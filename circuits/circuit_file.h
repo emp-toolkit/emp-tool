@@ -15,7 +15,6 @@ class CircuitFile { public:
 	block * wires;
 	int tmp, tmp2;
 	CircuitFile(const char * file) {
-		cout << file<<endl;
 		FILE * f = fopen(file, "r");
 		tmp2=fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		tmp2=fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
