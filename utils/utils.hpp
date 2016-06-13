@@ -52,11 +52,11 @@ inline double wallClock() {
 	return t.tv_sec+1e-9*t.tv_nsec;
 }
 
-template<typename T>
-T bool_to_int(const bool * data, size_t len) {
-	if (len != 0) len = (len > sizeof(T)*8 ? sizeof(T)*8 : len);
-	else len = sizeof(T)*8;
-	T res = 0;
+template<typename t>
+t bool_to_int(const bool * data, size_t len) {
+	if (len != 0) len = (len > sizeof(t)*8 ? sizeof(t)*8 : len);
+	else len = sizeof(t)*8;
+	t res = 0;
 	for(size_t i = 0; i < len-1; ++i) {
 		if(data[i])
 			res |= (1LL<<i);
@@ -64,8 +64,17 @@ T bool_to_int(const bool * data, size_t len) {
 	if(data[len-1]) return -1*res;
 	else return res;
 }
+
+inline uint64_t bool_to64(const bool * data) {
+	uint64_t res = 0;
+	for(int i = 0; i < 64; ++i) {
+		if(data[i])
+			res |= (1LL<<i);
+	}
+	return res;
+}
 inline block bool_to128(const bool * data) {
-	return makeBlock(bool_to_int<uint64_t>(data+64), bool_to_int<uint64_t>(data));
+	return makeBlock(bool_to64(data+64), bool_to64(data));
 }
 
 inline void int64_to_bool(bool * data, uint64_t input, int length) {
