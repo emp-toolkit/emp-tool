@@ -7,7 +7,6 @@ include_directories(${CMAKE_SOURCE_DIR}/io)
 include_directories(${CMAKE_SOURCE_DIR}/utils)
 include_directories(${CMAKE_SOURCE_DIR}/circuits)
 include_directories(${CMAKE_SOURCE_DIR}/gc)
-include_directories(${CMAKE_SOURCE_DIR}/libgarble/src)
 
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 
@@ -32,9 +31,8 @@ file(GLOB circuit-files
 "circuits/files/*"
 )
 
-
 file(GLOB libgarble
-"libgarble/src/garble/*.h"
+"garble/*.h"
 )
 
 set(sources
