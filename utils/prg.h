@@ -6,6 +6,7 @@
 #include "utils_ec.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <gmp.h>
 class PRG;
 static PRG * rnd = nullptr;
 class PRG { public:
@@ -79,10 +80,10 @@ class PRG { public:
 	}
 
 	template<typename T, typename ... L>
-	void random_bn(T t, L... l) {
-		random_bn(l...);
-		random_bn(t);
-	}
+		void random_bn(T t, L... l) {
+			random_bn(l...);
+			random_bn(t);
+		}
 
 	void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
 		int digits;
@@ -105,10 +106,10 @@ class PRG { public:
 	}
 
 	template<typename T, typename ... L>
-	void random_eb(T t, L... l) {
-		random_eb(l...);
-		random_eb(t);
-	}
+		void random_eb(T t, L... l) {
+			random_eb(l...);
+			random_eb(t);
+		}
 
 	void random_eb(eb_t p) {
 		bn_t n, k;
@@ -129,6 +130,29 @@ class PRG { public:
 			random_bn(k, BN_POS, bn_bits(n));
 			bn_mod(k, k, n);
 			eb_mul_gen(p[i], k);
+		}
+	}
+
+	void random_mpz(mpz_t out, int nbits) {
+		int nbytes = (nbits+1)/8;
+		uint8_t * data = new uint8_t[nbytes+16];
+		random_data(data, nbytes+16);
+		int n = nbytes;
+		for(int i = 3; i >= 0; i--) {
+			data[i] = (unsigned char) (n % (1 << 8));
+			n /= (1 << 8);
+		}
+		FILE *fp = fmemopen(data, nbytes+16, "rb");
+		int res = mpz_inp_raw(out, fp);
+		assert(res != 0);
+	}
+	void random_mpz(mpz_t rop, const mpz_t n) {
+		unsigned long size = mpz_sizeinbase(n, 2);
+		while(1) {
+			random_mpz(rop, size);
+			if(mpz_cmp(rop, n) < 0) {
+				break;
+			}
 		}
 	}
 };

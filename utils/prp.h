@@ -16,8 +16,12 @@ class PRP { public:
 	}
 	void aes_set_key(const char * key) {
 		__m128i v = _mm_load_si128((__m128i*)&key[0]);
+		aes_set_key(v);
+	}
+	void aes_set_key(const block& v) {
 		AES_set_encrypt_key(v, aes);
 	}
+
 
 	void permute_block(block *data, int nblocks) {
 		int i = 0;
@@ -25,6 +29,17 @@ class PRP { public:
 			AES_ecb_encrypt_blks(data+i, AES_BATCH_SIZE, aes);
 		}
 		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, aes);
+	}
+	
+	void permute_data(uint8_t*data, int nbytes) {
+		permute_block((block *)data, nbytes/16);
+		if (nbytes % 16 != 0) {
+			uint8_t extra[16];
+			memset(extra, 0, 16);
+			memcpy(extra, (nbytes/16*16)+(char *) data, nbytes%16);
+			permute_block((block*)extra, 1);
+			memcpy((nbytes/16*16)+(char *) data, &extra, nbytes%16);
+		}
 	}
 
 	block H(block in, uint64_t id) {

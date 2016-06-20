@@ -297,7 +297,7 @@ inline Bit Integer::greater (const Integer& rhs) const{
 }
 
 inline Bit Integer::equal(const Integer& rhs) const {
-	Bit res;
+	Bit res(true);
 	for(int i = 0; i < size(); ++i)
 		res = res & (bits[i] == rhs[i]);
 	return res;
