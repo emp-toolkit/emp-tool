@@ -16,6 +16,11 @@ class Batcher { public:
 			values.push_back(b[i]);
 	}
 
+	~Batcher(){
+		if(labels != nullptr)
+			delete[] labels;
+	}
+
 	template<typename T, typename... Args>
 	void add(Args&&... args) {
 		int length = T::bool_size(std::forward<Args>(args)...);
@@ -39,6 +44,7 @@ class Batcher { public:
 		label_ptr = labels = new block[size()];
 		local_backend->Feed(labels, party, bools, size());
 		len_ptr = 0;
+		delete[] bools;
 	}
 
 	void set_blocks(block * b) {
