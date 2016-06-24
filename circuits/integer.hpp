@@ -141,13 +141,8 @@ inline void init(Bit * bits, const bool* b, int length, int party) {
   }*/
 
 inline Integer::Integer(int len, const string& str, int party) : length(len) {
-	string bin = dec_to_bin(str);
 	bool* b = new bool[len];
-	int l = (bin.size() > (size_t)len ? len : bin.size());
-	for(int i = 0; i < l; ++i)
-		b[i] = (bin[l-1-i] == '1');
-	for (int i = l; i < length; ++i)
-		b[i] = b[l-1];
+	bool_data(b, len, str);
 	bits = new Bit[length];
 	init(bits,b,length, party);
 	delete[] b;
@@ -188,6 +183,14 @@ inline int Integer::reveal<int>(int party) const {
 	string s = reveal<string>(party);
 	return stoi(s);
 }
+template<>
+inline uint32_t Integer::reveal<uint32_t>(int party) const {
+	Integer tmp = *this;
+	tmp.resize(tmp.size()+1, false);
+	string s = tmp.reveal<string>(party);
+	return stoi(s);
+}
+
 
 template<>
 inline long long Integer::reveal<long long>(int party) const {
@@ -288,12 +291,15 @@ inline Integer Integer::operator>>(const Integer& shamt) const{
 }
 
 //Comparisons
-inline Bit Integer::greater (const Integer& rhs) const{
-	Bit res(false);
+inline Bit Integer::geq (const Integer& rhs) const {
+/*	Bit res(false);
 	for(int i = 0; i < size(); ++i) {
 		res = ((bits[i]^res)&(rhs[i]^res))^bits[i];
 	} 
 	return res; 
+*/
+	Integer tmp = (*this) - rhs;
+	return !tmp[tmp.size()-1];
 }
 
 inline Bit Integer::equal(const Integer& rhs) const {

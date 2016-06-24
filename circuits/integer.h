@@ -40,7 +40,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	Integer() :length(0),bits(nullptr){ }
 
 //Comparable
-	Bit greater(const Integer & rhs) const;
+	Bit geq(const Integer & rhs) const;
 	Bit equal(const Integer & rhs) const;
 
 //Swappable
@@ -84,9 +84,11 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	}
 	static void bool_data(bool* data, size_t len, string str) {
 		string bin = dec_to_bin(str);
+		std::reverse(bin.begin(), bin.end());
+//		cout << "convert " <<str<<" "<<bin<<endl;
 		int l = (bin.size() > (size_t)len ? len : bin.size());
 		for(int i = 0; i < l; ++i)
-			data[i] = (bin[l-1-i] == '1');
+			data[i] = (bin[i] == '1');
 		for (size_t i = l; i < len; ++i)
 			data[i] = data[l-1];
 	}
