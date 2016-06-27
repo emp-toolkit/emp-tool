@@ -43,7 +43,9 @@ inline string change_base(string str, int old_base, int new_base) {
 	mpz_init_set_str (tmp, str.c_str(), old_base);
 	char * b = new char[mpz_sizeinbase(tmp, new_base) + 2];
 	mpz_get_str(b, new_base, tmp);
-	string res(b); delete[]b;
+	mpz_clear(tmp);
+	string res(b);
+	delete[]b;
 	return res;
 }
 
