@@ -68,7 +68,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		delete[] buffer;
 	}
 	void sync() {
-		int tmp;
+		int tmp = 0;
 		if(is_server) {
 			send_data(&tmp, 1);
 			recv_data(&tmp, 1);
