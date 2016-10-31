@@ -15,6 +15,22 @@
 #define ALICE 1
 #define BOB 2
 using std::string;
+
+template<typename T>
+void inline delete_array_null(T * ptr){
+	if(ptr != nullptr) {
+		delete[] ptr;
+		ptr = nullptr;
+	}
+}
+
+inline void error(const char * s, int line = 0, const char * file = nullptr) {
+	fprintf(stderr, s, "\n");
+	if(file != nullptr) {
+		fprintf(stderr, "at %d, %s\n", line, file);
+	}
+	exit(1);
+}
 template<class... Ts>
 void run_function(void *function, const Ts&... args) {	
 	reinterpret_cast<void(*)(Ts...)>(function)(args...);
