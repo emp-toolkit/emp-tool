@@ -1,3 +1,6 @@
+#ifndef FILE_IO_CHANNEL_H__
+#define FILE_IO_CHANNEL_H__
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,8 +14,10 @@
 #include "io_channel.h"
 using namespace std;
 
-#ifndef FILE_IO_CHANNEL
-#define FILE_IO_CHANNEL
+/** @addtogroup IO
+    @{
+  */
+  
 class FileIO: public IOChannel<FileIO> { public:
 	uint64_t bytes_sent = 0;
 	int mysocket = -1;
@@ -63,4 +68,5 @@ class FileIO: public IOChannel<FileIO> { public:
 		}
 	}
 };
+/**@}*/
 #endif//FILE_IO_CHANNEL

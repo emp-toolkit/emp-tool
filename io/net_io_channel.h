@@ -15,7 +15,10 @@ using namespace std;
 
 #ifndef NETWORK_IO_CHANNEL
 #define NETWORK_IO_CHANNEL
-
+/** @addtogroup IO
+    @{
+  */
+  
 class NetIO: public IOChannel<NetIO> { public:
 	bool is_server;
 	int mysocket = -1;
@@ -124,4 +127,5 @@ class NetIO: public IOChannel<NetIO> { public:
 		}
 	}
 };
+/**@}*/
 #endif//NETWORK_IO_CHANNEL

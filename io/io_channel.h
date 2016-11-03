@@ -4,6 +4,10 @@
 #ifndef IO_CHANNEL_H__
 #define IO_CHANNEL_H__
 
+/** @addtogroup IO
+    @{
+  */
+  
 template<typename T>
 class IOChannel { public:
 	PRG *prg = nullptr;
@@ -174,4 +178,5 @@ class IOChannel { public:
 		}
 	}
 };
+/**@}*/
 #endif// IO_CHANNEL_H__

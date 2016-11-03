@@ -1,10 +1,14 @@
+#ifndef CHECK_IO_CHANNEL_H__
+#define CHECK_IO_CHANNEL_H__
 #include <iostream>
 #include <string>
 #include "net_io_channel.h"
 using namespace std;
 
-#ifndef CHECK_IO_CHANNEL
-#define CHECK_IO_CHANNEL
+/** @addtogroup IO
+    @{
+  */
+  
 
 class CheckIO: public IOChannel<CheckIO> { public:
 	NetIO * netio;
@@ -43,4 +47,5 @@ class CheckIO: public IOChannel<CheckIO> { public:
 		check_size += len;
 	}
 };
+/**@}*/
 #endif//CHECK_IO_CHANNEL

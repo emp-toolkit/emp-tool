@@ -4,6 +4,9 @@
 #include <stdio.h>
 #ifndef PRP_H__
 #define PRP_H__
+/** @addtogroup BP
+    @{
+  */
 
 class PRP { public:
 	AES_KEY *aes;
@@ -80,4 +83,5 @@ class PRP { public:
 		}
 	}
 };
+/**@}*/
 #endif// PRP_H__

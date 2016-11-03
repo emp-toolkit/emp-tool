@@ -5,6 +5,10 @@
 #ifndef MEM_IO_CHANNEL
 #define MEM_IO_CHANNEL
 
+/** @addtogroup IO
+    @{
+  */
+  
 class MemIO: public IOChannel<MemIO> { public:
 	char * buffer = nullptr;
 	int size = 0;
@@ -52,4 +56,5 @@ class MemIO: public IOChannel<MemIO> { public:
 		}
 	}
 };
-#endif//MEM_IO_CHANNEL
+/**@}*/
+#endif//MEM_IO_CHANNEL_H__

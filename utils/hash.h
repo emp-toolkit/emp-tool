@@ -5,6 +5,9 @@
 #include <openssl/sha.h>
 #include <stdio.h>
 #include "utils_ec.h"
+/** @addtogroup BP
+    @{
+  */
 
 class Hash {
 	SHA_CTX hash;
@@ -60,4 +63,5 @@ class Hash {
 		}
 	}
 };
+/**@}*/
 #endif// HASH_H__

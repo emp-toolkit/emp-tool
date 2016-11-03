@@ -29,3 +29,6 @@
 #include "xor_tree.h"
 #include "garble/aes.h"
 #include "garble/block.h"
+
+/** @defgroup IO Input/Output*/
+/** @defgroup BP Basic Primitives*/

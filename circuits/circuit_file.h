@@ -37,6 +37,17 @@ class CircuitFile { public:
 		fclose(f);
 	}
 
+	CircuitFile(const CircuitFile& cf) {
+		num_gate = cf.num_gate;
+		num_wire = cf.num_wire;
+		n1 = cf.n1;
+		n2 = cf.n2;
+		n3 = cf.n3;
+		gates = new int[num_gate*4];
+		wires = new block[num_wire];
+		memcpy(gates, cf.gates, num_gate*4*sizeof(int));
+		memcpy(wires, cf.wires, num_wire*sizeof(block));	
+	}
 	~CircuitFile(){
 		delete[] gates;
 		delete[] wires;

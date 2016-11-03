@@ -1,6 +1,9 @@
 #ifndef XORTREE_H__
 #define XORTREE_H__
 #include "bit.h"
+/** @addtogroup BP
+    @{
+  */
 
 //TODO: hardcoded with ssp=40, should at least support a range a ssp's
 template<int N=232, int M=232>
@@ -77,4 +80,6 @@ class XorTree{public:
 		}
 	}
 };
+/**@}*/
 #endif
+

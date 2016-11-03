@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <gmp.h>
+/** @addtogroup BP
+    @{
+  */
+
 class PRG;
 static PRG * rnd = nullptr;
 class PRG { public:
@@ -156,4 +160,5 @@ class PRG { public:
 		}
 	}
 };
+/**@}*/
 #endif// PRP_H__

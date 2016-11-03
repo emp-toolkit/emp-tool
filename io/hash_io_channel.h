@@ -1,8 +1,11 @@
-#ifndef HASH_IO_CHANNEL
-#define HASH_IO_CHANNEL
+#ifndef HASH_IO_CHANNEL_H__
+#define HASH_IO_CHANNEL_H__
 #include "hash.h"
 #include "net_io_channel.h"
-
+/** @addtogroup IO
+    @{
+  */
+  
 class HashIO: public IOChannel<HashIO>{ public:
 	Hash h;
 	NetIO * netio;
@@ -20,4 +23,5 @@ class HashIO: public IOChannel<HashIO>{ public:
 		h.digest(dgst);
 	}
 };
-#endif//HASH_IO_CHANNEL
+/**@}*/
+#endif//HASH_IO_CHANNEL_H__

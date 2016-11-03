@@ -3,6 +3,9 @@
 #include "string.h"
 #include "hash.h"
 #include "prg.h"
+/** @addtogroup BP
+    @{
+  */
 
 typedef char Com[20];
 typedef block Decom[1];
@@ -27,4 +30,5 @@ class Commitment{ public:
 		return strncmp(com, res, Hash::DIGEST_SIZE)==0;
 	}
 };
+/**@}*/
 #endif// COM_H__
