@@ -1,6 +1,6 @@
 find_package(OpenSSL)
 #find_path(EMP-TOOL_INCLUDE_DIR emp-tool.h PATHS /usr/local/include/emp-tool/)
-find_path(EMP-TOOL_INCLUDE_DIR emp-tool/emp-tool.h)
+find_path(EMP-TOOL_INCLUDE_DIR cmake/emp-tool-config.cmake)
 find_library(EMP-TOOL_LIBRARY NAMES emp-tool)
 
 include(FindPackageHandleStandardArgs)
