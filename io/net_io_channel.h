@@ -31,8 +31,7 @@ class NetIO: public IOChannel<NetIO> { public:
 #ifdef COUNT_IO
 	uint64_t counter = 0;
 #endif
-	NetIO(const char * address, int port) {
-		addr = string(address);
+	NetIO(const char * address, int port, bool quiet = false) {
 		this->port = port;
 		is_server = (address == nullptr);
 		if (address == nullptr) {
@@ -51,6 +50,7 @@ class NetIO: public IOChannel<NetIO> { public:
 			consocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
 		}
 		else {
+			addr = string(address);
 			struct sockaddr_in dest; 
 			consocket = socket(AF_INET, SOCK_STREAM, 0);
 			memset(&dest, 0, sizeof(dest));
@@ -62,7 +62,8 @@ class NetIO: public IOChannel<NetIO> { public:
 			}
 		}
 //		set_nodelay();
-		cout << "connected"<<endl;
+		if(!quiet)
+			cout << "connected"<<endl;
 		stream = fdopen(consocket, "wb+");
 		buffer = new char[NETWORK_BUFFER_SIZE];
 		memset(buffer, 0, NETWORK_BUFFER_SIZE);
