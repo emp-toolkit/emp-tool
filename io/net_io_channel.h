@@ -26,10 +26,14 @@ class NetIO: public IOChannel<NetIO> { public:
 	FILE * stream = nullptr;
 	char * buffer = nullptr;
 	bool has_sent = false;
+	string addr;
+	int port;
 #ifdef COUNT_IO
 	uint64_t counter = 0;
 #endif
 	NetIO(const char * address, int port) {
+		addr = string(address);
+		this->port = port;
 		is_server = (address == nullptr);
 		if (address == nullptr) {
 			struct sockaddr_in dest;
