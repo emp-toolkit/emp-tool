@@ -1,6 +1,6 @@
 #ifndef CONFIG_H__
 #define CONFIG_H__
-#define THREADING
+//#define THREADING
 #define AES_BATCH_SIZE 1024 // may need to change for different cache size, for the best performance.
 #define HASH_BUFFER_SIZE 1024*8*8
 

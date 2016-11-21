@@ -25,7 +25,7 @@ file(GLOB headers
 "utils/*.hpp"
 "gc/*.h"
 "gc/*.hpp"
-"emp-tool.h"
+"emp-tool"
 )
 file(GLOB circuit-files 
 "circuits/files/*"
