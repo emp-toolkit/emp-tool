@@ -9,5 +9,5 @@
 #define CHECK_BUFFER_SIZE 1024*8
 //#define SERVER_IP  "54.165.226.80"
 #define SERVER_IP  "127.0.0.1"
-#define COUNT_IO
+//#define COUNT_IO
 #endif// CONFIG_H__
