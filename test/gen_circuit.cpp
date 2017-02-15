@@ -1,10 +1,11 @@
 #include "circuit_generator.h"
 
-void add(int n) {
+void ham(int n) {
 	Integer a(n, 0, ALICE);
 	Integer b(n, 0, BOB);
-	Integer c = a*b;
-	c.reveal<string>();
+	Integer c = a^b;
+	Integer d = c.hamming_weight();
+	d.reveal<string>();
 }
 
 void mult(int n) {
@@ -34,8 +35,8 @@ void sort(int n) {
 }
 int main(int argc, char** argv) {
 	setup_circuit_generator(true, "sort");
-	sort(1024*4);	
-//	mult(128);
-//	modexp(128, 128);
+//	sort(1024*4);	
+//	mult(2048);
+	ham(1<<20);
 	finalize_circuit_generator();
 }
