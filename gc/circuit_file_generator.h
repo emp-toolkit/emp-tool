@@ -4,6 +4,7 @@
 #include "block.h"
 #include "utils.h"
 #include <iostream>
+#include <fstream>
 
 bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, int party);
 
@@ -22,7 +23,9 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 	const static unsigned long long S1 = 4;
 	bool print = false;
 	block public_one, public_zero;
-	CircuitFileGenerator(bool print) {
+	uint64_t gates = 0;
+	ofstream &fout;
+	CircuitFileGenerator(bool print, ofstream & fout):fout(fout) {
 		is_public_ptr = &circuit_file_gen_is_public;
 		public_label_ptr = &circuit_file_gen_public_label;
 		gc_and_ptr = &circuit_file_gen_and;
@@ -35,7 +38,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 		arr[0] = P1;
 		arr = (uint64_t*) &public_zero;
 		arr[0] = P0;
-		gid = 1;
+		gid = 0;
 	}
 	bool is_public_impl(const block & b, int party) {
 		uint64_t *arr = (uint64_t*) &b;
@@ -69,8 +72,9 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_and(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				cout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<endl;
 			gid++;
+			gates++;
 			return res;
 		}
 	}
@@ -91,7 +95,8 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_xor(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				cout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<<endl;
+			gates++;
 			gid++;
 			return res;
 		}
@@ -106,8 +111,8 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 	}
 	bool get_value(block a) {
 		uint64_t *arr = (uint64_t*) &a;
-//		if(print)
-//			cout <<"1 0 "<<arr[1] <<" OUT"<<endl;
+		//		if(print)
+		//			fout <<"1 0 "<<arr[1] <<" OUT"<<endl;
 		if (arr[0] == S0 or arr[0] == P0)
 			return false;
 		else return true;
@@ -125,8 +130,9 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			else arr[0] = S0;
 			arr[1] = gid;
 			if(print)
-				cout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<<endl;
+				fout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<<endl;
 			gid++;
+			gates++;
 			return res;
 		}
 	}

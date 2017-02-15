@@ -1,7 +1,8 @@
-
+emp-toolkit_tmpfile
 CMakeCache.txt
 CMakeFiles/
 Makefile
+bin/
 cmake_install.cmake
 install_manifest.txt
 # Compiled Object files

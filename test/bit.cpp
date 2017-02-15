@@ -29,6 +29,6 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	setup_circuit_generator(true);
+	setup_circuit_generator(true, "mul");
 	test_bit();
 }
