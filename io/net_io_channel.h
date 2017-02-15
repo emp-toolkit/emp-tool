@@ -116,9 +116,6 @@ class NetIO: public IOChannel<NetIO> { public:
 	}
 
 	void recv_data_impl(void  * data, int len) {
-#ifdef COUNT_IO
-	counter +=len;
-#endif
 		if(has_sent)
 			fflush(stream);
 		has_sent = false;

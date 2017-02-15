@@ -69,7 +69,7 @@ inline uint64_t bool_to64(const bool * data) {
 	uint64_t res = 0;
 	for(int i = 0; i < 64; ++i) {
 		if(data[i])
-			res |= (1LL<<i);
+			res |= (1ULL<<i);
 	}
 	return res;
 }
