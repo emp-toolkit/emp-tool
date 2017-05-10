@@ -1,7 +1,7 @@
 #ifndef BATCHER_H__
 #define BATCHER_H__
 #include <vector>
-#include "backend.h"
+#include "gc/backend.h"
 using std::vector;
 
 class Batcher { public:

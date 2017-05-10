@@ -4,6 +4,7 @@
 #include <wmmintrin.h>
 #include <emmintrin.h>
 #include <xmmintrin.h>
+#include <smmintrin.h>
 
 typedef __m128i block;
 
@@ -13,7 +14,7 @@ typedef __m128i block;
 #define garble_unequal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) != 0xffff)
 
 #define garble_lsb(x) (*((char *) &x) & 1)
-#define garble_make_block(X,Y) _mm_set_epi64((__m64)(X), (__m64)(Y))
+#define garble_make_block(X,Y) _mm_set_epi64x((long long)(X), (long long)(Y))
 #define garble_double(B) _mm_slli_epi64(B,1)
 
 #include <stdio.h>

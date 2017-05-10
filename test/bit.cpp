@@ -1,4 +1,5 @@
-#include "circuit_generator.h"
+#include "gc/circuit_generator.h"
+using namespace std;
 
 void test_bit() {
 	bool b[] = {true, false};
@@ -12,7 +13,7 @@ void test_bit() {
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
 						bool res = (b1&b2).reveal(BOB);
-						if(res != (b[i] and b[k]))
+						if(res != (b[i] && b[k]))
 							cout<<"AND" <<i<<" "<<j<<" "<<k<<" "<<l<<" "<<res<<endl;
 						assert(res == (b[i] and b[k]));
 					}
@@ -20,7 +21,7 @@ void test_bit() {
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
 						bool res = (b1^b2).reveal(BOB);
-						if(res != (b[i] xor b[k]))
+						if(res != (b[i] ^ b[k]))
 							cout <<"XOR"<<i<<" "<<j<<" "<<k<<" "<<l<< " " <<res<<endl;
 						assert(res == (b[i] xor b[k]));
 					}

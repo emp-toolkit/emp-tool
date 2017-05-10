@@ -1,10 +1,10 @@
 #ifndef FLOAT_H__
 #define FLOAT_H__
 
-#include "bit.h"
-#include "integer.h"
-#include "swappable.h"
-#include "number.h"
+#include "circuits/bit.h"
+#include "circuits/integer.h"
+#include "circuits/swappable.h"
+#include "circuits/number.h"
 #include <math.h>
 
 class Float: Swappable<Float> { public:
@@ -38,7 +38,7 @@ class Float: Swappable<Float> { public:
 
 	void normalize(int value_length, int to_add_to_expnt);
 
-	string detail(int party) const;
+	std::string detail(int party) const;
 
 	Bit greater(const Float & rhs) const;
 	Bit equal(const Float & rhs) const;

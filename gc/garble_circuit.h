@@ -1,7 +1,7 @@
 #ifndef GARBLE_CIRCUIT_H__
 #define GARBLE_CIRCUIT_H__
-#include "block.h"
-#include "utils.h"
+#include "utils/block.h"
+#include "utils/utils.h"
 
 enum RTCktOpt{on, off};
 class GarbleCircuit { public:

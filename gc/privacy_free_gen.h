@@ -1,11 +1,11 @@
 #ifndef PRIVACY_FREE_GEN_H__
 #define PRIVACY_FREE_GEN_H__
-#include "io_channel.h"
-#include "net_io_channel.h"
-#include "block.h"
-#include "utils.h"
-#include "prp.h"
-#include "hash.h"
+#include "io/io_channel.h"
+#include "io/net_io_channel.h"
+#include "utils/block.h"
+#include "utils/utils.h"
+#include "utils/prp.h"
+#include "utils/hash.h"
 #include "garble/garble_gate_privacy_free.h"
 #include <iostream>
 

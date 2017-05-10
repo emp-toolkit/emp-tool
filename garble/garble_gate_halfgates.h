@@ -1,8 +1,12 @@
 #ifndef LIBGARBLE_GARBLE_GATE_HALFGATES_H
 #define LIBGARBLE_GARBLE_GATE_HALFGATES_H
 
-#include "garble.h"
-#include "aes.h"
+#include "garble/garble.h"
+#include "garble/aes.h"
+#include "garble/block.h"
+
+#include <emmintrin.h>
+#include <smmintrin.h>
 
 #include <assert.h>
 #include <string.h>
@@ -12,7 +16,7 @@ garble_gate_eval_halfgates(garble_gate_type_e type, block A, block B, block *out
                            const block *table, uint64_t idx, const AES_KEY *key)
 {
     if (type == GARBLE_GATE_XOR) {
-        *out = garble_xor(A, B);
+        *out = _mm_xor_si128(A, B);
     } else {
         block HA, HB, W;
         int sa, sb;
@@ -21,7 +25,7 @@ garble_gate_eval_halfgates(garble_gate_type_e type, block A, block B, block *out
         sa = garble_lsb(A);
         sb = garble_lsb(B);
 
-        tweak1 = garble_make_block(2 * idx, (long) 0);
+        tweak1 = garble_make_block(2 * idx, (long)0);
         tweak2 = garble_make_block(2 * idx + 1, (long) 0);
 
         {

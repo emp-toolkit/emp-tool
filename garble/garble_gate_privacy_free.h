@@ -1,8 +1,9 @@
 #ifndef LIBGARBLE_GARBLE_GATE_PRIVACY_FREE_H
 #define LIBGARBLE_GARBLE_GATE_PRIVACY_FREE_H
 
-#include "garble.h"
-#include "aes.h"
+#include "garble/garble.h"
+#include "garble/aes.h"
+#include "garble/block.h"
 
 #include <assert.h>
 #include <string.h>

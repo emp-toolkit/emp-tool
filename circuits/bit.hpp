@@ -19,7 +19,7 @@ inline O Bit::reveal(int party) const {
 }
 
 template<>
-inline string Bit::reveal<string>(int party) const {
+inline std::string Bit::reveal<std::string>(int party) const {
 	bool res;
 	local_backend->Reveal(&res, party, &bit, 1);
 	return res ? "true" : "false";

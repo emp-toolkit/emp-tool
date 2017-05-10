@@ -29,8 +29,8 @@
 #include <smmintrin.h>
 #include <wmmintrin.h>
 #include <assert.h>
-
-typedef __m128i block;
+#include "garble/block.h"
+//typedef __m128i block;
 typedef __m128i block_tpl[2];
 inline block xorBlocks(block x, block y){return _mm_xor_si128(x,y);}
 inline block andBlocks(block x, block y){return _mm_and_si128(x,y);}
@@ -66,7 +66,7 @@ inline bool block_cmp(const block * x, const block * y, int nblocks) {
 #define zero_block() _mm_setzero_si128()
 #define one_block() makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
 #define getLSB(x) (*((unsigned short *)&x)&1)
-#define makeBlock(X,Y) _mm_set_epi64((__m64)(X), (__m64)(Y))
+#define makeBlock(X,Y) _mm_set_epi64x(X, Y)
 
 inline bool isZero(const block * b) {
 	return _mm_testz_si128(*b,*b);

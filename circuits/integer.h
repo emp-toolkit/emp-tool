@@ -1,10 +1,10 @@
 #ifndef INTEGER_H__
 #define INTEGER_H__
 
-#include "bit.h"
-#include "number.h"
-#include "comparable.h"
-#include "swappable.h"
+#include "circuits/bit.h"
+#include "circuits/number.h"
+#include "circuits/comparable.h"
+#include "circuits/swappable.h"
 #include <vector>
 #include <algorithm>
 #include <math.h>
@@ -35,7 +35,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 		if (bits!=nullptr) delete[] bits;
 	}
 
-	Integer(int length, const string& str, int party = PUBLIC);
+	Integer(int length, const std::string& str, int party = PUBLIC);
 	Integer(int length, long long input, int party = PUBLIC);
 	Integer() :length(0),bits(nullptr){ }
 
@@ -82,8 +82,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	static void bool_data(bool* data, size_t len, long long num) {
 		bool_data(data, len, std::to_string(num));
 	}
-	static void bool_data(bool* data, size_t len, string str) {
-		string bin = dec_to_bin(str);
+	static void bool_data(bool* data, size_t len, std::string str) {
+		std::string bin = dec_to_bin(str);
 		std::reverse(bin.begin(), bin.end());
 //		cout << "convert " <<str<<" "<<bin<<endl;
 		int l = (bin.size() > (size_t)len ? len : bin.size());

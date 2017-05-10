@@ -1,7 +1,11 @@
 #ifndef UTILS_EC_H__
 #define UTILS_EC_H__
 extern "C" {
+#ifdef _MSC_VER
+#include <relic.h>
+#else
 #include <relic/relic.h>
+#endif
 }
 #include "block.h"
 

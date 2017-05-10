@@ -1,9 +1,9 @@
 #ifndef BIT_H__
 #define BIT_H__
-#include "backend.h"
-#include "utils.h"
-#include "block.h"
-#include "swappable.h"
+#include "gc/backend.h"
+#include "utils/utils.h"
+#include "utils/block.h"
+#include "circuits/swappable.h"
 
 class Bit : public Swappable<Bit>{ public:
 	block bit;

@@ -1,8 +1,9 @@
 #ifndef HASH_H__
 #define HASH_H__
-#include "block.h"
-#include "config.h"
-#include <openssl/sha.h>
+#include "utils/block.h"
+#include "utils/config.h"
+//#include <openssl/sha.h>
+#include <cryptoTools/Crypto/sha1.h>
 #include <stdio.h>
 #include "utils_ec.h"
 /** @addtogroup BP
@@ -10,24 +11,29 @@
   */
 
 class Hash {
-	SHA_CTX hash;
+	osuCrypto::SHA1 hash;
 	char buffer[HASH_BUFFER_SIZE];
 	int size = 0;
 	public:
 	static const int DIGEST_SIZE = 20;
 	Hash() {
-		SHA1_Init(&hash);
+		//SHA1_Init(&hash);
 	}
 	~Hash() {
 	}
 	void put(const void * data, int nbyte) {
 		if (nbyte > HASH_BUFFER_SIZE)
-			SHA1_Update(&hash, data, nbyte);
+		{
+			hash.Update((uint8_t*) data, nbyte);
+			//SHA1_Update(&hash, data, nbyte);
+		}
 		else if(size + nbyte < HASH_BUFFER_SIZE) {
 			memcpy(buffer+size, data, nbyte);
 			size+=nbyte;
 		} else {
-			SHA1_Update(&hash, (char*)buffer, size);
+			hash.Update((uint8_t*)buffer, nbyte);
+
+			//SHA1_Update(&hash, (char*)buffer, size);
 			memcpy(buffer, data, nbyte);
 			size = nbyte;
 		}
@@ -37,17 +43,24 @@ class Hash {
 	}
 	void digest(char * a) {
 		if(size > 0) {
-			SHA1_Update(&hash, (char*)buffer, size);
+			hash.Update((uint8_t*)buffer, size);
+			//SHA1_Update(&hash, (char*)buffer, size);
 			size=0;
 		}
-		SHA1_Final((unsigned char *)a, &hash);
+		//SHA1_Final((unsigned char *)a, &hash);
+		hash.Final((uint8_t*)a);
 	}
 	void reset() {
-		SHA1_Init(&hash);
+		//SHA1_Init(&hash);
+		hash.Reset();
 		size=0;
 	}
 	static void hash_once(void * digest, const void * data, int nbyte) {
-		(void )SHA1((const unsigned char *)data, nbyte, (unsigned char *)digest);
+		using namespace osuCrypto;
+		SHA1 sha;
+		sha.Update((u8*)data, nbyte);
+		sha.Final((u8*)digest);
+		//(void )SHA1((const unsigned char *)data, nbyte, (unsigned char *)digest);
 	}
 	static block hash_for_block(const void * data, int nbyte) {
 		char digest[20];

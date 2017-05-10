@@ -1,20 +1,24 @@
 #ifndef UTILS_H__
 #define UTILS_H__
 #include <string>
-#include "block.h"
+#include "utils/block.h"
 #include <sstream>
-#include <bitset>
-#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
+//#include <bitset>
+//#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
+//#ifdef _MSC_VER
+//#include <mpir.h>
+//#else
 #include <gmp.h>
-#include "config.h"
-#include "prg.h"
+//#endif
+#include "utils/config.h"
+#include "utils/prg.h"
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
 #define PUBLIC 0
 #define ALICE 1
 #define BOB 2
-using std::string;
+//using std::string;
 
 template<typename T>
 void inline delete_array_null(T * ptr){
@@ -54,19 +58,19 @@ block bool_to128(const bool * data);
 void int64_to_bool(bool * data, uint64_t input, int length);
 std::string hex_to_binary(std::string hex);
 
-inline string change_base(string str, int old_base, int new_base) {
+inline std::string change_base(std::string str, int old_base, int new_base) {
 	mpz_t tmp;
 	mpz_init_set_str (tmp, str.c_str(), old_base);
 	char * b = new char[mpz_sizeinbase(tmp, new_base) + 2];
 	mpz_get_str(b, new_base, tmp);
 	mpz_clear(tmp);
-	string res(b);
+	std::string res(b);
 	delete[]b;
 	return res;
 }
 
-inline string dec_to_bin(const string& dec) {
-	string bin = change_base(dec, 10, 2);
+inline std::string dec_to_bin(const std::string& dec) {
+	std::string bin = change_base(dec, 10, 2);
 	if(dec[0] != '-')
 		return '0' + bin;
 	bin[0] = '1';
@@ -79,10 +83,10 @@ inline string dec_to_bin(const string& dec) {
 	}
 	return bin;
 }
-inline string bin_to_dec(const string& bin2) {
+inline std::string bin_to_dec(const std::string& bin2) {
 	if(bin2[0] == '0')
 		return change_base(bin2, 2, 10);
-	string bin = bin2;
+	std::string bin = bin2;
 	bin[0] = '0';
 	bool flip = false;
 	for(int i = bin.size()-1; i>=1; --i) {

@@ -1,3 +1,5 @@
+#include <chrono>
+
 static const char* hex_char_to_bin(char c)
 {
 	switch(toupper(c))
@@ -42,14 +44,19 @@ inline std::string Party(int p) {
 }
 
 inline uint64_t timeStamp() {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME,&t);
-	return (t.tv_sec*1000*1000+t.tv_nsec/1000);
+	//struct timespec t;
+	//clock_gettime(CLOCK_REALTIME,&t);
+	//return (t.tv_sec*1000*1000+t.tv_nsec/1000);
+	auto now = std::chrono::system_clock::now();
+	return std::chrono::time_point_cast<std::chrono::microseconds>(now).time_since_epoch().count();
+
 }
 inline double wallClock() {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME,&t);
-	return t.tv_sec+1e-9*t.tv_nsec;
+	//struct timespec t;
+	//clock_gettime(CLOCK_REALTIME,&t);
+	//return t.tv_sec+1e-9*t.tv_nsec;
+	auto now = std::chrono::system_clock::now();
+	return std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count();
 }
 
 template<typename t>

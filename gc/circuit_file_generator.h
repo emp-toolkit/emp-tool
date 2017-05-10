@@ -1,8 +1,8 @@
 #ifndef CIRCUIT_FILE_GENERATOR_H__
 #define CIRCUIT_FILE_GENERATOR_H__
 #define HALFGATE_GEN_H__
-#include "block.h"
-#include "utils.h"
+#include "utils/block.h"
+#include "utils/utils.h"
 #include <iostream>
 #include <fstream>
 
@@ -24,8 +24,8 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 	bool print = false;
 	block public_one, public_zero;
 	uint64_t gates = 0;
-	ofstream &fout;
-	CircuitFileGenerator(bool print, ofstream & fout):fout(fout) {
+	std::ofstream &fout;
+	CircuitFileGenerator(bool print, std::ofstream & fout):fout(fout) {
 		is_public_ptr = &circuit_file_gen_is_public;
 		public_label_ptr = &circuit_file_gen_public_label;
 		gc_and_ptr = &circuit_file_gen_and;
@@ -48,7 +48,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 		return b? public_one : public_zero;
 	}
 	uint64_t compute_and(uint64_t a, uint64_t b) {
-		if(a == S0 or b == S0)
+		if(a == S0 || b == S0)
 			return S0;
 		else return S1;
 	}
@@ -64,7 +64,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			return b;
 		} else if (arr_b[0] == P1) {
 			return a;
-		} else if(arr_a[0] == P0 or arr_b[0] == P0) {
+		} else if(arr_a[0] == P0 || arr_b[0] == P0) {
 			return public_zero;
 		} else {
 			block res = zero_block();
@@ -72,7 +72,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_and(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<< std::endl;
 			gid++;
 			gates++;
 			return res;
@@ -95,7 +95,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_xor(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<< std::endl;
 			gates++;
 			gid++;
 			return res;
@@ -113,7 +113,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 		uint64_t *arr = (uint64_t*) &a;
 		//		if(print)
 		//			fout <<"1 0 "<<arr[1] <<" OUT"<<endl;
-		if (arr[0] == S0 or arr[0] == P0)
+		if (arr[0] == S0 || arr[0] == P0)
 			return false;
 		else return true;
 	}
@@ -130,7 +130,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			else arr[0] = S0;
 			arr[1] = gid;
 			if(print)
-				fout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<<endl;
+				fout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<< std::endl;
 			gid++;
 			gates++;
 			return res;

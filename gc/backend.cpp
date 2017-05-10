@@ -1,3 +1,4 @@
+#include <thread>
 #include "backend.h"
 
 #ifdef THREADING

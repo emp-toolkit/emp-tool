@@ -1,9 +1,14 @@
 #ifndef BACKEND_H__
 #define BACKEND_H__
+
+#ifdef USE_PTHREADS
 #include <pthread.h>  
+#else
+#include <thread>
+#endif
 #include "garble_circuit.h"
-#include "block.h"
-#include "config.h"
+#include "utils/block.h"
+#include "utils/config.h"
 
 class Backend { public:
 	int cur_party;

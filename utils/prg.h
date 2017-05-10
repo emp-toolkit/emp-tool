@@ -4,39 +4,60 @@
 #include "garble/aes.h"
 #include "config.h"
 #include "utils_ec.h"
-#include <stdio.h>
-#include <stdarg.h>
+//#include <stdio.h>
+//#include <stdarg.h>
 #include <gmp.h>
+#include <random>
+#include <mutex>
 /** @addtogroup BP
     @{
   */
 
 class PRG;
 static PRG * rnd = nullptr;
+extern std::mutex rnd_mtx;
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {
+
 		if(rnd == nullptr) {
-			char data[16];
-			FILE *fp;
-			fp = fopen("/dev/urandom", "r");
-			int r_bytes = 0;
-			while (r_bytes < 16) {
-				int r = fread(&data, 1, 16, fp);
-				if (r < 0) exit(1);
-				r_bytes+=r;
+			std::lock_guard<std::mutex> lock(rnd_mtx);
+			if (rnd == nullptr) {
+
+				int data[sizeof(block)/sizeof(int)];
+
+				// this will be "/dev/urandom" when possible...
+				std::random_device rand_div;
+
+				for(int i =0; i < sizeof(block) / sizeof(int); ++i)
+					data[i] = rand_div();
+
+				//FILE *fp;
+				//fp = fopen("/dev/urandom", "r");
+				//int r_bytes = 0;
+				//while (r_bytes < 16) {
+				//	int r = fread(&data, 1, 16, fp);
+				//	if (r < 0) exit(1);
+				//	r_bytes += r;
+				//}
+				//fclose(fp);
+
+				rnd = this;//make rnd not nullptr, to avoiding infinite recursion.
+				rnd = new PRG(data);
 			}
-			fclose(fp);
-			rnd = this;//make rnd not nullptr, to avoiding infinite recursion.
-			rnd = new PRG(data);
 		}
+
+
 		if (seed == nullptr) {
 			block data;
+			std::lock_guard<std::mutex> lock(rnd_mtx);
 			rnd->random_block(&data, 1);
 			reseed(&data, id);
-		} else
+		}
+		else {
 			reseed(seed, id);
+		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
 		const char * k = (const char *)key;
@@ -89,66 +110,69 @@ class PRG { public:
 			random_bn(t);
 		}
 
-	void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
-		int digits;
-		SPLIT(bits, digits, bits, BN_DIG_LOG);
-		digits += (bits > 0 ? 1 : 0);
-		bn_grow(a, digits);
-		random_data((uint8_t*)a->dp, digits * sizeof(dig_t));
-		a->used = digits;
-		a->sign = sign;
-		if (bits > 0) {
-			dig_t mask = ((dig_t)1 << (dig_t)bits) - 1;
-			a->dp[a->used - 1] &= mask;
-		}
-		bn_trim(a);
-	}
+	//void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
+	//	int digits;
+	//	SPLIT(bits, digits, bits, BN_DIG_LOG);
+	//	digits += (bits > 0 ? 1 : 0);
+	//	bn_grow(a, digits);
+	//	random_data((uint8_t*)a->dp, digits * sizeof(dig_t));
+	//	a->used = digits;
+	//	a->sign = sign;
+	//	if (bits > 0) {
+	//		dig_t mask = ((dig_t)1 << (dig_t)bits) - 1;
+	//		a->dp[a->used - 1] &= mask;
+	//	}
+	//	bn_trim(a);
+	//}
 
-	void random_bn(bn_t *a, int length=1, int sign = BN_POS, int bits = BIT_LEN) {
-		for(int i = 0; i < length; ++i)
-			random_bn(a[i]);
-	}
+	//void random_bn(bn_t *a, int length=1, int sign = BN_POS, int bits = BIT_LEN) {
+	//	for(int i = 0; i < length; ++i)
+	//		random_bn(a[i]);
+	//}
 
-	template<typename T, typename ... L>
-		void random_eb(T t, L... l) {
-			random_eb(l...);
-			random_eb(t);
-		}
+	//template<typename T, typename ... L>
+	//	void random_eb(T t, L... l) {
+	//		random_eb(l...);
+	//		random_eb(t);
+	//	}
 
-	void random_eb(eb_t p) {
-		bn_t n, k;
-		bn_new(k);
-		bn_new(n);
-		eb_curve_get_ord(n);
-		random_bn(k, BN_POS, bn_bits(n));
-		bn_mod(k, k, n);
-		eb_mul_gen(p, k);
-	}
+	//void random_eb(eb_t p) {
+	//	bn_t n, k;
+	//	bn_new(k);
+	//	bn_new(n);
+	//	eb_curve_get_ord(n);
+	//	random_bn(k, BN_POS, bn_bits(n));
+	//	bn_mod(k, k, n);
+	//	eb_mul_gen(p, k);
+	//}
 
-	void random_eb(eb_t *p, int length=1) {
-		bn_t n, k;
-		bn_new(k);
-		bn_new(n);
-		eb_curve_get_ord(n);
-		for(int i = 0; i < length; ++i) {
-			random_bn(k, BN_POS, bn_bits(n));
-			bn_mod(k, k, n);
-			eb_mul_gen(p[i], k);
-		}
-	}
+	//void random_eb(eb_t *p, int length=1) {
+	//	bn_t n, k;
+	//	bn_new(k);
+	//	bn_new(n);
+	//	eb_curve_get_ord(n);
+	//	for(int i = 0; i < length; ++i) {
+	//		random_bn(k, BN_POS, bn_bits(n));
+	//		bn_mod(k, k, n);
+	//		eb_mul_gen(p[i], k);
+	//	}
+	//}
 
 	void random_mpz(mpz_t out, int nbits) {
-		int nbytes = (nbits+1)/8;
-		uint8_t * data = new uint8_t[nbytes+16];
-		random_data(data, nbytes+16);
-		int n = nbytes;
-		for(int i = 3; i >= 0; i--) {
-			data[i] = (unsigned char) (n % (1 << 8));
-			n /= (1 << 8);
-		}
-		FILE *fp = fmemopen(data, nbytes+16, "rb");
-		int res = mpz_inp_raw(out, fp);
-		assert(res != 0);
+		int nbytes = (nbits+7)/8;
+		uint8_t * data = new uint8_t[nbytes];
+		random_data(data, nbytes);
+		//int n = nbytes;
+		//for(int i = 3; i >= 0; i--) {
+		//	data[i] = (unsigned char) (n % (1 << 8));
+		//	n /= (1 << 8);
+		//}
+		//FILE *fp = fmemopen(data, nbytes+16, "rb");
+		//
+		//int res = mpz_inp_raw(out, fp);
+		//assert(res != 0);
+		data[0] %= (1 << (nbits % 8));
+		mpz_import(out, nbytes, 1, 1, 0, 0, data);
 	}
 	void random_mpz(mpz_t rop, const mpz_t n) {
 		unsigned long size = mpz_sizeinbase(n, 2);

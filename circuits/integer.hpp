@@ -140,7 +140,7 @@ inline void init(Bit * bits, const bool* b, int length, int party) {
   init(bits,b,length, party);
   }*/
 
-inline Integer::Integer(int len, const string& str, int party) : length(len) {
+inline Integer::Integer(int len, const std::string& str, int party) : length(len) {
 	bool* b = new bool[len];
 	bool_data(b, len, str);
 	bits = new Bit[length];
@@ -168,10 +168,10 @@ inline const Bit &Integer::operator[](int index) const {
 }
 
 template<>
-inline string Integer::reveal<string>(int party) const {
+inline std::string Integer::reveal<std::string>(int party) const {
 	bool * b = new bool[length];
 	local_backend->Reveal(b, party, (block *)bits,  length);
-	string bin="";
+	std::string bin="";
 	for(int i = length-1; i >= 0; --i)
 		bin += (b[i]? '1':'0');
 	delete [] b;
@@ -180,21 +180,21 @@ inline string Integer::reveal<string>(int party) const {
 
 template<>
 inline int Integer::reveal<int>(int party) const {
-	string s = reveal<string>(party);
+	std::string s = reveal<std::string>(party);
 	return stoi(s);
 }
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
 	Integer tmp = *this;
 	tmp.resize(tmp.size()+1, false);
-	string s = tmp.reveal<string>(party);
+	std::string s = tmp.reveal<std::string>(party);
 	return stoi(s);
 }
 
 
 template<>
 inline long long Integer::reveal<long long>(int party) const {
-	string s = reveal<string>(party);
+	std::string s = reveal<std::string>(party);
 	return stoll(s);
 }
 

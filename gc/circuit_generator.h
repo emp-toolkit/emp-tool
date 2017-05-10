@@ -10,8 +10,8 @@ void gen_reveal(Backend* be, bool* clear, int party, const block * label, int le
 
 class CircuitGenerator: public Backend { public:
 	CircuitFileGenerator * gc;
-	ofstream fout;
-	ofstream tmp;
+	std::ofstream fout;
+	std::ofstream tmp;
 	CircuitGenerator(CircuitFileGenerator* gc): Backend(PUBLIC) {
 		this->gc = gc;	
 		Feed_internal = gen_feed;
@@ -19,9 +19,9 @@ class CircuitGenerator: public Backend { public:
 	}
 	void finalize() {
 		tmp.close();
-		fout<<gc->gates<<" "<<gc->gid<<endl;
-		fout<<n1<<" "<<n2<<" "<<n3<<endl;
-		ifstream fin("emp-toolkit_tmpfile");
+		fout<<gc->gates<<" "<<gc->gid<< std::endl;
+		fout<<n1<<" "<<n2<<" "<<n3<< std::endl;
+		std::ifstream fin("emp-toolkit_tmpfile");
 		fout << fin.rdbuf();
 		fout.close();
 		fin.close();

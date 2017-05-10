@@ -52,7 +52,7 @@
 #ifndef LIBGARBLE_AES_H
 #define LIBGARBLE_AES_H
 
-#include "block.h"
+#include "utils/block.h"
     
 typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
 

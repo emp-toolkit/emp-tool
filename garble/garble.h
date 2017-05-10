@@ -1,12 +1,15 @@
 #ifndef LIBGARBLE_H
 #define LIBGARBLE_H
 
-#include "block.h"
+#include "utils/block.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <openssl/sha.h>
+//#include <openssl/sha.h>
+
+#include <cryptoTools/crypto/sha1.h>
+#define SHA_DIGEST_LENGTH osuCrypto::SHA1::HashSize
 
 #define GARBLE_OK 0
 #define GARBLE_ERR -1

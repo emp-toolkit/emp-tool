@@ -1,4 +1,5 @@
-#include "circuit_generator.h"
+#include "gc/circuit_generator.h"
+#include "circuits/integer.h"
 
 void ham(int n) {
 	Integer a(n, 0, ALICE);
