@@ -6,7 +6,7 @@ include_directories(${CMAKE_SOURCE_DIR}/)
 
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 
-set (CMAKE_C_FLAGS " -Wall -pthread -march=native -O3 -maes -Wfatal-errors")
+set (CMAKE_C_FLAGS " -Wall -pthread -march=native -O3 -maes")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -ggdb")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
@@ -39,10 +39,12 @@ if(MSVC)
 
 	set(gmp "mpir")
 	set(relic "relic_s")
+	set(boost "")
 else(MSVC)
 	# =================== LINUX =============================
    	set(gmp "gmp")
 	set(relic "relic")
+	set(boost "boost_system boost_thread")
 endif(MSVC)
 
 
@@ -87,7 +89,7 @@ install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)
 	add_executable("test_${_name}" "test/${_name}.cpp" ${basics} "gc/backend.cpp")
-	target_link_libraries("test_${_name}"  ${NAME}  ${relic} cryptoTools miracl ${gmp} boost_system boost_thread) 
+	target_link_libraries("test_${_name}"  ${NAME}  ${relic} cryptoTools miracl ${gmp} ${boost}) 
 endmacro()
 add_test(bit)
 add_test(gen_circuit)
