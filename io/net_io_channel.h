@@ -7,9 +7,9 @@
 //#include <netinet/tcp.h>
 //#include <netinet/in.h>
 //#include <sys/socket.h>
-#include <cryptoTools\Network\Channel.h>
-#include <cryptoTools\Network\Endpoint.h>
-#include <cryptoTools\Network\IOService.h>
+#include <cryptoTools/Network/Channel.h>
+#include <cryptoTools/Network/Endpoint.h>
+#include <cryptoTools/Network/IOService.h>
 #include <sys/types.h>
 
 #include <string>

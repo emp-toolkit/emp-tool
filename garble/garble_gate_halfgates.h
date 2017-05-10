@@ -51,6 +51,7 @@ garble_gate_eval_halfgates(garble_gate_type_e type, block A, block B, block *out
         *out = W;
     }
 }
+#undef B0
 
 static inline void
 garble_gate_garble_halfgates(garble_gate_type_e type, block A0, block A1, block B0,

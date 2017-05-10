@@ -8,7 +8,7 @@
 #include <stdio.h>
 //#include <openssl/sha.h>
 
-#include <cryptoTools/crypto/sha1.h>
+#include <cryptoTools/Crypto/sha1.h>
 #define SHA_DIGEST_LENGTH osuCrypto::SHA1::HashSize
 
 #define GARBLE_OK 0
