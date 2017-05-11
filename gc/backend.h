@@ -7,8 +7,8 @@
 #include <thread>
 #endif
 #include "garble_circuit.h"
-#include "utils/block.h"
-#include "utils/config.h"
+#include "emp-tool/utils/block.h"
+#include "emp-tool/utils/config.h"
 
 class Backend { public:
 	int cur_party;

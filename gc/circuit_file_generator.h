@@ -1,8 +1,8 @@
 #ifndef CIRCUIT_FILE_GENERATOR_H__
 #define CIRCUIT_FILE_GENERATOR_H__
 #define HALFGATE_GEN_H__
-#include "utils/block.h"
-#include "utils/utils.h"
+#include "emp-tool/utils/block.h"
+#include "emp-tool/utils/utils.h"
 #include <iostream>
 #include <fstream>
 

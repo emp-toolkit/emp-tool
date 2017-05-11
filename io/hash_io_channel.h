@@ -1,6 +1,6 @@
 #ifndef HASH_IO_CHANNEL_H__
 #define HASH_IO_CHANNEL_H__
-#include "utils/hash.h"
+#include "emp-tool/utils/hash.h"
 #include "net_io_channel.h"
 /** @addtogroup IO
     @{

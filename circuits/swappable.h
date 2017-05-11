@@ -1,6 +1,6 @@
 #ifndef SWAPPABLE_H__
 #define SWAPPABLE_H__
-#include "circuits/bit.h"
+#include "emp-tool/circuits/bit.h"
 class Bit;
 
 template<typename T>

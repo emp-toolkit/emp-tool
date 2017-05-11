@@ -1,4 +1,4 @@
-#include "gc/circuit_generator.h"
+#include "emp-tool/gc/circuit_generator.h"
 using namespace std;
 
 void test_bit() {

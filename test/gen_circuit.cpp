@@ -1,5 +1,6 @@
-#include "gc/circuit_generator.h"
-#include "circuits/integer.h"
+#include "emp-tool/gc/circuit_generator.h"
+#include "emp-tool/circuits/integer.h"
+using std::string;
 
 void ham(int n) {
 	Integer a(n, 0, ALICE);

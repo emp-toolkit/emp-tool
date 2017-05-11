@@ -1,10 +1,10 @@
 #ifndef INTEGER_H__
 #define INTEGER_H__
 
-#include "circuits/bit.h"
-#include "circuits/number.h"
-#include "circuits/comparable.h"
-#include "circuits/swappable.h"
+#include "emp-tool/circuits/bit.h"
+#include "emp-tool/circuits/number.h"
+#include "emp-tool/circuits/comparable.h"
+#include "emp-tool/circuits/swappable.h"
 #include <vector>
 #include <algorithm>
 #include <math.h>

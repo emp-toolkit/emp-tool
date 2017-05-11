@@ -1,7 +1,7 @@
 #ifndef LIBGARBLE_H
 #define LIBGARBLE_H
 
-#include "utils/block.h"
+#include "emp-tool/utils/block.h"
 
 #include <stdbool.h>
 #include <stdint.h>

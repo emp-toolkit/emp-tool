@@ -1,8 +1,8 @@
 #ifndef COM_H__
 #define COM_H__
 #include "string.h"
-#include "utils/hash.h"
-#include "utils/prg.h"
+#include "emp-tool/utils/hash.h"
+#include "emp-tool/utils/prg.h"
 /** @addtogroup BP
     @{
   */

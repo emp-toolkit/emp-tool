@@ -29,7 +29,7 @@
 #include <smmintrin.h>
 #include <wmmintrin.h>
 #include <assert.h>
-#include "garble/block.h"
+#include "emp-tool/garble/block.h"
 //typedef __m128i block;
 typedef __m128i block_tpl[2];
 inline block xorBlocks(block x, block y){return _mm_xor_si128(x,y);}

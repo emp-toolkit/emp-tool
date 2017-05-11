@@ -1,4 +1,3 @@
-find_package(OpenSSL)
 find_path(EMP-TOOL_INCLUDE_DIR NAMES cmake/emp-tool-config.cmake)
 find_library(EMP-TOOL_LIBRARY NAMES emp-tool)
 

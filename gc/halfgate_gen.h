@@ -3,11 +3,11 @@
 #include "io/io_channel.h"
 #include "io/net_io_channel.h"
 #include "io/file_io_channel.h"
-#include "utils/block.h"
-#include "utils/utils.h"
-#include "utils/prp.h"
-#include "utils/hash.h"
-#include "garble/garble_gate_halfgates.h"
+#include "emp-tool/utils/block.h"
+#include "emp-tool/utils/utils.h"
+#include "emp-tool/utils/prp.h"
+#include "emp-tool/utils/hash.h"
+#include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
 
 template<typename T, RTCktOpt rt>

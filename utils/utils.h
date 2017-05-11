@@ -1,7 +1,7 @@
 #ifndef UTILS_H__
 #define UTILS_H__
 #include <string>
-#include "utils/block.h"
+#include "emp-tool/utils/block.h"
 #include <sstream>
 //#include <bitset>
 //#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
@@ -10,8 +10,8 @@
 //#else
 #include <gmp.h>
 //#endif
-#include "utils/config.h"
-#include "utils/prg.h"
+#include "emp-tool/utils/config.h"
+#include "emp-tool/utils/prg.h"
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 

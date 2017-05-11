@@ -4,11 +4,11 @@
 #define AND_GATE 0
 #define XOR_GATE 1
 #define NOT_GATE 2
-#include "gc/garble_circuit.h"
-#include "gc/backend.h"
+#include "emp-tool/gc/garble_circuit.h"
+#include "emp-tool/gc/backend.h"
 #include <stdio.h>
-#include "utils/block.h"
-#include "circuits/bit.h"
+#include "emp-tool/utils/block.h"
+#include "emp-tool/circuits/bit.h"
 class CircuitFile { public:
 	int num_gate, num_wire, n1, n2, n3;
 	int *gates;

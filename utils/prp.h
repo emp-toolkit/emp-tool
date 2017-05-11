@@ -1,6 +1,6 @@
 #include "block.h"
 #include "config.h"
-#include "garble/aes.h"
+#include "emp-tool/garble/aes.h"
 #include <stdio.h>
 #ifndef PRP_H__
 #define PRP_H__

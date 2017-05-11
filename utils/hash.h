@@ -1,7 +1,7 @@
 #ifndef HASH_H__
 #define HASH_H__
-#include "utils/block.h"
-#include "utils/config.h"
+#include "emp-tool/utils/block.h"
+#include "emp-tool/utils/config.h"
 //#include <openssl/sha.h>
 #include <cryptoTools/Crypto/sha1.h>
 #include <stdio.h>

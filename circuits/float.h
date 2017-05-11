@@ -1,10 +1,10 @@
 #ifndef FLOAT_H__
 #define FLOAT_H__
 
-#include "circuits/bit.h"
-#include "circuits/integer.h"
-#include "circuits/swappable.h"
-#include "circuits/number.h"
+#include "emp-tool/circuits/bit.h"
+#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/swappable.h"
+#include "emp-tool/circuits/number.h"
 #include <math.h>
 
 class Float: Swappable<Float> { public:

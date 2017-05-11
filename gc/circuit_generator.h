@@ -1,6 +1,6 @@
 #ifndef CIRCUIT_GENEARTOR_H__
 #define CIRCUIT_GENEARTOR_H__
-#include <emp-tool>
+#include <emp-tool/emp-tool>
 #include "circuit_file_generator.h"
 #include <iostream>
 #include <fstream>

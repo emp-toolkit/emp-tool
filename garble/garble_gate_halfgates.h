@@ -1,9 +1,9 @@
 #ifndef LIBGARBLE_GARBLE_GATE_HALFGATES_H
 #define LIBGARBLE_GARBLE_GATE_HALFGATES_H
 
-#include "garble/garble.h"
-#include "garble/aes.h"
-#include "garble/block.h"
+#include "emp-tool/garble/garble.h"
+#include "emp-tool/garble/aes.h"
+#include "emp-tool/garble/block.h"
 
 #include <emmintrin.h>
 #include <smmintrin.h>
