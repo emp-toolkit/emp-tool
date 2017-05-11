@@ -44,7 +44,7 @@ else(MSVC)
 	# =================== LINUX =============================
    	set(gmp "gmp")
 	set(relic "relic")
-	set(boost "boost_system boost_thread")
+	set(boost boost_system boost_thread)
 endif(MSVC)
 
 
@@ -58,7 +58,7 @@ file(GLOB headers
 	"utils/*.hpp"
 	"gc/*.h"
 	"gc/*.hpp"
-#	"emp-tool"
+#	"emp-tool.h"
 )
 file(GLOB circuit-files 
 	"circuits/files/*"
@@ -85,10 +85,10 @@ install(FILES emp-tool-config.cmake DESTINATION cmake/)
 
 
 #message(STATUS ${headers})
-install(FILES "emp-tool" DESTINATION include)
+install(FILES "emp-tool.h" DESTINATION include)
 install(DIRECTORY . DESTINATION include/${NAME} FILES_MATCHING 
-	PATTERN "*.h"
-	PATTERN "./circuits/files/*")
+	PATTERN "*.h")
+#	PATTERN "./circuits/files/*")
 #install(FILES ${headers} DESTINATION include/${NAME})
 #install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
 #install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
