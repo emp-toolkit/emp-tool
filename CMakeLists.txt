@@ -58,7 +58,7 @@ file(GLOB headers
 	"utils/*.hpp"
 	"gc/*.h"
 	"gc/*.hpp"
-	"emp-tool"
+#	"emp-tool"
 )
 file(GLOB circuit-files 
 	"circuits/files/*"
@@ -81,6 +81,11 @@ SET_TARGET_PROPERTIES(${NAME}_static PROPERTIES  OUTPUT_NAME ${NAME} CLEAN_DIREC
 
 # install steps
 install(FILES emp-tool-config.cmake DESTINATION cmake/)
+
+
+
+message(STATUS ${headers})
+install(FILES "emp-tool" DESTINATION include)
 install(FILES ${headers} DESTINATION include/${NAME})
 install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
 install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
