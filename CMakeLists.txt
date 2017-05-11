@@ -86,12 +86,10 @@ install(FILES emp-tool-config.cmake DESTINATION cmake/)
 
 #message(STATUS ${headers})
 install(FILES "emp-tool.h" DESTINATION include)
-install(DIRECTORY . DESTINATION include/${NAME} FILES_MATCHING 
-	PATTERN "*.h")
-#	PATTERN "./circuits/files/*")
-#install(FILES ${headers} DESTINATION include/${NAME})
-#install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
-#install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
+install(DIRECTORY ${CMAKE_SOURCE_DIR} DESTINATION include/${NAME} FILES_MATCHING 
+	PATTERN "*.h"
+	PATTERN "*.hpp"
+	PATTERN "${CMAKE_SOURCE_DIR}/circuits/files/*")
 install(TARGETS ${NAME} DESTINATION lib)
 
 
