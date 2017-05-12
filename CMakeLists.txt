@@ -50,23 +50,23 @@ endif(MSVC)
 
 MESSAGE( STATUS "CMAKE_CXX_COMPILER: " ${CMAKE_CXX_COMPILER} )
 
-file(GLOB headers 
-	"io/*.h"
-	"circuits/*.h"
-	"circuits/*.hpp"
-	"utils/*.h"
-	"utils/*.hpp"
-	"gc/*.h"
-	"gc/*.hpp"
-#	"emp-tool.h"
-)
-file(GLOB circuit-files 
-	"circuits/files/*"
-)
+# file(GLOB headers 
+	# "io/*.h"
+	# "circuits/*.h"
+	# "circuits/*.hpp"
+	# "utils/*.h"
+	# "utils/*.hpp"
+	# "gc/*.h"
+	# "gc/*.hpp"
+# #	"emp-tool.h"
+# )
+# file(GLOB circuit-files 
+	# "circuits/files/*"
+# )
 
-file(GLOB libgarble
-	"garble/*.h"
-)
+# file(GLOB libgarble
+	# "garble/*.h"
+# )
 
 set(sources
 	gc/backend.cpp
@@ -84,12 +84,18 @@ install(FILES emp-tool-config.cmake DESTINATION cmake/)
 
 
 
-#message(STATUS ${headers})
+message(STATUS ${CMAKE_SOURCE_DIR})
 install(FILES "emp-tool.h" DESTINATION include)
-install(DIRECTORY ${CMAKE_SOURCE_DIR} DESTINATION include/${NAME} FILES_MATCHING 
-	PATTERN "*.h"
-	PATTERN "*.hpp"
-	PATTERN "${CMAKE_SOURCE_DIR}/circuits/files/*")
+
+macro (install_headers _dir)
+	install(DIRECTORY ${CMAKE_SOURCE_DIR}/_dir DESTINATION include/${NAME}/_dir FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+endmacro()
+
+install_headers(io)
+install_headers(garble)
+install_headers(gc)
+install_headers(circuits)
+install_headers(utils)
 install(TARGETS ${NAME} DESTINATION lib)
 
 
