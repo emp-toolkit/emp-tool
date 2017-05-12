@@ -88,7 +88,7 @@ message(STATUS ${CMAKE_SOURCE_DIR})
 install(FILES "emp-tool.h" DESTINATION include)
 
 macro (install_headers _dir)
-	install(DIRECTORY ${CMAKE_SOURCE_DIR}/_dir DESTINATION include/${NAME}/_dir FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+	install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME}/${_dir} FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
 endmacro()
 
 install_headers(io)
