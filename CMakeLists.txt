@@ -89,8 +89,8 @@ install(FILES "emp-tool.h" DESTINATION include)
 
 macro (install_pattern _dir _patterns)
 	FOREACH(pattern ${_patterns})
-		message(STATUS ${pattern})
-		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME}/${_dir} FILES_MATCHING PATTERN ${pattern})
+		#message(STATUS ${pattern})
+		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME} FILES_MATCHING PATTERN ${pattern})
 	ENDFOREACH(pattern)
 endmacro()
 
