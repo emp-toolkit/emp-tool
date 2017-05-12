@@ -87,15 +87,20 @@ install(FILES emp-tool-config.cmake DESTINATION cmake/)
 message(STATUS ${CMAKE_SOURCE_DIR})
 install(FILES "emp-tool.h" DESTINATION include)
 
-macro (install_headers _dir)
-	install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME}/${_dir} FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp")
+macro (install_pattern _dir _patterns)
+	FOREACH(pattern ${_patterns})
+		message(STATUS ${pattern})
+		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME}/${_dir} FILES_MATCHING PATTERN ${pattern})
+	ENDFOREACH(pattern)
 endmacro()
 
-install_headers(io)
-install_headers(garble)
-install_headers(gc)
-install_headers(circuits)
-install_headers(utils)
+install_pattern(io "*.h;*.hpp")
+install_pattern(garble "*.h;*.hpp")
+install_pattern(gc "*.h;*.hpp")
+install_pattern(circuits "*.h;*.hpp")
+install_pattern(circuits/files "*")
+install_pattern(utils "*.h;*.hpp")
+
 install(TARGETS ${NAME} DESTINATION lib)
 
 
