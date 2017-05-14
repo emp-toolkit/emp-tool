@@ -1,9 +1,9 @@
 #ifndef PRG_H__
 #define PRG_H__
+#include "utils_ec.h"
 #include "block.h"
 #include "emp-tool/garble/aes.h"
 #include "config.h"
-#include "utils_ec.h"
 //#include <stdio.h>
 //#include <stdarg.h>
 #include <gmp.h>
