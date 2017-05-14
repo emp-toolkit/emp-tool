@@ -1,5 +1,11 @@
 find_path(EMP-TOOL_INCLUDE_DIR NAMES cmake/emp-tool-config.cmake)
-find_library(EMP-TOOL_LIBRARY NAMES emp-tool)
+
+
+if(CMAKE_BUILD_TYPE EQUAL "Debug")
+	find_library(EMP-TOOL_LIBRARY NAMES emp-toold)
+else()
+	find_library(EMP-TOOL_LIBRARY NAMES emp-tool)
+endif()
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(EMP-TOOL DEFAULT_MSG EMP-TOOL_INCLUDE_DIR EMP-TOOL_LIBRARY)
