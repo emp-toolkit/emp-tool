@@ -28,10 +28,10 @@ set(possible_gmp_lib_dirs ${possible_gmp_h_dirs})
 # GMP_INCLUDE_DIRS - the GMP include directory
 # GMP_LIBRARIES - Libraries needed to use GMP
 
-if (GMP_INCLUDE_DIR AND GMP_LIBRARIES)
+if (GMP_INCLUDE_DIRS AND GMP_LIBRARIES)
 		# Already in cache, be silent
 		set(GMP_FIND_QUIETLY TRUE)
-endif (GMP_INCLUDE_DIR AND GMP_LIBRARIES)
+endif (GMP_INCLUDE_DIRS AND GMP_LIBRARIES)
 
 if(MSVC)
 	set(gmp_lib_name mpir)
@@ -42,11 +42,11 @@ endif()
 message(STATUS "s   ${possible_gmp_h_dirs}")
 find_path(GMP_INCLUDE_DIRS NAMES gmp.h PATHS ${possible_gmp_h_dirs}/Release)
 find_library(GMP_LIBRARIES NAMES ${gmp_lib_name} lib${gmp_lib_name} PATHS ${possible_gmp_lib_dirs}/Release)
-find_library(GMPXX_LIBRARIES NAMES ${gmp_lib_name}xx lib${gmp_lib_name}xx PATHS ${possible_gmp_lib_dirs}/Release)
+#find_library(GMPXX_LIBRARIES NAMES ${gmp_lib_name}xx lib${gmp_lib_name}xx PATHS ${possible_gmp_lib_dirs}/Release)
 find_library(GMP_DEBUG_LIBRARIES NAMES ${gmp_lib_name} lib${gmp_lib_name} PATHS ${possible_gmp_lib_dirs}/Debug)
-find_library(GMPXX_DEBUG_LIBRARIES NAMES ${gmp_lib_name}xx lib${gmp_lib_name}xx PATHS ${possible_gmp_lib_dirs}/Debug)
+#efind_library(GMPXX_DEBUG_LIBRARIES NAMES ${gmp_lib_name}xx lib${gmp_lib_name}xx PATHS ${possible_gmp_lib_dirs}/Debug)
 MESSAGE(STATUS "GMP libs: " ${GMP_LIBRARIES} " " ${GMPXX_LIBRARIES} )
-MESSAGE(STATUS "GMP include: " ${GMP_INCLUDE_DIR})
+MESSAGE(STATUS "GMP include: " ${GMP_INCLUDE_DIRS})
 include(FindPackageHandleStandardArgs)
 FIND_PACKAGE_HANDLE_STANDARD_ARGS(GMP DEFAULT_MSG GMP_INCLUDE_DIR GMP_LIBRARIES)
 

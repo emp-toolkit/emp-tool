@@ -21,7 +21,7 @@ FOREACH(dir ${cryptoTools_dirs})
 				"C:/libs/miracl/x64/\$(Configuration)/Miracl.lib")
 			set(cryptoTools_LINK_DIRS C:/libs/boost/stage/lib)
 		else()
-			set(cryptoTools_LIBRARIES ${dir}/../lib/libcryptoTools.a)
+			set(cryptoTools_LIBRARIES ${dir}/../lib/libcryptoTools.a;boost_system)
 		endif()
 		
 		set(relic_FOUND true)
