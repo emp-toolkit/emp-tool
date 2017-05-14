@@ -14,7 +14,7 @@ include_directories(
 	${CMAKE_SOURCE_DIR}/.. 
 	${cryptoTools_INCLUDE_DIRS} 
 	${relic_INCLUDE_DIRS}
-	${gmp_INCLUDE_DIRS})
+	${GMP_INCLUDE_DIRS})
 
 	
 if(MSVC)
@@ -62,6 +62,8 @@ install_dir(utils "*.h;*.hpp")
 install(TARGETS ${NAME} DESTINATION lib)
 
 
+set(RELEASE_LIBRARIES ${relic_LIBRARRIES} ${cryptoTools_LIBRARIES} ${GMP_LIBRARIES})
+set(DEBUG_LIBRARIES ${relic_DEBUG_LIBRARRIES} ${cryptoTools_DEBUG_LIBRARIES} ${GMP_DEBUG_LIBRARIES})
 
 target_link_libraries(${NAME}  ${cryptoTools_LIBRARIES}) 
 
@@ -69,7 +71,7 @@ message(STATUS  "sss  ${cryptoTools_LINK_DIRS}")
 
 macro (add_test _name)
 	add_executable("test_${_name}" "test/${_name}.cpp" ${basics} "gc/backend.cpp")
-	target_link_libraries("test_${_name}"  ${NAME}  ${relic_LIBRARRIES} ${cryptoTools_LIBRARIES} ${gmp_LIBRARIES}) 
+	target_link_libraries("test_${_name}"  ${NAME} optimized ${RELEASE_LIBRARIES} debug ${DEBUG_LIBRARIES}) 
 endmacro()
 add_test(bit)
 add_test(gen_circuit)
