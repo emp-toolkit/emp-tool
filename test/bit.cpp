@@ -15,7 +15,7 @@ void test_bit() {
 						bool res = (b1&b2).reveal(BOB);
 						if(res != (b[i] && b[k]))
 							cout<<"AND" <<i<<" "<<j<<" "<<k<<" "<<l<<" "<<res<<endl;
-						assert(res == (b[i] and b[k]));
+						assert(res == (b[i] && b[k]));
 					}
 					{
 						Bit b1(b[i], p[j]);
@@ -23,7 +23,7 @@ void test_bit() {
 						bool res = (b1^b2).reveal(BOB);
 						if(res != (b[i] ^ b[k]))
 							cout <<"XOR"<<i<<" "<<j<<" "<<k<<" "<<l<< " " <<res<<endl;
-						assert(res == (b[i] xor b[k]));
+						assert(res == (b[i] ^ b[k]));
 					}
 				}
 	cout <<"success!"<<endl;

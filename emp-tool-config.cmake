@@ -7,6 +7,6 @@ find_package_handle_standard_args(EMP-TOOL DEFAULT_MSG EMP-TOOL_INCLUDE_DIR EMP-
 add_definitions(-DEMP_CIRCUIT_PATH=${EMP-TOOL_INCLUDE_DIR}/include/emp-tool/files/)
 if(EMP-TOOL_FOUND)
 	set(EMP-TOOL_LIBRARIES ${EMP-TOOL_LIBRARY})
-	set(EMP-TOOL_INCLUDE_DIRS ${EMP-TOOL_INCLUDE_DIR}/include/emp-tool/)
+	set(EMP-TOOL_INCLUDE_DIRS ${EMP-TOOL_INCLUDE_DIR}/include/)
 #	message("EMP-TOOL Found!")
 endif()

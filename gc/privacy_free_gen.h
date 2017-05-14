@@ -1,7 +1,7 @@
 #ifndef PRIVACY_FREE_GEN_H__
 #define PRIVACY_FREE_GEN_H__
-#include "io/io_channel.h"
-#include "io/net_io_channel.h"
+#include "emp-tool/io/io_channel.h"
+#include "emp-tool/io/net_io_channel.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"

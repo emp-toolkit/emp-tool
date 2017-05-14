@@ -2,75 +2,39 @@ cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
 
-include_directories(${CMAKE_SOURCE_DIR}/..)
 
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 
-set (CMAKE_C_FLAGS " -Wall -pthread -march=native -O3 -maes")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -ggdb")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} cmake/ ${CMAKE_SOURCE_DIR})
+FIND_PACKAGE(cryptoTools REQUIRED)
+FIND_PACKAGE(relic       REQUIRED)
+FIND_PACKAGE(gmp         REQUIRED)
+
+include_directories(
+	${CMAKE_SOURCE_DIR}/.. 
+	${cryptoTools_INCLUDE_DIRS} 
+	${relic_INCLUDE_DIRS}
+	${gmp_INCLUDE_DIRS})
+
+	
+if(MSVC)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3 /EHsc")
+	set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+	set(CMAKE_CXX_FLAGS_DEBUG "/MTd")
+else()
+	set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
+endif()
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
-# OS specific flags
-if(MSVC)
-	# =================== WINDOWS =============================
-	if(NOT  EXISTS ${libOTe_dir})
-		set(libOTe_dir "${CMAKE_SOURCE_DIR}/../../libOTe/")
-	endif()
-
-	# Set up LD_LIBRARY_PATH and includes path for windows
-	set( relic_dir "${CMAKE_SOURCE_DIR}/../../relic")
-	set( mpir_dir "C:/libs/mpir")
-	set( miracl_dir "C:/libs/miracl/")
-	set( boost_dir "C:/libs/boost")
-
-	include_directories("${libOTe_dir}/cryptoTools")
-	include_directories("${relic_dir}/include")
-	include_directories("${mpir_dir}/lib/x64/\$(Configuration)")
-	include_directories("${boost_dir}")
-	include_directories("${miracl_dir}/miracl/include")
-
-	link_directories("${CMAKE_SOURCE_DIR}")
-	link_directories("${libOTe_dir}/x64/\$(Configuration)")
-	link_directories("${relic_dir}/lib/\$(Configuration)")
-	link_directories("${mpir_dir}/lib/x64/\$(Configuration)")
-	link_directories("${boost_dir}/stage/lib")
-	link_directories("${miracl_dir}/x64/\$(Configuration)")
 
 
-	set(gmp "mpir")
-	set(relic "relic_s")
-	set(boost "")
-else(MSVC)
-	# =================== LINUX =============================
-   	set(gmp "gmp")
-	set(relic "relic")
-	set(boost boost_system boost_thread)
-endif(MSVC)
 
+set(sources 
+	gc/backend.cpp 
+	io/net_io_channel.cpp 
+	utils/prg.cpp)
 
-MESSAGE( STATUS "CMAKE_CXX_COMPILER: " ${CMAKE_CXX_COMPILER} )
-
-# file(GLOB headers 
-	# "io/*.h"
-	# "circuits/*.h"
-	# "circuits/*.hpp"
-	# "utils/*.h"
-	# "utils/*.hpp"
-	# "gc/*.h"
-	# "gc/*.hpp"
-# #	"emp-tool.h"
-# )
-# file(GLOB circuit-files 
-	# "circuits/files/*"
-# )
-
-# file(GLOB libgarble
-	# "garble/*.h"
-# )
-
-set(sources
-	gc/backend.cpp
-)
+LINK_DIRECTORIES(${cryptoTools_LINK_DIRS})
 
 # Build both the static and dynamic library 
 add_library(${NAME}        SHARED ${sources})
@@ -78,9 +42,10 @@ add_library(${NAME}_static STATIC ${sources})
 
 # Name the static library the same
 SET_TARGET_PROPERTIES(${NAME}_static PROPERTIES  OUTPUT_NAME ${NAME} CLEAN_DIRECT_OUTPUT 1)
+set_target_properties(${NAME} ${NAME}_static PROPERTIES DEBUG_POSTFIX d)
+
 
 # install steps
-
 macro (install_dir _dir _patterns)
 	FOREACH(pattern ${_patterns})
 		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME} FILES_MATCHING PATTERN ${pattern})
@@ -97,23 +62,17 @@ install_dir(utils "*.h;*.hpp")
 install(TARGETS ${NAME} DESTINATION lib)
 
 
+
+target_link_libraries(${NAME}  ${cryptoTools_LIBRARIES}) 
+
+message(STATUS  "sss  ${cryptoTools_LINK_DIRS}")
+
 macro (add_test _name)
 	add_executable("test_${_name}" "test/${_name}.cpp" ${basics} "gc/backend.cpp")
-	target_link_libraries("test_${_name}"  ${NAME}  ${relic} cryptoTools miracl ${gmp} ${boost}) 
+	target_link_libraries("test_${_name}"  ${NAME}  ${relic_LIBRARRIES} ${cryptoTools_LIBRARIES} ${gmp_LIBRARIES}) 
 endmacro()
 add_test(bit)
 add_test(gen_circuit)
 
 
 
-if(MSVC)
-	# Force static std runtime library on windows
-	FOREACH(flag
-	 CMAKE_C_FLAGS_RELEASE CMAKE_C_FLAGS_RELWITHDEBINFO
-	 CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_DEBUG_INIT
-	 CMAKE_CXX_FLAGS_RELEASE  CMAKE_CXX_FLAGS_RELWITHDEBINFO
-	 CMAKE_CXX_FLAGS_DEBUG  CMAKE_CXX_FLAGS_DEBUG_INIT)
-	 STRING(REPLACE "/MD"  "/MT" "${flag}" "${${flag}}")
-	 SET("${flag}" "${${flag}} /EHsc")
-	ENDFOREACH()
-endif()

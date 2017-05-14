@@ -1,8 +1,8 @@
 #ifndef HALFGATE_EVA_H__
 #define HALFGATE_EVA_H__
-#include "io/io_channel.h"
-#include "io/net_io_channel.h"
-#include "io/file_io_channel.h"
+#include "emp-tool/io/io_channel.h"
+#include "emp-tool/io/net_io_channel.h"
+#include "emp-tool/io/file_io_channel.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
