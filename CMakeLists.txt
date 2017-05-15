@@ -36,6 +36,7 @@ file(GLOB libgarble
 )
 
 set(sources
+utils/fmemopen.c
 gc/backend.cpp
 )
 add_library(${NAME} SHARED ${sources})

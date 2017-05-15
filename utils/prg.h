@@ -4,6 +4,7 @@
 #include "garble/aes.h"
 #include "config.h"
 #include "utils_ec.h"
+#include "fmemopen.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <gmp.h>
