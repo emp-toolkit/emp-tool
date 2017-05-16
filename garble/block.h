@@ -6,8 +6,10 @@
 #include <xmmintrin.h>
 #include <smmintrin.h>
 
-typedef __m128i block;
+//typedef __m128i block;
+#include <cryptoTools/Common/defines.h>
 
+using namespace osuCrypto;
 #define garble_xor(x,y) _mm_xor_si128(x,y)
 #define garble_zero_block() _mm_setzero_si128()
 #define garble_equal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) == 0xffff)

@@ -1,3 +1,6 @@
+#include  "emp-tool/utils/prg.h"
+extern std::mutex rnd_mtx;
+
 inline void bn_to_block(block * b, const bn_t bn) {
 	bn_write_bin((uint8_t*)b, sizeof(block), bn);
 }
@@ -6,7 +9,10 @@ inline void block_to_bn(bn_t bn, const block * b) {
 	bn_read_bin(bn, (const uint8_t*)b, sizeof(block));
 }
 inline void initialize_relic() {
+	std::lock_guard < std::mutex> lock(rnd_mtx);
 	if(initialized) return;
+
+
 	initialized = true;
 	if (core_init() != STS_OK) {
 		core_clean();

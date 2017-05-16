@@ -10,29 +10,30 @@
 #include <random>
 #include <mutex>
 /** @addtogroup BP
-    @{
+	@{
   */
 
 class PRG;
 static PRG * rnd = nullptr;
 extern std::mutex rnd_mtx;
-class PRG { public:
+
+class PRG {
+public:
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {
 
-		if(rnd == nullptr) {
+
+#ifdef REAL_RANDOM
+		if (rnd == nullptr) {
 			std::lock_guard<std::mutex> lock(rnd_mtx);
 			if (rnd == nullptr) {
 
-				int data[sizeof(block)/sizeof(int)];
-
+				int data[sizeof(block) / sizeof(int)];
 				// this will be "/dev/urandom" when possible...
 				std::random_device rand_div;
-
-				for(int i =0; i < sizeof(block) / sizeof(int); ++i)
+				for (int i = 0; i < sizeof(block) / sizeof(int); ++i)
 					data[i] = rand_div();
-
 				//FILE *fp;
 				//fp = fopen("/dev/urandom", "r");
 				//int r_bytes = 0;
@@ -48,12 +49,20 @@ class PRG { public:
 			}
 		}
 
+#endif
 
 		if (seed == nullptr) {
+#ifdef REAL_RANDOM
 			block data;
 			std::lock_guard<std::mutex> lock(rnd_mtx);
 			rnd->random_block(&data, 1);
 			reseed(&data, id);
+#else
+			if(rnd == nullptr)
+				std::cout << "using random number generator seeded by zero -- Insecure. Please compile with -DREAL_RANDOM" << std::endl;
+			rnd = (PRG *)1;
+			reseed(&ZeroBlock, id);
+#endif
 		}
 		else {
 			reseed(seed, id);
@@ -68,47 +77,47 @@ class PRG { public:
 	}
 
 	void random_data(void *data, int nbytes) {
-		random_block((block *)data, nbytes/16);
+		random_block((block *)data, nbytes / 16);
 		if (nbytes % 16 != 0) {
 			block extra;
 			random_block(&extra, 1);
-			memcpy((nbytes/16*16)+(char *) data, &extra, nbytes%16);
+			memcpy((nbytes / 16 * 16) + (char *)data, &extra, nbytes % 16);
 		}
 	}
 	void random_bool(bool * data, int length) {
 		uint8_t * uint_data = (uint8_t*)data;
 		random_data(uint_data, length);
-		for(int i = 0; i < length; ++i)
+		for (int i = 0; i < length; ++i)
 			data[i] = uint_data[i] & 1;
 	}
 	void random_data_unaligned(void *data, int nbytes) {
 		block tmp[AES_BATCH_SIZE];
-		for(int i = 0; i < nbytes/(AES_BATCH_SIZE*16); i++) {
+		for (int i = 0; i < nbytes / (AES_BATCH_SIZE * 16); i++) {
 			random_block(tmp, AES_BATCH_SIZE);
-			memcpy((16*i*AES_BATCH_SIZE)+(uint8_t*)data, tmp, 16*AES_BATCH_SIZE);
+			memcpy((16 * i*AES_BATCH_SIZE) + (uint8_t*)data, tmp, 16 * AES_BATCH_SIZE);
 		}
-		if (nbytes % (16*AES_BATCH_SIZE) != 0) {
+		if (nbytes % (16 * AES_BATCH_SIZE) != 0) {
 			random_block(tmp, AES_BATCH_SIZE);
-			memcpy((nbytes/(16*AES_BATCH_SIZE)*(16*AES_BATCH_SIZE))+(uint8_t*) data, tmp, nbytes%(16*AES_BATCH_SIZE));
+			memcpy((nbytes / (16 * AES_BATCH_SIZE)*(16 * AES_BATCH_SIZE)) + (uint8_t*)data, tmp, nbytes % (16 * AES_BATCH_SIZE));
 		}
 	}
 
-	void random_block(block * data, int nblocks=1) {
+	void random_block(block * data, int nblocks = 1) {
 		for (int i = 0; i < nblocks; ++i) {
 			data[i] = makeBlock(0LL, counter++);
 		}
 		int i = 0;
-		for(; i < nblocks-AES_BATCH_SIZE; i+=AES_BATCH_SIZE) {
-			AES_ecb_encrypt_blks(data+i, AES_BATCH_SIZE, &aes);
+		for (; i < nblocks - AES_BATCH_SIZE; i += AES_BATCH_SIZE) {
+			AES_ecb_encrypt_blks(data + i, AES_BATCH_SIZE, &aes);
 		}
-		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, &aes);
+		AES_ecb_encrypt_blks(data + i, (AES_BATCH_SIZE > nblocks - i) ? nblocks - i : AES_BATCH_SIZE, &aes);
 	}
 
 	template<typename T, typename ... L>
-		void random_bn(T t, L... l) {
-			random_bn(l...);
-			random_bn(t);
-		}
+	void random_bn(T t, L... l) {
+		random_bn(l...);
+		random_bn(t);
+	}
 
 	void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
 		int digits;
@@ -125,16 +134,16 @@ class PRG { public:
 		bn_trim(a);
 	}
 
-	void random_bn(bn_t *a, int length=1, int sign = BN_POS, int bits = BIT_LEN) {
-		for(int i = 0; i < length; ++i)
+	void random_bn(bn_t *a, int length = 1, int sign = BN_POS, int bits = BIT_LEN) {
+		for (int i = 0; i < length; ++i)
 			random_bn(a[i]);
 	}
 
 	template<typename T, typename ... L>
-		void random_eb(T t, L... l) {
-			random_eb(l...);
-			random_eb(t);
-		}
+	void random_eb(T t, L... l) {
+		random_eb(l...);
+		random_eb(t);
+	}
 
 	void random_eb(eb_t p) {
 		bn_t n, k;
@@ -146,12 +155,12 @@ class PRG { public:
 		eb_mul_gen(p, k);
 	}
 
-	void random_eb(eb_t *p, int length=1) {
+	void random_eb(eb_t *p, int length = 1) {
 		bn_t n, k;
 		bn_new(k);
 		bn_new(n);
 		eb_curve_get_ord(n);
-		for(int i = 0; i < length; ++i) {
+		for (int i = 0; i < length; ++i) {
 			random_bn(k, BN_POS, bn_bits(n));
 			bn_mod(k, k, n);
 			eb_mul_gen(p[i], k);
@@ -159,7 +168,7 @@ class PRG { public:
 	}
 
 	void random_mpz(mpz_t out, int nbits) {
-		int nbytes = (nbits+7)/8;
+		int nbytes = (nbits + 7) / 8;
 		uint8_t * data = new uint8_t[nbytes];
 		random_data(data, nbytes);
 		//int n = nbytes;
@@ -176,9 +185,9 @@ class PRG { public:
 	}
 	void random_mpz(mpz_t rop, const mpz_t n) {
 		unsigned long size = mpz_sizeinbase(n, 2);
-		while(1) {
+		while (1) {
 			random_mpz(rop, size);
-			if(mpz_cmp(rop, n) < 0) {
+			if (mpz_cmp(rop, n) < 0) {
 				break;
 			}
 		}

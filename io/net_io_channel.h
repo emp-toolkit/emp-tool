@@ -22,8 +22,24 @@ using namespace std;
 	@{
   */
 
-extern osuCrypto::IOService gIoSerive;
-extern std::list<osuCrypto::Endpoint> gEndpoints;
+class __networking
+{
+public:
+	osuCrypto::IOService mIoService;
+	std::list<osuCrypto::Endpoint> mEndpoints;
+	std::mutex mMtx;
+
+	~__networking()
+	{
+		for (auto& e : mEndpoints)
+			e.stop();
+		mEndpoints.clear();
+
+		mIoService.stop();
+	}
+};
+
+extern  __networking gNetworking;
 
 class NetIO : public IOChannel<NetIO> {
 public:
@@ -43,28 +59,37 @@ public:
 
 		this->port = port;
 		is_server = (address == nullptr);
-
 		if (is_server) {
 			// wildcard address
 			addr = "0.0.0.0";
 		}
-
-		for (auto& ep : gEndpoints)
+		else
 		{
-			if (ep.IP() == addr && ep.port() == port)
-			{
-				chan = ep.addChannel("c");
-				chan.waitForConnection();
+			addr = address;
+		}
 
-				if (!quiet)
-					cout << "connected" << endl;
-				return;
+		{
+			std::lock_guard<std::mutex> lock(gNetworking.mMtx);
+			bool set = 0;
+			for (auto& ep : gNetworking.mEndpoints)
+			{
+				if (ep.IP() == addr && ep.port() == port)
+				{
+					chan = ep.addChannel("c");
+					set = 1;
+				}
+			}
+
+			if (!set)
+			{
+				gNetworking.mEndpoints.emplace_back(gNetworking.mIoService, addr, port, is_server ? osuCrypto::EpMode::Server : osuCrypto::EpMode::Client, "c");
+				auto& ep = gNetworking.mEndpoints.back();
+				chan = ep.addChannel("c");
 			}
 		}
 
-		gEndpoints.emplace_back(gIoSerive, addr, port, is_server ? osuCrypto::EpMode::Server : osuCrypto::EpMode::Client, "c");
-		auto& ep = gEndpoints.back();
-		chan = ep.addChannel("c");
+
+
 		chan.waitForConnection();
 
 		if (!quiet)
@@ -112,6 +137,9 @@ public:
 		//fflush(stream);
 		//close(consocket);
 		//delete[] buffer;
+
+		//auto & ep = chan.getEndpoint();
+		//chan.close();
 	}
 	void sync() {
 		int tmp = 0;
