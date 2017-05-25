@@ -45,8 +45,14 @@ class NetIO: public IOChannel<NetIO> { public:
 			mysocket = socket(AF_INET, SOCK_STREAM, 0);
 			int reuse = 1;
 			setsockopt(mysocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
-			bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr));
-			listen(mysocket, 1);
+			if(::bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) {
+				perror("error: bind");
+				exit(1);
+			}
+			if(listen(mysocket, 1) < 0) {
+				perror("error: listen");
+				exit(1);
+			}
 			consocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
 		}
 		else {
