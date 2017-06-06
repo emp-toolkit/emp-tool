@@ -33,16 +33,21 @@ using namespace std;
 /** @addtogroup IO
     @{
   */
+//static const int netioBufferSize(int(1) << 10);
+#ifndef NETIO_BUFFER_SIZE
+#define NETIO_BUFFER_SIZE (1 << 10)
+#endif
 
 
-
-
-class NetIO : public IOChannel<NetIO> {
-public:
+class NetIO: public IOChannel<NetIO> { public:
     bool is_server;
 
 #ifdef USE_ASIO 
     boost::asio::ip::tcp::socket mSock;
+
+    // 1 KB buffer size
+    std::vector<u8> buffer;
+    int buffIdx;
 #else
     int mysocket = -1;
     int consocket = -1;
@@ -59,14 +64,16 @@ public:
 
     NetIO(const char * address, int port, bool quiet = false)
 #ifdef USE_ASIO 
-        :mSock(emp_io_service)
+        : mSock(emp_io_service)
+        , buffer(NETIO_BUFFER_SIZE)
+        , buffIdx(0)
 #endif
     {
+        this->port = port;
+        is_server = (address == nullptr);
 
 #ifdef USE_ASIO
         using namespace boost::asio::ip;
-        this->port = port;
-        is_server = (address == nullptr);
         if (is_server) {
             // wildcard address
             //addr = "0.0.0.0";
@@ -132,8 +139,9 @@ public:
     }
 
     ~NetIO() {
+        flush();
+
 #ifndef USE_ASIO
-        fflush(stream);
         close(consocket);
         delete[] buffer;
 #endif
@@ -150,6 +158,8 @@ public:
             flush();
         }
     }
+
+
     void set_nodelay() {
 #ifdef USE_ASIO
         boost::asio::ip::tcp::no_delay option(true);
@@ -171,7 +181,25 @@ public:
     }
 
     void flush() {
-#ifndef USE_ASIO
+#ifdef USE_ASIO
+        if (buffIdx)
+        {
+
+            boost::system::error_code ec;
+            auto ss = boost::asio::write(mSock, boost::asio::buffer(buffer.data(), buffIdx), ec);
+            if (ss != buffIdx)
+            {
+                throw std::runtime_error(LOCATION);
+            }
+
+            buffIdx = 0;
+            if (ec)
+            {
+                std::cout << "network write error: " << ec.message() << std::endl;
+                std::terminate();
+            }
+        }
+#else
         fflush(stream);
 #endif
     }
@@ -182,13 +210,20 @@ public:
 #endif
 
 #ifdef USE_ASIO
-        boost::system::error_code ec;
-        boost::asio::write(mSock, boost::asio::buffer(data, len), ec);
+        u8* d =(u8*) data;
 
-        if (ec)
+        while (len)
         {
-            std::cout << "network error" << std::endl << ec.message() << std::endl;
-            std::terminate();
+            auto min = std::min<int>(len, buffer.size() - buffIdx);
+            memcpy(buffer.data() + buffIdx, d, min);
+
+            buffIdx += min;
+            len -= min;
+            d += min;
+            if (buffIdx == buffer.size())
+            {
+                flush();
+            }
         }
 #else
         int sent = 0;
@@ -204,18 +239,19 @@ public:
     }
 
     void recv_data_impl(void  * data, int len) {
+
+        if (has_sent) flush();
+
 #ifdef USE_ASIO
         boost::system::error_code ec;
-        boost::asio::read(mSock, boost::asio::buffer(data, len), ec);
+        auto ss = boost::asio::read(mSock, boost::asio::buffer(data, len), ec);
 
-        if (ec)
+        if (ec || ss != len)
         {
-            std::cout << "network error" << std::endl << ec.message() << std::endl;
+            std::cout << "network receive error: " << ec.message() << std::endl;
             std::terminate();
         }
 #else
-        if (has_sent)
-            fflush(stream);
         has_sent = false;
         int sent = 0;
         while (sent < len) {
