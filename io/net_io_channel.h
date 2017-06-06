@@ -35,7 +35,7 @@ using namespace std;
   */
 //static const int netioBufferSize(int(1) << 10);
 #ifndef NETIO_BUFFER_SIZE
-#define NETIO_BUFFER_SIZE (1 << 10)
+#define NETIO_BUFFER_SIZE (1 << 14)
 #endif
 
 
@@ -46,8 +46,8 @@ class NetIO: public IOChannel<NetIO> { public:
     boost::asio::ip::tcp::socket mSock;
 
     // 1 KB buffer size
-    std::vector<u8> buffer;
-    int buffIdx;
+    std::vector<u8> sendBuffer, recvBuffer;
+    int sendBuffIdx, recvBuffIdx, recvBuffEnd;
 #else
     int mysocket = -1;
     int consocket = -1;
@@ -65,8 +65,11 @@ class NetIO: public IOChannel<NetIO> { public:
     NetIO(const char * address, int port, bool quiet = false)
 #ifdef USE_ASIO 
         : mSock(emp_io_service)
-        , buffer(NETIO_BUFFER_SIZE)
-        , buffIdx(0)
+        , sendBuffer(NETIO_BUFFER_SIZE)
+        , recvBuffer(NETIO_BUFFER_SIZE)
+        , sendBuffIdx(0)
+        , recvBuffIdx(0)
+        , recvBuffEnd(0)
 #endif
     {
         this->port = port;
@@ -182,17 +185,17 @@ class NetIO: public IOChannel<NetIO> { public:
 
     void flush() {
 #ifdef USE_ASIO
-        if (buffIdx)
+        if (sendBuffIdx)
         {
 
             boost::system::error_code ec;
-            auto ss = boost::asio::write(mSock, boost::asio::buffer(buffer.data(), buffIdx), ec);
-            if (ss != buffIdx)
+            auto ss = boost::asio::write(mSock, boost::asio::buffer(sendBuffer.data(), sendBuffIdx), ec);
+            if (ss != sendBuffIdx)
             {
                 throw std::runtime_error(LOCATION);
             }
 
-            buffIdx = 0;
+            sendBuffIdx = 0;
             if (ec)
             {
                 std::cout << "network write error: " << ec.message() << std::endl;
@@ -214,13 +217,13 @@ class NetIO: public IOChannel<NetIO> { public:
 
         while (len)
         {
-            auto min = std::min<int>(len, buffer.size() - buffIdx);
-            memcpy(buffer.data() + buffIdx, d, min);
+            auto min = std::min<int>(len, sendBuffer.size() - sendBuffIdx);
+            memcpy(sendBuffer.data() + sendBuffIdx, d, min);
 
-            buffIdx += min;
+            sendBuffIdx += min;
             len -= min;
             d += min;
-            if (buffIdx == buffer.size())
+            if (sendBuffIdx == sendBuffer.size())
             {
                 flush();
             }
@@ -241,15 +244,33 @@ class NetIO: public IOChannel<NetIO> { public:
     void recv_data_impl(void  * data, int len) {
 
         if (has_sent) flush();
+        u8* d = (u8*)data;
 
 #ifdef USE_ASIO
-        boost::system::error_code ec;
-        auto ss = boost::asio::read(mSock, boost::asio::buffer(data, len), ec);
-
-        if (ec || ss != len)
+        while (len)
         {
-            std::cout << "network receive error: " << ec.message() << std::endl;
-            std::terminate();
+            auto avaliable = recvBuffEnd - recvBuffIdx;
+            auto rem = recvBuffer.size() - recvBuffEnd;
+            if (len > avaliable && rem)
+            {
+                boost::system::error_code ec;
+                auto ss = mSock.read_some(boost::asio::buffer(recvBuffer.data() + recvBuffIdx, rem));
+                recvBuffEnd += ss;
+                avaliable += ss;
+
+                if (ec)
+                {
+                    std::cout << "network receive error: " << ec.message() << std::endl;
+                    std::terminate();
+                }
+            }
+
+            auto min = std::min<int>(len, avaliable);
+            memcpy(d, recvBuffer.data() + recvBuffIdx, min);
+
+            len -= min;
+            d += min;
+            recvBuffIdx += min;
         }
 #else
         has_sent = false;
