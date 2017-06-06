@@ -3,4 +3,5 @@
 
 //osuCrypto::IOService gIoSerive;
 //std::list<osuCrypto::Endpoint> gEndpoints;
-__networking gNetworking;
+//__networking gNetworking;
+boost::asio::io_service emp_io_service;

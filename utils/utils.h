@@ -15,9 +15,26 @@
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
-#define PUBLIC 0
-#define ALICE 1
-#define BOB 2
+enum EmpParty
+{
+    PUBLIC = 0,
+    ALICE = 1,
+    BOB = 2
+};
+
+inline std::ostream& operator<<(std::ostream& out, EmpParty p)
+{
+    switch (p)
+    {
+    case PUBLIC: out << "PUBLIC"; break;
+    case ALICE: out << "ALICE"; break;
+    case BOB: out << "BOB"; break;
+    }
+    return out;
+}
+//#define PUBLIC 0
+//#define ALICE 1
+//#define BOB 2
 //using std::string;
 
 template<typename T>
@@ -39,7 +56,7 @@ template<class... Ts>
 void run_function(void *function, const Ts&... args) {	
 	reinterpret_cast<void(*)(Ts...)>(function)(args...);
 }
-void parse_party_and_port(char ** arg, int * party, int * port);
+void parse_party_and_port(char ** arg, int argc, int * party, int * port);
 std::string Party(int p);
 template <typename T = uint64_t>
 std::string m128i_to_string(const __m128i var) {
@@ -75,7 +92,7 @@ inline std::string dec_to_bin(const std::string& dec) {
 		return '0' + bin;
 	bin[0] = '1';
 	bool flip = false;
-	for(int i = bin.size()-1; i>=1; --i) {
+	for(auto i = bin.size()-1; i>=1; --i) {
 		if(flip)
 			bin[i] = (bin[i] == '1' ? '0': '1');
 		if(bin[i] == '1')
@@ -89,7 +106,7 @@ inline std::string bin_to_dec(const std::string& bin2) {
 	std::string bin = bin2;
 	bin[0] = '0';
 	bool flip = false;
-	for(int i = bin.size()-1; i>=1; --i) {
+	for(auto i = bin.size()-1; i>=1; --i) {
 		if(flip)
 			bin[i] = (bin[i] == '1' ? '0': '1');
 		if(bin[i] == '1')

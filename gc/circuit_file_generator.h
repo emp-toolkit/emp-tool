@@ -6,15 +6,15 @@
 #include <iostream>
 #include <fstream>
 
-bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, int party);
-
-block circuit_file_gen_public_label(GarbleCircuit* gc, bool b);
-
-block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b);
-
-block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b);
-
-block circuit_file_gen_not(GarbleCircuit*gc, const block&a);
+//bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, EmpParty party);
+//
+//block circuit_file_gen_public_label(GarbleCircuit* gc, bool b);
+//
+//block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b);
+//
+//block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b);
+//
+//block circuit_file_gen_not(GarbleCircuit*gc, const block&a);
 
 class CircuitFileGenerator:public GarbleCircuit{ public:
 	const static unsigned long long P1 = 1;
@@ -26,11 +26,11 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 	uint64_t gates = 0;
 	std::ofstream &fout;
 	CircuitFileGenerator(bool print, std::ofstream & fout):fout(fout) {
-		is_public_ptr = &circuit_file_gen_is_public;
-		public_label_ptr = &circuit_file_gen_public_label;
-		gc_and_ptr = &circuit_file_gen_and;
-		gc_xor_ptr = &circuit_file_gen_xor;
-		gc_not_ptr = &circuit_file_gen_not;
+		//is_public_ptr = &circuit_file_gen_is_public;
+		//public_label_ptr = &circuit_file_gen_public_label;
+		//gc_and_ptr = &circuit_file_gen_and;
+		//gc_xor_ptr = &circuit_file_gen_xor;
+		//gc_not_ptr = &circuit_file_gen_not;
 		public_one = zero_block();
 		public_zero = zero_block();
 		this->print = print;
@@ -40,11 +40,11 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 		arr[0] = P0;
 		gid = 0;
 	}
-	bool is_public_impl(const block & b, int party) {
+	bool is_public(const block & b, EmpParty party) override {
 		uint64_t *arr = (uint64_t*) &b;
 		return arr[0] < 2;
 	}
-	block public_label_impl(bool b) {
+	block public_label(bool b) override {
 		return b? public_one : public_zero;
 	}
 	uint64_t compute_and(uint64_t a, uint64_t b) {
@@ -57,7 +57,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			return S0;
 		else return S1;
 	}
-	block gen_and(const block& a, const block& b) {
+	block gc_and(const block& a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
@@ -78,13 +78,13 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			return res;
 		}
 	}
-	block gen_xor(const block&a, const block& b) {
+	block gc_xor(const block&a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
-			return gen_not(b);
+			return gc_not(b);
 		} else if (arr_b[0] == P1) {
-			return gen_not(a);
+			return gc_not(a);
 		} else if(arr_a[0] == P0) {
 			return b;
 		} else if(arr_b[0] == P0){
@@ -117,7 +117,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			return false;
 		else return true;
 	}
-	block gen_not(const block&a) {
+	block gc_not(const block&a) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		if (arr_a[0] == P1) {
 			return public_zero;
@@ -137,20 +137,20 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 		}
 	}
 };
-bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, int party) {
-	return ((CircuitFileGenerator*)gc)->is_public_impl(b, party);
-}
-block circuit_file_gen_public_label(GarbleCircuit* gc, bool b) {
-	return ((CircuitFileGenerator*)gc)->public_label_impl(b);
-}
-block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b) {
-	return ((CircuitFileGenerator*)gc)->gen_and(a, b);
-}
-block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b) {
-	return ((CircuitFileGenerator*)gc)->gen_xor(a, b);
-}
-block circuit_file_gen_not(GarbleCircuit*gc, const block&a) {
-	return ((CircuitFileGenerator*)gc)->gen_not(a);
-}
+//bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, EmpParty party) {
+//	return ((CircuitFileGenerator*)gc)->is_public_impl(b, party);
+//}
+//block circuit_file_gen_public_label(GarbleCircuit* gc, bool b) {
+//	return ((CircuitFileGenerator*)gc)->public_label_impl(b);
+//}
+//block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b) {
+//	return ((CircuitFileGenerator*)gc)->gen_and(a, b);
+//}
+//block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b) {
+//	return ((CircuitFileGenerator*)gc)->gen_xor(a, b);
+//}
+//block circuit_file_gen_not(GarbleCircuit*gc, const block&a) {
+//	return ((CircuitFileGenerator*)gc)->gen_not(a);
+//}
 
 #endif //CIRCUIT_FILE_GENERATOR_H__

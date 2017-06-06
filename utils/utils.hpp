@@ -30,7 +30,12 @@ inline std::string hex_to_binary(std::string hex) {
 		bin += hex_char_to_bin(hex[i]);
 	return bin;
 }
-inline void parse_party_and_port(char ** arg, int * party, int * port) {
+inline void parse_party_and_port(char ** arg, int argc, int * party, int * port) {
+    if (argc == 1)
+    {
+        std::cout << "ERROR: argc = 1, need two argsm party ID {1,2} and port." << std::endl;
+        std::terminate();
+    }
 	*party = atoi (arg[1]);
 	*port = atoi (arg[2]);
 }
@@ -56,7 +61,7 @@ inline double wallClock() {
 	//clock_gettime(CLOCK_REALTIME,&t);
 	//return t.tv_sec+1e-9*t.tv_nsec;
 	auto now = std::chrono::system_clock::now();
-	return std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count();
+	return static_cast<double>(std::chrono::time_point_cast<std::chrono::nanoseconds>(now).time_since_epoch().count());
 }
 
 template<typename t>

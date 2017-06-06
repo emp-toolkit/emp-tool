@@ -5,8 +5,8 @@
 #include <iostream>
 #include <fstream>
 
-void gen_feed(Backend* be, int party, block * label, const bool*, int length);
-void gen_reveal(Backend* be, bool* clear, int party, const block * label, int length);
+void gen_feed(Backend* be, EmpParty party, block * label, const bool*, int length);
+void gen_reveal(Backend* be, bool* clear, EmpParty party, const block * label, int length);
 
 class CircuitGenerator: public Backend { public:
 	CircuitFileGenerator * gc;
@@ -29,7 +29,7 @@ class CircuitGenerator: public Backend { public:
 	int n1=0,n2=0,n3=0;
 };
 
-void gen_feed(Backend* be, int party, block * label, const bool* b, int length) {
+void gen_feed(Backend* be, EmpParty party, block * label, const bool* b, int length) {
 	CircuitGenerator * backend = (CircuitGenerator*)(be);
 	for(int i = 0; i < length; ++i) {
 		label[i] = backend->gc->private_label(b[i]);
@@ -38,7 +38,7 @@ void gen_feed(Backend* be, int party, block * label, const bool* b, int length) 
 	else backend->n2+=length;
 }
 
-void gen_reveal(Backend* be, bool* b, int party, const block * label, int length) {
+void gen_reveal(Backend* be, bool* b, EmpParty party, const block * label, int length) {
 	CircuitGenerator * backend = (CircuitGenerator*)(be);
 	for (int i = 0; i < length; ++i) {
 		b[i] = backend->gc->get_value(label[i]);

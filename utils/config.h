@@ -11,3 +11,4 @@
 #define SERVER_IP  "127.0.0.1"
 //#define COUNT_IO
 #endif// CONFIG_H__
+//#define INSECURE_DEBUG

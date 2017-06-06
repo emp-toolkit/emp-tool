@@ -27,10 +27,10 @@ class MemIO: public IOChannel<MemIO> { public:
 	void load_from_file(FileIO * fio, uint64_t size) {
 		delete[] buffer;
 		buffer = new char[size];
-		this->cap = size;
+		this->cap = (int)size;
 		this->read_pos = 0;
-		this->size = size;
-		fio->recv_data(buffer, size);
+		this->size = (int) size;
+		fio->recv_data(buffer, (int)size);
 	}
 	void clear(){
 		size = 0;

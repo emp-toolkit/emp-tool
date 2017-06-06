@@ -7,9 +7,11 @@
 //#include <netinet/tcp.h>
 //#include <netinet/in.h>
 //#include <sys/socket.h>
-#include <cryptoTools/Network/Channel.h>
-#include <cryptoTools/Network/Endpoint.h>
-#include <cryptoTools/Network/IOService.h>
+//#include <cryptoTools/Network/Channel.h>
+//#include <cryptoTools/Network/Endpoint.h>
+//#include <cryptoTools/Network/IOService.h>
+#include <boost/asio.hpp>
+
 #include <sys/types.h>
 
 #include <string>
@@ -22,29 +24,32 @@ using namespace std;
 	@{
   */
 
-class __networking
-{
-public:
-	osuCrypto::IOService mIoService;
-	std::list<osuCrypto::Endpoint> mEndpoints;
-	std::mutex mMtx;
+//class __networking
+//{
+//public:
+//	osuCrypto::IOService mIoService;
+//	std::list<osuCrypto::Endpoint> mEndpoints;
+//	std::mutex mMtx;
+//
+//	~__networking()
+//	{
+//		for (auto& e : mEndpoints)
+//			e.stop();
+//		mEndpoints.clear();
+//
+//		mIoService.stop();
+//	}
+//};
+//
+//extern  __networking gNetworking;
 
-	~__networking()
-	{
-		for (auto& e : mEndpoints)
-			e.stop();
-		mEndpoints.clear();
-
-		mIoService.stop();
-	}
-};
-
-extern  __networking gNetworking;
+extern  boost::asio::io_service emp_io_service;
 
 class NetIO : public IOChannel<NetIO> {
 public:
 	bool is_server;
-	osuCrypto::Channel chan;
+    boost::asio::ip::tcp::socket mSock;
+
 	//int mysocket = -1;
 	//int consocket = -1;
 	//FILE * stream = nullptr;
@@ -55,42 +60,55 @@ public:
 #ifdef COUNT_IO
 	uint64_t counter = 0;
 #endif
-	NetIO(const char * address, int port, bool quiet = false) {
-
+	NetIO(const char * address, int port, bool quiet = false)
+        :mSock(emp_io_service)
+    {
+        using namespace boost::asio::ip;
 		this->port = port;
 		is_server = (address == nullptr);
 		if (is_server) {
 			// wildcard address
-			addr = "0.0.0.0";
+			//addr = "0.0.0.0";
+
+            tcp::acceptor acceptor(emp_io_service, tcp::endpoint(tcp::v4(), port));
+            acceptor.accept(mSock);
+
 		}
 		else
 		{
 			addr = address;
+            tcp::resolver resolver(emp_io_service);
+            tcp::resolver::query query(addr, std::to_string(port));
+            tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
+            boost::asio::connect(mSock, endpoint_iterator);
 		}
-
-		{
-			std::lock_guard<std::mutex> lock(gNetworking.mMtx);
-			bool set = 0;
-			for (auto& ep : gNetworking.mEndpoints)
-			{
-				if (ep.IP() == addr && ep.port() == port)
-				{
-					chan = ep.addChannel("c");
-					set = 1;
-				}
-			}
-
-			if (!set)
-			{
-				gNetworking.mEndpoints.emplace_back(gNetworking.mIoService, addr, port, is_server ? osuCrypto::EpMode::Server : osuCrypto::EpMode::Client, "c");
-				auto& ep = gNetworking.mEndpoints.back();
-				chan = ep.addChannel("c");
-			}
-		}
+        boost::asio::ip::tcp::no_delay option(true);
+        mSock.set_option(option);
+		//{
 
 
+			////std::lock_guard<std::mutex> lock(gNetworking.mMtx);
+			//bool set = 0;
+			//for (auto& ep : gNetworking.mEndpoints)
+			//{
+			//	if (ep.IP() == addr && ep.port() == port)
+			//	{
+			//		chan = ep.addChannel("c");
+			//		set = 1;
+			//	}
+			//}
 
-		chan.waitForConnection();
+			//if (!set)
+			//{
+			//	gNetworking.mEndpoints.emplace_back(gNetworking.mIoService, addr, port, is_server ? osuCrypto::EpMode::Server : osuCrypto::EpMode::Client, "c");
+			//	auto& ep = gNetworking.mEndpoints.back();
+			//	chan = ep.addChannel("c");
+			//}
+		//}
+
+
+
+		//chan.waitForConnection();
 
 		if (!quiet)
 			cout << "connected" << endl;
@@ -171,7 +189,16 @@ public:
 #ifdef COUNT_IO
 		counter += len;
 #endif
-		chan.send(data, len);
+
+        boost::system::error_code ec;
+        boost::asio::write(mSock, boost::asio::buffer(data, len), ec);
+
+        if (ec)
+        {
+            std::cout << "network error" << std::endl << ec.message() << std::endl;
+            std::terminate();
+        }
+		//chan.asyncSendCopy(data, len);
 
 		//int sent = 0;
 		//while (sent < len) {
@@ -186,7 +213,15 @@ public:
 
 	void recv_data_impl(void  * data, int len) {
 
-		chan.recv(data, len);
+        boost::system::error_code ec;
+        boost::asio::read(mSock, boost::asio::buffer(data, len), ec);
+
+        if (ec)
+        {
+            std::cout << "network error" << std::endl << ec.message() << std::endl;
+            std::terminate();
+        }
+		//chan.recv(data, len);
 		//if (has_sent)
 		//	fflush(stream);
 		//has_sent = false;
@@ -200,5 +235,10 @@ public:
 		//}
 	}
 };
+
+
+
+
+
 /**@}*/
 #endif//NETWORK_IO_CHANNEL

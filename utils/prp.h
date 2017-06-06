@@ -10,6 +10,11 @@
 
 class PRP { public:
 	AES_KEY *aes;
+    PRP(const block& seed) {
+        aes = new AES_KEY;
+        aes_set_key(seed);
+    }
+
 	PRP(const char * seed = fix_key) {
 		aes = new AES_KEY;
 		aes_set_key(seed);

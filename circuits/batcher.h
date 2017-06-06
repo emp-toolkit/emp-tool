@@ -36,7 +36,7 @@ class Batcher { public:
 		}
 	}
 	
-	void make_semi_honest(int party, Backend * be = nullptr) {
+	void make_semi_honest(EmpParty party, Backend * be = nullptr) {
 		if(be == nullptr)
 			be = local_backend;
 		bool * bools = new bool[size()];
@@ -62,7 +62,7 @@ class Batcher { public:
 	}
 
 	int size() {
-		return values.size();
+		return (int)values.size();
 	}
 };
 #endif

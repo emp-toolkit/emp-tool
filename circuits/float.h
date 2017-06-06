@@ -26,19 +26,19 @@ class Float: Swappable<Float> { public:
 		return *this;
 	}
 
-	Float(int value_length, int expnt_length, double input, int party = PUBLIC);
+	Float(int value_length, int expnt_length, double input, EmpParty party = PUBLIC);
 
 	Float If(const Bit& select, const Float & d);
 
 	template<typename O> 
-	O reveal(int party = PUBLIC) const;
+	O reveal(EmpParty party = PUBLIC) const;
 
 	int size() const;
 	Float abs() const;
 
 	void normalize(int value_length, int to_add_to_expnt);
 
-	std::string detail(int party) const;
+	std::string detail(EmpParty party) const;
 
 	Bit greater(const Float & rhs) const;
 	Bit equal(const Float & rhs) const;

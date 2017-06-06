@@ -10,7 +10,7 @@
 #include <iostream>
 
 template<typename T>
-bool privacy_free_gen_is_public(GarbleCircuit* gc, const block & b, int party);
+bool privacy_free_gen_is_public(GarbleCircuit* gc, const block & b, EmpParty party);
 
 template<typename T>
 block privacy_free_gen_public_label(GarbleCircuit* gc, bool b);
@@ -41,7 +41,7 @@ class PrivacyFreeGen: public GarbleCircuit{ public:
 		gc_xor_ptr = &privacy_free_gen_xor<T>;
 		gc_not_ptr = &privacy_free_gen_not<T>;
 	}
-	bool is_public_impl(const block & b, int party) {
+	bool is_public_impl(const block & b, EmpParty party) {
 		return false;
 	}
 	bool isDelta(const block & b) {
@@ -84,7 +84,7 @@ class PrivacyFreeGen: public GarbleCircuit{ public:
 	}
 };
 template<typename T>
-bool privacy_free_gen_is_public(GarbleCircuit* gc, const block & b, int party) {
+bool privacy_free_gen_is_public(GarbleCircuit* gc, const block & b, EmpParty party) {
 	return ((PrivacyFreeGen<T>*)gc)->is_public_impl(b, party);
 }
 template<typename T>

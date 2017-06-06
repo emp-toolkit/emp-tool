@@ -1,4 +1,7 @@
-inline Bit::Bit(bool b, int party) {
+#include "emp-tool/gc/halfgate_gen.h"
+#include "emp-tool/gc/halfgate_eva.h"
+
+inline Bit::Bit(bool b, EmpParty party) {
 	if (party == PUBLIC)
 		bit = local_gc->public_label(b);
 	else local_backend->Feed(&bit, party, &b, 1); 
@@ -8,18 +11,22 @@ inline Bit Bit::select(const Bit & select, const Bit & new_v) const{
 	Bit tmp = *this;
 	tmp = tmp ^ new_v;
 	tmp = tmp & select;
+    auto ptr0 = dynamic_cast<HalfGateGen<NetIO, on>*>(local_gc);
+    auto ptr1 = dynamic_cast<HalfGateEva<NetIO, on>*>(local_gc);
+    if (ptr0) ptr0->io->sync();
+    if (ptr1) ptr1->io->sync();
 	return *this ^ tmp;
 }
 
 template<typename O>
-inline O Bit::reveal(int party) const {
+inline O Bit::reveal(EmpParty party) const {
 	O res;
 	local_backend->Reveal(&res, party, &bit, 1);
 	return res;
 }
 
 template<>
-inline std::string Bit::reveal<std::string>(int party) const {
+inline std::string Bit::reveal<std::string>(EmpParty party) const {
 	bool res;
 	local_backend->Reveal(&res, party, &bit, 1);
 	return res ? "true" : "false";

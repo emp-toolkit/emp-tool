@@ -122,7 +122,7 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-inline void init(Bit * bits, const bool* b, int length, int party) {
+inline void init(Bit * bits, const bool* b, int length, EmpParty party) {
 	block * bbits = (block *) bits;
 	if (party == PUBLIC) {
 		block one = local_gc->public_label(true);
@@ -140,7 +140,7 @@ inline void init(Bit * bits, const bool* b, int length, int party) {
   init(bits,b,length, party);
   }*/
 
-inline Integer::Integer(int len, const std::string& str, int party) : length(len) {
+inline Integer::Integer(int len, const std::string& str, EmpParty party) : length(len) {
 	bool* b = new bool[len];
 	bool_data(b, len, str);
 	bits = new Bit[length];
@@ -148,7 +148,7 @@ inline Integer::Integer(int len, const std::string& str, int party) : length(len
 	delete[] b;
 }
 
-inline Integer::Integer(int len, long long input, int party)
+inline Integer::Integer(int len, long long input, EmpParty party)
 	: Integer(len, std::to_string(input), party) {
 	}
 
@@ -168,7 +168,7 @@ inline const Bit &Integer::operator[](int index) const {
 }
 
 template<>
-inline std::string Integer::reveal<std::string>(int party) const {
+inline std::string Integer::reveal<std::string>(EmpParty party) const {
 	bool * b = new bool[length];
 	local_backend->Reveal(b, party, (block *)bits,  length);
 	std::string bin="";
@@ -179,12 +179,12 @@ inline std::string Integer::reveal<std::string>(int party) const {
 }
 
 template<>
-inline int Integer::reveal<int>(int party) const {
+inline int Integer::reveal<int>(EmpParty party) const {
 	std::string s = reveal<std::string>(party);
 	return stoi(s);
 }
 template<>
-inline uint32_t Integer::reveal<uint32_t>(int party) const {
+inline uint32_t Integer::reveal<uint32_t>(EmpParty party) const {
 	Integer tmp = *this;
 	tmp.resize(tmp.size()+1, false);
 	std::string s = tmp.reveal<std::string>(party);
@@ -193,7 +193,7 @@ inline uint32_t Integer::reveal<uint32_t>(int party) const {
 
 
 template<>
-inline long long Integer::reveal<long long>(int party) const {
+inline long long Integer::reveal<long long>(EmpParty party) const {
 	std::string s = reveal<std::string>(party);
 	return stoll(s);
 }

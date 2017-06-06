@@ -48,23 +48,23 @@ class FileIO: public IOChannel<FileIO> { public:
 	}
 	void send_data_impl(const void * data, int len) {
 		bytes_sent += len;
-		int sent = 0;
+        size_t sent = 0;
 		while(sent < len) {
-			int res = fwrite(sent+(char*)data, 1, len-sent, stream);
+			auto res = fwrite(sent+(char*)data, 1, len-sent, stream);
 			if (res >= 0)
 				sent+=res;
 			else
-				fprintf(stderr,"error: file_send_data %d\n", res);
+				fprintf(stderr,"error: file_send_data %d\n", (int)res);
 		}
 	}
 	void recv_data_impl(void  * data, int len) {
-		int sent = 0;
+		size_t sent = 0;
 		while(sent < len) {
-			int res = fread(sent+(char*)data, 1, len-sent, stream);
+			auto res = fread(sent+(char*)data, 1, len-sent, stream);
 			if (res >= 0)
 				sent+=res;
 			else 
-				fprintf(stderr,"error: file_recv_data %d\n", res);
+				fprintf(stderr,"error: file_recv_data %d\n", (int)res);
 		}
 	}
 };

@@ -1,7 +1,8 @@
 
 set(cryptoTools_dirs
 	${CMAKE_SOURCE_DIR}/../../libOTe/cryptoTools;
-	${CMAKE_SOURCE_DIR}/../libOTe/cryptoTools)
+	${CMAKE_SOURCE_DIR}/../libOTe/cryptoTools;
+	${CMAKE_SOURCE_DIR}/../cryptoTools)
 	
 FOREACH(dir ${cryptoTools_dirs})
 	if(EXISTS ${dir})

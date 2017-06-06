@@ -8,13 +8,13 @@
 class Bit : public Swappable<Bit>{ public:
 	block bit;
 
-	Bit(bool _b = false, int party = PUBLIC);
+	Bit(bool _b = false, EmpParty party = PUBLIC);
 	Bit(const block& a) {
 		memcpy(&bit, &a, sizeof(block));
 	}
 
 	template<typename O = bool> 
-	O reveal(int party = PUBLIC) const;
+	O reveal(EmpParty party = PUBLIC) const;
 
 	Bit operator!=(const Bit& rhs) const; 
 	Bit operator==(const Bit& rhs) const;

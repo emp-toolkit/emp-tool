@@ -3,7 +3,7 @@ using namespace std;
 
 void test_bit() {
 	bool b[] = {true, false};
-	int p[] = {PUBLIC, ALICE, BOB};
+	EmpParty p[] = {PUBLIC, ALICE, BOB};
 
 	for(int i = 0; i < 2; ++i)
 		for(int j = 0; j < 3; ++j)

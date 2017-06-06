@@ -35,8 +35,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 		if (bits!=nullptr) delete[] bits;
 	}
 
-	Integer(int length, const std::string& str, int party = PUBLIC);
-	Integer(int length, long long input, int party = PUBLIC);
+	Integer(int length, const std::string& str, EmpParty party = PUBLIC);
+	Integer(int length, long long input, EmpParty party = PUBLIC);
 	Integer() :length(0),bits(nullptr){ }
 
 //Comparable
@@ -49,7 +49,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 
 	int size() const;
 	template<typename O>
-	O reveal(int party=PUBLIC) const;
+	O reveal(EmpParty party=PUBLIC) const;
 
 	Integer abs() const;
 	Integer& resize(int length, bool signed_extend = true);

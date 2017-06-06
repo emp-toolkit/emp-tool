@@ -18,19 +18,20 @@ extern "C" {
 typedef eb_t eb_tpl[2];
 typedef bn_t bn_tpl[2];
 
-#define __batch(func, ...)\
+#define __batch(func)\
 	template <typename H, typename... T> void func##l(H p, T... t) {\
-		func(p,##__VA_ARGS__);\
+		func(p);\
 		func##l(t...);\
 	}\
 	template <typename H> void func##l(H p) {\
-		func(p,##__VA_ARGS__);\
+		func(p);\
 	}
 
 __batch(eb_new);
 __batch(eb_free);
 __batch(bn_new);
 __batch(bn_free);
+
 
 #define __batch2(func)\
 template <typename H1, typename H2, typename H3> void func##_norm(H1 h1, H2 h2, H3 h3) {\
