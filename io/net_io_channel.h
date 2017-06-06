@@ -13,6 +13,7 @@
 
 #ifdef USE_ASIO 
 #include <boost/asio.hpp>
+extern  boost::asio::io_service emp_io_service;
 #else
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -35,7 +36,6 @@ using namespace std;
 
 
 
-extern  boost::asio::io_service emp_io_service;
 
 class NetIO : public IOChannel<NetIO> {
 public:
@@ -136,9 +136,6 @@ public:
         fflush(stream);
         close(consocket);
         delete[] buffer;
-
-        auto & ep = chan.getEndpoint();
-        chan.close();
 #endif
     }
     void sync() {

@@ -1,7 +1,5 @@
 #include "net_io_channel.h"
 
-
-//osuCrypto::IOService gIoSerive;
-//std::list<osuCrypto::Endpoint> gEndpoints;
-//__networking gNetworking;
+#ifdef USE_ASIO
 boost::asio::io_service emp_io_service;
+#endif
