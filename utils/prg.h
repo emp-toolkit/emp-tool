@@ -21,6 +21,11 @@ class PRG {
 public:
     uint64_t counter = 0;
     AES_KEY aes;
+    PRG()
+    {
+        aes.rounds = -1;
+    }
+
     PRG(const char * seed, int id = 0)
         :PRG(*(block*)seed, id)
     {
@@ -114,6 +119,10 @@ public:
         return b;
     }
     void random_block(block * data, int nblocks = 1) {
+#if defined(_MSC_VER) | !defined(NDEBUG)
+        if (aes.rounds == -1) throw std::runtime_error("unititialized PRG " LOCATION);
+#endif // _MSC_VER
+
         for (int i = 0; i < nblocks; ++i) {
             data[i] = makeBlock(0LL, counter++);
         }
