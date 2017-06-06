@@ -1,9 +1,7 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
-
-
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
+DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 
@@ -17,23 +15,31 @@ include_directories(
 	${cryptoTools_INCLUDE_DIRS} 
 	${relic_INCLUDE_DIRS}
 	${GMP_INCLUDE_DIRS})
-
 	
-if(MSVC)
-	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3 /EHsc  -D_CRT_SECURE_NO_WARNINGS ")
-	set(CMAKE_CXX_FLAGS_RELEASE "/MT /Z7")
-	set(CMAKE_CXX_FLAGS_DEBUG "/MTd /Od /Z7")
-	set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} /DEBUG /OPT:REF /OPT:ICF" CACHE STRING "" FORCE)
-else()
-	set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
-endif()
+set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
+
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
+file(GLOB headers 
+"io/*.h"
+"circuits/*.h"
+"circuits/*.hpp"
+"utils/*.h"
+"utils/*.hpp"
+"gc/*.h"
+"gc/*.hpp"
+"emp-tool"
+)
+file(GLOB circuit-files 
+"circuits/files/*"
+)
 
+file(GLOB libgarble
+"garble/*.h"
+)
 
-
-set(sources 
-	gc/backend.cpp 
+set(sources
+gc/backend.cpp
 	io/net_io_channel.cpp 
 	utils/prg.cpp)
 
@@ -48,7 +54,7 @@ SET_TARGET_PROPERTIES(${NAME}_static PROPERTIES  OUTPUT_NAME ${NAME} CLEAN_DIREC
 #set_target_properties(${NAME} ${NAME}_static PROPERTIES DEBUG_POSTFIX d)
 
 
-#if(CMAKE_BUILD_TYPE)
+
 
 
 # install steps
@@ -67,12 +73,11 @@ install_dir(circuits "*.h;*.hpp;files/*")
 install_dir(utils "*.h;*.hpp")
 install(TARGETS ${NAME} DESTINATION lib)
 
-
 set(LIBRARIES ${relic_LIBRARIES} ${cryptoTools_LIBRARIES} ${GMP_LIBRARIES})
 
 target_link_libraries(${NAME}  ${LIBRARIES}) 
 
-message(STATUS  "sss  ${cryptoTools_LINK_DIRS}")
+
 
 macro (add_test _name)
 	add_executable("test_${_name}" "test/${_name}.cpp" ${basics} "gc/backend.cpp")
