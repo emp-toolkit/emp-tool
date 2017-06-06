@@ -31,7 +31,7 @@ class IOChannel { public:
 		}
 		if(prg != nullptr) 
 			delete prg;
-		prg = new PRG(b);
+		prg = new PRG(*b);
 	}
 
 	void send_data_enc(const void * data, int len) {

@@ -169,7 +169,7 @@ class HalfGateGen<T,RTCktOpt::off>:public GarbleCircuit{ public:
 		return xorBlocks(a, b);
 	}
 	block gc_not(const block&a) override {
-		return gen_xor(a, public_label_impl(true));
+		return gen_xor(a, public_label(true));
 	}
 	void generic_to_xor(const block* new_b0,const block * b0, const block * b1, int length) {
 		block h[4];

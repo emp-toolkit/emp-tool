@@ -7,7 +7,7 @@
 #include <smmintrin.h>
 
 //typedef __m128i block;
-#include <cryptoTools/Common/defines.h>
+#include <cryptoTools/Common/Defines.h>
 
 using namespace osuCrypto;
 #define garble_xor(x,y) _mm_xor_si128(x,y)
