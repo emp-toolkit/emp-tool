@@ -1,12 +1,12 @@
 #ifndef CIRCUIT_GENEARTOR_H__
 #define CIRCUIT_GENEARTOR_H__
-#include <emp-tool/emp-tool.h>
+#include <emp-tool.h>
 #include "circuit_file_generator.h"
 #include <iostream>
 #include <fstream>
 
-void gen_feed(Backend* be, EmpParty party, block * label, const bool*, int length);
-void gen_reveal(Backend* be, bool* clear, EmpParty party, const block * label, int length);
+void CircuitGenerator_gen_feed(Backend* be, EmpParty party, block * label, const bool*, int length);
+void CircuitGenerator_gen_reveal(Backend* be, bool* clear, EmpParty party, const block * label, int length);
 
 class CircuitGenerator: public Backend { public:
 	CircuitFileGenerator * gc;
@@ -14,8 +14,8 @@ class CircuitGenerator: public Backend { public:
 	std::ofstream tmp;
 	CircuitGenerator(CircuitFileGenerator* gc): Backend(PUBLIC) {
 		this->gc = gc;	
-		Feed_internal = gen_feed;
-		Reveal_internal = gen_reveal;
+		Feed_internal = CircuitGenerator_gen_feed;
+		Reveal_internal = CircuitGenerator_gen_reveal;
 	}
 	void finalize() {
 		tmp.close();
@@ -29,7 +29,7 @@ class CircuitGenerator: public Backend { public:
 	int n1=0,n2=0,n3=0;
 };
 
-void gen_feed(Backend* be, EmpParty party, block * label, const bool* b, int length) {
+inline void CircuitGenerator_gen_feed(Backend* be, EmpParty party, block * label, const bool* b, int length) {
 	CircuitGenerator * backend = (CircuitGenerator*)(be);
 	for(int i = 0; i < length; ++i) {
 		label[i] = backend->gc->private_label(b[i]);
@@ -38,7 +38,7 @@ void gen_feed(Backend* be, EmpParty party, block * label, const bool* b, int len
 	else backend->n2+=length;
 }
 
-void gen_reveal(Backend* be, bool* b, EmpParty party, const block * label, int length) {
+inline void CircuitGenerator_gen_reveal(Backend* be, bool* b, EmpParty party, const block * label, int length) {
 	CircuitGenerator * backend = (CircuitGenerator*)(be);
 	for (int i = 0; i < length; ++i) {
 		b[i] = backend->gc->get_value(label[i]);

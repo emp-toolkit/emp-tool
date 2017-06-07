@@ -244,6 +244,7 @@ class NetIO: public IOChannel<NetIO> { public:
     void recv_data_impl(void  * data, int len) {
 
         if (has_sent) flush();
+        has_sent = false;
         u8* d = (u8*)data;
 
 #ifdef USE_ASIO
@@ -279,7 +280,6 @@ class NetIO: public IOChannel<NetIO> { public:
             
         }
 #else
-        has_sent = false;
         int sent = 0;
         while (sent < len) {
             int res = fread(sent + (char*)data, 1, len - sent, stream);

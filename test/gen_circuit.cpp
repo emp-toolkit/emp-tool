@@ -1,5 +1,5 @@
-#include "emp-tool/gc/circuit_generator.h"
-#include "emp-tool/circuits/integer.h"
+#include <emp-tool.h>
+
 using std::string;
 
 void ham(int n) {

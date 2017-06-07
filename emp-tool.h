@@ -22,6 +22,8 @@
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/gc/garble_circuit.h"
+#include "emp-tool/gc/circuit_file_generator.h"
+#include "emp-tool/gc/circuit_generator.h"
 #include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"
 #include "emp-tool/gc/privacy_free_eva.h"

@@ -49,7 +49,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)../../relic/include;$(ProjectDir)../../libOTe/cryptoTools;C:/libs/boost;C:/libs/mpir/lib/x64/$(configuration)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)../../relic/include;$(ProjectDir)../../libOTe/cryptoTools;C:/libs/boost;C:/libs/mpir/lib/x64/$(configuration)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0501;THREADING;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -62,7 +62,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <AdditionalIncludeDirectories>$(ProjectDir)..;$(ProjectDir)../../relic/include;$(ProjectDir)../../libOTe/cryptoTools;C:/libs/boost;C:/libs/mpir/lib/x64/$(configuration)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)../../relic/include;$(ProjectDir)../../libOTe/cryptoTools;C:/libs/boost;C:/libs/mpir/lib/x64/$(configuration)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN32_WINNT=0x0501;THREADING;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -72,54 +72,54 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="gc\backend.cpp" />
-    <ClCompile Include="io\net_io_channel.cpp" />
-    <ClCompile Include="utils\prg.cpp" />
+    <ClCompile Include="emp-tool\gc\backend.cpp" />
+    <ClCompile Include="emp-tool\io\net_io_channel.cpp" />
+    <ClCompile Include="emp-tool\utils\prg.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="circuits\batcher.h" />
-    <ClInclude Include="circuits\bit.h" />
-    <ClInclude Include="circuits\bit.hpp" />
-    <ClInclude Include="circuits\circuit_file.h" />
-    <ClInclude Include="circuits\comparable.h" />
-    <ClInclude Include="circuits\float.h" />
-    <ClInclude Include="circuits\float.hpp" />
-    <ClInclude Include="circuits\integer.h" />
-    <ClInclude Include="circuits\integer.hpp" />
-    <ClInclude Include="circuits\number.h" />
-    <ClInclude Include="circuits\swappable.h" />
+    <ClInclude Include="emp-tool\circuits\batcher.h" />
+    <ClInclude Include="emp-tool\circuits\bit.h" />
+    <ClInclude Include="emp-tool\circuits\bit.hpp" />
+    <ClInclude Include="emp-tool\circuits\circuit_file.h" />
+    <ClInclude Include="emp-tool\circuits\comparable.h" />
+    <ClInclude Include="emp-tool\circuits\float.h" />
+    <ClInclude Include="emp-tool\circuits\float.hpp" />
+    <ClInclude Include="emp-tool\circuits\integer.h" />
+    <ClInclude Include="emp-tool\circuits\integer.hpp" />
+    <ClInclude Include="emp-tool\circuits\number.h" />
+    <ClInclude Include="emp-tool\circuits\swappable.h" />
     <ClInclude Include="emp-tool.h" />
-    <ClInclude Include="garble\aes.h" />
-    <ClInclude Include="garble\block.h" />
-    <ClInclude Include="garble\garble.h" />
-    <ClInclude Include="garble\garble_gate_halfgates.h" />
-    <ClInclude Include="garble\garble_gate_privacy_free.h" />
-    <ClInclude Include="garble\garble_gate_standard.h" />
-    <ClInclude Include="gc\backend.h" />
-    <ClInclude Include="gc\circuit_file_generator.h" />
-    <ClInclude Include="gc\circuit_generator.h" />
-    <ClInclude Include="gc\garble_circuit.h" />
-    <ClInclude Include="gc\halfgate_eva.h" />
-    <ClInclude Include="gc\halfgate_gen.h" />
-    <ClInclude Include="gc\privacy_free_eva.h" />
-    <ClInclude Include="gc\privacy_free_gen.h" />
-    <ClInclude Include="io\check_io_channel.h" />
-    <ClInclude Include="io\file_io_channel.h" />
-    <ClInclude Include="io\hash_io_channel.h" />
-    <ClInclude Include="io\io_channel.h" />
-    <ClInclude Include="io\mem_io_channel.h" />
-    <ClInclude Include="io\net_io_channel.h" />
-    <ClInclude Include="utils\block.h" />
-    <ClInclude Include="utils\com.h" />
-    <ClInclude Include="utils\config.h" />
-    <ClInclude Include="utils\hash.h" />
-    <ClInclude Include="utils\prg.h" />
-    <ClInclude Include="utils\prp.h" />
-    <ClInclude Include="utils\utils.h" />
-    <ClInclude Include="utils\utils.hpp" />
-    <ClInclude Include="utils\utils_ec.h" />
-    <ClInclude Include="utils\utils_ec.hpp" />
-    <ClInclude Include="utils\xor_tree.h" />
+    <ClInclude Include="emp-tool\garble\aes.h" />
+    <ClInclude Include="emp-tool\garble\block.h" />
+    <ClInclude Include="emp-tool\garble\garble.h" />
+    <ClInclude Include="emp-tool\garble\garble_gate_halfgates.h" />
+    <ClInclude Include="emp-tool\garble\garble_gate_privacy_free.h" />
+    <ClInclude Include="emp-tool\garble\garble_gate_standard.h" />
+    <ClInclude Include="emp-tool\gc\backend.h" />
+    <ClInclude Include="emp-tool\gc\circuit_file_generator.h" />
+    <ClInclude Include="emp-tool\gc\circuit_generator.h" />
+    <ClInclude Include="emp-tool\gc\garble_circuit.h" />
+    <ClInclude Include="emp-tool\gc\halfgate_eva.h" />
+    <ClInclude Include="emp-tool\gc\halfgate_gen.h" />
+    <ClInclude Include="emp-tool\gc\privacy_free_eva.h" />
+    <ClInclude Include="emp-tool\gc\privacy_free_gen.h" />
+    <ClInclude Include="emp-tool\io\check_io_channel.h" />
+    <ClInclude Include="emp-tool\io\file_io_channel.h" />
+    <ClInclude Include="emp-tool\io\hash_io_channel.h" />
+    <ClInclude Include="emp-tool\io\io_channel.h" />
+    <ClInclude Include="emp-tool\io\mem_io_channel.h" />
+    <ClInclude Include="emp-tool\io\net_io_channel.h" />
+    <ClInclude Include="emp-tool\utils\block.h" />
+    <ClInclude Include="emp-tool\utils\com.h" />
+    <ClInclude Include="emp-tool\utils\config.h" />
+    <ClInclude Include="emp-tool\utils\hash.h" />
+    <ClInclude Include="emp-tool\utils\prg.h" />
+    <ClInclude Include="emp-tool\utils\prp.h" />
+    <ClInclude Include="emp-tool\utils\utils.h" />
+    <ClInclude Include="emp-tool\utils\utils.hpp" />
+    <ClInclude Include="emp-tool\utils\utils_ec.h" />
+    <ClInclude Include="emp-tool\utils\utils_ec.hpp" />
+    <ClInclude Include="emp-tool\utils\xor_tree.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

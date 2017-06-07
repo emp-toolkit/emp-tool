@@ -63,11 +63,11 @@ public:
         delete[] gates;
         delete[] wires;
     }
-    int table_size() const {
+    int inline table_size() const {
         return num_gate * 4;
     }
 
-    void compute(block * out, block * in1, block * in2) {
+    void inline compute(block * out, block * in1, block * in2) {
         memcpy(wires, in1, n1 * sizeof(block));
         memcpy(wires + n1, in2, n2 * sizeof(block));
         for (int i = 0; i < num_gate; ++i) {
