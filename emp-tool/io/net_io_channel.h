@@ -262,7 +262,7 @@ class NetIO: public IOChannel<NetIO> { public:
             if (len > avaliable && rem)
             {
                 boost::system::error_code ec;
-                auto ss = mSock.read_some(boost::asio::buffer(recvBuffer.data() + recvBuffIdx, rem));
+                auto ss = mSock.read_some(boost::asio::buffer(recvBuffer.data() + recvBuffEnd, rem));
                 recvBuffEnd += ss;
                 avaliable += ss;
 
