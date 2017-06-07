@@ -10,25 +10,9 @@
 
 
 
-if(MSVC)
+find_path   (GMP_INCLUDE_DIRS    NAMES gmp.h     )
+find_library(GMP_LIBRARIES       NAMES gmp libgmp)
+	
+include(FindPackageHandleStandardArgs)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(GMP DEFAULT_MSG GMP_INCLUDE_DIR GMP_LIBRARIES)
 
-	set(possible_gmp_h_dirs "C:/libs/mpir/")
-	set(possible_gmp_lib_dirs ${possible_gmp_h_dirs})
-	
-	FOREACH(dir ${possible_gmp_h_dirs})
-		if(EXISTS ${dir})
-			set(GMP_INCLUDE_DIRS  "${dir}/lib/x64/\$(Configuration)")
-			set(GMP_LIBRARIES "${dir}/lib/x64/\$(Configuration)/mpir.lib")
-			set(GMP_FOUND true)
-			break()
-		endif()
-	endforeach(dir)
-else()
-	
-
-	find_path   (GMP_INCLUDE_DIRS    NAMES gmp.h     )
-	find_library(GMP_LIBRARIES       NAMES gmp libgmp)
-	
-	include(FindPackageHandleStandardArgs)
-	FIND_PACKAGE_HANDLE_STANDARD_ARGS(GMP DEFAULT_MSG GMP_INCLUDE_DIR GMP_LIBRARIES)
-endif()
