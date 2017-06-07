@@ -1,6 +1,5 @@
 #ifndef CIRCUIT_FILE_GENERATOR_H__
 #define CIRCUIT_FILE_GENERATOR_H__
-#define HALFGATE_GEN_H__
 #include "block.h"
 #include "utils.h"
 #include <iostream>
