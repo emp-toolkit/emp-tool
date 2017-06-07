@@ -68,7 +68,7 @@ endmacro()
 
 install(FILES emp-tool-config.cmake DESTINATION cmake/)
 install(FILES "emp-tool.h" DESTINATION include)
-install_dir(emp-tool "*.h;*.hpp")
+install_dir(emp-tool "*.h;*.hpp;*/circuits/files/*.txt")
 #install_dir(garble "*.h;*.hpp")
 #install_dir(gc "*.h;*.hpp")
 #install_dir(circuits "*.h;*.hpp;files/*")
@@ -82,7 +82,7 @@ target_link_libraries(${NAME}  ${LIBRARIES})
 
 
 macro (add_test _name)
-	add_executable("test_${_name}" "test/${_name}.cpp" ${basics} "gc/backend.cpp")
+	add_executable("test_${_name}" "test/${_name}.cpp")
 	target_link_libraries("test_${_name}"  ${NAME} ${LIBRARIES} ) 
 endmacro()
 add_test(bit)
