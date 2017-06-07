@@ -22,24 +22,6 @@ set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
 
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
-#file(GLOB headers 
-#"emp-tool/io/*.h"
-#"emp-tool/circuits/*.h"
-#"emp-tool/circuits/*.hpp"
-#"emp-tool/utils/*.h"
-#"emp-tool/utils/*.hpp"
-#"emp-tool/gc/*.h"
-#"emp-tool/gc/*.hpp"
-#"emp-tool.h"
-#)
-#file(GLOB circuit-files 
-#"circuits/files/*"
-#)
-#
-#file(GLOB libgarble
-#"garble/*.h"
-#)
-
 set(sources
 	emp-tool/gc/backend.cpp
 	emp-tool/io/net_io_channel.cpp 
@@ -69,10 +51,6 @@ endmacro()
 install(FILES emp-tool-config.cmake DESTINATION cmake/)
 install(FILES "emp-tool.h" DESTINATION include)
 install_dir(emp-tool "*.h;*.hpp;*/circuits/files/*.txt")
-#install_dir(garble "*.h;*.hpp")
-#install_dir(gc "*.h;*.hpp")
-#install_dir(circuits "*.h;*.hpp;files/*")
-#install_dir(utils "*.h;*.hpp")
 install(TARGETS ${NAME} DESTINATION lib)
 
 set(LIBRARIES ${relic_LIBRARIES} ${cryptoTools_LIBRARIES} ${GMP_LIBRARIES})
