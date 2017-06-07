@@ -11,10 +11,6 @@ inline Bit Bit::select(const Bit & select, const Bit & new_v) const{
 	Bit tmp = *this;
 	tmp = tmp ^ new_v;
 	tmp = tmp & select;
-    auto ptr0 = dynamic_cast<HalfGateGen<NetIO, on>*>(local_gc);
-    auto ptr1 = dynamic_cast<HalfGateEva<NetIO, on>*>(local_gc);
-    if (ptr0) ptr0->io->sync();
-    if (ptr1) ptr1->io->sync();
 	return *this ^ tmp;
 }
 
