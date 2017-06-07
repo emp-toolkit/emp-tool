@@ -41,9 +41,9 @@ set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 #)
 
 set(sources
-gc/backend.cpp
-	io/net_io_channel.cpp 
-	utils/prg.cpp)
+	emp-tool/gc/backend.cpp
+	emp-tool/io/net_io_channel.cpp 
+	emp-tool/utils/prg.cpp)
 
 LINK_DIRECTORIES(${cryptoTools_LINK_DIRS})
 
