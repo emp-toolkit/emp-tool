@@ -22,23 +22,23 @@ set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
 
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
 
-file(GLOB headers 
-"io/*.h"
-"circuits/*.h"
-"circuits/*.hpp"
-"utils/*.h"
-"utils/*.hpp"
-"gc/*.h"
-"gc/*.hpp"
-"emp-tool"
-)
-file(GLOB circuit-files 
-"circuits/files/*"
-)
-
-file(GLOB libgarble
-"garble/*.h"
-)
+#file(GLOB headers 
+#"emp-tool/io/*.h"
+#"emp-tool/circuits/*.h"
+#"emp-tool/circuits/*.hpp"
+#"emp-tool/utils/*.h"
+#"emp-tool/utils/*.hpp"
+#"emp-tool/gc/*.h"
+#"emp-tool/gc/*.hpp"
+#"emp-tool.h"
+#)
+#file(GLOB circuit-files 
+#"circuits/files/*"
+#)
+#
+#file(GLOB libgarble
+#"garble/*.h"
+#)
 
 set(sources
 gc/backend.cpp
@@ -62,17 +62,17 @@ SET_TARGET_PROPERTIES(${NAME}_static PROPERTIES  OUTPUT_NAME ${NAME} CLEAN_DIREC
 # install steps
 macro (install_dir _dir _patterns)
 	FOREACH(pattern ${_patterns})
-		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include/${NAME} FILES_MATCHING PATTERN ${pattern})
+		install(DIRECTORY ${CMAKE_SOURCE_DIR}/${_dir} DESTINATION include FILES_MATCHING PATTERN ${pattern})
 	ENDFOREACH(pattern)
 endmacro()
 
 install(FILES emp-tool-config.cmake DESTINATION cmake/)
 install(FILES "emp-tool.h" DESTINATION include)
-install_dir(io "*.h;*.hpp")
-install_dir(garble "*.h;*.hpp")
-install_dir(gc "*.h;*.hpp")
-install_dir(circuits "*.h;*.hpp;files/*")
-install_dir(utils "*.h;*.hpp")
+install_dir(emp-tool "*.h;*.hpp")
+#install_dir(garble "*.h;*.hpp")
+#install_dir(gc "*.h;*.hpp")
+#install_dir(circuits "*.h;*.hpp;files/*")
+#install_dir(utils "*.h;*.hpp")
 install(TARGETS ${NAME} DESTINATION lib)
 
 set(LIBRARIES ${relic_LIBRARIES} ${cryptoTools_LIBRARIES} ${GMP_LIBRARIES})
