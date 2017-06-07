@@ -13,72 +13,72 @@
     @{
   */
 
-class PRG;
-//static PRG * rnd = nullptr;
-//extern std::mutex rnd_mtx;
 
 class PRG {
 public:
+    enum RandomSource
+    {
+        Uninitialized = 0,
+        OsRandom = 1
+    };
+
     uint64_t counter = 0;
     AES_KEY aes;
-    PRG()
+    PRG(RandomSource source = Uninitialized)
     {
-        aes.rounds = -1;
+        reseed(source);
     }
 
     PRG(const char * seed, int id = 0)
         :PRG(*(block*)seed, id)
-    {
-    }
+    { }
 
     PRG(block seedBlk, int id = 0)
     {
         reseed(&seedBlk, id);
-
-
-        //#ifdef REAL_RANDOM
-        //		if (rnd == nullptr) {
-        //			std::lock_guard<std::mutex> lock(rnd_mtx);
-        //			if (rnd == nullptr) {
-        //
-        //				int data[sizeof(block) / sizeof(int)];
-        //				// this will be "/dev/urandom" when possible...
-        //				std::random_device rand_div;
-        //				for (int i = 0; i < sizeof(block) / sizeof(int); ++i)
-        //					data[i] = rand_div();
-        //				//FILE *fp;
-        //				//fp = fopen("/dev/urandom", "r");
-        //				//int r_bytes = 0;
-        //				//while (r_bytes < 16) {
-        //				//	int r = fread(&data, 1, 16, fp);
-        //				//	if (r < 0) exit(1);
-        //				//	r_bytes += r;
-        //				//}
-        //				//fclose(fp);
-        //
-        //				rnd = this;//make rnd not nullptr, to avoiding infinite recursion.
-        //				rnd = new PRG(data);
-        //			}
-        //		}
-        //
-        //#endif
-        //
-        //		if (seed == nullptr) {
-        //#ifdef REAL_RANDOM
-        //			block data;
-        //			std::lock_guard<std::mutex> lock(rnd_mtx);
-        //			rnd->random_block(&data, 1);
-        //			reseed(&data, id);
-        //#else
-        //			if(rnd == nullptr)
-        //				std::cout << "using random number generator seeded by zero -- Insecure. Please compile with -DREAL_RANDOM" << std::endl;
-        //			rnd = (PRG *)1;
-        //#endif
-        //		}
-        //		else {
-        //			reseed(seed, id);
-        //		}
     }
+
+    void reseed(RandomSource source = OsRandom)
+    {
+        if (source == OsRandom)
+        {
+            static PRG rnd(OsRandom);
+            static std::mutex _rnd_mtx;
+            block seed;
+
+            {
+                std::lock_guard<std::mutex> lock(_rnd_mtx);
+                if (&rnd == this) {
+
+                    //FILE *fp;
+                    //fp = fopen("/dev/urandom", "r");
+                    //int r_bytes = 0;
+                    //while (r_bytes < 16) {
+                    //	int r = fread(&data, 1, 16, fp);
+                    //	if (r < 0) exit(1);
+                    //	r_bytes += r;
+                    //}
+                    //fclose(fp);
+
+                    int data[sizeof(block) / sizeof(int)];
+                    // this will be "/dev/urandom" when possible...
+                    std::random_device rand_div;
+                    for (int i = 0; i < sizeof(block) / sizeof(int); ++i)
+                        data[i] = rand_div();
+
+                    reseed(data);
+                }
+                seed = rnd.random_block();
+            }
+
+            reseed(&seed);
+        }
+        else
+        {
+            aes.rounds = 0;
+        }
+    }
+
     void reseed(const void * key, uint64_t id = 0) {
         const char * k = (const char *)key;
         __m128i v = _mm_load_si128((__m128i*)&k[0]);
@@ -120,7 +120,7 @@ public:
     }
     void random_block(block * data, int nblocks = 1) {
 #if defined(_MSC_VER) | !defined(NDEBUG)
-        if (aes.rounds == -1) throw std::runtime_error("unititialized PRG " LOCATION);
+        if (aes.rounds == 0) throw std::runtime_error("unititialized PRG " LOCATION);
 #endif // _MSC_VER
 
         for (int i = 0; i < nblocks; ++i) {

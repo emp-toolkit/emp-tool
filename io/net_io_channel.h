@@ -271,6 +271,12 @@ class NetIO: public IOChannel<NetIO> { public:
             len -= min;
             d += min;
             recvBuffIdx += min;
+            
+            if (recvBuffEnd == recvBuffIdx)
+            {
+                recvBuffEnd = recvBuffIdx = 0;
+            }
+            
         }
 #else
         has_sent = false;

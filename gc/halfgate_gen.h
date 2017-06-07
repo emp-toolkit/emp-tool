@@ -131,8 +131,8 @@ class HalfGateGen<T,RTCktOpt::off>:public GarbleCircuit{ public:
 	Hash hash;
 	bool with_file_io = false;
 	block constant[2];
-	HalfGateGen(T * io) :io(io) {
-		PRG tmp;
+	HalfGateGen(T * io, const block& prgSeed) :io(io) {
+		PRG tmp(prgSeed);
 		tmp.random_block(&seed, 1);
 		block a;
 		tmp.random_block(&a, 1);
@@ -169,7 +169,7 @@ class HalfGateGen<T,RTCktOpt::off>:public GarbleCircuit{ public:
 		return xorBlocks(a, b);
 	}
 	block gc_not(const block&a) override {
-		return gen_xor(a, public_label(true));
+		return gc_xor(a, public_label(true));
 	}
 	void generic_to_xor(const block* new_b0,const block * b0, const block * b1, int length) {
 		block h[4];

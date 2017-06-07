@@ -70,8 +70,8 @@ class XorTree{public:
 		return n;
 	}
 
-	void gen(bool * out, bool * in) {
-		PRG prg;int i;
+	void gen(bool * out, bool * in, const block& seed) {
+		PRG prg(seed);int i;
 		for(i = 0; i < n/N; ++i) {
 			genN(out+(i*(N+M)), in+N*i, &prg, N);
 		}
