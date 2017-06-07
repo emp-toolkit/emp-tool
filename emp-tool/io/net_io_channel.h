@@ -7,9 +7,9 @@
 //#include <cryptoTools/Network/Endpoint.h>
 //#include <cryptoTools/Network/IOService.h>
 
-#ifdef _MSC_VER 
+//#ifdef _MSC_VER 
 #define USE_ASIO
-#endif
+//#endif
 
 #ifdef USE_ASIO 
 #include <boost/asio.hpp>
