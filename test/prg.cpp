@@ -4,7 +4,7 @@
 using namespace std;
 
 int main() {
-/*	PRG prg;//using a random seed
+	PRG prg;//using a random seed
 
 	int rand_int;
 	prg.random_data(&rand_int, sizeof(rand_int));
@@ -40,6 +40,6 @@ int main() {
 		double interval = time_from(start);
 		delete data;
 		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3<<" Gbps\n";
-	}*/
+	}
 	return 0;
 }

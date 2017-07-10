@@ -11,7 +11,7 @@
  */
 
 class PRG;
-static PRG * rnd = nullptr;
+extern PRG * rnd;
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
