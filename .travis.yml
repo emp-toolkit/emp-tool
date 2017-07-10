@@ -7,6 +7,7 @@ addons:
     packages:
       - cmake-data
       - cmake
+		- build-essential libssl-dev libgmp-dev
 
 matrix:
   include:
@@ -24,3 +25,7 @@ matrix:
 
 before_install:
     - eval "${MATRIX_EVAL}"
+
+
+script:
+	cmake . && make
