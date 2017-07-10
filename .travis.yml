@@ -9,9 +9,9 @@ matrix:
          sources:
             - ubuntu-toolchain-r-test
          packages:
-            - g++-5
+            - g++-6
    env:
-      - MATRIX_EVAL="CC=gcc-5 && CXX=g++-5"
+      - MATRIX_EVAL="CC=gcc-6 && CXX=g++-6"
 
 before_install:
    - sudo apt-get install libssl-dev libgmp-dev -y
