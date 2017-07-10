@@ -5,26 +5,32 @@
 #ifndef PRP_H__
 #define PRP_H__
 /** @addtogroup BP
-    @{
-  */
+  @{
+ */
 
 class PRP { public:
 	AES_KEY *aes;
+
 	PRP(const char * seed = fix_key) {
 		aes = new AES_KEY;
 		aes_set_key(seed);
 	}
+
+	PRP(const block& seed): PRP((const char *)&seed) {
+	}
+
 	~PRP() {
 		delete aes;
 	}
+
 	void aes_set_key(const char * key) {
 		__m128i v = _mm_load_si128((__m128i*)&key[0]);
 		aes_set_key(v);
 	}
+
 	void aes_set_key(const block& v) {
 		AES_set_encrypt_key(v, aes);
 	}
-
 
 	void permute_block(block *data, int nblocks) {
 		int i = 0;
@@ -33,7 +39,7 @@ class PRP { public:
 		}
 		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, aes);
 	}
-	
+
 	void permute_data(uint8_t*data, int nbytes) {
 		permute_block((block *)data, nbytes/16);
 		if (nbytes % 16 != 0) {
@@ -55,15 +61,15 @@ class PRP { public:
 		return in;	
 	}
 	template<int n>
-	void H(block out[n], block in[n], uint64_t id) {
-		block scratch[n];
-		for(int i = 0; i < n; ++i) {
-			out[i] = scratch[i] = xorBlocks(double_block(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
-			++id;
+		void H(block out[n], block in[n], uint64_t id) {
+			block scratch[n];
+			for(int i = 0; i < n; ++i) {
+				out[i] = scratch[i] = xorBlocks(double_block(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
+				++id;
+			}
+			permute_block(scratch, n);
+			xorBlocks_arr(out, scratch, out, n);
 		}
-		permute_block(scratch, n);
-		xorBlocks_arr(out, scratch, out, n);
-	}
 
 	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
 		bool del = false;
