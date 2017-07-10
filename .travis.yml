@@ -25,9 +25,9 @@ before_install:
 addons:
 
 script:
-  cmake . && make
-  ./bin/prg
-  ./bin/prp
-  ./bin/com
-  ./bin/hash
-  ./bin/netio 1 12345 & ./bin/netio 2 12345
+  - cmake . && make
+  - ./bin/prg
+  - ./bin/prp
+  - ./bin/com
+  - ./bin/hash
+  - ./bin/netio 1 12345 & ./bin/netio 2 12345
