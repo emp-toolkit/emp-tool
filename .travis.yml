@@ -25,7 +25,7 @@ before_install:
 addons:
 
 script:
-  - cmake . && make
+  - cmake . && make && sudo make install && sleep 3
   - ./bin/prg
   - ./bin/prp
   - ./bin/com
