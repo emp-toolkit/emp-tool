@@ -7,7 +7,9 @@ addons:
     packages:
       - cmake-data
       - cmake
-		- build-essential libssl-dev libgmp-dev
+		- build-essential 
+		- libssl-dev 
+		- libgmp-dev
 
 matrix:
   include:
