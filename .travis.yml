@@ -1,12 +1,5 @@
 language: cpp
 
-before_install:
-   - sudo apt-get install software-properties-common
-   - sudo add-apt-repository  ppa:george-edison55/cmake-3.x -y
-   - sudo apt-get update -q
-   - sudo apt-get install build-essential libssl-dev libgmp-dev python -y
-   - sudo apt-get install --reinstall cmake
-   - eval "${MATRIX_EVAL}"
 
 matrix:
    include:
@@ -19,6 +12,18 @@ matrix:
             - g++-4.9
    env:
       - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+
+before_install:
+   - sudo apt-get install libssl-dev libgmp-dev -y
+   - eval "${MATRIX_EVAL}"
+
+addons:
+   apt:
+      sources:
+         - george-edison55-precise-backports
+      packages:
+         - cmake-data
+         - cmake
 
 script:
    cmake . && make
