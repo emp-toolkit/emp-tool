@@ -9,8 +9,10 @@ include_directories(${CMAKE_SOURCE_DIR}/circuits)
 include_directories(${CMAKE_SOURCE_DIR}/gc)
 
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR})
 
-FIND_PACKAGE(OpenSSL)
+find_package(OpenSSL)
+find_package(relic)
 INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
@@ -48,7 +50,7 @@ install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)
 	add_executable(${_name} "test/${_name}.cpp" ${sources})
-	target_link_libraries(${_name}  relic  ${OPENSSL_LIBRARIES} gmp) 
+	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} gmp) 
 endmacro()
 
 add_test(bit)
