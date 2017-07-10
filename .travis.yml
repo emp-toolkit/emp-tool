@@ -12,16 +12,12 @@ matrix:
             - g++-4.9
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-    - os: linux
-      addons:
         apt:
           sources:
             - george-edison55-precise-backports
           packages:
             - cmake-data
             - cmake
-      env:
-         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
 before_install:
   - sudo apt-get install libssl-dev libgmp-dev -y
