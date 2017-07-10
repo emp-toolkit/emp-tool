@@ -1,15 +1,24 @@
 language: cpp
 
 matrix:
-  include:
+   include:
     # works on Precise and Trusty
-    - os: linux
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-4.9
+      - os: linux
+         addons:
+         apt:
+            sources:
+               - ubuntu-toolchain-r-test
+            packages:
+               - g++-4.9
+      - os: linux
+         addons:
+         apt:
+            sources:
+               - george-edison55-precise-backports
+            packages:
+               - cmake-data
+               - cmake
+
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
@@ -20,12 +29,6 @@ before_install:
    - bash ./emp-readme/scripts/install_relic.sh
 
 addons:
-   apt:
-      sources:
-         - george-edison55-precise-backports
-      packages:
-         - cmake-data
-         - cmake
 
 script:
    cmake . && make
