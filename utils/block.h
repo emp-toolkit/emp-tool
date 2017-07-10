@@ -85,9 +85,7 @@ inline bool isOne(const block * b) {
 //Modified from
 //https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
 // with inner most loops changed to _mm_set_epi8 and _mm_set_epi16
-	inline void
-sse_trans(uint8_t *out, uint8_t const *inp, int nrows, int ncols)
-{
+inline void sse_trans(uint8_t *out, uint8_t const *inp, int nrows, int ncols) {
 #   define INP(x,y) inp[(x)*ncols/8 + (y)/8]
 #   define OUT(x,y) out[(y)*nrows/8 + (x)/8]
 	int rr, cc, i, h;

@@ -3,7 +3,7 @@
 #include <string>
 #include "block.h"
 #include <sstream>
-//#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
+#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
 #include <gmp.h>
 #include "prg.h"
 #define macro_xstr(a) macro_str(a)
