@@ -29,11 +29,16 @@
 #include <smmintrin.h>
 #include <wmmintrin.h>
 #include <assert.h>
+#include "garble/block.h"
 
-typedef __m128i block;
 typedef __m128i block_tpl[2];
-inline block xorBlocks(block x, block y){return _mm_xor_si128(x,y);}
-inline block andBlocks(block x, block y){return _mm_and_si128(x,y);}
+inline block xorBlocks(block x, block y) {
+	return _mm_xor_si128(x,y);
+}
+inline block andBlocks(block x, block y) {
+	return _mm_and_si128(x,y);
+}
+
 inline void xorBlocks_arr(block* res, const block* x, const block* y, int nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;) {
@@ -46,14 +51,8 @@ inline void xorBlocks_arr(block* res, const block* x, block y, int nblocks) {
 		*(res++) = xorBlocks(*(x++), y);	
 	}
 }
-inline void xorBlocks_arr2(block* res, const block* x, const block* y, int nblocks) {
-	const block * dest = nblocks+x;
-	for (; x != dest;) {
-		*(res++) = xorBlocks(*(x++), *(y++));	
-	}
-}
 
-inline bool block_cmp(const block * x, const block * y, int nblocks) {
+inline bool cmpBlock(const block * x, const block * y, int nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;) {
 		__m128i vcmp = _mm_xor_si128(*(x++), *(y++)); 
@@ -63,18 +62,23 @@ inline bool block_cmp(const block * x, const block * y, int nblocks) {
 	return true;
 }
 
+//deprecate soon
+inline bool block_cmp(const block * x, const block * y, int nblocks) {
+	return cmpBlock(x,y,nblocks);
+}
+
 #define zero_block() _mm_setzero_si128()
 #define one_block() makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
 #define getLSB(x) (*((unsigned short *)&x)&1)
-#define makeBlock(X,Y) _mm_set_epi64((__m64)(X), (__m64)(Y))
+#define makeBlock(X,Y) _mm_set_epi64x(X, Y)
 
 inline bool isZero(const block * b) {
-	return _mm_testz_si128(*b,*b);
+	return _mm_testz_si128(*b,*b) > 0;
 }
 
 inline bool isOne(const block * b) {
 	__m128i neq = _mm_xor_si128(*b, one_block());
-	return _mm_testz_si128(neq, neq);
+	return _mm_testz_si128(neq, neq) > 0;
 }
 
 
@@ -124,6 +128,8 @@ sse_trans(uint8_t *out, uint8_t const *inp, int nrows, int ncols)
 		tmp.b[i] = INP(rr + i, cc);
 	for (i = 8; --i >= 0; tmp.x = _mm_slli_epi64(tmp.x, 1))
 		OUT(rr, cc + i) = _mm_movemask_epi8(tmp.x);
+#undef INP
+#undef OUT
 }
 
 

@@ -70,13 +70,22 @@ class XorTree{public:
 		return n;
 	}
 
-	void gen(bool * out, bool * in) {
-		PRG prg;int i;
+	void gen(bool * out, bool * in, PRG * prg = nullptr) {
+		bool prg_provided = true;
+		if (prg == nullptr) {
+			prg = new PRG();
+			prg_provided = false;
+		}
+		int i;
 		for(i = 0; i < n/N; ++i) {
 			genN(out+(i*(N+M)), in+N*i, &prg, N);
 		}
 		if(n%N != 0) {
 			genN(out+(i*(N+M)) , in+N*i, &prg, n%N);
+		}
+		if(not prg_provided) {
+			delete prg;
+			prg = nullptr;
 		}
 	}
 };

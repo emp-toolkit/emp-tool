@@ -3,10 +3,8 @@
 #include <string>
 #include "block.h"
 #include <sstream>
-#include <bitset>
-#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
+//#include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
 #include <gmp.h>
-#include "config.h"
 #include "prg.h"
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
@@ -35,7 +33,14 @@ template<class... Ts>
 void run_function(void *function, const Ts&... args) {	
 	reinterpret_cast<void(*)(Ts...)>(function)(args...);
 }
-void parse_party_and_port(char ** arg, int * party, int * port);
+
+void inline parse_party_and_port(char ** arg, int argc, int * party, int * port);
+
+//deprecate soon
+void inline parse_party_and_port(char ** arg, int * party, int * port) {
+	parse_party_and_port(arg, 2, party, port);
+}
+
 std::string Party(int p);
 template <typename T = uint64_t>
 std::string m128i_to_string(const __m128i var) {

@@ -28,7 +28,9 @@ inline std::string hex_to_binary(std::string hex) {
 		bin += hex_char_to_bin(hex[i]);
 	return bin;
 }
-inline void parse_party_and_port(char ** arg, int * party, int * port) {
+inline void parse_party_and_port(char ** arg, int argc, int * party, int * port) {
+	if (argc == 1)
+		error("ERROR: argc = 1, need two argsm party ID {1,2} and port.");
 	*party = atoi (arg[1]);
 	*port = atoi (arg[2]);
 }
