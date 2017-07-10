@@ -1,34 +1,35 @@
 language: cpp
 
 matrix:
-   include:
+  include:
     # works on Precise and Trusty
-      - os: linux
-         addons:
-         apt:
-            sources:
-               - ubuntu-toolchain-r-test
-            packages:
-               - g++-4.9
-      - os: linux
-         addons:
-         apt:
-            sources:
-               - george-edison55-precise-backports
-            packages:
-               - cmake-data
-               - cmake
-
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-4.9
+      env:
+         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - george-edison55-precise-backports
+          packages:
+            - cmake-data
+            - cmake
       env:
          - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
 before_install:
-   - sudo apt-get install libssl-dev libgmp-dev -y
-   - eval "${MATRIX_EVAL}"
-   - git clone https://github.com/emp-toolkit/emp-readme.git
-   - bash ./emp-readme/scripts/install_relic.sh
+  - sudo apt-get install libssl-dev libgmp-dev -y
+  - eval "${MATRIX_EVAL}"
+  - git clone https://github.com/emp-toolkit/emp-readme.git
+  - bash ./emp-readme/scripts/install_relic.sh
 
 addons:
 
 script:
-   cmake . && make
+  cmake . && make
