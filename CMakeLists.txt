@@ -13,7 +13,7 @@ set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 FIND_PACKAGE(OpenSSL)
 INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
 
-set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -lrt")
+set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -ggdb")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
 

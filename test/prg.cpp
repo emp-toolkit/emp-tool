@@ -30,13 +30,13 @@ int main() {
 	for (long long length = 2; length <= 2048; length*=4) {
 		long long times = 1024*1024*1024/length;
 		block * data = new block[length];
-		int64_t t1 = timeStamp();
+		auto start = std::chrono::high_resolution_clock::now();
 		for (int i = 0; i < times; ++i) {
 			prg.random_block(data, length);
 		}
-		int64_t t2 = timeStamp();
+		long long interval = (std::chrono::high_resolution_clock::now() - start).count();
 		delete data;
-		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(t2-t1+0.0)/1e3<<" Gbps\n";
+		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e9<<" Gbps\n";
 	}
 	return 0;
 }

@@ -6,7 +6,7 @@
 #include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
 #include <gmp.h>
 #include "prg.h"
-#include <time.h>
+#include <chrono>
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
