@@ -5,7 +5,7 @@ before_install:
    - sudo add-apt-repository  ppa:george-edison55/cmake-3.x -y
    - sudo apt-get update -q
    - sudo apt-get install build-essential libssl-dev libgmp-dev python -y
-   - sudo apt-get install --reinstall cmake=3.2.2-2~ubuntu14.04.1~ppa1
+   - sudo apt-get install --reinstall cmake
    - eval "${MATRIX_EVAL}"
 
 matrix:
