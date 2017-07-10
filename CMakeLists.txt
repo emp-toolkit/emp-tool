@@ -52,4 +52,8 @@ endmacro()
 
 add_test(bit)
 add_test(prg)
+add_test(hash)
+add_test(prp)
+add_test(com)
+add_test(netio)
 add_test(gen_circuit)

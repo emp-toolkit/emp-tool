@@ -1,19 +1,24 @@
 #ifndef HASH_H__
 #define HASH_H__
+
 #include "block.h"
 #include "config.h"
 #include <openssl/sha.h>
 #include <stdio.h>
-#include "utils_ec.h"
-/** @addtogroup BP
-    @{
-  */
+//#include "utils_ec.h"
 
-class Hash {
+extern "C" {
+#include <relic/relic.h>
+}
+
+/** @addtogroup BP
+  @{
+ */
+
+class Hash { public:
 	SHA_CTX hash;
 	char buffer[HASH_BUFFER_SIZE];
 	int size = 0;
-	public:
 	static const int DIGEST_SIZE = 20;
 	Hash() {
 		SHA1_Init(&hash);

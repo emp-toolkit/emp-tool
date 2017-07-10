@@ -19,8 +19,8 @@ inline void initialize_relic() {
 //TODO: fix the following.
 inline block KDF(eb_t in) {
 	uint8_t tmp[100];
-	int eb_size= eb_size_bin(in, ECC_PACK);
+	int eb_size = eb_size_bin(in, ECC_PACK);
 	eb_write_bin(tmp, eb_size, in, ECC_PACK);
-	return Hash::hash_for_block(&tmp[0], eb_size);
+	return Hash::hash_for_block(tmp, eb_size);
 }
 

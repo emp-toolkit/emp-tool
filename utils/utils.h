@@ -54,6 +54,13 @@ std::string m128i_to_string(const __m128i var) {
 }
 double wallClock();
 uint64_t timeStamp();
+
+inline std::chrono::time_point<std::chrono::high_resolution_clock> clock_start() { 
+	return std::chrono::high_resolution_clock::now();
+}
+inline long long time_from(const std::chrono::time_point<std::chrono::high_resolution_clock>& s) {
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - s).count();
+}
 template<typename T>
 T bool_to_int(const bool * data, size_t len = 0);
 block bool_to128(const bool * data);

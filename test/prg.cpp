@@ -5,14 +5,17 @@ using namespace std;
 
 int main() {
 	PRG prg;//using a random seed
+
 	int rand_int;
 	prg.random_data(&rand_int, sizeof(rand_int));
 
 	block rand_block[3];
 	prg.random_block(rand_block, 3);
+		
+	prg.reseed(&rand_block[1]);//reset the PRG with another seed
 
 	int rand_ints[100];
-	prg.random_data_unaligned(rand_ints+2, 100);
+	prg.random_data_unaligned(rand_ints+2, sizeof(int)*98);//when the array is not 128-bit-aligned
 
 	initialize_relic();
 	bn_t bn1, bn2, bn3;
@@ -28,15 +31,15 @@ int main() {
 	prg.random_mpz(integ, 1024);//random number with 1024 bits.
 
 	for (long long length = 2; length <= 2048; length*=4) {
-		long long times = 1024*1024*1024/length;
+		long long times = 1024*1024*32/length;
 		block * data = new block[length];
-		auto start = std::chrono::high_resolution_clock::now();
+		auto start = clock_start();
 		for (int i = 0; i < times; ++i) {
 			prg.random_block(data, length);
 		}
-		long long interval = (std::chrono::high_resolution_clock::now() - start).count();
+		double interval = time_from(start);
 		delete data;
-		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e9<<" Gbps\n";
+		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3<<" Gbps\n";
 	}
 	return 0;
 }

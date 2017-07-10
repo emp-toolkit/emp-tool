@@ -1,19 +1,14 @@
 #ifndef UTILS_EC_H__
 #define UTILS_EC_H__
+
 extern "C" {
-#ifdef _MSC_VER
-#include <relic.h>
-#else
 #include <relic/relic.h>
-#endif
 }
 #include "block.h"
-
 #include "hash.h"
 #define ECC_PACK false
 #define BIT_LEN 128
 #define EB_SIZE 65
-
 
 typedef eb_t eb_tpl[2];
 typedef bn_t bn_tpl[2];

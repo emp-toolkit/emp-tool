@@ -28,9 +28,7 @@ class NetIO: public IOChannel<NetIO> { public:
 	bool has_sent = false;
 	string addr;
 	int port;
-#ifdef COUNT_IO
 	uint64_t counter = 0;
-#endif
 	NetIO(const char * address, int port, bool quiet = false) {
 		this->port = port;
 		is_server = (address == nullptr);
@@ -67,13 +65,25 @@ class NetIO: public IOChannel<NetIO> { public:
 				usleep(1000);
 			}
 		}
-//		set_nodelay();
-		if(!quiet)
-			cout << "connected"<<endl;
+		set_nodelay();
 		stream = fdopen(consocket, "wb+");
 		buffer = new char[NETWORK_BUFFER_SIZE];
 		memset(buffer, 0, NETWORK_BUFFER_SIZE);
 		setvbuf(stream, buffer, _IOFBF, NETWORK_BUFFER_SIZE);
+		if(!quiet)
+			cout << "connected"<<endl;
+	}
+
+	void sync() {
+		int tmp = 0;
+		if(is_server) {
+			send_data(&tmp, 1);
+			recv_data(&tmp, 1);
+		} else {
+			recv_data(&tmp, 1);
+			send_data(&tmp, 1);
+			flush();
+		}
 	}
 
 	~NetIO(){
@@ -81,23 +91,13 @@ class NetIO: public IOChannel<NetIO> { public:
 		close(consocket);
 		delete[] buffer;
 	}
-	void sync() {
-		int tmp = 0;
-		if(is_server) {
-			send_data(&tmp, 1);
-			recv_data(&tmp, 1);
-		}else{
-			recv_data(&tmp, 1);
-			send_data(&tmp, 1);
-			flush();
-		}
-	}
-	void set_nodelay(){
+
+	void set_nodelay() {
 		const int one=1;
 		setsockopt(consocket,IPPROTO_TCP,TCP_NODELAY,&one,sizeof(one));
 	}
 
-	void set_delay(){
+	void set_delay() {
 		const int zero = 0;
 		setsockopt(consocket,IPPROTO_TCP,TCP_NODELAY,&zero,sizeof(zero));
 	}
@@ -107,12 +107,10 @@ class NetIO: public IOChannel<NetIO> { public:
 	}
 
 	void send_data_impl(const void * data, int len) {
-#ifdef COUNT_IO
-	counter +=len;
-#endif
+		counter += len;
 		int sent = 0;
 		while(sent < len) {
-			int res = fwrite(sent+(char*)data, 1, len-sent, stream);
+			int res = fwrite(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
 				sent+=res;
 			else
@@ -127,9 +125,9 @@ class NetIO: public IOChannel<NetIO> { public:
 		has_sent = false;
 		int sent = 0;
 		while(sent < len) {
-			int res = fread(sent+(char*)data, 1, len-sent, stream);
+			int res = fread(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
-				sent+=res;
+				sent += res;
 			else 
 				fprintf(stderr,"error: net_send_data %d\n", res);
 		}

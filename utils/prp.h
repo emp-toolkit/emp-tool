@@ -40,7 +40,7 @@ class PRP { public:
 		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, aes);
 	}
 
-	void permute_data(uint8_t*data, int nbytes) {
+	void permute_data(void*data, int nbytes) {
 		permute_block((block *)data, nbytes/16);
 		if (nbytes % 16 != 0) {
 			uint8_t extra[16];
