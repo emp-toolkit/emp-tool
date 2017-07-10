@@ -29,4 +29,5 @@ script:
   - ./bin/prp
   - ./bin/com
   - ./bin/hash
+  - ./bin/prg
   - ./bin/netio 1 12345 & ./bin/netio 2 12345
