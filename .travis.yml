@@ -16,6 +16,8 @@ matrix:
 before_install:
    - sudo apt-get install libssl-dev libgmp-dev -y
    - eval "${MATRIX_EVAL}"
+   - git clone https://github.com/emp-toolkit/emp-readme.git
+   - bash ./scripts/install_relic.sh
 
 addons:
    apt:
