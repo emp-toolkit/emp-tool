@@ -1,32 +1,30 @@
 language: cpp
 
 addons:
-	apt:
-		sources:
-			- george-edison55-precise-backports
-	packages:
-		- cmake-data
-		- cmake
-		- build-essential 
-		- libssl-dev 
-		- libgmp-dev
+   apt:
+      sources:
+         - george-edison55-precise-backports
+   packages:
+      - cmake-data
+      - cmake
+      - build-essential 
+      - libssl-dev 
+      - libgmp-dev
 
 matrix:
-	include:
-		- os: linux
-	addons:
-		apt:
-			sources:
-				- ubuntu-toolchain-r-test
-			packages:
-				- g++-4.9
-	env:
-		- MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-
+   include:
+      - os: linux
+   addons:
+      apt:
+         sources:
+            - ubuntu-toolchain-r-test
+         packages:
+            - g++-4.9
+   env:
+      - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
 
 before_install:
-	- eval "${MATRIX_EVAL}"
-
+   - eval "${MATRIX_EVAL}"
 
 script:
-	cmake . && make
+   cmake . && make
