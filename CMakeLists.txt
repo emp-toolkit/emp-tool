@@ -45,9 +45,10 @@ install(FILES ${headers} DESTINATION include/${NAME})
 install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
 install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
 install(TARGETS ${NAME} DESTINATION lib)
+
 macro (add_test _name)
-	add_executable(${_name} "test/${_name}.cpp" ${basics} "gc/backend.cpp")
-	target_link_libraries(${_name}  relic  ${OPENSSL_LIBRARIES} gmp ${EMP-TOOL_LIBRARIES}) 
+	add_executable(${_name} "test/${_name}.cpp" ${sources})
+	target_link_libraries(${_name}  relic  ${OPENSSL_LIBRARIES} gmp) 
 endmacro()
 
 add_test(bit)
