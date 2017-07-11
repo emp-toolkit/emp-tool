@@ -27,7 +27,7 @@ addons:
 script:
   - cmake . && make 
   - ./bin/prp
+  - ./bin/prg
   - ./bin/com
   - ./bin/hash
-  - ./bin/prg
   - ./bin/netio 1 12345 & ./bin/netio 2 12345

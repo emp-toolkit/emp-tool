@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
 			}
 			double interval = time_from(start);
 			delete data;
-			cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3<<" Gbps\n";
+			cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3*1e-9<<" Gbps\n";
 		}
 	} else {//party == BOB
 		for (long long length = 2; length <= 2048; length*=4) {

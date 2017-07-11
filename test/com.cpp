@@ -22,7 +22,7 @@ int main() {
 		}
 		double interval = time_from(start);
 		delete data;
-		cout << "Commit+Open speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3<<" Gbps\n";
+		cout << "Commit+Open speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e3*1e-9<<" Gbps\n";
 	}
 	return 0;
 }
