@@ -11,12 +11,14 @@ int main() {
 	char dig[Hash::DIGEST_SIZE];
 	hash.digest(dig);
 	
+	PRG prg;
 	for (long long length = 2; length <= 2048; length*=4) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
+		prg.random_block(data, length);
 		auto start = clock_start();
 		for (int i = 0; i < times; ++i) {
-			hash.put(data, length);
+			hash.put(data, length*sizeof(block));
 			hash.digest(dig);
 		}
 		double interval = time_from(start);
