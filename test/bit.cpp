@@ -1,4 +1,7 @@
-#include "circuit_generator.h"
+#include "plain/plain_env.h"
+#include "bit.h"
+#include <iostream>
+using namespace std;
 
 void test_bit() {
 	bool b[] = {true, false};
@@ -11,24 +14,25 @@ void test_bit() {
 					{
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
-						bool res = (b1&b2).reveal(BOB);
+						bool res = (b1&b2).reveal(PUBLIC);
 						if(res != (b[i] and b[k]))
 							cout<<"AND" <<i<<" "<<j<<" "<<k<<" "<<l<<" "<<res<<endl;
-						assert(res == (b[i] and b[k]));
+						if(res != (b[i] and b[k])) error("test bit error!");
 					}
 					{
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
-						bool res = (b1^b2).reveal(BOB);
+						bool res = (b1^b2).reveal(PUBLIC);
 						if(res != (b[i] xor b[k]))
 							cout <<"XOR"<<i<<" "<<j<<" "<<k<<" "<<l<< " " <<res<<endl;
-						assert(res == (b[i] xor b[k]));
+						if(res != (b[i] xor b[k])) error("test bit error!");
 					}
 				}
 	cout <<"success!"<<endl;
 }
 
 int main(int argc, char** argv) {
-	setup_circuit_generator(true, "mul");
+	setup_plain_env(false, "cfile");
 	test_bit();
+	finalize_plain_env();
 }

@@ -1,21 +1,22 @@
-#ifndef CIRCUIT_FILE_GENERATOR_H__
-#define CIRCUIT_FILE_GENERATOR_H__
+#ifndef PLAIN_GC_H__
+#define PLAIN_GC_H__
 #include "block.h"
 #include "utils.h"
+#include "garble_circuit.h"
 #include <iostream>
 #include <fstream>
 
-bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, int party);
+bool plain_gc_is_public(GarbleCircuit* gc, const block & b, int party);
 
-block circuit_file_gen_public_label(GarbleCircuit* gc, bool b);
+block plain_gc_public_label(GarbleCircuit* gc, bool b);
 
-block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b);
+block plain_gc_and(GarbleCircuit* gc, const block&a, const block&b);
 
-block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b);
+block plain_gc_xor(GarbleCircuit*gc, const block&a, const block&b);
 
-block circuit_file_gen_not(GarbleCircuit*gc, const block&a);
+block plain_gc_not(GarbleCircuit*gc, const block&a);
 
-class CircuitFileGenerator:public GarbleCircuit{ public:
+class PlainGC:public GarbleCircuit{ public:
 	const static unsigned long long P1 = 1;
 	const static unsigned long long P0 = 2;
 	const static unsigned long long S0 = 3;
@@ -23,13 +24,13 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 	bool print = false;
 	block public_one, public_zero;
 	uint64_t gates = 0;
-	ofstream &fout;
-	CircuitFileGenerator(bool print, ofstream & fout):fout(fout) {
-		is_public_ptr = &circuit_file_gen_is_public;
-		public_label_ptr = &circuit_file_gen_public_label;
-		gc_and_ptr = &circuit_file_gen_and;
-		gc_xor_ptr = &circuit_file_gen_xor;
-		gc_not_ptr = &circuit_file_gen_not;
+	std::ofstream &fout;
+	PlainGC(bool print, std::ofstream & fout):fout(fout) {
+		is_public_ptr = &plain_gc_is_public;
+		public_label_ptr = &plain_gc_public_label;
+		gc_and_ptr = &plain_gc_and;
+		gc_xor_ptr = &plain_gc_xor;
+		gc_not_ptr = &plain_gc_not;
 		public_one = zero_block();
 		public_zero = zero_block();
 		this->print = print;
@@ -71,7 +72,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_and(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<std::endl;
 			gid++;
 			gates++;
 			return res;
@@ -94,7 +95,7 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			arr[0] = compute_xor(arr_a[0], arr_b[0]);
 			arr[1] = gid;
 			if(print)
-				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<<endl;
+				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" XOR"<<std::endl;
 			gates++;
 			gid++;
 			return res;
@@ -129,27 +130,27 @@ class CircuitFileGenerator:public GarbleCircuit{ public:
 			else arr[0] = S0;
 			arr[1] = gid;
 			if(print)
-				fout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<<endl;
+				fout <<"1 1 "<<arr_a[1] <<" "<<gid<<" INV"<<std::endl;
 			gid++;
 			gates++;
 			return res;
 		}
 	}
 };
-bool circuit_file_gen_is_public(GarbleCircuit* gc, const block & b, int party) {
-	return ((CircuitFileGenerator*)gc)->is_public_impl(b, party);
+bool plain_gc_is_public(GarbleCircuit* gc, const block & b, int party) {
+	return ((PlainGC*)gc)->is_public_impl(b, party);
 }
-block circuit_file_gen_public_label(GarbleCircuit* gc, bool b) {
-	return ((CircuitFileGenerator*)gc)->public_label_impl(b);
+block plain_gc_public_label(GarbleCircuit* gc, bool b) {
+	return ((PlainGC*)gc)->public_label_impl(b);
 }
-block circuit_file_gen_and(GarbleCircuit* gc, const block&a, const block&b) {
-	return ((CircuitFileGenerator*)gc)->gen_and(a, b);
+block plain_gc_and(GarbleCircuit* gc, const block&a, const block&b) {
+	return ((PlainGC*)gc)->gen_and(a, b);
 }
-block circuit_file_gen_xor(GarbleCircuit*gc, const block&a, const block&b) {
-	return ((CircuitFileGenerator*)gc)->gen_xor(a, b);
+block plain_gc_xor(GarbleCircuit*gc, const block&a, const block&b) {
+	return ((PlainGC*)gc)->gen_xor(a, b);
 }
-block circuit_file_gen_not(GarbleCircuit*gc, const block&a) {
-	return ((CircuitFileGenerator*)gc)->gen_not(a);
+block plain_gc_not(GarbleCircuit*gc, const block&a) {
+	return ((PlainGC*)gc)->gen_not(a);
 }
 
-#endif //CIRCUIT_FILE_GENERATOR_H__
+#endif
