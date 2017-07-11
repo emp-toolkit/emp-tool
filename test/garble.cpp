@@ -22,51 +22,50 @@ int main(int argc, char** argv) {
 	CircuitFile cf(file.c_str());
 
 	if(party == BOB) {
-		NetIO* netio = new NetIO("127.0.0.1", 54213);
+		NetIO* netio = new NetIO(nullptr, 54213);
 		local_gc = new HalfGateEva<NetIO>(netio);
 		for(int i = 0; i < 10000; ++i)
 			cf.compute(c, a, b);
 		delete netio;
 		delete local_gc;
-		return 0;
-	}
+	} else {
+		AbandonIO * aio = new AbandonIO();
+		local_gc = new HalfGateGen<AbandonIO>(aio);
 
-	AbandonIO * aio = new AbandonIO();
-	local_gc = new HalfGateGen<AbandonIO>(aio);
-
-	auto start = clock_start();
-	for(int i = 0; i < 10000; ++i) {
-		cf.compute(c, a, b);
-	}
-	double interval = time_from(start);
-	cout << "Pure AES garbling speed : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
-	delete aio;
-	delete local_gc;
-
-	MemIO * mio = new MemIO(cf.table_size()*100);
-	local_gc = new HalfGateGen<MemIO>(mio);
-
-	start = clock_start();
-	for(int i = 0; i < 100; ++i) {
-		mio->clear();
-		for(int j = 0; j < 100; ++j)
+		auto start = clock_start();
+		for(int i = 0; i < 10000; ++i) {
 			cf.compute(c, a, b);
+		}
+		double interval = time_from(start);
+		cout << "Pure AES garbling speed : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		delete aio;
+		delete local_gc;
+
+		MemIO * mio = new MemIO(cf.table_size()*100);
+		local_gc = new HalfGateGen<MemIO>(mio);
+
+		start = clock_start();
+		for(int i = 0; i < 100; ++i) {
+			mio->clear();
+			for(int j = 0; j < 100; ++j)
+				cf.compute(c, a, b);
+		}
+		interval = time_from(start);
+		cout << "AES garbling + Writting to Memory : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		delete mio;
+		delete local_gc;
+
+		NetIO* netio = new NetIO("127.0.0.1", 54213);
+		local_gc = new HalfGateGen<NetIO>(netio);
+
+		start = clock_start();
+		for(int i = 0; i < 10000; ++i) {
+			cf.compute(c, a, b);
+		}
+		interval = time_from(start);
+		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+
+		delete netio;
+		delete local_gc;
 	}
-	interval = time_from(start);
-	cout << "AES garbling + Writting to Memory : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
-	delete mio;
-	delete local_gc;
-
-	NetIO* netio = new NetIO(nullptr, 54213);
-	local_gc = new HalfGateGen<NetIO>(netio);
-
-	start = clock_start();
-	for(int i = 0; i < 10000; ++i) {
-		cf.compute(c, a, b);
-	}
-	interval = time_from(start);
-	cout << "AES garbling + Loopback Network : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
-
-	delete netio;
-	delete local_gc;
 }
