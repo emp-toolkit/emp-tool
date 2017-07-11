@@ -6,9 +6,9 @@
 #define MEM_IO_CHANNEL
 
 /** @addtogroup IO
-    @{
-  */
-  
+  @{
+ */
+
 class MemIO: public IOChannel<MemIO> { public:
 	char * buffer = nullptr;
 	int size = 0;
@@ -20,7 +20,7 @@ class MemIO: public IOChannel<MemIO> { public:
 		buffer = new char[cap];
 		size = 0;
 	}
-	~MemIO(){
+	~MemIO() {
 		if(buffer!=nullptr)
 			delete[] buffer;
 	}
@@ -32,7 +32,7 @@ class MemIO: public IOChannel<MemIO> { public:
 		this->size = size;
 		fio->recv_data(buffer, size);
 	}
-	void clear(){
+	void clear() {
 		size = 0;
 	}
 	void send_data_impl(const void * data, int len) {

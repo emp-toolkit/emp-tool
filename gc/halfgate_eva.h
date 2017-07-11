@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "prp.h"
 #include "hash.h"
+#include "garble_circuit.h"
 #include "garble/garble_gate_halfgates.h"
 #include <iostream>
 
@@ -59,7 +60,7 @@ class HalfGateEva:public GarbleCircuit{ public:
 				fio->send_block(table, 2);
 				return prp.H(a, gid++);
 			}
-			garble_gate_eval_halfgates(GARBLE_GATE_AND, a, b, &out, table, gid++, prp.aes);
+			garble_gate_eval_halfgates(a, b, &out, table, gid++, prp.aes);
 			return out;
 		}
 	}
@@ -126,7 +127,7 @@ class HalfGateEva<T,RTCktOpt::off>:public GarbleCircuit{ public:
 			fio->send_block(table, 2);
 			return prp.H(a, gid++);
 		}
-		garble_gate_eval_halfgates(GARBLE_GATE_AND, a, b, &out, table, gid++, prp.aes);
+		garble_gate_eval_halfgates(a, b, &out, table, gid++, prp.aes);
 		return out;
 	}
 	block xor_gate(const block& a, const block& b) {

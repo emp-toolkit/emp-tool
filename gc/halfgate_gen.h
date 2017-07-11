@@ -7,6 +7,7 @@
 #include "utils.h"
 #include "prp.h"
 #include "hash.h"
+#include "garble_circuit.h"
 #include "garble/garble_gate_halfgates.h"
 #include <iostream>
 
@@ -63,7 +64,7 @@ class HalfGateGen:public GarbleCircuit{ public:
 		} else if (isOne(&b)){
 			return a;
 		} else {
-			garble_gate_garble_halfgates(GARBLE_GATE_AND, a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
+			garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
 					&out[0], &out[1], delta, table, gid++, prp.aes);
 			io->send_block(table, 2);
 			return out[0];
@@ -138,7 +139,7 @@ class HalfGateGen<T,RTCktOpt::off>:public GarbleCircuit{ public:
 	}
 	block gen_and(const block& a, const block& b) {
 		block out[2], table[2];
-		garble_gate_garble_halfgates(GARBLE_GATE_AND, a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
+		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
 				&out[0], &out[1], delta, table, gid++, prp.aes);
 		io->send_block(table, 2);
 		return out[0];

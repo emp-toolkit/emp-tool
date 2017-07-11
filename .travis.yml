@@ -31,6 +31,7 @@ script:
   - ./bin/prg
   - ./bin/com
   - ./bin/hash
+  - ./bin/garble
   - ./bin/netio 1 12345 & ./bin/netio 2 12345
   - echo "Testing Circuits"
   - ./bin/bit
