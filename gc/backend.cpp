@@ -1,4 +1,7 @@
 #include "backend.h"
+#include "prg.h"
+
+PRG * rnd = nullptr;
 
 #ifdef THREADING
 __thread Backend* local_backend = nullptr;

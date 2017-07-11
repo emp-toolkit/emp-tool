@@ -5,9 +5,9 @@
 #define IO_CHANNEL_H__
 
 /** @addtogroup IO
-    @{
-  */
-  
+  @{
+ */
+
 template<typename T>
 class IOChannel { public:
 	PRG *prg = nullptr;
@@ -16,6 +16,14 @@ class IOChannel { public:
 	}
 	void recv_data(void * data, int nbyte) {
 		static_cast<T*>(this)->recv_data_impl(data, nbyte);
+	}
+
+	void send_block(const block* data, int nblock) {
+		send_data(data, nblock*sizeof(block));
+	}
+
+	void recv_block(block* data, int nblock) {
+		recv_data(data, nblock*sizeof(block));
 	}
 
 	~IOChannel() {
@@ -51,6 +59,7 @@ class IOChannel { public:
 		send_block(tmp, len);
 		delete[] tmp;
 	}
+
 	void send_bn_enc(const bn_t * bn, size_t num) {
 		uint64_t buffer[4];
 		uint64_t buffer2[4];
@@ -75,6 +84,7 @@ class IOChannel { public:
 			((char *)data)[i] ^= tmp[i];
 		delete[] tmp;
 	}
+
 	void recv_block_enc(block* data, int len) {
 		recv_block(data, len);
 		if(prg == nullptr)return;
@@ -84,6 +94,7 @@ class IOChannel { public:
 			data[i] = xorBlocks(data[i], tmp[i]);
 		delete[] tmp;
 	}
+
 	void send_eb_enc(const eb_t * eb, size_t num) {
 		uint8_t buffer[EB_SIZE];
 		uint8_t buffer2[EB_SIZE];
@@ -114,6 +125,7 @@ class IOChannel { public:
 			eb_read_bin(eb[i], buffer, eb_size);
 		}
 	}
+
 	void recv_bn_enc(bn_t* bn, size_t num) {
 		uint64_t buffer[4];
 		uint64_t buffer2[4];
@@ -127,14 +139,6 @@ class IOChannel { public:
 				buffer[k] ^=buffer2[k];
 			bn_read_raw(bn[i], buffer, bn_size);
 		}
-	}
-
-	void send_block(const block* data, int nblock) {
-		send_data(data, nblock*sizeof(block));
-	}
-
-	void recv_block(block* data, int nblock) {
-		recv_data(data, nblock*sizeof(block));
 	}
 
 	void send_eb(const eb_t * eb, size_t num) {
