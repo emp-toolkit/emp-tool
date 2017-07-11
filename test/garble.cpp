@@ -5,7 +5,6 @@
 #include "io/mem_io_channel.h"
 #include "utils/utils.h"
 #include <iostream>
-#include <thread>
 using namespace std;
 
 int main(int argc, char** argv) {
