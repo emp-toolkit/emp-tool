@@ -20,7 +20,7 @@ template<>
 inline string Float::reveal<string>(int party) const {
    double val = value.reveal<long long>(party);
    double exp = expnt.reveal<long long>(party);
-   return to_string(val*pow(2.0, exp)); 
+   return std::to_string(val*pow(2.0, exp)); 
 }
 
 template<>
