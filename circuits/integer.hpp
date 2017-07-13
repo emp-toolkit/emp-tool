@@ -292,6 +292,7 @@ inline Integer Integer::operator>>(const Integer& shamt) const{
 
 //Comparisons
 inline Bit Integer::geq (const Integer& rhs) const {
+	assert(size() == rhs.size());
 /*	Bit res(false);
 	for(int i = 0; i < size(); ++i) {
 		res = ((bits[i]^res)&(rhs[i]^res))^bits[i];
@@ -303,6 +304,7 @@ inline Bit Integer::geq (const Integer& rhs) const {
 }
 
 inline Bit Integer::equal(const Integer& rhs) const {
+	assert(size() == rhs.size());
 	Bit res(true);
 	for(int i = 0; i < size(); ++i)
 		res = res & (bits[i] == rhs[i]);
@@ -312,12 +314,14 @@ inline Bit Integer::equal(const Integer& rhs) const {
 /* Arithmethics
  */
 inline Integer Integer::operator+(const Integer & rhs) const {
+	assert(size() == rhs.size());
 	Integer res(*this);
 	add_full(res.bits, nullptr, bits, rhs.bits, nullptr, size());
 	return res;
 }
 
 inline Integer Integer::operator-(const Integer& rhs) const {
+	assert(size() == rhs.size());
 	Integer res(*this);
 	sub_full(res.bits, nullptr, bits, rhs.bits, nullptr, size());
 	return res;
@@ -325,12 +329,14 @@ inline Integer Integer::operator-(const Integer& rhs) const {
 
 
 inline Integer Integer::operator*(const Integer& rhs) const {
+	assert(size() == rhs.size());
 	Integer res(*this);
 	mul_full(res.bits, bits, rhs.bits, size());
 	return res;
 }
 
 inline Integer Integer::operator/(const Integer& rhs) const {
+	assert(size() == rhs.size());
 	Integer res(*this);
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();
@@ -340,6 +346,7 @@ inline Integer Integer::operator/(const Integer& rhs) const {
 	return res;
 }
 inline Integer Integer::operator%(const Integer& rhs) const {
+	assert(size() == rhs.size());
 	Integer res(*this);
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();

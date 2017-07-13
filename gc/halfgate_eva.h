@@ -69,8 +69,13 @@ class HalfGateEva:public GarbleCircuit{ public:
 			return not_gate(b);
 		else if (isOne(&b))
 			return not_gate(a);
-		else
-			return xorBlocks(a, b);
+		else {
+			block res = xorBlocks(a, b);
+			if (isZero(&res))
+				return a;
+			else return res;
+//			return xorBlocks(a, b);
+		}
 	}
 	block not_gate(const block&a) {
 		if (isZero(&a))

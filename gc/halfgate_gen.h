@@ -55,6 +55,11 @@ class HalfGateGen:public GarbleCircuit{ public:
 	block public_label_impl(bool b) {
 		return b? one_block() : zero_block();
 	}
+	bool isDelta(const block & b) {
+		__m128i neq = _mm_xor_si128(b, delta);
+		return _mm_testz_si128(neq, neq);
+	}
+
 	block gen_and(const block& a, const block& b) {
 		block out[2], table[2];
 		if (isZero(&a) or isZero(&b)) {
@@ -75,8 +80,15 @@ class HalfGateGen:public GarbleCircuit{ public:
 			return gen_not(b);
 		else if (isOne(&b))
 			return gen_not(a);
-		else
-			return xorBlocks(a, b);
+		else {
+			block res = xorBlocks(a, b);
+			if (isZero(&res))
+				return a;
+			if (isDelta(res))
+				return xorBlocks(a, delta);
+			else
+				return res;//xorBlocks(a, b);
+		}
 	}
 	block gen_not(const block&a) {
 		if (isZero(&a))

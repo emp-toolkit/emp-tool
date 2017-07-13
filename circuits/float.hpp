@@ -56,7 +56,10 @@ inline void Float::normalize(int value_length, int to_add_to_expnt) {
 
    Integer shift_amount = bits_to_shift.leading_zeros();
    value_before_normalize = value_before_normalize << shift_amount;
-   expnt = expnt - shift_amount;
+	Integer shift_amount_extended = shift_amount;
+	shift_amount_extended.resize(expnt.size());
+   expnt = expnt - shift_amount_extended;
+//	std::cout << expnt.size()<<" "<<shift_amount.size()<<endl;
 
 	value = value_before_normalize;
 	value = value >> (value_before_normalize.size() - value_length);
@@ -118,8 +121,10 @@ inline Integer divide_frac(const Integer& lhs, const Integer& rhs) {
    Integer res(2*rhs.size(), 0, 0);
    for(int i = 0; i <= rhs.size(); ++i) {
 		Integer tmp = i1 >> (rhs.size()-i);
-		tmp.resize(i1.size() - rhs.size());
+		tmp.resize(i2.size());// - rhs.size());
+//		std::cout <<"...\n"<<endl;
       Integer diff = tmp - i2;
+//		std::cout <<"...!\n"<<endl;
       res[rhs.size()-i] = !diff[diff.size()-1];
       tmp = tmp.If(!diff[diff.size()-1], diff);
       for(int j = 0; j < tmp.size(); ++j)
