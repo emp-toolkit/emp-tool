@@ -5,7 +5,7 @@
 using namespace std;
 
 bool accurate(double a, double b, double err) {
-	if (abs(a - b) < err*a and abs(a - b) < err*b)
+	if (fabs(a - b) < err*a and fabs(a - b) < err*b)
 		return true;
 	else return false;
 }
