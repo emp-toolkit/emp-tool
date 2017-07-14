@@ -117,11 +117,12 @@ inline Float Float::operator*(const Float& rhs) const {
 inline Integer divide_frac(const Integer& lhs, const Integer& rhs) {
    Integer i1 = lhs, i2 = rhs;
    i1.resize(rhs.size()*2+1, false);
+   i2.resize(rhs.size()*2+1, false);
    i1=i1<<rhs.size();
    Integer res(2*rhs.size(), 0, 0);
    for(int i = 0; i <= rhs.size(); ++i) {
 		Integer tmp = i1 >> (rhs.size()-i);
-		tmp.resize(i2.size());// - rhs.size());
+//		tmp.resize(i1.size() - rhs.size() +i);
 //		std::cout <<"...\n"<<endl;
       Integer diff = tmp - i2;
 //		std::cout <<"...!\n"<<endl;

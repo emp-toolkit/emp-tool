@@ -34,7 +34,9 @@ class HalfGateGen:public GarbleCircuit{ public:
 	T * io;
 	Hash hash;
 	bool with_file_io = false;
+	block fix_point;
 	HalfGateGen(T * io) :io(io) {
+		PRG prg(fix_key);prg.random_block(&fix_point, 1);
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
@@ -80,12 +82,16 @@ class HalfGateGen:public GarbleCircuit{ public:
 			return gen_not(b);
 		else if (isOne(&b))
 			return gen_not(a);
+		else if (isZero(&a))
+			return b;
+		else if (isZero(&b))
+			return a;
 		else {
 			block res = xorBlocks(a, b);
 			if (isZero(&res))
-				return a;
+				return fix_point;
 			if (isDelta(res))
-				return xorBlocks(a, delta);
+				return xorBlocks(fix_point, delta);
 			else
 				return res;//xorBlocks(a, b);
 		}

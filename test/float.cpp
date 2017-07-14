@@ -10,7 +10,7 @@ bool accurate(double a, double b, double err) {
 	else return false;
 }
 template<typename Op, typename Op2>
-void test_float(int party, double precision, int runs = 100) {
+void test_float(double precision, int runs = 100) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		long long ia, ib;
@@ -25,8 +25,8 @@ void test_float(int party, double precision, int runs = 100) {
 			db = ib / 1000.0;
 		}
 	
-		Float a(24, 9, da);
-		Float b(24, 9, db);
+		Float a(24, 9, da, PUBLIC);
+		Float b(24, 9, db, PUBLIC);
 		Float res = Op2()(a,b);
 
 		if (not accurate(res.reveal<double>(PUBLIC), Op()(da,db), precision)) {
@@ -37,9 +37,9 @@ void test_float(int party, double precision, int runs = 100) {
 	cout << typeid(Op2).name()<<"\t\t\tDONE"<<endl;
 }
 
-void scratch_pad(int party) {
-	Float a(24, 9, 0.21);
-	Float b(24, 9, 0.41);
+void scratch_pad() {
+	Float a(24, 9, 0.21, PUBLIC);
+	Float b(24, 9, 0.41, PUBLIC);
 	cout << a.reveal<double>(PUBLIC)<<endl;
 	cout << b.reveal<double>(PUBLIC)<<endl;
 	cout << (a+b).reveal<double>(PUBLIC)<<endl;
@@ -50,13 +50,12 @@ void scratch_pad(int party) {
 }
 
 int main(int argc, char** argv) {
-	int party = PUBLIC;
 	setup_plain_env(false, "");
-	//test_float(party);
-	test_float<std::plus<float>, std::plus<Float>>(party, 1e-4);
-	test_float<std::minus<float>, std::minus<Float>>(party, 1e-4);
-	test_float<std::multiplies<float>, std::multiplies<Float>>(party, 1e-4);
-	test_float<std::divides<float>, std::divides<Float>>(party, 1e-4);
+//	scratch_pad();return 0;
+	test_float<std::plus<float>, std::plus<Float>>(1e-4);
+	test_float<std::minus<float>, std::minus<Float>>(1e-4);
+	test_float<std::multiplies<float>, std::multiplies<Float>>(1e-4);
+	test_float<std::divides<float>, std::divides<Float>>(1e-4);
 
 	finalize_plain_env();
 	return 0;
