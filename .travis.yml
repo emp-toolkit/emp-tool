@@ -25,7 +25,7 @@ before_install:
 addons:
 
 script:
-  - cmake . && make 
+  - cmake -DCMAKE_BUILD_TYPE=Debug . && make 
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg
