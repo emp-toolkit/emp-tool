@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 				cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Writting to Memory : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		cout << "AES garbling + Writing to Memory : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
 		delete mio;
 		delete local_gc;
 
