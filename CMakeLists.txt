@@ -46,7 +46,7 @@ gc/backend.cpp
 )
 add_library(${NAME} SHARED ${sources})
 
-install(FILES emp-tool-config.cmake DESTINATION cmake/)
+install(FILES emp-tool-config.cmake relic-config.cmake DESTINATION cmake/)
 install(FILES ${headers} DESTINATION include/${NAME})
 install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
 install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
