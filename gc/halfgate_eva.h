@@ -33,7 +33,9 @@ class HalfGateEva:public GarbleCircuit{ public:
 	Hash hash;
 	bool with_file_io = false;
 	FileIO * fio;
+	block fix_point;
 	HalfGateEva(T * io) :io(io) {
+		PRG prg(fix_key);prg.random_block(&fix_point, 1);
 		is_public_ptr = &halfgate_eva_is_public<T, rt>;
 		public_label_ptr = &halfgate_eva_public_label<T, rt>;
 		gc_and_ptr = &halfgate_eva_and<T, rt>;
@@ -69,8 +71,17 @@ class HalfGateEva:public GarbleCircuit{ public:
 			return not_gate(b);
 		else if (isOne(&b))
 			return not_gate(a);
-		else
-			return xorBlocks(a, b);
+		else if (isZero(&a))
+			return b;
+		else if (isZero(&b))
+			return a;
+		else {
+			block res = xorBlocks(a, b);
+			if (isZero(&res))
+				return fix_point;
+			else return res;
+//			return xorBlocks(a, b);
+		}
 	}
 	block not_gate(const block&a) {
 		if (isZero(&a))

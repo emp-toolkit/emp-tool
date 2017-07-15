@@ -16,22 +16,22 @@ class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {
-		if(rnd == nullptr) {
+		if (seed != nullptr) {
+			reseed(seed, id);
+		} else if(rnd == nullptr) {
 			int data[sizeof(block) / sizeof(int)];
 			// this will be "/dev/urandom" when possible...
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
-				data[i] = rand_div();
-
-			rnd = this;//make rnd not nullptr, to avoiding infinite recursion.
+				data[i] = rand();//_div();
+			reseed(data);
+			random_data((void*)data, 4);
 			rnd = new PRG(data);
-		}
-		if (seed == nullptr) {
+		} else {
 			block data;
 			rnd->random_block(&data, 1);
 			reseed(&data, id);
-		} else
-			reseed(seed, id);
+		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
 		const char * k = (const char *)key;

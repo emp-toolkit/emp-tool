@@ -17,8 +17,11 @@ find_package(relic)
 INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -ggdb")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pg -ggdb")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
 
 file(GLOB headers 
 "io/*.h"

@@ -15,17 +15,44 @@ void test_bit() {
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
 						bool res = (b1&b2).reveal(PUBLIC);
-						if(res != (b[i] and b[k]))
+						if(res != (b[i] and b[k])) {
 							cout<<"AND" <<i<<" "<<j<<" "<<k<<" "<<l<<" "<<res<<endl;
-						if(res != (b[i] and b[k])) error("test bit error!");
+							error("test bit error!");
+						}
+						res = (b1 & b1).reveal(PUBLIC);
+						if (res != b[i]) {
+							cout<<"AND" <<i<<" "<<j<<res<<endl;
+							error("test bit error!");
+						}
+
+						res = (b1 & (!b1)).reveal(PUBLIC);
+						if (res) {
+							cout<<"AND" <<i<<" "<<j<<res<<endl;
+							error("test bit error!");
+						}
+
 					}
 					{
 						Bit b1(b[i], p[j]);
 						Bit b2(b[k], p[l]);
 						bool res = (b1^b2).reveal(PUBLIC);
-						if(res != (b[i] xor b[k]))
+						if(res != (b[i] xor b[k])) {
 							cout <<"XOR"<<i<<" "<<j<<" "<<k<<" "<<l<< " " <<res<<endl;
-						if(res != (b[i] xor b[k])) error("test bit error!");
+							error("test bit error!");
+						}
+
+						res = (b1 ^ b1).reveal(PUBLIC);
+						if (res) {
+							cout<<"XOR" <<i<<" "<<j<<res<<endl;
+							error("test bit error!");
+						}
+
+						res = (b1 ^ (!b1)).reveal(PUBLIC);
+						if (!res) {
+							cout<<"XOR" <<i<<" "<<j<<res<<endl;
+							error("test bit error!");
+						}
+
 					}
 				}
 	cout <<"success!"<<endl;

@@ -48,11 +48,13 @@ void plain_env_reveal(Backend* be, bool* b, int party, const block * label, int 
 static void setup_plain_env(bool print, string filename) {
 	local_backend = (Backend *) new PlainEnv(nullptr); 
 	PlainEnv * backend = (PlainEnv* )local_backend;
-	backend->fout.open(filename);
-   //place holder for circuit information
-	for (int i = 0; i < 200; ++i)//good for 32-bit sized circuits
-		backend->fout << " ";
-	backend->fout<<endl;
+	if (print) {
+		backend->fout.open(filename);
+		//place holder for circuit information
+		for (int i = 0; i < 200; ++i)//good for 32-bit sized circuits
+			backend->fout << " ";
+		backend->fout<<endl;
+	}
 	backend->filename = filename;
 	local_gc = new PlainGC(print, backend->fout);
 	backend->gc = (PlainGC *)local_gc;

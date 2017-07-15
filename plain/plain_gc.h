@@ -42,7 +42,7 @@ class PlainGC:public GarbleCircuit{ public:
 	}
 	bool is_public_impl(const block & b, int party) {
 		uint64_t *arr = (uint64_t*) &b;
-		return arr[0] < 2;
+		return arr[0] == P0 or arr[0] == P1;
 	}
 	block public_label_impl(bool b) {
 		return b? public_one : public_zero;
