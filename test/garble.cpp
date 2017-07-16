@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 			cf.compute(c, a, b);
 		}
 		double interval = time_from(start);
-		cout << "Pure AES garbling speed : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		cout << "Pure AES garbling speed : "<< 10000*6800/interval<<" million gate per second\n";
 		delete aio;
 		delete local_gc;
 
@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
 				cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Writing to Memory : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		cout << "AES garbling + Writing to Memory : "<< 10000*6800/interval<<" million gate per second\n";
 		delete mio;
 		delete local_gc;
 
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
 			cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval*1e-3<<" million gate per second\n";
+		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval<<" million gate per second\n";
 
 		delete netio;
 		delete local_gc;
