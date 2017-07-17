@@ -4,7 +4,7 @@ dist: trusty
 sudo: required
 
 before_install:
-  - sudo apt-get install libssl-dev libgmp-dev build_essential cmake -y
+  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
