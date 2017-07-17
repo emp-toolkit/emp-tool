@@ -28,6 +28,9 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
     sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
     fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then 
+    export CFLAGS="-I/usr/local/opt/openssl/include $CFLAGS" LDFLAGS="-L/usr/local/opt/openssl/lib $LDFLAGS"; 
+    fi
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
