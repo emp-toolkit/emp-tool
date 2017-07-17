@@ -11,6 +11,7 @@ matrix:
       osx_image: xcode8
       env:
         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+        - TYPE=Debug
 
 before_install:
   - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
