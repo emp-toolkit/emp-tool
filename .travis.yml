@@ -13,31 +13,14 @@ matrix:
       sudo: required
       env: TYPE=Release
 
-    - os: osx
-      osx_image: xcode8
-      env:
-        - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-        - TYPE=Debug
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-    brew update;
-    brew list openssl &>/dev/null || brew install openssl;
-    brew list gmp &>/dev/null || brew install gmp;
-    fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-    sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
-    fi
+  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-    cmake -DCMAKE_BUILD_TYPE=$TYPE -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl . && make ;
-    fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-    cmake -DCMAKE_BUILD_TYPE=$TYPE . && make ;
-    fi
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg
