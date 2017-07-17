@@ -14,11 +14,12 @@ matrix:
         - TYPE=Debug
 
 before_install:
-  - if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-    brew update
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    brew update;
+    brew install openssl gmp;
     fi
-  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
-    sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+    sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
     fi
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
