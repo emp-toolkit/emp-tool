@@ -14,7 +14,7 @@ int main() {
 		error("Commitment: open failed!");
 	}
 	
-	for (long long length = 2; length <= 2048; length*=4) {
+	for (long long length = 2; length <= 2048; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
 		auto start = clock_start();

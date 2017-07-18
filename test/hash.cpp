@@ -12,7 +12,7 @@ int main() {
 	hash.digest(dig);
 	
 	PRG prg;
-	for (long long length = 2; length <= 2048; length*=4) {
+	for (long long length = 2; length <= 8192; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
 		prg.random_block(data, length);

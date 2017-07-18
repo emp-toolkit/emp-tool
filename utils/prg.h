@@ -70,10 +70,6 @@ class PRG { public:
 	}
 
 	void random_block(block * data, int nblocks=1) {
-#if defined(_MSC_VER) | !defined(NDEBUG)
-        assert(aes.rounds > 0 && "unititialized PRG");
-#endif // _MSC_VER
-
 		for (int i = 0; i < nblocks; ++i) {
 			data[i] = makeBlock(0LL, counter++);
 		}

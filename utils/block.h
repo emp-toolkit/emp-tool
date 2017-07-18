@@ -29,9 +29,24 @@
 #include <smmintrin.h>
 #include <wmmintrin.h>
 #include <assert.h>
-#include "garble/block.h"
+
+typedef __m128i block;
+
+#define garble_xor(x,y) _mm_xor_si128(x,y)
+#define garble_zero_block() _mm_setzero_si128()
+#define garble_equal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) == 0xffff)
+#define garble_unequal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) != 0xffff)
+#define garble_lsb(x) (*((char *) &x) & 1)
+#define garble_make_block(X,Y) _mm_set_epi64((__m64)(X), (__m64)(Y))
+#define garble_double(B) double_block(B)
+#define zero_block() _mm_setzero_si128()
+#define one_block() makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
+#define getLSB(x) (*((unsigned short *)&x)&1)
+#define makeBlock(X,Y) _mm_set_epi64x(X, Y)
+
 
 typedef __m128i block_tpl[2];
+
 inline block xorBlocks(block x, block y) {
 	return _mm_xor_si128(x,y);
 }
@@ -67,10 +82,6 @@ inline bool block_cmp(const block * x, const block * y, int nblocks) {
 	return cmpBlock(x,y,nblocks);
 }
 
-#define zero_block() _mm_setzero_si128()
-#define one_block() makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
-#define getLSB(x) (*((unsigned short *)&x)&1)
-#define makeBlock(X,Y) _mm_set_epi64x(X, Y)
 
 inline bool isZero(const block * b) {
 	return _mm_testz_si128(*b,*b) > 0;

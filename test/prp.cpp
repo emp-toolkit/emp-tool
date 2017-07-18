@@ -14,13 +14,13 @@ int main() {
 
 
 	//b2 = pi(r)\xor r, where r = doubling(random_block)\xor 1
-	block b2 = prp.H(rand_block[1], 1); 
+	rand_block[2] = prp.H(rand_block[1], 1); 
 
 	block b3[3];
 	prp.H<3>(b3, rand_block, 0);
 
 
-	for (long long length = 2; length <= 2048; length*=4) {
+	for (long long length = 2; length <= 2048; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
 		auto start = clock_start();

@@ -2,7 +2,6 @@
 #define LIBGARBLE_GARBLE_GATE_HALFGATES_H
 
 #include "aes.h"
-
 #include <assert.h>
 #include <string.h>
 
