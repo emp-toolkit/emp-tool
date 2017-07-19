@@ -190,4 +190,56 @@ static inline block RIGHTSHIFT(block bl) {
 	bl = _mm_slli_epi64(bl, 1);
 	return _mm_xor_si128(bl,tmp);
 }
+
+/**
+	  University of Bristol : Open Access Software Licence
+
+	  Copyright (c) 2016, The University of Bristol, a chartered corporation having Royal Charter number RC000648 and a charity (number X1121) and its place of administration being at Senate House, Tyndall Avenue, Bristol, BS8 1TH, United Kingdom.
+
+	  All rights reserved
+
+	  Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+	  1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+	  2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+	  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+	  Any use of the software for scientific publications or commercial purposes should be reported to the University of Bristol (OSI-notifications@bristol.ac.uk and quote reference 1914). This is for impact and usage monitoring purposes only.
+
+	  Enquiries about further applications and development opportunities are welcome. Please contact nigel@cs.bris.ac.uk
+
+	  Contact GitHub API Training Shop Blog About
+	 */
+	inline void mul128(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
+		/*	block a0xora1 = xorBlocks(a, _mm_srli_si128(a, 8));
+			block b0xorb1 = xorBlocks(b, _mm_srli_si128(b, 8));
+
+			block a0b0 = _mm_clmulepi64_si128(a, b, 0x00);
+			block a1b1 = _mm_clmulepi64_si128(a, b, 0x11);
+			block ab = _mm_clmulepi64_si128(a0xora1, b0xorb1, 0x00);
+
+			block tmp = xorBlocks(a0b0, a1b1);
+			tmp = xorBlocks(tmp, ab);
+
+		 *res1 = xorBlocks(a1b1, _mm_srli_si128(tmp, 8));
+		 *res2 = xorBlocks(a0b0, _mm_slli_si128(tmp, 8));*/
+		__m128i tmp3, tmp4, tmp5, tmp6;
+		tmp3 = _mm_clmulepi64_si128(a, b, 0x00);
+		tmp4 = _mm_clmulepi64_si128(a, b, 0x10);
+		tmp5 = _mm_clmulepi64_si128(a, b, 0x01);
+		tmp6 = _mm_clmulepi64_si128(a, b, 0x11);
+
+		tmp4 = _mm_xor_si128(tmp4, tmp5);
+		tmp5 = _mm_slli_si128(tmp4, 8);
+		tmp4 = _mm_srli_si128(tmp4, 8);
+		tmp3 = _mm_xor_si128(tmp3, tmp5);
+		tmp6 = _mm_xor_si128(tmp6, tmp4);
+		// initial mul now in tmp3, tmp6
+		*res1 = tmp3;
+		*res2 = tmp6;
+	}
+
 #endif//UTIL_BLOCK_H__
