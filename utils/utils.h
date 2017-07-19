@@ -52,8 +52,6 @@ std::string m128i_to_string(const __m128i var) {
 	}
 	return sstr.str();
 }
-double wallClock();
-uint64_t timeStamp();
 
 inline std::chrono::time_point<std::chrono::high_resolution_clock> clock_start() { 
 	return std::chrono::high_resolution_clock::now();

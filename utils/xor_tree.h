@@ -78,10 +78,10 @@ class XorTree{public:
 		}
 		int i;
 		for(i = 0; i < n/N; ++i) {
-			genN(out+(i*(N+M)), in+N*i, &prg, N);
+			genN(out+(i*(N+M)), in+N*i, prg, N);
 		}
 		if(n%N != 0) {
-			genN(out+(i*(N+M)) , in+N*i, &prg, n%N);
+			genN(out+(i*(N+M)) , in+N*i, prg, n%N);
 		}
 		if(not prg_provided) {
 			delete prg;

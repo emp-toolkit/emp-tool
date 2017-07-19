@@ -9,6 +9,11 @@ include_directories(${CMAKE_SOURCE_DIR}/circuits)
 include_directories(${CMAKE_SOURCE_DIR}/gc)
 include_directories(${CMAKE_SOURCE_DIR}/plain)
 
+if(NOT CMAKE_BUILD_TYPE)
+set(CMAKE_BUILD_TYPE Release)
+endif(NOT CMAKE_BUILD_TYPE)
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR})
 
@@ -16,10 +21,10 @@ find_package(OpenSSL)
 find_package(relic)
 INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
 
-set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
+set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O1 -maes")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -pg -ggdb")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 

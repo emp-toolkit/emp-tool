@@ -43,17 +43,6 @@ inline std::string Party(int p) {
 	else return "PUBLIC";
 }
 
-inline uint64_t timeStamp() {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME,&t);
-	return (t.tv_sec*1000*1000+t.tv_nsec/1000);
-}
-inline double wallClock() {
-	struct timespec t;
-	clock_gettime(CLOCK_REALTIME,&t);
-	return t.tv_sec+1e-9*t.tv_nsec;
-}
-
 template<typename t>
 t bool_to_int(const bool * data, size_t len) {
 	if (len != 0) len = (len > sizeof(t)*8 ? sizeof(t)*8 : len);

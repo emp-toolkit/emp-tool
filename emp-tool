@@ -28,7 +28,6 @@
 #include "privacy_free_gen.h"
 #include "xor_tree.h"
 #include "garble/aes.h"
-#include "garble/block.h"
 #include "backend.h"
 
 /** @defgroup IO Input/Output*/

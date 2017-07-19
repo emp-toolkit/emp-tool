@@ -30,7 +30,7 @@ int main() {
 	mpz_init(integ);
 	prg.random_mpz(integ, 1024);//random number with 1024 bits.
 
-	for (long long length = 2; length <= 2048; length*=4) {
+	for (long long length = 2; length <= 8192; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
 		auto start = clock_start();

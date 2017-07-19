@@ -7,9 +7,9 @@
 #include <iostream>
 using namespace std;
 
-int main(int argc, char** argv) {
-	int port, party;
-	parse_party_and_port(argv, argc, &party, &port);
+int port, party;
+template<RTCktOpt rt>
+void test(NetIO * netio) {
 	block *a = new block[128];
 	block *b = new block[128];
 	block *c = new block[128];
@@ -22,15 +22,13 @@ int main(int argc, char** argv) {
 	CircuitFile cf(file.c_str());
 
 	if(party == BOB) {
-		NetIO* netio = new NetIO(nullptr, 54213);
-		local_gc = new HalfGateEva<NetIO>(netio);
+		local_gc = new HalfGateEva<NetIO, rt>(netio);
 		for(int i = 0; i < 10000; ++i)
 			cf.compute(c, a, b);
-		delete netio;
 		delete local_gc;
 	} else {
 		AbandonIO * aio = new AbandonIO();
-		local_gc = new HalfGateGen<AbandonIO>(aio);
+		local_gc = new HalfGateGen<AbandonIO, rt>(aio);
 
 		auto start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
@@ -42,7 +40,7 @@ int main(int argc, char** argv) {
 		delete local_gc;
 
 		MemIO * mio = new MemIO(cf.table_size()*100);
-		local_gc = new HalfGateGen<MemIO>(mio);
+		local_gc = new HalfGateGen<MemIO, rt>(mio);
 
 		start = clock_start();
 		for(int i = 0; i < 100; ++i) {
@@ -55,8 +53,7 @@ int main(int argc, char** argv) {
 		delete mio;
 		delete local_gc;
 
-		NetIO* netio = new NetIO("127.0.0.1", 54213);
-		local_gc = new HalfGateGen<NetIO>(netio);
+		local_gc = new HalfGateGen<NetIO, rt>(netio);
 
 		start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
@@ -65,7 +62,14 @@ int main(int argc, char** argv) {
 		interval = time_from(start);
 		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval<<" million gate per second\n";
 
-		delete netio;
 		delete local_gc;
 	}
+
+}
+int main(int argc, char** argv) {
+	parse_party_and_port(argv, argc, &party, &port);
+	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
+	test<RTCktOpt::on>(netio);
+	test<RTCktOpt::off>(netio);
+	delete netio;
 }
