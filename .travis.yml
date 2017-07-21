@@ -22,9 +22,9 @@ matrix:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
     brew update;
-    brew list openssl &>/dev/null || brew install openssl;
-    brew list gmp &>/dev/null || brew install gmp;
-    export OPENSSL_ROOT_DIR=/usr/local/opt/openssl
+    brew list openssl || brew install openssl;
+    brew list gmp  || brew install gmp;
+    export OPENSSL_ROOT_DIR=/usr/local/opt/openssl;
     fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
     sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
