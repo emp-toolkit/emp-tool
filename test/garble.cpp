@@ -65,6 +65,9 @@ void test(NetIO * netio) {
 		delete local_gc;
 	}
 
+	delete[] a;
+	delete[] b;
+	delete[] c;
 }
 int main(int argc, char** argv) {
 	parse_party_and_port(argv, argc, &party, &port);

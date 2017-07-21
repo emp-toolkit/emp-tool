@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
 				io->send_block(data, length);
 			}
 			double interval = time_from(start);
-			delete data;
+			delete[] data;
 			cout << "Loopback speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 		}
 	} else {//party == BOB
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
 			for (int i = 0; i < times; ++i) {
 				io->recv_block(data, length);
 			}
-			delete data;
+			delete[] data;
 		}
 	}
 	delete io;
