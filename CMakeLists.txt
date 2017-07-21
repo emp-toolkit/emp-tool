@@ -2,6 +2,10 @@ cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
 
+if(POLICY CMP0042)
+  cmake_policy(SET CMP0042 NEW) # use rpath on macOS
+endif()
+
 include_directories(${CMAKE_SOURCE_DIR}/)
 include_directories(${CMAKE_SOURCE_DIR}/io)
 include_directories(${CMAKE_SOURCE_DIR}/utils)
