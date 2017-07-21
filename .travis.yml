@@ -12,9 +12,36 @@ matrix:
       dist: trusty
       sudo: required
       env: TYPE=Release
+      
+    - os: linux
+      dist: trusty
+      sudo: required
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-3.9
+          packages:
+            - clang-3.9
+      env:
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+        - TYPE=Release
+
+    - os: linux
+      dist: trusty
+      sudo: required
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-3.9
+          packages:
+            - clang-3.9
+      env:
+        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+        - TYPE=Debug
 
 before_install:
-  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
+  - eval "${MATRIX_EVAL}"
+  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
