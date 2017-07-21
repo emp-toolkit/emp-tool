@@ -14,13 +14,14 @@ matrix:
       env: TYPE=Release
 
     - os: osx
-      osx_image: xcode8
+      osx_image: xcode6.4
       env:
         - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
         - TYPE=Debug
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    sysctl hw;
     brew update;
     brew list openssl || brew install openssl;
     brew list gmp  || brew install gmp;
@@ -33,7 +34,6 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - sysctl hw
   - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make
   - echo "Testing Basic Primitives"
   - ./bin/prp
