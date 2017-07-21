@@ -13,23 +13,19 @@ matrix:
       sudo: required
       env: TYPE=Release
 
-    - os: osx
-      osx_image: xcode6.4
+   - os: linux
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty
+          packages:
+            - clang-5.0
       env:
-        - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
-        - TYPE=Debug
+        - MATRIX_EVAL="CC=clang-5.0 && CXX=clang++-5.0"
 
 before_install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
-    sysctl hw;
-    brew update;
-    brew list openssl || brew install openssl;
-    brew list gmp  || brew install gmp;
-    export OPENSSL_ROOT_DIR=/usr/local/opt/openssl;
-    fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
-    sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
-    fi
+  - eval "${MATRIX_EVAL}"
+  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
@@ -40,6 +36,7 @@ script:
   - ./bin/prg
   - ./bin/com
   - ./bin/hash
+  - ./bin/garble 1 12345 & ./bin/garble 2 12345
   - ./bin/netio 1 12345 & ./bin/netio 2 12345
   - echo "Testing Circuits"
   - ./bin/bit
