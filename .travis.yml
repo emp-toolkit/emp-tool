@@ -13,7 +13,7 @@ matrix:
       sudo: required
       env: TYPE=Release
 
-   - os: linux
+    - os: linux
       addons:
         apt:
           sources:
