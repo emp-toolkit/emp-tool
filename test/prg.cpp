@@ -38,7 +38,7 @@ int main() {
 			prg.random_block(data, length);
 		}
 		double interval = time_from(start);
-		delete data;
+		delete[] data;
 		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 	}
 	return 0;

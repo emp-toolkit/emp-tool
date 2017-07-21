@@ -28,7 +28,7 @@ int main() {
 			prp.permute_block(data, length);
 		}
 		double interval = time_from(start);
-		delete data;
+		delete[] data;
 		cout << "PRP speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 	}
 	return 0;

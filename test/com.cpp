@@ -14,6 +14,7 @@ int main() {
 		error("Commitment: open failed!");
 	}
 	
+	delete[] data;
 	for (long long length = 2; length <= 2048; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length];
@@ -23,7 +24,7 @@ int main() {
 			c.open(decom, com, data, length*sizeof(block));
 		}
 		double interval = time_from(start);
-		delete data;
+		delete[] data;
 		cout << "Commit+Open speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 	}
 	return 0;

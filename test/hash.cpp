@@ -10,7 +10,8 @@ int main() {
 	hash.put(data, 1024*1024);
 	char dig[Hash::DIGEST_SIZE];
 	hash.digest(dig);
-	
+	delete[] data;	
+
 	PRG prg;
 	for (long long length = 2; length <= 8192; length*=2) {
 		long long times = 1024*1024*32/length;
@@ -22,7 +23,7 @@ int main() {
 			hash.digest(dig);
 		}
 		double interval = time_from(start);
-		delete data;
+		delete[] data;
 		cout << "Hash speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 	}
 	return 0;
