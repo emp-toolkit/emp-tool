@@ -13,9 +13,22 @@ matrix:
       sudo: required
       env: TYPE=Release
 
+    - os: osx
+      osx_image: xcode8
+      env:
+        - MATRIX_EVAL="CC=gcc-4.9 && CXX=g++-4.9"
+        - TYPE=Debug
 
 before_install:
-  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    brew update;
+    brew list openssl &>/dev/null || brew install openssl;
+    brew list gmp &>/dev/null || brew install gmp;
+    export OPENSSL_ROOT_DIR=/usr/local/opt/openssl
+    fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
+    sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y;
+    fi
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
