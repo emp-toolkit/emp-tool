@@ -17,9 +17,9 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR})
 
-find_package(OpenSSL)
-find_package(relic)
-INCLUDE_DIRECTORIES(${OPENSSL_INCLUDE_DIR})
+find_package(OpenSSL REQUIRED)
+find_package(relic REQUIRED)
+include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O1 -maes")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
