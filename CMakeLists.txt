@@ -39,13 +39,13 @@ file(GLOB headers
 "utils/*.h"
 "utils/*.hpp"
 "gc/*.h"
+"plain/*.h"
 "gc/*.hpp"
 "emp-tool"
 )
 file(GLOB circuit-files 
 "circuits/files/*"
 )
-
 file(GLOB libgarble
 "garble/*.h"
 )
