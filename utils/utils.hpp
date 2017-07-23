@@ -11,7 +11,7 @@ void inline delete_array_null(T * ptr){
 	}
 }
 
-template <typename T = uint64_t>
+template <typename T>
 std::string m128i_to_string(const __m128i var) {
 	std::stringstream sstr;
 	const T* values = (const T*) &var;
