@@ -6,12 +6,7 @@ if(POLICY CMP0042)
   cmake_policy(SET CMP0042 NEW) # use rpath on macOS
 endif()
 
-include_directories(${CMAKE_SOURCE_DIR}/)
-include_directories(${CMAKE_SOURCE_DIR}/io)
-include_directories(${CMAKE_SOURCE_DIR}/utils)
-include_directories(${CMAKE_SOURCE_DIR}/circuits)
-include_directories(${CMAKE_SOURCE_DIR}/gc)
-include_directories(${CMAKE_SOURCE_DIR}/plain)
+include_directories(${CMAKE_SOURCE_DIR})
 
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release)
@@ -19,7 +14,7 @@ endif(NOT CMAKE_BUILD_TYPE)
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR})
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(OpenSSL REQUIRED)
 find_package(relic REQUIRED)
@@ -32,33 +27,14 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 
-file(GLOB headers 
-"io/*.h"
-"circuits/*.h"
-"circuits/*.hpp"
-"utils/*.h"
-"utils/*.hpp"
-"gc/*.h"
-"plain/*.h"
-"gc/*.hpp"
-"emp-tool"
-)
-file(GLOB circuit-files 
-"circuits/files/*"
-)
-file(GLOB libgarble
-"garble/*.h"
+set(sources
+emp-tool/gc/backend.cpp
 )
 
-set(sources
-gc/backend.cpp
-)
 add_library(${NAME} SHARED ${sources})
 
-install(FILES emp-tool-config.cmake relic-config.cmake DESTINATION cmake/)
-install(FILES ${headers} DESTINATION include/${NAME})
-install(FILES ${libgarble} DESTINATION include/${NAME}/garble)
-install(FILES ${circuit-files} DESTINATION include/${NAME}/files)
+install(FILES cmake/emp-tool-config.cmake cmake/relic-config.cmake DESTINATION cmake/)
+install(DIRECTORY emp-tool DESTINATION include/)
 install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)

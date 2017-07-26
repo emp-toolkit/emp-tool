@@ -1,9 +1,4 @@
-#include "gc/halfgate_gen.h"
-#include "gc/halfgate_eva.h"
-#include "circuits/circuit_file.h"
-#include "io/abandon_io_channel.h"
-#include "io/mem_io_channel.h"
-#include "utils/utils.h"
+#include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
 
@@ -18,7 +13,7 @@ void test(NetIO * netio) {
 	prg.random_block(a, 128);
 	prg.random_block(b, 128);
 
-	string file = "circuits/files/AES-non-expanded.txt";
+	string file = "emp-tool/circuits/files/AES-non-expanded.txt";
 	CircuitFile cf(file.c_str());
 
 	if(party == BOB) {
