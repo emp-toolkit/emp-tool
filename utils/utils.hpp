@@ -1,7 +1,85 @@
-static const char* hex_char_to_bin(char c)
-{
-	switch(toupper(c))
-	{
+template<class... Ts>
+void run_function(void *function, const Ts&... args) {	
+	reinterpret_cast<void(*)(Ts...)>(function)(args...);
+}
+
+template<typename T>
+void inline delete_array_null(T * ptr){
+	if(ptr != nullptr) {
+		delete[] ptr;
+		ptr = nullptr;
+	}
+}
+
+template <typename T>
+std::string m128i_to_string(const __m128i var) {
+	std::stringstream sstr;
+	const T* values = (const T*) &var;
+	for (unsigned int i = 0; i < sizeof(__m128i) / sizeof(T); i++) {
+		sstr <<"0x"<<std::hex<< values[i] << " ";
+	}
+	return sstr.str();
+}
+
+inline time_point<high_resolution_clock> clock_start() { 
+	return high_resolution_clock::now();
+}
+
+inline double time_from(const time_point<high_resolution_clock>& s) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(high_resolution_clock::now() - s).count();
+}
+
+inline string bin_to_dec(const string& bin2) {
+	if(bin2[0] == '0')
+		return change_base(bin2, 2, 10);
+	string bin = bin2;
+	bin[0] = '0';
+	bool flip = false;
+	for(int i = bin.size()-1; i>=1; --i) {
+		if(flip)
+			bin[i] = (bin[i] == '1' ? '0': '1');
+		if(bin[i] == '1')
+			flip = true;
+	}
+	return "-"+change_base(bin, 2, 10);
+}
+
+inline string dec_to_bin(const string& dec) {
+	string bin = change_base(dec, 10, 2);
+	if(dec[0] != '-')
+		return '0' + bin;
+	bin[0] = '1';
+	bool flip = false;
+	for(int i = bin.size()-1; i>=1; --i) {
+		if(flip)
+			bin[i] = (bin[i] == '1' ? '0': '1');
+		if(bin[i] == '1')
+			flip = true;
+	}
+	return bin;
+}
+
+inline string change_base(string str, int old_base, int new_base) {
+	mpz_t tmp;
+	mpz_init_set_str (tmp, str.c_str(), old_base);
+	char * b = new char[mpz_sizeinbase(tmp, new_base) + 2];
+	mpz_get_str(b, new_base, tmp);
+	mpz_clear(tmp);
+	string res(b);
+	delete[]b;
+	return res;
+}
+
+inline void error(const char * s, int line, const char * file) {
+	fprintf(stderr, s, "\n");
+	if(file != nullptr) {
+		fprintf(stderr, "at %d, %s\n", line, file);
+	}
+	exit(1);
+}
+
+inline const char* hex_char_to_bin(char c) {
+	switch(toupper(c)) {
 		case '0': return "0000";
 		case '1': return "0001";
 		case '2': return "0010";
