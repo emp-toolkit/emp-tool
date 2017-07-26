@@ -9,7 +9,7 @@
 #include "bit.h"
 #include "circuit_file.h"
 #include "comparable.h"
-#include "float.h"
+#include "float_circuit.h"
 #include "integer.h"
 #include "number.h"
 #include "swappable.h"
