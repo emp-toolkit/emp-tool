@@ -23,7 +23,7 @@ class PRG { public:
 			// this will be "/dev/urandom" when possible...
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
-				data[i] = rand();//_div();
+				data[i] = rand_div();
 			reseed(data);
 			random_data((void*)data, 4);
 			rnd = new PRG(data);
