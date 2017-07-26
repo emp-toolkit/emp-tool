@@ -1,4 +1,4 @@
-#include "circuit_generator.h"
+#include "emp-tool/emp-tool.h"
 
 void ham(int n) {
 	Integer a(n, 0, ALICE);

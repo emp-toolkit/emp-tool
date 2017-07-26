@@ -1,6 +1,5 @@
 #include <typeinfo>
-#include "plain_env.h"
-#include "float_circuit.h"
+#include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
 

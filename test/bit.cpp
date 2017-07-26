@@ -1,5 +1,4 @@
-#include "plain/plain_env.h"
-#include "bit.h"
+#include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
 
