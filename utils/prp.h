@@ -9,19 +9,15 @@
  */
 
 class PRP { public:
-	AES_KEY *aes;
+	AES_KEY aes;
 
 	PRP(const char * seed = fix_key) {
-		aes = new AES_KEY;
 		aes_set_key(seed);
 	}
 
 	PRP(const block& seed): PRP((const char *)&seed) {
 	}
 
-	~PRP() {
-		delete aes;
-	}
 
 	void aes_set_key(const char * key) {
 		__m128i v = _mm_load_si128((__m128i*)&key[0]);
@@ -29,15 +25,15 @@ class PRP { public:
 	}
 
 	void aes_set_key(const block& v) {
-		AES_set_encrypt_key(v, aes);
+		AES_set_encrypt_key(v, &aes);
 	}
 
 	void permute_block(block *data, int nblocks) {
 		int i = 0;
 		for(; i < nblocks-AES_BATCH_SIZE; i+=AES_BATCH_SIZE) {
-			AES_ecb_encrypt_blks(data+i, AES_BATCH_SIZE, aes);
+			AES_ecb_encrypt_blks(data+i, AES_BATCH_SIZE, &aes);
 		}
-		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, aes);
+		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, &aes);
 	}
 
 	void permute_data(void*data, int nbytes) {

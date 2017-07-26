@@ -62,7 +62,7 @@ class PrivacyFreeGen: public GarbleCircuit{ public:
 	block gen_and(const block& a, const block& b) {
 		block out[2], table[2];
 		garble_gate_garble_privacy_free(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-				&out[0], &out[1], delta, table, gid++, prp.aes);
+				&out[0], &out[1], delta, table, gid++, &prp.aes);
 		io->send_block(table, 1);
 		return out[0];
 	}

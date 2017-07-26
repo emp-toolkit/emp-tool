@@ -49,7 +49,7 @@ class PrivacyFreeEva:public GarbleCircuit{ public:
 	block and_gate(const block& a, const block& b) {
 		block out[2], table[1];
 		io->recv_block(table, 1);
-		garble_gate_eval_privacy_free(a, b, out, table, gid++, prp.aes);
+		garble_gate_eval_privacy_free(a, b, out, table, gid++, &prp.aes);
 		return out[0];
 	}
 	block xor_gate(const block& a, const block& b) {
