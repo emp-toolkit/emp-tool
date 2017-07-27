@@ -12,18 +12,26 @@
  */
 
 class PRG;
+extern PRG * rnd;
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {	
 		if (seed != nullptr) {
 			reseed(seed, id);
-		} else {
-			unsigned long long r0, r1;
-			_rdseed64_step(&r0);
-			_rdseed64_step(&r1);
-			block v = makeBlock(r0, r1);
+		} else if(rnd == nullptr) {
+			block v;
+			int * data = (int *)(&v);
+			std::random_device rand_div;
+			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
+				data[i] = rand_div();
 			reseed(&v);
+			random_block(&v, 1);
+			rnd = new PRG(&v);
+		} else {
+			block data;
+			rnd->random_block(&data, 1);
+			reseed(&data, id);
 		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
