@@ -20,13 +20,14 @@ class PRG { public:
 		if (seed != nullptr) {
 			reseed(seed, id);
 		} else if(rnd == nullptr) {
-			int data[sizeof(block) / sizeof(int)];
+			block v;
+			int * data = (int *)(&v);
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
 				data[i] = rand_div();
-			reseed(data);
-			random_data((void*)data, 4);
-			rnd = new PRG(data);
+			reseed(&v);
+			random_block(&v, 1);
+			rnd = new PRG(&v);
 		} else {
 			block data;
 			rnd->random_block(&data, 1);
