@@ -18,9 +18,9 @@ class PRP { public:
 	PRP(const block& seed): PRP((const char *)&seed) {
 	}
 
-
 	void aes_set_key(const char * key) {
-		__m128i v = _mm_load_si128((__m128i*)&key[0]);
+		block v;
+		memcpy(&v, key, sizeof(block));
 		aes_set_key(v);
 	}
 

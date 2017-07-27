@@ -6,6 +6,7 @@
 #include "emp-tool/utils/utils_ec.h"
 #include <gmp.h>
 #include <random>
+
 /** @addtogroup BP
   @{
  */
@@ -15,12 +16,11 @@ extern PRG * rnd;
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
-	PRG(const void * seed = nullptr, int id = 0) {
+	PRG(const void * seed = nullptr, int id = 0) {	
 		if (seed != nullptr) {
 			reseed(seed, id);
 		} else if(rnd == nullptr) {
 			int data[sizeof(block) / sizeof(int)];
-			// this will be "/dev/urandom" when possible...
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
 				data[i] = rand_div();
@@ -34,8 +34,8 @@ class PRG { public:
 		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
-		const char * k = (const char *)key;
-		__m128i v = _mm_load_si128((__m128i*)&k[0]);
+		block v;
+		memcpy(&v, key, sizeof(block));
 		v = xorBlocks(v, makeBlock(0LL, id));
 		AES_set_encrypt_key(v, &aes);
 		counter = 0;
