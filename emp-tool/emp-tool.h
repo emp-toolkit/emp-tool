@@ -25,6 +25,7 @@
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/utils/xor_tree.h"
+#include "emp-tool/utils/ThreadPool.h"
 
 #include "emp-tool/gc/garble_circuit.h"
 #include "emp-tool/gc/halfgate_eva.h"
