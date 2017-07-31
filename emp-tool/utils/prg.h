@@ -2,7 +2,7 @@
 #define PRG_H__
 #include "emp-tool/utils/block.h"
 #include "emp-tool/garble/aes.h"
-#include "emp-tool/utils/config.h"
+#include "emp-tool/utils/constants.h"
 #include "emp-tool/utils/utils_ec.h"
 #include <gmp.h>
 #include <random>
@@ -35,8 +35,7 @@ class PRG { public:
 		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
-		block v;
-		memcpy(&v, key, sizeof(block));
+		block v = _mm_loadu_si128((block*)key);
 		v = xorBlocks(v, makeBlock(0LL, id));
 		AES_set_encrypt_key(v, &aes);
 		counter = 0;

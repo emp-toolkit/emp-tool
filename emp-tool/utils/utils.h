@@ -10,9 +10,6 @@
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
-#define PUBLIC 0
-#define ALICE 1
-#define BOB 2
 using std::string;
 using std::chrono::time_point;
 using std::chrono::high_resolution_clock;

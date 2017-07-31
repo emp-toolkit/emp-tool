@@ -3,7 +3,7 @@
 #include <pthread.h>  
 #include "emp-tool/gc/garble_circuit.h"
 #include "emp-tool/utils/block.h"
-#include "emp-tool/utils/config.h"
+#include "emp-tool/utils/constants.h"
 
 class Backend { public:
 	int cur_party;

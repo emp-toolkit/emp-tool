@@ -2,7 +2,7 @@
 #define HASH_H__
 
 #include "emp-tool/utils/block.h"
-#include "emp-tool/utils/config.h"
+#include "emp-tool/utils/constants.h"
 #include <openssl/sha.h>
 #include <stdio.h>
 //#include "emp-tool/utils_ec.h"

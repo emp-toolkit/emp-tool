@@ -1,5 +1,5 @@
 #include "emp-tool/utils/block.h"
-#include "emp-tool/utils/config.h"
+#include "emp-tool/utils/constants.h"
 #include "emp-tool/garble/aes.h"
 #include <stdio.h>
 #ifndef PRP_H__
@@ -19,9 +19,7 @@ class PRP { public:
 	}
 
 	void aes_set_key(const char * key) {
-		block v;
-		memcpy(&v, key, sizeof(block));
-		aes_set_key(v);
+		aes_set_key(_mm_loadu_si128((block*)key));
 	}
 
 	void aes_set_key(const block& v) {
