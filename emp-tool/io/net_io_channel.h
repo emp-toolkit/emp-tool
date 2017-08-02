@@ -106,7 +106,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		fflush(stream);
 	}
 
-	void send_data_impl(const void * data, int len) {
+	void send_data(const void * data, int len) {
 		counter += len;
 		int sent = 0;
 		while(sent < len) {
@@ -119,7 +119,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		has_sent = true;
 	}
 
-	void recv_data_impl(void  * data, int len) {
+	void recv_data(void  * data, int len) {
 		if(has_sent)
 			fflush(stream);
 		has_sent = false;

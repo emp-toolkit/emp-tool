@@ -34,9 +34,9 @@ class CheckIO: public IOChannel<CheckIO> { public:
 	}
 
 
-	void recv_data_impl(void  * data, int len) {
+	void recv_data(void  * data, int len) {
 	}
-	void send_data_impl(const void * data, int len) {
+	void send_data(const void * data, int len) {
 		assert(len < CHECK_BUFFER_SIZE);
 		if(check_size + len >= CHECK_BUFFER_SIZE) {
 			netio->recv_data(net_buffer, check_size);

@@ -46,7 +46,7 @@ class FileIO: public IOChannel<FileIO> { public:
 	void reset() {
 		rewind(stream);
 	}
-	void send_data_impl(const void * data, int len) {
+	void send_data(const void * data, int len) {
 		bytes_sent += len;
 		int sent = 0;
 		while(sent < len) {
@@ -57,7 +57,7 @@ class FileIO: public IOChannel<FileIO> { public:
 				fprintf(stderr,"error: file_send_data %d\n", res);
 		}
 	}
-	void recv_data_impl(void  * data, int len) {
+	void recv_data(void  * data, int len) {
 		int sent = 0;
 		while(sent < len) {
 			int res = fread(sent+(char*)data, 1, len-sent, stream);
