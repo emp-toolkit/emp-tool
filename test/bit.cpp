@@ -2,6 +2,7 @@
 #include <iostream>
 using namespace std;
 
+template<typename T>
 void test_bit() {
 	bool b[] = {true, false};
 	int p[] = {PUBLIC, ALICE, BOB};
@@ -11,8 +12,8 @@ void test_bit() {
 			for(int k = 0; k < 2; ++k)
 				for (int l= 0; l < 3; ++l)  {
 					{
-						Bit b1(b[i], p[j]);
-						Bit b2(b[k], p[l]);
+						Bit<T> b1(b[i], p[j]);
+						Bit<T> b2(b[k], p[l]);
 						bool res = (b1&b2).reveal(PUBLIC);
 						if(res != (b[i] and b[k])) {
 							cout<<"AND" <<i<<" "<<j<<" "<<k<<" "<<l<<" "<<res<<endl;
@@ -32,8 +33,8 @@ void test_bit() {
 
 					}
 					{
-						Bit b1(b[i], p[j]);
-						Bit b2(b[k], p[l]);
+						Bit<T> b1(b[i], p[j]);
+						Bit<T> b2(b[k], p[l]);
 						bool res = (b1^b2).reveal(PUBLIC);
 						if(res != (b[i] xor b[k])) {
 							cout <<"XOR"<<i<<" "<<j<<" "<<k<<" "<<l<< " " <<res<<endl;
@@ -58,7 +59,7 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_env(false, "cfile");
-	test_bit();
-	finalize_plain_env();
+	setup_plain_prot(false, "");
+	test_bit<PlainCircExec>();
+	finalize_plain_prot();
 }

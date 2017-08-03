@@ -27,15 +27,13 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 
-set(sources
-emp-tool/gc/backend.cpp
-)
+#set(sources)
 
-add_library(${NAME} SHARED ${sources})
+#add_library(${NAME} SHARED ${sources})
 
 install(FILES cmake/emp-tool-config.cmake cmake/relic-config.cmake DESTINATION cmake/)
 install(DIRECTORY emp-tool DESTINATION include/)
-install(TARGETS ${NAME} DESTINATION lib)
+#install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)
 	add_executable(${_name} "test/${_name}.cpp" ${sources})

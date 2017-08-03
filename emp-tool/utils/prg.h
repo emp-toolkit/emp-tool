@@ -12,8 +12,8 @@
  */
 
 class PRG;
-extern PRG * rnd;
 class PRG { public:
+	static PRG * rnd;
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {	
@@ -152,5 +152,7 @@ class PRG { public:
 		}
 	}
 };
+
+PRG* PRG::rnd = nullptr;
 /**@}*/
 #endif// PRP_H__

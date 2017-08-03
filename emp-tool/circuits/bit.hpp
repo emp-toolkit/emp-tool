@@ -1,55 +1,65 @@
-inline Bit::Bit(bool b, int party) {
+template<typename T>
+inline Bit<T>::Bit(bool b, int party) {
 	if (party == PUBLIC)
-		bit = local_gc->public_label(b);
-	else local_backend->Feed(&bit, party, &b, 1); 
+		bit = T::circ_exec->public_label(b);
+	else ProtocolExecution::prot_exec->feed(&bit, party, &b, 1); 
 }
 
-inline Bit Bit::select(const Bit & select, const Bit & new_v) const{
+template<typename T>
+inline Bit<T> Bit<T>::select(const Bit & select, const Bit & new_v) const{
 	Bit tmp = *this;
 	tmp = tmp ^ new_v;
 	tmp = tmp & select;
 	return *this ^ tmp;
 }
 
-template<typename O>
-inline O Bit::reveal(int party) const {
-	O res;
-	local_backend->Reveal(&res, party, &bit, 1);
+template<typename T>
+inline bool Bit<T>::reveal(int party) const {
+	bool res;
+	ProtocolExecution::prot_exec->reveal(&res, party, &bit, 1);
 	return res;
 }
 
-template<>
-inline string Bit::reveal<string>(int party) const {
+/*template<typename T>
+template<typename O = string>
+inline O Bit<T>::reveal(int party) const {
 	bool res;
 	local_backend->Reveal(&res, party, &bit, 1);
 	return res ? "true" : "false";
-}
+}*/
 
 
 
-inline Bit Bit::operator==(const Bit& rhs) const {
+template<typename T>
+inline Bit<T> Bit<T>::operator==(const Bit& rhs) const {
 	return !(*this ^ rhs);
 }
 
-inline Bit Bit::operator!=(const Bit& rhs) const {
+template<typename T>
+inline Bit<T> Bit<T>::operator!=(const Bit& rhs) const {
 	return (*this) ^ rhs;
 }
 
-inline Bit Bit::operator &(const Bit& rhs) const{
+template<typename T>
+inline Bit<T> Bit<T>::operator &(const Bit& rhs) const{
 	Bit res;
-	res.bit = local_gc->gc_and(bit, rhs.bit);
-	return res;
-}
-inline Bit Bit::operator ^(const Bit& rhs) const{
-	Bit res;
-	res.bit = local_gc->gc_xor(bit, rhs.bit);
+	res.bit = T::circ_exec->and_gate(bit, rhs.bit);
 	return res;
 }
 
-inline Bit Bit::operator |(const Bit& rhs) const{
+template<typename T>
+inline Bit<T> Bit<T>::operator ^(const Bit& rhs) const{
+	Bit res;
+	res.bit = T::circ_exec->xor_gate(bit, rhs.bit);
+	return res;
+}
+
+template<typename T>
+inline Bit<T> Bit<T>::operator |(const Bit& rhs) const{
 	return (*this ^ rhs) ^ (*this & rhs);
 }
 
-inline Bit Bit::operator!() const {
-	return local_gc->gc_not(bit);
+template<typename T>
+inline Bit<T> Bit<T>::operator!() const {
+	return T::circ_exec->not_gate(bit);
 }

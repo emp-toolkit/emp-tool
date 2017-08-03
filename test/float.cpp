@@ -8,7 +8,7 @@ bool accurate(double a, double b, double err) {
 		return true;
 	else return false;
 }
-template<typename Op, typename Op2>
+template<typename T, typename Op, typename Op2>
 void test_float(double precision, int runs = 100) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
@@ -24,38 +24,39 @@ void test_float(double precision, int runs = 100) {
 			db = ib / 1000.0;
 		}
 	
-		Float a(24, 9, da, PUBLIC);
-		Float b(24, 9, db, PUBLIC);
-		Float res = Op2()(a,b);
+		Float<T> a(24, 9, da, PUBLIC);
+		Float<T> b(24, 9, db, PUBLIC);
+		Float<T> res = Op2()(a,b);
 
-		if (not accurate(res.reveal<double>(PUBLIC), Op()(da,db), precision)) {
-			cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+		if (not accurate(res.reveal(PUBLIC), Op()(da,db), precision)) {
+			cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal(PUBLIC)<<endl<<flush;
 		}
-		assert(accurate(res.reveal<double>(PUBLIC),  Op()(da,db), precision*10));
+		assert(accurate(res.reveal(PUBLIC),  Op()(da,db), precision*10));
 	}
 	cout << typeid(Op2).name()<<"\t\t\tDONE"<<endl;
 }
 
+template<typename T>
 void scratch_pad() {
-	Float a(24, 9, 0.21, PUBLIC);
-	Float b(24, 9, 0.41, PUBLIC);
-	cout << a.reveal<double>(PUBLIC)<<endl;
-	cout << b.reveal<double>(PUBLIC)<<endl;
-	cout << (a+b).reveal<double>(PUBLIC)<<endl;
-	cout << (a-b).reveal<double>(PUBLIC)<<endl;
-	cout << (a*b).reveal<double>(PUBLIC)<<endl;
-	double res = (a/b).reveal<double>(BOB);
+	Float<T> a(24, 9, 0.21, PUBLIC);
+	Float<T> b(24, 9, 0.41, PUBLIC);
+	cout << a.reveal(PUBLIC)<<endl;
+	cout << b.revea(PUBLIC)<<endl;
+	cout << (a+b).reveal(PUBLIC)<<endl;
+	cout << (a-b).reveal(PUBLIC)<<endl;
+	cout << (a*b).reveal(PUBLIC)<<endl;
+	double res = (a/b).reveal(BOB);
 	cout << res <<endl;
 }
 
 int main(int argc, char** argv) {
-	setup_plain_env(false, "");
+	setup_plain_prot(false, "");
 //	scratch_pad();return 0;
-	test_float<std::plus<float>, std::plus<Float>>(1e-4);
-	test_float<std::minus<float>, std::minus<Float>>(1e-4);
-	test_float<std::multiplies<float>, std::multiplies<Float>>(1e-4);
-	test_float<std::divides<float>, std::divides<Float>>(1e-4);
+	test_float<PlainCircExec,std::plus<float>, std::plus<Float<PlainCircExec>>>(1e-4);
+	test_float<PlainCircExec,std::minus<float>, std::minus<Float<PlainCircExec>>>(1e-4);
+	test_float<PlainCircExec,std::multiplies<float>, std::multiplies<Float<PlainCircExec>>>(1e-4);
+	test_float<PlainCircExec,std::divides<float>, std::divides<Float<PlainCircExec>>>(1e-4);
 
-	finalize_plain_env();
+	finalize_plain_prot();
 	return 0;
 }

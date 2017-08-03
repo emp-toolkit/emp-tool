@@ -5,7 +5,9 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/swappable.h"
 
-class Bit : public Swappable<Bit>{ public:
+template<typename T>
+class Bit : public Swappable<T, Bit> {
+public:
 	block bit;
 
 	Bit(bool _b = false, int party = PUBLIC);
@@ -13,8 +15,7 @@ class Bit : public Swappable<Bit>{ public:
 		memcpy(&bit, &a, sizeof(block));
 	}
 
-	template<typename O = bool> 
-	O reveal(int party = PUBLIC) const;
+	bool reveal(int party = PUBLIC) const;
 
 	Bit operator!=(const Bit& rhs) const; 
 	Bit operator==(const Bit& rhs) const;

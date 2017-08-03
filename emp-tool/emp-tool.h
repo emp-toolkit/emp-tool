@@ -27,19 +27,18 @@
 #include "emp-tool/utils/xor_tree.h"
 #include "emp-tool/utils/ThreadPool.h"
 
-#include "emp-tool/gc/garble_circuit.h"
 #include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"
 #include "emp-tool/gc/privacy_free_eva.h"
 #include "emp-tool/gc/privacy_free_gen.h"
-#include "emp-tool/gc/backend.h"
-
 
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include "emp-tool/garble/garble_gate_privacy_free.h"
 
-#include "emp-tool/plain/plain_env.h"  
-#include "emp-tool/plain/plain_gc.h"
+#include "emp-tool/execution/circuit_execution.h"
+#include "emp-tool/execution/protocol_execution.h"
+#include "emp-tool/execution/plain_circ.h"
+#include "emp-tool/execution/plain_prot.h"
 /** @defgroup IO Input/Output*/
 /** @defgroup BP Basic Primitives*/

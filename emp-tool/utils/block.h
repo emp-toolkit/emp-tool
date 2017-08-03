@@ -44,6 +44,9 @@ typedef __m128i block;
 #define getLSB(x) (*((unsigned short *)&x)&1)
 #define makeBlock(X,Y) _mm_set_epi64x(X, Y)
 
+inline block make_delta(const block & a) {
+	return _mm_or_si128(makeBlock(0L, 1L), a);
+}
 
 typedef __m128i block_tpl[2];
 
