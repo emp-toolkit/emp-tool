@@ -1,6 +1,6 @@
 #ifndef CIRCUIT_EXECUTION_H__
 #define CIRCUIT_EXECUTION_H__
-
+#include "emp-tool/utils/block.h"
 class CircuitExecution { 
 public:
 	static CircuitExecution * circ_exec;
@@ -11,7 +11,6 @@ public:
 	virtual ~CircuitExecution (){ }
 };
 
-CircuitExecution* CircuitExecution::circ_exec = nullptr;
 
 enum RTCktOpt{on, off};
 #endif

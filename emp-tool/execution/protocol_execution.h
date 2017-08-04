@@ -16,5 +16,4 @@ public:
 	virtual void finalize() {}
 };
 
-ProtocolExecution* ProtocolExecution::prot_exec = nullptr;
 #endif

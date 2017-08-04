@@ -153,6 +153,5 @@ class PRG { public:
 	}
 };
 
-PRG* PRG::rnd = nullptr;
 /**@}*/
 #endif// PRP_H__
