@@ -9,13 +9,14 @@
  */
 
 template<typename T>
-class IOChannel { public:
+class IOChannel {
+public:
 	PRG *prg = nullptr;
 	void send_data(const void * data, int nbyte) {
-		static_cast<T*>(this)->send_data_impl(data, nbyte);
+		derived().send_data(data, nbyte);
 	}
 	void recv_data(void * data, int nbyte) {
-		static_cast<T*>(this)->recv_data_impl(data, nbyte);
+		derived().recv_data(data, nbyte);
 	}
 
 	void send_block(const block* data, int nblock) {
@@ -180,6 +181,11 @@ class IOChannel { public:
 			recv_data(buffer, bn_size*sizeof(uint64_t));
 			bn_read_raw(bn[i], buffer, bn_size);
 		}
+	}
+
+private:
+	T& derived() {
+		return *static_cast<T*>(this);
 	}
 };
 /**@}*/

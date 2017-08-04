@@ -1,55 +1,33 @@
 #ifndef HALFGATE_EVA_H__
 #define HALFGATE_EVA_H__
-#include "emp-tool/io/io_channel.h"
 #include "emp-tool/io/net_io_channel.h"
 #include "emp-tool/io/file_io_channel.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
-#include "emp-tool/utils/hash.h"
-#include "emp-tool/gc/garble_circuit.h"
+#include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
 
-template<typename T, RTCktOpt rt>
-bool halfgate_eva_is_public(GarbleCircuit* gc, const block & b, int party);
-
-template<typename T, RTCktOpt rt>
-block halfgate_eva_public_label(GarbleCircuit* gc, bool b);
-
-template<typename T, RTCktOpt rt>
-block halfgate_eva_and(GarbleCircuit* gc, const block&a, const block&b);
-
-template<typename T, RTCktOpt rt>
-block halfgate_eva_xor(GarbleCircuit*gc, const block&a, const block&b);
-
-template<typename T, RTCktOpt rt>
-block halfgate_eva_not(GarbleCircuit*gc, const block&a);
-
 template<typename T, RTCktOpt rt = on>
-class HalfGateEva:public GarbleCircuit{ public:
+class HalfGateEva:public CircuitExecution{ public:
+	int64_t gid = 0;
 	PRP prp;
 	T * io;
-	Hash hash;
 	bool with_file_io = false;
 	FileIO * fio;
 	block fix_point;
 	HalfGateEva(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
-		is_public_ptr = &halfgate_eva_is_public<T, rt>;
-		public_label_ptr = &halfgate_eva_public_label<T, rt>;
-		gc_and_ptr = &halfgate_eva_and<T, rt>;
-		gc_xor_ptr = &halfgate_eva_xor<T, rt>;
-		gc_not_ptr = &halfgate_eva_not<T, rt>;
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
 		this->fio = fio;
 	}
-	bool is_public_impl(const block & b, int party) {
+	bool is_public(const block & b, int party) {
 		return isZero(&b) or isOne(&b);
 	}
-	block public_label_impl(bool b) {
+	block public_label(bool b) {
 		return b? one_block() : zero_block();
 	}
 	block and_gate(const block& a, const block& b) {
@@ -105,29 +83,25 @@ class HalfGateEva:public GarbleCircuit{ public:
 	}
 };
 template<typename T>
-class HalfGateEva<T,RTCktOpt::off>:public GarbleCircuit{ public:
+class HalfGateEva<T,RTCktOpt::off>:public CircuitExecution {
+public:
+	int64_t gid = 0;
 	PRP prp;
 	T * io;
-	Hash hash;
 	bool with_file_io = false;
 	FileIO * fio;
 	block constant[2];
 	HalfGateEva(T * io) :io(io) {
-		is_public_ptr = &halfgate_eva_is_public<T, RTCktOpt::off>;
-		public_label_ptr = &halfgate_eva_public_label<T, RTCktOpt::off>;
-		gc_and_ptr = &halfgate_eva_and<T, RTCktOpt::off>;
-		gc_xor_ptr = &halfgate_eva_xor<T, RTCktOpt::off>;
-		gc_not_ptr = &halfgate_eva_not<T, RTCktOpt::off>;
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
 		this->fio = fio;
 	}
-	bool is_public_impl(const block & b, int party) {
+	bool is_public(const block & b, int party) {
 		return false;
 	}
-	block public_label_impl(bool b) {
+	block public_label(bool b) {
 		return constant[b];
 //		return b? one_block() : zero_block();
 	}
@@ -145,7 +119,7 @@ class HalfGateEva<T,RTCktOpt::off>:public GarbleCircuit{ public:
 		return xorBlocks(a,b);
 	}
 	block not_gate(const block&a){
-		return xor_gate(a, public_label_impl(true));
+		return xor_gate(a, public_label(true));
 	}
 	void generic_to_xor(block* new_block, const block * old_block, int length) {
 		block h[4], t;
@@ -160,26 +134,4 @@ class HalfGateEva<T,RTCktOpt::off>:public GarbleCircuit{ public:
 		}
 	}
 };
-
-template<typename T, RTCktOpt rt>
-bool halfgate_eva_is_public(GarbleCircuit* gc, const block & b, int party) {
-	return ((HalfGateEva<T,rt>*)gc)->is_public_impl(b, party);
-}
-template<typename T, RTCktOpt rt>
-block halfgate_eva_public_label(GarbleCircuit* gc, bool b) {
-	return ((HalfGateEva<T,rt>*)gc)->public_label_impl(b);
-}
-template<typename T, RTCktOpt rt>
-block halfgate_eva_and(GarbleCircuit* gc, const block&a, const block&b) {
-	return ((HalfGateEva<T,rt>*)gc)->and_gate(a, b);
-}
-template<typename T, RTCktOpt rt>
-block halfgate_eva_xor(GarbleCircuit*gc, const block&a, const block&b) {
-	return ((HalfGateEva<T,rt>*)gc)->xor_gate(a, b);
-}
-template<typename T, RTCktOpt rt>
-block halfgate_eva_not(GarbleCircuit*gc, const block&a) {
-	return ((HalfGateEva<T,rt>*)gc)->not_gate(a);
-}
-
 #endif// HALFGATE_EVA_H__

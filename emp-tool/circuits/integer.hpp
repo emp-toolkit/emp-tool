@@ -125,13 +125,13 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 inline void init(Bit * bits, const bool* b, int length, int party) {
 	block * bbits = (block *) bits;
 	if (party == PUBLIC) {
-		block one = local_gc->public_label(true);
-		block zero = local_gc->public_label(false);
+		block one = CircuitExecution::circ_exec->public_label(true);
+		block zero = CircuitExecution::circ_exec->public_label(false);
 		for(int i = 0; i < length; ++i)
 			bbits[i] = b[i] ? one : zero;
 	}
 	else {
-		local_backend->Feed((block *)bits, party, b, length); 
+		ProtocolExecution::prot_exec->feed((block *)bits, party, b, length); 
 	}
 }
 
@@ -170,7 +170,7 @@ inline const Bit &Integer::operator[](int index) const {
 template<>
 inline string Integer::reveal<string>(int party) const {
 	bool * b = new bool[length];
-	local_backend->Reveal(b, party, (block *)bits,  length);
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits,  length);
 	string bin="";
 	for(int i = length-1; i >= 0; --i)
 		bin += (b[i]? '1':'0');

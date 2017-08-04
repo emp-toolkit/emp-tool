@@ -4,7 +4,7 @@
 using namespace std;
 
 template<typename Op, typename Op2>
-void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 100) {
+void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 100000) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		long long ia, ib;
@@ -36,11 +36,10 @@ void scratch_pad() {
 	Integer a(32, 9, ALICE);
 	cout << "HW "<<a.hamming_weight().reveal<string>(PUBLIC)<<endl;
 	cout << "LZ "<<a.leading_zeros().reveal<string>(PUBLIC)<<endl;
-	cout << local_gc->gid<<endl;
 }
 int main(int argc, char** argv) {
 	int party = PUBLIC;
-	setup_plain_env(false, "");
+	setup_plain_prot(false, "");
 
 //	scratch_pad();return 0;
 	test_int<std::plus<int>, std::plus<Integer>>(party);
@@ -53,5 +52,5 @@ int main(int argc, char** argv) {
 	test_int<std::bit_or<int>, std::bit_or<Integer>>(party);
 	test_int<std::bit_xor<int>, std::bit_xor<Integer>>(party);
 
-	finalize_plain_env();
+	finalize_plain_prot();
 }

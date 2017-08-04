@@ -9,7 +9,7 @@ bool accurate(double a, double b, double err) {
 	else return false;
 }
 template<typename Op, typename Op2>
-void test_float(double precision, int runs = 100) {
+void test_float(double precision, int runs = 100000) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		long long ia, ib;
@@ -49,13 +49,13 @@ void scratch_pad() {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_env(false, "");
+	setup_plain_prot(false, "");
 //	scratch_pad();return 0;
-	test_float<std::plus<float>, std::plus<Float>>(1e-4);
-	test_float<std::minus<float>, std::minus<Float>>(1e-4);
-	test_float<std::multiplies<float>, std::multiplies<Float>>(1e-4);
-	test_float<std::divides<float>, std::divides<Float>>(1e-4);
+	test_float<std::plus<float>, std::plus<Float>>(1e-3);
+	test_float<std::minus<float>, std::minus<Float>>(1e-3);
+	test_float<std::multiplies<float>, std::multiplies<Float>>(1e-3);
+	test_float<std::divides<float>, std::divides<Float>>(1e-3);
 
-	finalize_plain_env();
+	finalize_plain_prot();
 	return 0;
 }

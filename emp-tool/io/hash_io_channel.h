@@ -12,10 +12,10 @@ class HashIO: public IOChannel<HashIO>{ public:
 	HashIO(NetIO * _netio ) {
 		this->netio = _netio;
 	}
-	void send_data_impl(const void * data, int len) {
+	void send_data(const void * data, int len) {
 		h.put(data, len);
 	}
-	void recv_data_impl(void  * data, int len) {
+	void recv_data(void  * data, int len) {
 		netio->recv_data(data, len);
 		h.put(data, len);
 	}

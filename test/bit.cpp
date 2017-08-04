@@ -58,7 +58,7 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_env(false, "cfile");
+	setup_plain_prot(false, "");
 	test_bit();
-	finalize_plain_env();
+	finalize_plain_prot();
 }
