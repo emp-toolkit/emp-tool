@@ -11,51 +11,42 @@ inline Bit Bit::select(const Bit & select, const Bit & new_v) const{
 	return *this ^ tmp;
 }
 
-inline bool Bit::reveal(int party) const {
-	bool res;
+template<typename O>
+inline O Bit::reveal(int party) const {
+	O res;
 	ProtocolExecution::prot_exec->reveal(&res, party, &bit, 1);
 	return res;
 }
 
-/*
-template<typename O = string>
-inline O Bit::reveal(int party) const {
+template<>
+inline string Bit::reveal<string>(int party) const {
 	bool res;
-	local_backend->Reveal(&res, party, &bit, 1);
+	ProtocolExecution::prot_exec->reveal(&res, party, &bit, 1);
 	return res ? "true" : "false";
-}*/
-
-
-
+}
 
 inline Bit Bit::operator==(const Bit& rhs) const {
 	return !(*this ^ rhs);
 }
 
-
 inline Bit Bit::operator!=(const Bit& rhs) const {
 	return (*this) ^ rhs;
 }
-
 
 inline Bit Bit::operator &(const Bit& rhs) const{
 	Bit res;
 	res.bit = CircuitExecution::circ_exec->and_gate(bit, rhs.bit);
 	return res;
 }
-
-
 inline Bit Bit::operator ^(const Bit& rhs) const{
 	Bit res;
 	res.bit = CircuitExecution::circ_exec->xor_gate(bit, rhs.bit);
 	return res;
 }
 
-
 inline Bit Bit::operator |(const Bit& rhs) const{
 	return (*this ^ rhs) ^ (*this & rhs);
 }
-
 
 inline Bit Bit::operator!() const {
 	return CircuitExecution::circ_exec->not_gate(bit);

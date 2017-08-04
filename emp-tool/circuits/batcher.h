@@ -1,7 +1,7 @@
 #ifndef BATCHER_H__
 #define BATCHER_H__
 #include <vector>
-#include "emp-tool/execution/protocol_execution.h"
+#include "emp-tool/gc/backend.h"
 using std::vector;
 
 class Batcher { public:
@@ -16,7 +16,7 @@ class Batcher { public:
 			values.push_back(b[i]);
 	}
 
-	~Batcher() {
+	~Batcher(){
 		if(labels != nullptr)
 			delete[] labels;
 	}
@@ -36,14 +36,13 @@ class Batcher { public:
 		}
 	}
 	
-	void make_semi_honest(int party, ProtocolExecution * be = nullptr) {
-		ProtocolExecution * exec = be;
-		if(exec == nullptr)
-			exec = ProtocolExecution::prot_exec;
+	void make_semi_honest(int party, Backend * be = nullptr) {
+		if(be == nullptr)
+			be = local_backend;
 		bool * bools = new bool[size()];
 		to_bool(bools);
 		label_ptr = labels = new block[size()];
-		exec->feed(labels, party, bools, size());
+		local_backend->Feed(labels, party, bools, size());
 		len_ptr = 0;
 		delete[] bools;
 	}

@@ -7,10 +7,9 @@
 #include "emp-tool/circuits/number.h"
 #include <math.h>
 
-template<typename T>
-class Float: Swappable<T, Float> { public:
-	Integer<T> value;
-	Integer<T> expnt;
+class Float: Swappable<Float> { public:
+	Integer value;
+	Integer expnt;
 	Float(Float && in): 
 		value(std::move(in.value)),
 		expnt(std::move(in.expnt)) {
@@ -21,7 +20,7 @@ class Float: Swappable<T, Float> { public:
 		expnt(in.expnt) {
 		}
 
-	Float<T>& operator= (Float rhs) {
+	Float& operator= (Float rhs) {
 		std::swap(value, rhs.value);
 		std::swap(expnt, rhs.expnt);
 		return *this;
@@ -29,28 +28,29 @@ class Float: Swappable<T, Float> { public:
 
 	Float(int value_length, int expnt_length, double input, int party = PUBLIC);
 
-	Float<T> If(const Bit<T>& select, const Float & d);
+	Float If(const Bit& select, const Float & d);
 
-	double reveal(int party = PUBLIC) const;
+	template<typename O> 
+	O reveal(int party = PUBLIC) const;
 
 	int size() const;
-	Float<T> abs() const;
+	Float abs() const;
 
 	void normalize(int value_length, int to_add_to_expnt);
 
 	string detail(int party) const;
 
-	Bit<T> greater(const Float & rhs) const;
-	Bit<T> equal(const Float & rhs) const;
+	Bit greater(const Float & rhs) const;
+	Bit equal(const Float & rhs) const;
 
-	Float<T> operator+(const Float& rhs) const;
-	Float<T> operator-(const Float& rhs) const;
-	Float<T> operator-() const;
-	Float<T> operator*(const Float& rhs) const;
-	Float<T> operator/(const Float& rhs) const;
-	Float<T> operator&(const Float& rhs) const;
-	Float<T> operator|(const Float& rhs) const;
-	Float<T> operator^(const Float& rhs) const;
+	Float operator+(const Float& rhs) const;
+	Float operator-(const Float& rhs) const;
+	Float operator-() const;
+	Float operator*(const Float& rhs) const;
+	Float operator/(const Float& rhs) const;
+	Float operator&(const Float& rhs) const;
+	Float operator|(const Float& rhs) const;
+	Float operator^(const Float& rhs) const;
 };
 
 #include "emp-tool/circuits/float_circuit.hpp"

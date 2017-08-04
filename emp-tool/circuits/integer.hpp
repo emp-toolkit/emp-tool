@@ -1,5 +1,4 @@
 //https://github.com/samee/obliv-c/blob/obliv-c/src/ext/oblivc/obliv_bits.c#L1487
-
 inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2,
 		const Bit * carryIn, int size) {
 	Bit carry, bxc, axc, t;
@@ -29,7 +28,6 @@ inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2
 	else
 		dest[i] = carry ^ op2[i] ^ op1[i];
 }
-
 inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * op2,
 		const Bit * borrowIn, int size) {
 	Bit borrow,bxc,bxa,t;
@@ -59,7 +57,6 @@ inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * o
 	else
 		dest[i] = op1[i] ^ op2[i] ^ borrow;
 }
-
 inline void mul_full(Bit * dest, const Bit * op1, const Bit * op2, int size) {
 	//	OblivBit temp[MAX_BITS]={},sum[MAX_BITS]={};
 	Bit * sum = new Bit[size];
@@ -75,7 +72,6 @@ inline void mul_full(Bit * dest, const Bit * op1, const Bit * op2, int size) {
 	delete[] temp;
 }
 
-
 inline void ifThenElse(Bit * dest, const Bit * tsrc, const Bit * fsrc, 
 		int size, Bit cond) {
 	Bit x, a;
@@ -87,20 +83,17 @@ inline void ifThenElse(Bit * dest, const Bit * tsrc, const Bit * fsrc,
 		++i;
 	}
 }
-
 inline void condNeg(Bit cond, Bit * dest, const Bit * src, int size) {
 	int i;
 	Bit c = cond;
-	for(i = 0; i < size-1; ++i) {
+	for(i=0; i < size-1; ++i) {
 		dest[i] = src[i] ^ cond;
-//		cout << dest[i].reveal(PUBLIC)<<endl;
 		Bit t  = dest[i] ^ c;
 		c = c & dest[i];
 		dest[i] = t;
 	}
 	dest[i] = cond ^ c ^ src[i];
 }
-
 
 inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2, 
 		int size) {
@@ -129,9 +122,8 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-
 inline void init(Bit * bits, const bool* b, int length, int party) {
-	block * bbits = new block[length];
+	block * bbits = (block *) bits;
 	if (party == PUBLIC) {
 		block one = CircuitExecution::circ_exec->public_label(true);
 		block zero = CircuitExecution::circ_exec->public_label(false);
@@ -139,30 +131,14 @@ inline void init(Bit * bits, const bool* b, int length, int party) {
 			bbits[i] = b[i] ? one : zero;
 	}
 	else {
-		ProtocolExecution::prot_exec->feed(bbits, party, b, length); 
+		ProtocolExecution::prot_exec->feed((block *)bits, party, b, length); 
 	}
-	for(int i = 0; i < length; ++i)
-		bits[i].bit = bbits[i];
-	delete[] bbits;
 }
 
 /*inline Integer::Integer(const bool * b, int length, int party) {
   bits = new Bit[length];
   init(bits,b,length, party);
   }*/
-
-
-inline int Integer::reveal(int party) const {
-	bool * b = new bool[length];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits,  length);
-	string bin="";
-	for(int i = length-1; i >= 0; --i)
-		bin += (b[i]? '1':'0');
-	delete [] b;
-	string s = bin_to_dec(bin);
-	return stoi(s);
-}
-
 
 inline Integer::Integer(int len, const string& str, int party) : length(len) {
 	bool* b = new bool[len];
@@ -172,11 +148,9 @@ inline Integer::Integer(int len, const string& str, int party) : length(len) {
 	delete[] b;
 }
 
-
 inline Integer::Integer(int len, long long input, int party)
 	: Integer(len, std::to_string(input), party) {
 	}
-
 
 inline Integer Integer::select(const Bit & select, const Integer & a) const{
 	Integer res(*this);
@@ -185,17 +159,44 @@ inline Integer Integer::select(const Bit & select, const Integer & a) const{
 	return res;
 }
 
-
 inline Bit& Integer::operator[](int index) {
 	return bits[min(index, size()-1)];
 }
-
 
 inline const Bit &Integer::operator[](int index) const {
 	return bits[min(index, size()-1)];
 }
 
+template<>
+inline string Integer::reveal<string>(int party) const {
+	bool * b = new bool[length];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits,  length);
+	string bin="";
+	for(int i = length-1; i >= 0; --i)
+		bin += (b[i]? '1':'0');
+	delete [] b;
+	return bin_to_dec(bin);
+}
 
+template<>
+inline int Integer::reveal<int>(int party) const {
+	string s = reveal<string>(party);
+	return stoi(s);
+}
+template<>
+inline uint32_t Integer::reveal<uint32_t>(int party) const {
+	Integer tmp = *this;
+	tmp.resize(tmp.size()+1, false);
+	string s = tmp.reveal<string>(party);
+	return stoi(s);
+}
+
+
+template<>
+inline long long Integer::reveal<long long>(int party) const {
+	string s = reveal<string>(party);
+	return stoll(s);
+}
 
 
 
@@ -204,14 +205,12 @@ inline int Integer::size() const {
 }
 
 //circuits
-
 inline Integer Integer::abs() const {
 	Integer res(*this);
 	for(int i = 0; i < size(); ++i)
 		res[i] = bits[size()-1];
 	return ( (*this) + res) ^ res;
 }
-
 
 inline Integer& Integer::resize(int len, bool signed_extend) {
 	Bit * old = bits;
@@ -226,14 +225,12 @@ inline Integer& Integer::resize(int len, bool signed_extend) {
 }
 
 //Logical operations
-
 inline Integer Integer::operator^(const Integer& rhs) const {
 	Integer res(*this);
 	for(int i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] ^ rhs.bits[i];
 	return res;
 }
-
 
 inline Integer Integer::operator|(const Integer& rhs) const {
 	Integer res(*this);
@@ -242,14 +239,12 @@ inline Integer Integer::operator|(const Integer& rhs) const {
 	return res;
 }
 
-
 inline Integer Integer::operator&(const Integer& rhs) const {
 	Integer res(*this);
 	for(int i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] & rhs.bits[i];
 	return res;
 }
-
 
 inline Integer Integer::operator<<(int shamt) const {
 	Integer res(*this);
@@ -266,7 +261,6 @@ inline Integer Integer::operator<<(int shamt) const {
 	return res;
 }
 
-
 inline Integer Integer::operator>>(int shamt) const {
 	Integer res(*this);
 	if(shamt >size()) {
@@ -282,7 +276,6 @@ inline Integer Integer::operator>>(int shamt) const {
 	return res;
 }
 
-
 inline Integer Integer::operator<<(const Integer& shamt) const {
 	Integer res(*this);
 	for(int i = 0; i < min(int(ceil(log2(size()))) , shamt.size()-1); ++i)
@@ -290,14 +283,12 @@ inline Integer Integer::operator<<(const Integer& shamt) const {
 	return res;
 }
 
-
 inline Integer Integer::operator>>(const Integer& shamt) const{
 	Integer res(*this);
 	for(int i = 0; i <min(int(ceil(log2(size()))) , shamt.size()-1); ++i)
 		res = res.select(shamt[i], res>>(1<<i));
 	return res;
 }
-
 
 //Comparisons
 inline Bit Integer::geq (const Integer& rhs) const {
@@ -312,7 +303,6 @@ inline Bit Integer::geq (const Integer& rhs) const {
 	return !tmp[tmp.size()-1];
 }
 
-
 inline Bit Integer::equal(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Bit res(true);
@@ -323,14 +313,12 @@ inline Bit Integer::equal(const Integer& rhs) const {
 
 /* Arithmethics
  */
-
 inline Integer Integer::operator+(const Integer & rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
 	add_full(res.bits, nullptr, bits, rhs.bits, nullptr, size());
 	return res;
 }
-
 
 inline Integer Integer::operator-(const Integer& rhs) const {
 	assert(size() == rhs.size());
@@ -340,7 +328,6 @@ inline Integer Integer::operator-(const Integer& rhs) const {
 }
 
 
-
 inline Integer Integer::operator*(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
@@ -348,38 +335,32 @@ inline Integer Integer::operator*(const Integer& rhs) const {
 	return res;
 }
 
-
 inline Integer Integer::operator/(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
-	Integer res2(*this);
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();
 	Bit sign = bits[size()-1] ^ rhs[size()-1];
 	div_full(res.bits, nullptr, i1.bits, i2.bits, size());
-	condNeg(sign, res2.bits, res.bits, size());
-	return res2;
+	condNeg(sign, res.bits, res.bits, size());
+	return res;
 }
-
 inline Integer Integer::operator%(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
-	Integer res2(*this);
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();
 	Bit sign = bits[size()-1];
 	div_full(nullptr, res.bits, i1.bits, i2.bits, size());
-	condNeg(sign, res2.bits, res.bits, size());
-	return res2;
+	condNeg(sign, res.bits, res.bits, size());
+	return res;
 }
-
 
 inline Integer Integer::operator-() const {
 	return Integer(size(), 0, PUBLIC)-(*this);
 }
 
 //Others
-
 inline Integer Integer::leading_zeros() const {
 	Integer res = *this;
 	for(int i = size() - 2; i>=0; --i)
@@ -389,7 +370,6 @@ inline Integer Integer::leading_zeros() const {
 		res[i] = !res[i];
 	return res.hamming_weight();
 }
-
 
 inline Integer Integer::hamming_weight() const {
 	vector<Integer> vec;
@@ -415,7 +395,6 @@ inline Integer Integer::hamming_weight() const {
 	}
 	return vec[0];
 }
-
 inline Integer Integer::modExp(Integer p, Integer q) {
 	// the value of q should be less than half of the MAX_INT
 	Integer base = *this;

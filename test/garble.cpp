@@ -19,7 +19,7 @@ void test(NetIO * netio) {
 	if(party == BOB) {
 		HalfGateEva<NetIO, rt>::circ_exec = new HalfGateEva<NetIO, rt>(netio);
 		for(int i = 0; i < 10000; ++i)
-			cf.compute<HalfGateEva<NetIO, rt>>(c, a, b);
+			cf.compute(c, a, b);
 		delete HalfGateEva<NetIO, rt>::circ_exec;
 	} else {
 		AbandonIO * aio = new AbandonIO();
@@ -27,7 +27,7 @@ void test(NetIO * netio) {
 
 		auto start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
-			cf.compute<HalfGateGen<AbandonIO, rt>>(c, a, b);
+			cf.compute(c, a, b);
 		}
 		double interval = time_from(start);
 		cout << "Pure AES garbling speed : "<< 10000*6800/interval<<" million gate per second\n";
@@ -41,7 +41,7 @@ void test(NetIO * netio) {
 		for(int i = 0; i < 100; ++i) {
 			mio->clear();
 			for(int j = 0; j < 100; ++j)
-				cf.compute<HalfGateGen<MemIO, rt>>(c, a, b);
+				cf.compute(c, a, b);
 		}
 		interval = time_from(start);
 		cout << "AES garbling + Writing to Memory : "<< 10000*6800/interval<<" million gate per second\n";
@@ -52,7 +52,7 @@ void test(NetIO * netio) {
 
 		start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
-			cf.compute<HalfGateGen<NetIO, rt>>(c, a, b);
+			cf.compute(c, a, b);
 		}
 		interval = time_from(start);
 		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval<<" million gate per second\n";

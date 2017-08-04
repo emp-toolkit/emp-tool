@@ -11,7 +11,7 @@ void cmp_swap(T*key, D*data, int i, int j, Bit acc) {
 		swap(to_swap, data[i], data[j]);
 }
 
-inline int greatestPowerOfTwoLessThan(int n) {
+int greatestPowerOfTwoLessThan(int n) {
 	int k = 1;
 	while (k < n)
 		k = k << 1;
@@ -39,7 +39,7 @@ void bitonic_sort(T * key, D * data, int lo, int n, Bit acc) {
 	}
 }
 
-template<typename T, typename D = Bit>
+template <typename T, typename D = Bit>
 void sort(T * key, int size, D* data = nullptr, Bit acc = true) {
 	bitonic_sort(key, data, 0, size, acc);
 }

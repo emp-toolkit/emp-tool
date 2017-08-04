@@ -58,19 +58,18 @@ public:
 		return num_gate*4;
 	}
 
-	template<typename T>
 	void compute(block * out, block * in1, block * in2) {
 		memcpy(wires, in1, n1*sizeof(block));
 		memcpy(wires+n1, in2, n2*sizeof(block));
 		for(int i = 0; i < num_gate; ++i) {
 			if(gates[4*i+3] == AND_GATE) {
-				wires[gates[4*i+2]] = T::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
+				wires[gates[4*i+2]] = CircuitExecution::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
 			}
 			else if (gates[4*i+3] == XOR_GATE) {
-				wires[gates[4*i+2]] = T::circ_exec->xor_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
+				wires[gates[4*i+2]] = CircuitExecution::circ_exec->xor_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
 			}
 			else  
-				wires[gates[4*i+2]] = T::circ_exec->not_gate(wires[gates[4*i]]);
+				wires[gates[4*i+2]] = CircuitExecution::circ_exec->not_gate(wires[gates[4*i]]);
 		}
 		memcpy(out, &wires[num_wire-n3], n3*sizeof(block));
 	}

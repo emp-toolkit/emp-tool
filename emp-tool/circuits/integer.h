@@ -49,7 +49,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	Integer operator^(const Integer& rhs) const;
 
 	int size() const;
-	int reveal(int party=PUBLIC) const;
+	template<typename O>
+	O reveal(int party=PUBLIC) const;
 
 	Integer abs() const;
 	Integer& resize(int length, bool signed_extend = true);
@@ -93,6 +94,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 			data[i] = data[l-1];
 	}
 };
+
 void init(Bit * bits, const bool* b, int length, int party = PUBLIC);
 #include "emp-tool/circuits/integer.hpp"
 #endif// INTEGER_H__
