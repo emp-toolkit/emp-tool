@@ -4,11 +4,11 @@
 #define AND_GATE 0
 #define XOR_GATE 1
 #define NOT_GATE 2
-#include "emp-tool/gc/garble_circuit.h"
-#include "emp-tool/gc/backend.h"
-#include <stdio.h>
+#include "emp-tool/execution/circuit_execution.h"
+#include "emp-tool/execution/protocol_execution.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
+#include <stdio.h>
 
 class CircuitFile { 
 public:

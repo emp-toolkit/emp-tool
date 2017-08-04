@@ -12,4 +12,6 @@ public:
 };
 
 CircuitExecution* CircuitExecution::circ_exec = nullptr;
+
+enum RTCktOpt{on, off};
 #endif
