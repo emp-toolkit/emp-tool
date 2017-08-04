@@ -6,7 +6,7 @@
 #include <iostream>
 #include <fstream>
 
-class PlainCircExec: public CircuitExecution<PlainCircExec> {
+class PlainCircExec: public CircuitExecution {
 public:
 	const static unsigned long long P1 = 1;
 	const static unsigned long long P0 = 2;

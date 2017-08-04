@@ -10,7 +10,7 @@
 #include <iostream>
 
 template<typename T, RTCktOpt rt = on>
-class HalfGateEva:public CircuitExecution<HalfGateEva<T, rt>>{ public:
+class HalfGateEva:public CircuitExecution{ public:
 	int64_t gid = 0;
 	PRP prp;
 	T * io;
@@ -83,7 +83,7 @@ class HalfGateEva:public CircuitExecution<HalfGateEva<T, rt>>{ public:
 	}
 };
 template<typename T>
-class HalfGateEva<T,RTCktOpt::off>:public CircuitExecution<HalfGateEva<T,RTCktOpt::off>> {
+class HalfGateEva<T,RTCktOpt::off>:public CircuitExecution {
 public:
 	int64_t gid = 0;
 	PRP prp;

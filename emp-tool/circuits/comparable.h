@@ -1,28 +1,28 @@
 #ifndef COMPARABLE_H__
 #define COMPARABLE_H__
 
-template<typename T1, template<typename> class T>
+template<typename T>
 class Comparable { public:
-	Bit<T1> operator>=(const T<T1>&rhs) const {
-		return static_cast<const T<T1>*>(this)->geq(rhs);
+	Bit operator>=(const T&rhs) const {
+		return static_cast<const T*>(this)->geq(rhs);
 	}
-	Bit<T1> operator<(const T<T1>& rhs) const {
-		return !( (*static_cast<const T<T1>*>(this))>= rhs );
-	}
-
-	Bit<T1> operator<=(const T<T1>& rhs) const {
-		return rhs >= *static_cast<const T<T1>*>(this);
+	Bit operator<(const T& rhs) const {
+		return !( (*static_cast<const T*>(this))>= rhs );
 	}
 
-	Bit<T1> operator>(const T<T1>& rhs) const {
-		return !(rhs >= *static_cast<const T<T1>*>(this));
+	Bit operator<=(const T& rhs) const {
+		return rhs >= *static_cast<const T*>(this);
+	}
+
+	Bit operator>(const T& rhs) const {
+		return !(rhs >= *static_cast<const T*>(this));
 	}
 	
-	Bit<T1> operator==(const T<T1>& rhs) const {
-		return static_cast<const T<T1>*>(this)->equal(rhs);
+	Bit operator==(const T& rhs) const {
+		return static_cast<const T*>(this)->equal(rhs);
 	}
-	Bit<T1> operator!=(const T<T1>& rhs) const {
-		return !(*static_cast<const T<T1>*>(this) == rhs);
+	Bit operator!=(const T& rhs) const {
+		return !(*static_cast<const T*>(this) == rhs);
 	}
 };
 #endif

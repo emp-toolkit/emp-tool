@@ -10,7 +10,7 @@
 #include <iostream>
 
 template<typename T, RTCktOpt rt = on>
-class HalfGateGen:public CircuitExecution<HalfGateGen<T, rt>>{ public:
+class HalfGateGen:public CircuitExecution { public:
 	int64_t gid = 0;
 	block delta;
 	PRP prp;
@@ -98,7 +98,7 @@ class HalfGateGen:public CircuitExecution<HalfGateGen<T, rt>>{ public:
 	}
 };
 template<typename T>
-class HalfGateGen<T,RTCktOpt::off>:public CircuitExecution<HalfGateGen<T,RTCktOpt::off>> {
+class HalfGateGen<T,RTCktOpt::off>:public CircuitExecution {
 public:
 	int64_t gid = 0;
 	block delta;

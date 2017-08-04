@@ -11,13 +11,16 @@ public:
 
 	bool print;
 	string filename;
+	PlainCircExec * cast_circ_exec;
 	PlainProt(bool _print, string _filename) : print(_print), 
-	filename(_filename) {}
+	filename(_filename) {
+	 cast_circ_exec = static_cast<PlainCircExec *> (CircuitExecution::circ_exec);
+	}
 
 	void finalize() {
 		if(print) {
 			fstream fout(filename, std::ofstream::in);
-			fout<<PlainCircExec::circ_exec->gates<<" "<<PlainCircExec::circ_exec->gid<<endl;
+			fout<<cast_circ_exec->gates<<" "<<cast_circ_exec->gid<<endl;
 			fout<<n1<<" "<<n2<<" "<<n3<<endl;
 			fout.close();
 		}
@@ -25,7 +28,7 @@ public:
 
 	void feed(block * label, int party, const bool* b, int length) {
 		for(int i = 0; i < length; ++i)
-			label[i] = PlainCircExec::circ_exec->private_label(b[i]);
+			label[i] = cast_circ_exec->private_label(b[i]);
 
 		if (party == ALICE) n1+=length;
 		else n2+=length;
@@ -33,17 +36,18 @@ public:
 
 	void reveal(bool* b, int party, const block * label, int length) {
 		for (int i = 0; i < length; ++i)
-			b[i] = PlainCircExec::circ_exec->get_value(label[i]);
+			b[i] = cast_circ_exec->get_value(label[i]);
 		n3+=length;
 	}
 };
 
 void setup_plain_prot(bool print, string filename) {
+	CircuitExecution::circ_exec = new PlainCircExec(print, filename);
 	ProtocolExecution::prot_exec = new PlainProt(print, filename);
-	PlainCircExec::circ_exec = new PlainCircExec(print, filename);
 }
 void finalize_plain_prot () {
-	PlainCircExec::circ_exec->finalize();
+	PlainCircExec * cast_circ_exec = static_cast<PlainCircExec *> (CircuitExecution::circ_exec);
+	cast_circ_exec->finalize();
 	ProtocolExecution::prot_exec->finalize();
 	delete PlainCircExec::circ_exec;
 	delete ProtocolExecution::prot_exec;

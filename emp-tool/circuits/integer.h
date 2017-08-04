@@ -12,17 +12,16 @@
 using std::vector;
 using std::min;
 
-template<typename T>
-class Integer : public Swappable<T, Integer>, public Comparable<T, Integer> { public:
+class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	int length = 0;
-	Bit<T>* bits = nullptr;
+	Bit* bits = nullptr;
 	Integer(Integer&& in) : length(in.length) {
 		bits = in.bits;
 		in.bits = nullptr;
 	}
 	Integer(const Integer& in): length(in.length) {
-		bits = new Bit<T>[length];
-		memcpy(bits, in.bits, sizeof(Bit<T>)*length);
+		bits = new Bit[length];
+		memcpy(bits, in.bits, sizeof(Bit)*length);
 	}
 	Integer& operator= (Integer rhs){
 		length = rhs.length;
@@ -30,8 +29,8 @@ class Integer : public Swappable<T, Integer>, public Comparable<T, Integer> { pu
 		return *this;
 	}
 	Integer(int len, const void * b) : length(len) {
-		bits = new Bit<T>[len];
-		memcpy(bits, b, sizeof(Bit<T>)*len);
+		bits = new Bit[len];
+		memcpy(bits, b, sizeof(Bit)*len);
 	}
 	~Integer() {
 		if (bits!=nullptr) delete[] bits;
@@ -42,38 +41,38 @@ class Integer : public Swappable<T, Integer>, public Comparable<T, Integer> { pu
 	Integer() :length(0),bits(nullptr){ }
 
 //Comparable
-	Bit<T> geq(const Integer & rhs) const;
-	Bit<T> equal(const Integer & rhs) const;
+	Bit geq(const Integer & rhs) const;
+	Bit equal(const Integer & rhs) const;
 
 //Swappable
-	Integer<T> select(const Bit<T> & sel, const Integer<T> & rhs) const;
-	Integer<T> operator^(const Integer<T>& rhs) const;
+	Integer select(const Bit & sel, const Integer & rhs) const;
+	Integer operator^(const Integer& rhs) const;
 
 	int size() const;
 	int reveal(int party=PUBLIC) const;
 
-	Integer<T> abs() const;
-	Integer<T>& resize(int length, bool signed_extend = true);
-	Integer<T> modExp(Integer p, Integer q);
-	Integer<T> leading_zeros() const;
-	Integer<T> hamming_weight() const;
+	Integer abs() const;
+	Integer& resize(int length, bool signed_extend = true);
+	Integer modExp(Integer p, Integer q);
+	Integer leading_zeros() const;
+	Integer hamming_weight() const;
 
-	Integer<T> operator<<(int shamt)const;
-	Integer<T> operator>>(int shamt)const;
-	Integer<T> operator<<(const Integer& shamt)const;
-	Integer<T> operator>>(const Integer& shamt)const;
+	Integer operator<<(int shamt)const;
+	Integer operator>>(int shamt)const;
+	Integer operator<<(const Integer& shamt)const;
+	Integer operator>>(const Integer& shamt)const;
 
-	Integer<T> operator+(const Integer& rhs)const;
-	Integer<T> operator-(const Integer& rhs)const;
-	Integer<T> operator-()const;
-	Integer<T> operator*(const Integer& rhs)const;
-	Integer<T> operator/(const Integer& rhs)const;
-	Integer<T> operator%(const Integer& rhs)const;
-	Integer<T> operator&(const Integer& rhs)const;
-	Integer<T> operator|(const Integer& rhs)const;
+	Integer operator+(const Integer& rhs)const;
+	Integer operator-(const Integer& rhs)const;
+	Integer operator-()const;
+	Integer operator*(const Integer& rhs)const;
+	Integer operator/(const Integer& rhs)const;
+	Integer operator%(const Integer& rhs)const;
+	Integer operator&(const Integer& rhs)const;
+	Integer operator|(const Integer& rhs)const;
 
-	Bit<T>& operator[](int index);
-	const Bit<T> & operator[](int index) const;
+	Bit& operator[](int index);
+	const Bit & operator[](int index) const;
 	
 //batcher
 	template<typename... Args>
@@ -94,7 +93,6 @@ class Integer : public Swappable<T, Integer>, public Comparable<T, Integer> { pu
 			data[i] = data[l-1];
 	}
 };
-template<typename T>
-void init(Bit<T> * bits, const bool* b, int length, int party = PUBLIC);
+void init(Bit * bits, const bool* b, int length, int party = PUBLIC);
 #include "emp-tool/circuits/integer.hpp"
 #endif// INTEGER_H__
