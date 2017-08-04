@@ -9,7 +9,7 @@ bool accurate(double a, double b, double err) {
 	else return false;
 }
 template<typename Op, typename Op2>
-void test_float(double precision, int runs = 100000) {
+void test_float(double precision, int runs = 1000) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		long long ia, ib;
