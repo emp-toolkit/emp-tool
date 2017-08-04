@@ -41,11 +41,12 @@ public:
 	}
 };
 
-void setup_plain_prot(bool print, string filename) {
+inline void setup_plain_prot(bool print, string filename) {
 	CircuitExecution::circ_exec = new PlainCircExec(print, filename);
 	ProtocolExecution::prot_exec = new PlainProt(print, filename);
 }
-void finalize_plain_prot () {
+
+inline void finalize_plain_prot () {
 	PlainCircExec * cast_circ_exec = static_cast<PlainCircExec *> (CircuitExecution::circ_exec);
 	cast_circ_exec->finalize();
 	ProtocolExecution::prot_exec->finalize();
