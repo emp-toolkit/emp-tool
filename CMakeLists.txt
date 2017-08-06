@@ -22,7 +22,6 @@ include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
-
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 

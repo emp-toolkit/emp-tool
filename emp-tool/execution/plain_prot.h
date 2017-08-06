@@ -26,7 +26,7 @@ public:
 		}
 	}
 
-	void feed(block * label, int party, const bool* b, int length) {
+	void feed(block * label, int party, const bool* b, int length) override {
 		for(int i = 0; i < length; ++i)
 			label[i] = cast_circ_exec->private_label(b[i]);
 
@@ -34,7 +34,7 @@ public:
 		else n2+=length;
 	}
 
-	void reveal(bool* b, int party, const block * label, int length) {
+	void reveal(bool* b, int party, const block * label, int length) override {
 		for (int i = 0; i < length; ++i)
 			b[i] = cast_circ_exec->get_value(label[i]);
 		n3+=length;

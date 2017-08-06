@@ -40,7 +40,7 @@ class HalfGateGen:public CircuitExecution { public:
 		return _mm_testz_si128(neq, neq);
 	}
 
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
 		if (isZero(&a) or isZero(&b)) {
 			return zero_block();
@@ -55,7 +55,7 @@ class HalfGateGen:public CircuitExecution { public:
 			return out[0];
 		}
 	}
-	block xor_gate(const block&a, const block& b) {
+	block xor_gate(const block&a, const block& b) override {
 		if(isOne(&a))
 			return not_gate(b);
 		else if (isOne(&b))
@@ -74,7 +74,7 @@ class HalfGateGen:public CircuitExecution { public:
 				return res;//xorBlocks(a, b);
 		}
 	}
-	block not_gate(const block&a) {
+	block not_gate(const block&a) override {
 		if (isZero(&a))
 			return one_block();
 		else if (isOne(&a))
@@ -126,20 +126,20 @@ public:
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
 		constant[1] = xorBlocks(constant[1],delta);
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return constant[b];
 	}
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
 		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
 				&out[0], &out[1], delta, table, gid++, &prp.aes);
 		io->send_block(table, 2);
 		return out[0];
 	}
-	block xor_gate(const block&a, const block& b) {
+	block xor_gate(const block&a, const block& b) override {
 		return xorBlocks(a, b);
 	}
-	block not_gate(const block&a) {
+	block not_gate(const block&a) override {
 		return xor_gate(a, public_label(true));
 	}
 	void generic_to_xor(const block* new_b0,const block * b0, const block * b1, int length) {

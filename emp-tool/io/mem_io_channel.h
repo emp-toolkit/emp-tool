@@ -11,11 +11,11 @@
 
 class MemIO: public IOChannel<MemIO> { public:
 	char * buffer = nullptr;
-	int size = 0;
-	int read_pos = 0;
-	int cap;
+	int64_t size = 0;
+	int64_t read_pos = 0;
+	int64_t cap;
 
-	MemIO(int _cap=1024*1024) {
+	MemIO(int64_t _cap=1024*1024) {
 		this->cap = _cap;
 		buffer = new char[cap];
 		size = 0;
@@ -24,7 +24,7 @@ class MemIO: public IOChannel<MemIO> { public:
 		if(buffer!=nullptr)
 			delete[] buffer;
 	}
-	void load_from_file(FileIO * fio, uint64_t size) {
+	void load_from_file(FileIO * fio, int64_t size) {
 		delete[] buffer;
 		buffer = new char[size];
 		this->cap = size;
@@ -35,7 +35,7 @@ class MemIO: public IOChannel<MemIO> { public:
 	void clear() {
 		size = 0;
 	}
-	void send_data(const void * data, int len) {
+	void send_data(const void * data, int64_t len) {
 		if(size + len >= cap){
 			char * new_buffer = new char[2*(cap+len)];
 			memcpy(new_buffer, buffer, size);
@@ -47,7 +47,7 @@ class MemIO: public IOChannel<MemIO> { public:
 		size += len;
 	}
 
-	void recv_data(void  * data, int len) {
+	void recv_data(void  * data, int64_t len) {
 		if(read_pos + len <= size) {
 			memcpy(data, buffer + read_pos, len);
 			read_pos += len;

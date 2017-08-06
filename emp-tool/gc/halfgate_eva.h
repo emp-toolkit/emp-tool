@@ -27,10 +27,10 @@ class HalfGateEva:public CircuitExecution{ public:
 	bool is_public(const block & b, int party) {
 		return isZero(&b) or isOne(&b);
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return b? one_block() : zero_block();
 	}
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		block out, table[2];
 		if (isZero(&a) or isOne(&a) or isZero(&b) or isOne(&b)) {
 			return _mm_and_si128(a, b);
@@ -44,7 +44,7 @@ class HalfGateEva:public CircuitExecution{ public:
 			return out;
 		}
 	}
-	block xor_gate(const block&a, const block& b) {
+	block xor_gate(const block&a, const block& b) override {
 		if(isOne(&a))
 			return not_gate(b);
 		else if (isOne(&b))
@@ -61,7 +61,7 @@ class HalfGateEva:public CircuitExecution{ public:
 //			return xorBlocks(a, b);
 		}
 	}
-	block not_gate(const block&a) {
+	block not_gate(const block&a) override {
 		if (isZero(&a))
 			return one_block();
 		else if (isOne(&a))
@@ -101,11 +101,11 @@ public:
 	bool is_public(const block & b, int party) {
 		return false;
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return constant[b];
 //		return b? one_block() : zero_block();
 	}
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		block out, table[2];
 		io->recv_block(table, 2);
 		if(with_file_io) {
@@ -115,10 +115,10 @@ public:
 		garble_gate_eval_halfgates(a, b, &out, table, gid++, &prp.aes);
 		return out;
 	}
-	block xor_gate(const block& a, const block& b) {
+	block xor_gate(const block& a, const block& b) override {
 		return xorBlocks(a,b);
 	}
-	block not_gate(const block&a){
+	block not_gate(const block&a) override {
 		return xor_gate(a, public_label(true));
 	}
 	void generic_to_xor(block* new_block, const block * old_block, int length) {

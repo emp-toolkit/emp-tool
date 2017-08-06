@@ -2,84 +2,83 @@
 #define LIBGARBLE_GARBLE_GATE_HALFGATES_H
 
 #include "emp-tool/garble/aes.h"
-#include <assert.h>
 #include <string.h>
 
-static inline void garble_gate_eval_halfgates(block A, block B, 
+inline void garble_gate_eval_halfgates(block A, block B, 
 		block *out, const block *table, uint64_t idx, const AES_KEY *key) {
 	block HA, HB, W;
 	int sa, sb;
 	block tweak1, tweak2;
 
-	sa = garble_lsb(A);
-	sb = garble_lsb(B);
+	sa = getLSB(A);
+	sb = getLSB(B);
 
-	tweak1 = garble_make_block(2 * idx, (long) 0);
-	tweak2 = garble_make_block(2 * idx + 1, (long) 0);
+	tweak1 = makeBlock(2 * idx, (long) 0);
+	tweak2 = makeBlock(2 * idx + 1, (long) 0);
 
 	{
 		block keys[2];
 		block masks[2];
 
-		keys[0] = garble_xor(garble_double(A), tweak1);
-		keys[1] = garble_xor(garble_double(B), tweak2);
+		keys[0] = xorBlocks(double_block(A), tweak1);
+		keys[1] = xorBlocks(double_block(B), tweak2);
 		masks[0] = keys[0];
 		masks[1] = keys[1];
 		AES_ecb_encrypt_blks(keys, 2, key);
-		HA = garble_xor(keys[0], masks[0]);
-		HB = garble_xor(keys[1], masks[1]);
+		HA = xorBlocks(keys[0], masks[0]);
+		HB = xorBlocks(keys[1], masks[1]);
 	}
 
-	W = garble_xor(HA, HB);
+	W = xorBlocks(HA, HB);
 	if (sa)
-		W = garble_xor(W, table[0]);
+		W = xorBlocks(W, table[0]);
 	if (sb) {
-		W = garble_xor(W, table[1]);
-		W = garble_xor(W, A);
+		W = xorBlocks(W, table[1]);
+		W = xorBlocks(W, A);
 	}
 	*out = W;
 }
 
-static inline void garble_gate_garble_halfgates(block A0, block A1, 
+inline void garble_gate_garble_halfgates(block A0, block A1, 
 		block B0, block B1, block *out0, block *out1, block delta, block *table, 
 		uint64_t idx, const AES_KEY *key) {
-	long pa = garble_lsb(A0);
-	long pb = garble_lsb(B0);
+	long pa = getLSB(A0);
+	long pb = getLSB(B0);
 	block tweak1, tweak2;
 	block HA0, HA1, HB0, HB1;
 	block tmp, W0;
 
-	tweak1 = garble_make_block(2 * idx, (uint64_t) 0);
-	tweak2 = garble_make_block(2 * idx + 1, (uint64_t) 0);
+	tweak1 = makeBlock(2 * idx, (uint64_t) 0);
+	tweak2 = makeBlock(2 * idx + 1, (uint64_t) 0);
 
 	{
 		block masks[4], keys[4];
 
-		keys[0] = garble_xor(garble_double(A0), tweak1);
-		keys[1] = garble_xor(garble_double(A1), tweak1);
-		keys[2] = garble_xor(garble_double(B0), tweak2);
-		keys[3] = garble_xor(garble_double(B1), tweak2);
+		keys[0] = xorBlocks(double_block(A0), tweak1);
+		keys[1] = xorBlocks(double_block(A1), tweak1);
+		keys[2] = xorBlocks(double_block(B0), tweak2);
+		keys[3] = xorBlocks(double_block(B1), tweak2);
 		memcpy(masks, keys, sizeof keys);
 		AES_ecb_encrypt_blks(keys, 4, key);
-		HA0 = garble_xor(keys[0], masks[0]);
-		HA1 = garble_xor(keys[1], masks[1]);
-		HB0 = garble_xor(keys[2], masks[2]);
-		HB1 = garble_xor(keys[3], masks[3]);
+		HA0 = xorBlocks(keys[0], masks[0]);
+		HA1 = xorBlocks(keys[1], masks[1]);
+		HB0 = xorBlocks(keys[2], masks[2]);
+		HB1 = xorBlocks(keys[3], masks[3]);
 	}
 
-	table[0] = garble_xor(HA0, HA1);
+	table[0] = xorBlocks(HA0, HA1);
 	if (pb)
-		table[0] = garble_xor(table[0], delta);
+		table[0] = xorBlocks(table[0], delta);
 	W0 = HA0;
 	if (pa)
-		W0 = garble_xor(W0, table[0]);
-	tmp = garble_xor(HB0, HB1);
-	table[1] = garble_xor(tmp, A0);
-	W0 = garble_xor(W0, HB0);
+		W0 = xorBlocks(W0, table[0]);
+	tmp = xorBlocks(HB0, HB1);
+	table[1] = xorBlocks(tmp, A0);
+	W0 = xorBlocks(W0, HB0);
 	if (pb)
-		W0 = garble_xor(W0, tmp);
+		W0 = xorBlocks(W0, tmp);
 
 	*out0 = W0;
-	*out1 = garble_xor(*out0, delta);
+	*out1 = xorBlocks(*out0, delta);
 }
 #endif

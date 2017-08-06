@@ -11,22 +11,22 @@ static inline void garble_gate_eval_privacy_free(block A, block B,
 	bool sa;
 	block tweak;
 
-	sa = garble_lsb(A);
+	sa = getLSB(A);
 
-	tweak = garble_make_block(2 * idx, (uint64_t) 0);
+	tweak = makeBlock(2 * idx, (uint64_t) 0);
 
 	{
 		block tmp, mask;
 
-		tmp = garble_xor(garble_double(A), tweak);
+		tmp = xorBlocks(double_block(A), tweak);
 		mask = tmp;
 		AES_ecb_encrypt_blks(&tmp, 1, key);
-		HA = garble_xor(tmp, mask);
+		HA = xorBlocks(tmp, mask);
 	}
 	if (sa) {
 		*((char *) &HA) |= 0x01;
-		W = garble_xor(HA, table[0]);
-		W = garble_xor(W, B);
+		W = xorBlocks(HA, table[0]);
+		W = xorBlocks(W, B);
 	} else {
 		*((char *) &HA) &= 0xfe;
 		W = HA;
@@ -50,24 +50,24 @@ static inline void garble_gate_garble_privacy_free(block A0, block A1,
 	block tweak, tmp;
 	block HA0, HA1;
 
-	tweak = garble_make_block(2 * idx, (long) 0);
+	tweak = makeBlock(2 * idx, (long) 0);
 
 	{
 		block masks[2], keys[2];
 
-		keys[0] = garble_xor(garble_double(A0), tweak);
-		keys[1] = garble_xor(garble_double(A1), tweak);
+		keys[0] = xorBlocks(double_block(A0), tweak);
+		keys[1] = xorBlocks(double_block(A1), tweak);
 		memcpy(masks, keys, sizeof keys);
 		AES_ecb_encrypt_blks(keys, 2, key);
-		HA0 = garble_xor(keys[0], masks[0]);
-		HA1 = garble_xor(keys[1], masks[1]);
+		HA0 = xorBlocks(keys[0], masks[0]);
+		HA1 = xorBlocks(keys[1], masks[1]);
 	}
 	*((char *) &HA0) &= 0xfe;
 	*((char *) &HA1) |= 0x01;
-	tmp = garble_xor(HA0, HA1);
-	table[0] = garble_xor(tmp, B0);
+	tmp = xorBlocks(HA0, HA1);
+	table[0] = xorBlocks(tmp, B0);
 	*out0 = HA0;
-	*out1 = garble_xor(HA0, delta);
+	*out1 = xorBlocks(HA0, delta);
 }
 
 #endif

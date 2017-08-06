@@ -44,10 +44,10 @@ public:
 		uint64_t *arr = (uint64_t*) &b;
 		return arr[0] == P0 or arr[0] == P1;
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return b? public_one : public_zero;
 	}
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
@@ -68,7 +68,7 @@ public:
 			return res;
 		}
 	}
-	block xor_gate(const block&a, const block& b) {
+	block xor_gate(const block&a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
@@ -107,7 +107,7 @@ public:
 			return false;
 		else return true;
 	}
-	block not_gate(const block&a) {
+	block not_gate(const block&a) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		if (arr_a[0] == P1) {
 			return public_zero;

@@ -1,22 +1,3 @@
-/*
-	This file is part of JustGarble.
-
-	JustGarble is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	JustGarble is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU General Public License
-	along with JustGarble.  If not, see <http://www.gnu.org/licenses/>.
-
- */
-
-
 #ifndef UTIL_BLOCK_H__
 #define UTIL_BLOCK_H__
 #include <stdio.h>
@@ -32,17 +13,18 @@
 
 typedef __m128i block;
 
-#define garble_xor(x,y) _mm_xor_si128(x,y)
-#define garble_zero_block() _mm_setzero_si128()
-#define garble_equal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) == 0xffff)
-#define garble_unequal(x,y) (_mm_movemask_epi8(_mm_cmpeq_epi8(x,y)) != 0xffff)
-#define garble_lsb(x) (*((char *) &x) & 1)
-#define garble_make_block(X,Y) _mm_set_epi64((__m64)(X), (__m64)(Y))
-#define garble_double(B) double_block(B)
-#define zero_block() _mm_setzero_si128()
-#define one_block() makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL)
-#define getLSB(x) (*((unsigned short *)&x)&1)
-#define makeBlock(X,Y) _mm_set_epi64x(X, Y)
+inline bool getLSB(const block & x) {
+	return (*((char*)&x)&1) == 1;
+}
+inline block makeBlock(int64_t x, int64_t y) {
+	return _mm_set_epi64x(x, y);
+}
+inline block zero_block() {
+	return _mm_setzero_si128();
+}
+inline block one_block() {
+	return makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
+}
 
 inline block make_delta(const block & a) {
 	return _mm_or_si128(makeBlock(0L, 1L), a);
@@ -85,7 +67,6 @@ inline bool block_cmp(const block * x, const block * y, int nblocks) {
 	return cmpBlock(x,y,nblocks);
 }
 
-
 inline bool isZero(const block * b) {
 	return _mm_testz_si128(*b,*b) > 0;
 }
@@ -94,7 +75,6 @@ inline bool isOne(const block * b) {
 	__m128i neq = _mm_xor_si128(*b, one_block());
 	return _mm_testz_si128(neq, neq) > 0;
 }
-
 
 //Modified from
 //https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
@@ -147,6 +127,25 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, int nrows, int ncols) {
 
 const char fix_key[] = "\x61\x7e\x8d\xa2\xa0\x51\x1e\x96"
 "\x5e\x41\xc2\x9b\x15\x3f\xc7\x7a";
+
+/*
+	This file is part of JustGarble.
+
+	JustGarble is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	JustGarble is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with JustGarble.  If not, see <http://www.gnu.org/licenses/>.
+
+ */
+
 
 /*------------------------------------------------------------------------
   / OCB Version 3 Reference Code (Optimized C)     Last modified 08-SEP-2012
