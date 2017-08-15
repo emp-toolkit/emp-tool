@@ -16,9 +16,9 @@ public:
 	bool print = false;
 	block public_one, public_zero;
 	uint64_t gates = 0;
-	std::ofstream &fout;
+	std::ofstream fout;
 
-	PlainCircExec(bool print, string filename):fout(fout) {
+	PlainCircExec(bool print, string filename) {
 		public_one = zero_block();
 		public_zero = zero_block();
 		this->print = print;
@@ -37,8 +37,11 @@ public:
 		filename = filename;
 	}
 	void finalize() {
-		if(print)
+		if(print) {
+			fout.clear();
 			fout.close();
+			fout.clear();
+		}
 	}
 	bool is_public(const block & b, int party) {
 		uint64_t *arr = (uint64_t*) &b;

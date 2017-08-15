@@ -19,7 +19,7 @@ public:
 
 	void finalize() {
 		if(print) {
-			fstream fout(filename, std::ofstream::in);
+			fstream fout(filename, std::fstream::in | std::fstream::out);
 			fout<<cast_circ_exec->gates<<" "<<cast_circ_exec->gid<<endl;
 			fout<<n1<<" "<<n2<<" "<<n3<<endl;
 			fout.close();
