@@ -16,7 +16,16 @@ class PRG { public:
 	static PRG * rnd;
 	uint64_t counter = 0;
 	AES_KEY aes;
-	PRG(const void * seed = nullptr, int id = 0) {	
+	PRG(const void * seed = nullptr, int id = 0, bool use_true_rand = false) {	
+		if (use_true_rand) {
+			block v;
+			int * data = (int *)(&v);
+			std::random_device rand_div;
+			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
+				data[i] = rand_div();
+			reseed(&v);
+			return;
+		}
 		if (seed != nullptr) {
 			reseed(seed, id);
 		} else if(rnd == nullptr) {
