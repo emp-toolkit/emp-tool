@@ -39,13 +39,11 @@ inline void garble_gate_eval_halfgates(block A, block B,
 	*out = W;
 }
 
-inline void garble_gate_garble_halfgates(block A0, block A1, 
-		block B0, block B1, block *out0, block *out1, block delta, block *table, 
-		uint64_t idx, const AES_KEY *key) {
-	long pa = getLSB(A0);
-	long pb = getLSB(B0);
+inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B1, block *out0, block *out1, block delta, block *table, uint64_t idx, const AES_KEY *key) {
+	long pa = getLSB(LA0);
+	long pb = getLSB(LB0);
 	block tweak1, tweak2;
-	block HA0, HA1, HB0, HB1;
+	block HLA0, HA1, HLB0, HB1;
 	block tmp, W0;
 
 	tweak1 = makeBlock(2 * idx, (uint64_t) 0);
@@ -54,27 +52,27 @@ inline void garble_gate_garble_halfgates(block A0, block A1,
 	{
 		block masks[4], keys[4];
 
-		keys[0] = xorBlocks(double_block(A0), tweak1);
+		keys[0] = xorBlocks(double_block(LA0), tweak1);
 		keys[1] = xorBlocks(double_block(A1), tweak1);
-		keys[2] = xorBlocks(double_block(B0), tweak2);
+		keys[2] = xorBlocks(double_block(LB0), tweak2);
 		keys[3] = xorBlocks(double_block(B1), tweak2);
 		memcpy(masks, keys, sizeof keys);
 		AES_ecb_encrypt_blks(keys, 4, key);
-		HA0 = xorBlocks(keys[0], masks[0]);
+		HLA0 = xorBlocks(keys[0], masks[0]);
 		HA1 = xorBlocks(keys[1], masks[1]);
-		HB0 = xorBlocks(keys[2], masks[2]);
+		HLB0 = xorBlocks(keys[2], masks[2]);
 		HB1 = xorBlocks(keys[3], masks[3]);
 	}
 
-	table[0] = xorBlocks(HA0, HA1);
+	table[0] = xorBlocks(HLA0, HA1);
 	if (pb)
 		table[0] = xorBlocks(table[0], delta);
-	W0 = HA0;
+	W0 = HLA0;
 	if (pa)
 		W0 = xorBlocks(W0, table[0]);
-	tmp = xorBlocks(HB0, HB1);
-	table[1] = xorBlocks(tmp, A0);
-	W0 = xorBlocks(W0, HB0);
+	tmp = xorBlocks(HLB0, HB1);
+	table[1] = xorBlocks(tmp, LA0);
+	W0 = xorBlocks(W0, HLB0);
 	if (pb)
 		W0 = xorBlocks(W0, tmp);
 

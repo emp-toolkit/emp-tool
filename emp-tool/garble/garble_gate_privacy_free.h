@@ -35,12 +35,12 @@ static inline void garble_gate_eval_privacy_free(block A, block B,
 }
 
 
-static inline void garble_gate_garble_privacy_free(block A0, block A1,
-		block B0, block B1, block *out0, block *out1, block delta, block *table, 
+static inline void garble_gate_garble_privacy_free(block LA0, block A1,
+		block LB0, block B1, block *out0, block *out1, block delta, block *table, 
 		uint64_t idx, const AES_KEY *key) {
 #ifdef DEBUG
-	if ((*((char *) &A0) & 0x01) == 1
-			|| (*((char *) &B0) & 0x01) == 1
+	if ((*((char *) &LA0) & 0x01) == 1
+			|| (*((char *) &LB0) & 0x01) == 1
 			|| (*((char *) &A1) & 0x01) == 0
 			|| (*((char *) &B1) & 0x01) == 0) {
 		assert(false && "invalid lsb in block");
@@ -48,26 +48,26 @@ static inline void garble_gate_garble_privacy_free(block A0, block A1,
 #endif
 
 	block tweak, tmp;
-	block HA0, HA1;
+	block HLA0, HA1;
 
 	tweak = makeBlock(2 * idx, (long) 0);
 
 	{
 		block masks[2], keys[2];
 
-		keys[0] = xorBlocks(double_block(A0), tweak);
+		keys[0] = xorBlocks(double_block(LA0), tweak);
 		keys[1] = xorBlocks(double_block(A1), tweak);
 		memcpy(masks, keys, sizeof keys);
 		AES_ecb_encrypt_blks(keys, 2, key);
-		HA0 = xorBlocks(keys[0], masks[0]);
+		HLA0 = xorBlocks(keys[0], masks[0]);
 		HA1 = xorBlocks(keys[1], masks[1]);
 	}
-	*((char *) &HA0) &= 0xfe;
+	*((char *) &HLA0) &= 0xfe;
 	*((char *) &HA1) |= 0x01;
-	tmp = xorBlocks(HA0, HA1);
-	table[0] = xorBlocks(tmp, B0);
-	*out0 = HA0;
-	*out1 = xorBlocks(HA0, delta);
+	tmp = xorBlocks(HLA0, HA1);
+	table[0] = xorBlocks(tmp, LB0);
+	*out0 = HLA0;
+	*out1 = xorBlocks(HLA0, delta);
 }
 
 #endif

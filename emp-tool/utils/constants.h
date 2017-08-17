@@ -14,4 +14,8 @@ const static int PUBLIC = 0;
 const static int ALICE = 1;
 const static int BOB = 2;
 
+#if defined(unix) || defined(__unix__) || defined(__unix)
+#define EMP_UNIX2
+#endif
+
 #endif// CONFIG_H__

@@ -18,7 +18,8 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(OpenSSL REQUIRED)
 find_package(relic REQUIRED)
-include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
+find_package(Boost REQUIRED COMPONENTS system)
+include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
@@ -42,7 +43,7 @@ install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)
 	add_executable(${_name} "test/${_name}.cpp" ${sources})
-	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} gmp) 
+	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} gmp) 
 endmacro()
 
 add_test(prg)
