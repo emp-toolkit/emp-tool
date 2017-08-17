@@ -19,20 +19,19 @@ class PRG { public:
 		if (seed != nullptr) {
 			reseed(seed, id);
 		} else {
-#ifdef EMP_USE_RANDOM_DEVICE
 			block v;
+#ifdef EMP_USE_RANDOM_DEVICE
 			int * data = (int *)(&v);
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
 				data[i] = rand_div();
-			reseed(&v);
 #else
 			unsigned long long r0, r1;
 			_rdseed64_step(&r0);
 			_rdseed64_step(&r1);
-			block v = makeBlock(r0, r1);
-			reseed(&v);
+			v = makeBlock(r0, r1);
 #endif
+			reseed(&v);
 		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {

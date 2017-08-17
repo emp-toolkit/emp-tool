@@ -46,7 +46,7 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make
+  - cmake -DUSE_RANDOM_DEVICE=ON -DCMAKE_BUILD_TYPE=$TYPE . && make
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg
