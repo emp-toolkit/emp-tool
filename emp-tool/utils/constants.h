@@ -7,6 +7,7 @@ const static int NETWORK_BUFFER_SIZE = 1024*16;//Should change depending on the 
 const static int FILE_BUFFER_SIZE = 1024*16;
 const static int CHECK_BUFFER_SIZE = 1024*8;
 //#define THREADING
+//#define EMP_USE_RANDOM_DEVICE
 
 const static int EMP_XOR = -1;
 const static int PUBLIC = 0;
