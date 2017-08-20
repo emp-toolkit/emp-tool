@@ -8,6 +8,7 @@
   @{
  */
 
+namespace emp {
 template<typename T>
 class IOChannel {
 public:
@@ -189,4 +190,5 @@ private:
 	}
 };
 /**@}*/
+}
 #endif// IO_CHANNEL_H__

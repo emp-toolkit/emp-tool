@@ -4,7 +4,7 @@
 #include "emp-tool/garble/aes.h"
 #include <assert.h>
 #include <string.h>
-
+namespace emp {
 static inline void garble_gate_eval_privacy_free(block A, block B,
 		block *out, const block *table, uint64_t idx, const AES_KEY *key) {
 	block HA, W;
@@ -69,5 +69,5 @@ static inline void garble_gate_garble_privacy_free(block LA0, block A1,
 	*out0 = HLA0;
 	*out1 = xorBlocks(HLA0, delta);
 }
-
+}
 #endif

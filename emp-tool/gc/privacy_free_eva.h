@@ -10,7 +10,7 @@
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_privacy_free.h"
 #include <iostream>
-
+namespace emp {
 template<typename T>
 class PrivacyFreeEva:public CircuitExecution{ public:
 	PRP prp;
@@ -52,4 +52,5 @@ class PrivacyFreeEva:public CircuitExecution{ public:
 		}
 	}
 };
+}
 #endif// PRIVACY_FREE_EVA_H__

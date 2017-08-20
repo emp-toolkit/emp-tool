@@ -4,7 +4,9 @@
 #include <iostream>
 #include <fstream>
 using std::endl;
+using std::fstream;
 
+namespace emp {
 class PlainProt: public ProtocolExecution { 
 public:
 	int64_t n1 = 0, n2 = 0, n3 = 0;
@@ -52,5 +54,6 @@ inline void finalize_plain_prot () {
 	ProtocolExecution::prot_exec->finalize();
 	delete PlainCircExec::circ_exec;
 	delete ProtocolExecution::prot_exec;
+}
 }
 #endif 

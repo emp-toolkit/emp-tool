@@ -6,16 +6,16 @@
 #include <string.h>
 #include <string>
 #include "emp-tool/io/io_channel.h"
-using namespace std;
+using std::string;
 
-#ifdef EMP_UNIX
+namespace emp {
+#ifdef UNIX_PLATFORM
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-
 /** @addtogroup IO
   @{
  */
@@ -44,7 +44,7 @@ class NetIO: public IOChannel<NetIO> { public:
 			mysocket = socket(AF_INET, SOCK_STREAM, 0);
 			int reuse = 1;
 			setsockopt(mysocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
-			if(::bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) {
+			if(bind(mysocket, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) {
 				perror("error: bind");
 				exit(1);
 			}
@@ -72,7 +72,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		memset(buffer, 0, NETWORK_BUFFER_SIZE);
 		setvbuf(stream, buffer, _IOFBF, NETWORK_BUFFER_SIZE);
 		if(!quiet)
-			cout << "connected"<<endl;
+			std::cout << "connected\n";
 	}
 
 	void sync() {
@@ -174,7 +174,7 @@ public:
 		buffer = new char[buffer_cap];
 		set_nodelay();
 		if(!quiet)
-			cout << "connected"<<endl;
+			std::cout << "connected\n";
 	}
 	void sync() {
 		int tmp = 0;
@@ -234,4 +234,5 @@ public:
 	}
 };
 #endif
+}
 #endif//NETWORK_IO_CHANNEL

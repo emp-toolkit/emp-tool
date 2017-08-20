@@ -6,6 +6,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/swappable.h"
 
+namespace emp {
 class Bit : public Swappable<Bit>{ public:
 	block bit;
 
@@ -42,4 +43,5 @@ class Bit : public Swappable<Bit>{ public:
 	}
 };
 #include "emp-tool/circuits/bit.hpp"
+}
 #endif

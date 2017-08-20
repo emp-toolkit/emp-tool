@@ -9,7 +9,7 @@
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_privacy_free.h"
 #include <iostream>
-
+namespace emp {
 template<typename T>
 class PrivacyFreeGen: public CircuitExecution{ 
 public:
@@ -66,4 +66,5 @@ public:
 		}
 	}
 };
+}
 #endif// PRIVACY_FREE_GEN_H__

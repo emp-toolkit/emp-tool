@@ -1,6 +1,7 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
+using namespace emp;
 
 void test_bit() {
 	bool b[] = {true, false};

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 
+namespace emp {
 class PlainCircExec: public CircuitExecution {
 public:
 	const static unsigned long long P1 = 1;
@@ -32,7 +33,7 @@ public:
 			//place holder for circuit information
 			for (int i = 0; i < 200; ++i)//good for 32-bit sized circuits
 				fout << " ";
-			fout<<endl;
+			fout<<std::endl;
 		}
 		filename = filename;
 	}
@@ -142,4 +143,5 @@ private:
 		else return S1;
 	}
 };
+}
 #endif

@@ -5,7 +5,7 @@
 /** @addtogroup IO
     @{
   */
-  
+namespace emp {  
 class HashIO: public IOChannel<HashIO>{ public:
 	Hash h;
 	NetIO * netio;
@@ -24,4 +24,5 @@ class HashIO: public IOChannel<HashIO>{ public:
 	}
 };
 /**@}*/
+}
 #endif//HASH_IO_CHANNEL_H__

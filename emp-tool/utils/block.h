@@ -11,6 +11,7 @@
 #include <wmmintrin.h>
 #include <assert.h>
 
+namespace emp {
 typedef __m128i block;
 
 inline bool getLSB(const block & x) {
@@ -243,5 +244,5 @@ static inline block RIGHTSHIFT(block bl) {
 		*res1 = tmp3;
 		*res2 = tmp6;
 	}
-
+}
 #endif//UTIL_BLOCK_H__

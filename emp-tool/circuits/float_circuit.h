@@ -6,7 +6,7 @@
 #include "emp-tool/circuits/swappable.h"
 #include "emp-tool/circuits/number.h"
 #include <math.h>
-
+namespace emp {
 class Float: Swappable<Float> { public:
 	Integer value;
 	Integer expnt;
@@ -54,4 +54,5 @@ class Float: Swappable<Float> { public:
 };
 
 #include "emp-tool/circuits/float_circuit.hpp"
+}
 #endif// DOUBLE_H__

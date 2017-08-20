@@ -7,6 +7,7 @@
   @{
  */
 
+namespace emp {
 // Essentially drop all communication
 class AbandonIO: public IOChannel<AbandonIO> { public:
 	int size = 0;
@@ -17,5 +18,6 @@ class AbandonIO: public IOChannel<AbandonIO> { public:
 	void recv_data(void  * data, int len) {
 	}
 };
+}
 /**@}*/
 #endif

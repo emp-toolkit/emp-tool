@@ -2,7 +2,7 @@
 #define NUMBER_H__
 #include "emp-tool/circuits/bit.h"
 
-
+namespace emp {
 template<typename T, typename D>
 void cmp_swap(T*key, D*data, int i, int j, Bit acc) {
 	Bit to_swap = ((key[i] > key[j]) == acc);
@@ -43,5 +43,5 @@ template <typename T, typename D = Bit>
 void sort(T * key, int size, D* data = nullptr, Bit acc = true) {
 	bitonic_sort(key, data, 0, size, acc);
 }
-
+}
 #endif

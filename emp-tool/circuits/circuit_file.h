@@ -1,14 +1,16 @@
 #ifndef CIRCUIT_FILE
 #define CIRCUIT_FILE
 
-#define AND_GATE 0
-#define XOR_GATE 1
-#define NOT_GATE 2
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
+
+namespace emp {
+#define AND_GATE 0
+#define XOR_GATE 1
+#define NOT_GATE 2
 
 class CircuitFile { 
 public:
@@ -74,4 +76,5 @@ public:
 		memcpy(out, &wires[num_wire-n3], n3*sizeof(block));
 	}
 };
+}
 #endif// CIRCUIT_FILE

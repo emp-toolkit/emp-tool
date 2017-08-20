@@ -8,7 +8,7 @@
 /** @addtogroup IO
   @{
  */
-
+namespace emp {
 class MemIO: public IOChannel<MemIO> { public:
 	char * buffer = nullptr;
 	int64_t size = 0;
@@ -57,4 +57,5 @@ class MemIO: public IOChannel<MemIO> { public:
 	}
 };
 /**@}*/
+}
 #endif//MEM_IO_CHANNEL_H__

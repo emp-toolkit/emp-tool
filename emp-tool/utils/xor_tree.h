@@ -6,6 +6,7 @@
   */
 
 //TODO: hardcoded with ssp=40, should at least support a range a ssp's
+namespace emp {
 template<int N=232, int M=232>
 class XorTree{public:
 	int n, ssp;
@@ -90,5 +91,6 @@ class XorTree{public:
 	}
 };
 /**@}*/
+}
 #endif
 

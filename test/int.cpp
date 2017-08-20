@@ -2,6 +2,7 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
+using namespace emp;
 
 template<typename Op, typename Op2>
 void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 1000) {

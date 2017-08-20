@@ -5,6 +5,7 @@
 #include "emp-tool/execution/protocol_execution.h"
 using std::vector;
 
+namespace emp {
 class Batcher { public:
 	vector<bool> values;
 	vector<int> lens;
@@ -67,4 +68,5 @@ class Batcher { public:
 		return values.size();
 	}
 };
+}
 #endif

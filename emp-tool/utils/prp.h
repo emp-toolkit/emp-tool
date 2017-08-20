@@ -7,6 +7,7 @@
 /** @addtogroup BP
   @{
  */
+namespace emp {
 
 class PRP { public:
 	AES_KEY aes;
@@ -83,5 +84,6 @@ class PRP { public:
 		}
 	}
 };
+}
 /**@}*/
 #endif// PRP_H__

@@ -1,6 +1,7 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
+using namespace emp;
 
 int main() {
 	PRG prg;//using a random seed

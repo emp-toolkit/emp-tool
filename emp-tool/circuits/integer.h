@@ -11,7 +11,7 @@
 #include <execinfo.h>
 using std::vector;
 using std::min;
-
+namespace emp {
 class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	int length = 0;
 	Bit* bits = nullptr;
@@ -97,4 +97,5 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 
 void init(Bit * bits, const bool* b, int length, int party = PUBLIC);
 #include "emp-tool/circuits/integer.hpp"
+}
 #endif// INTEGER_H__

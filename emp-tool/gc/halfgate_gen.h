@@ -8,7 +8,7 @@
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
-
+namespace emp {
 template<typename T, RTCktOpt rt = on>
 class HalfGateGen:public CircuitExecution { public:
 	int64_t gid = 0;
@@ -157,4 +157,5 @@ public:
 		}
 	}
 };
+}
 #endif// HALFGATE_GEN_H__

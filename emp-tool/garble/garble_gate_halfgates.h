@@ -3,7 +3,7 @@
 
 #include "emp-tool/garble/aes.h"
 #include <string.h>
-
+namespace emp {
 inline void garble_gate_eval_halfgates(block A, block B, 
 		block *out, const block *table, uint64_t idx, const AES_KEY *key) {
 	block HA, HB, W;
@@ -78,5 +78,6 @@ inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B
 
 	*out0 = W0;
 	*out1 = xorBlocks(*out0, delta);
+}
 }
 #endif

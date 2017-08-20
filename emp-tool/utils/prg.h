@@ -10,8 +10,8 @@
 /** @addtogroup BP
   @{
  */
+namespace emp {
 
-class PRG;
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
@@ -152,6 +152,6 @@ class PRG { public:
 		}
 	}
 };
-
+}
 /**@}*/
 #endif// PRP_H__
