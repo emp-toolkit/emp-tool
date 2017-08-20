@@ -135,11 +135,13 @@ class PRG { public:
 	}
 
 	void random_mpz(mpz_t out, int nbits) {
-		int nbytes = (nbits+1)/8;
-		uint8_t * data = new uint8_t[nbytes+16];
-		random_data(data, nbytes+16);
-		data[0] %= (1 << (nbits % 8));
+		int nbytes = (nbits+7)/8;
+		uint8_t * data = (uint8_t *)new block[(nbytes+15)/16];
+		random_data(data, nbytes);
+		if (nbits % 8 != 0)
+			data[0] %= (1 << (nbits % 8));
 		mpz_import(out, nbytes, 1, 1, 0, 0, data);
+		delete [] data;
 	}
 
 	void random_mpz(mpz_t rop, const mpz_t n) {
