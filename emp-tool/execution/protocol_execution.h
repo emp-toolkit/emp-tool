@@ -4,6 +4,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/constants.h"
 
+namespace emp {
 class ProtocolExecution { 
 public:
 	int cur_party;
@@ -15,6 +16,5 @@ public:
 	virtual void reveal(bool*out, int party, const block *lbls, int nel) = 0;
 	virtual void finalize() {}
 };
-
-ProtocolExecution* ProtocolExecution::prot_exec = nullptr;
+}
 #endif

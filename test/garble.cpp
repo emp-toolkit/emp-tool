@@ -1,6 +1,7 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
+using namespace emp;
 
 int port, party;
 template<RTCktOpt rt>

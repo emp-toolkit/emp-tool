@@ -53,7 +53,9 @@
 #define LIBGARBLE_AES_H
 
 #include "emp-tool/utils/block.h"
-    
+
+namespace emp { 
+
 typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
 
 #define EXPAND_ASSIST(v1,v2,v3,v4,shuff_const,aes_const)                    \
@@ -143,5 +145,5 @@ AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key)
     for (i = 0; i < nblks; ++i)
         blks[i] = _mm_aesdeclast_si128(blks[i], key->rd_key[j]);
 }
-
+}
 #endif

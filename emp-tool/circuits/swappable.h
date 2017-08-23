@@ -1,8 +1,8 @@
 #ifndef SWAPPABLE_H__
 #define SWAPPABLE_H__
 #include "emp-tool/circuits/bit.h"
+namespace emp {
 class Bit;
-
 template<typename T>
 class Swappable { public:
 	T If(const Bit & sel, const T& rhs) const {
@@ -21,5 +21,5 @@ inline void swap(const Bit & swap, T & o1, T & o2) {
 	o1 = o ^ o1;
 	o2 = o ^ o2;
 }
-
+}
 #endif

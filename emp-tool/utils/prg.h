@@ -10,22 +10,29 @@
 /** @addtogroup BP
   @{
  */
+namespace emp {
 
-class PRG;
 class PRG { public:
-	static PRG * rnd;
 	uint64_t counter = 0;
 	AES_KEY aes;
 	PRG(const void * seed = nullptr, int id = 0) {	
 		if (seed != nullptr) {
 			reseed(seed, id);
 		} else {
+			block v;
+#ifdef EMP_USE_RANDOM_DEVICE
+			int * data = (int *)(&v);
+			std::random_device rand_div;
+			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
+				data[i] = rand_div();
+#else
 			unsigned long long r0, r1;
 			_rdseed64_step(&r0);
 			_rdseed64_step(&r1);
-			block v = makeBlock(r0, r1);
+			v = makeBlock(r0, r1);
+#endif
 			reseed(&v);
-		} 	
+		}
 	}
 	void reseed(const void * key, uint64_t id = 0) {
 		block v = _mm_loadu_si128((block*)key);
@@ -128,11 +135,13 @@ class PRG { public:
 	}
 
 	void random_mpz(mpz_t out, int nbits) {
-		int nbytes = (nbits+1)/8;
-		uint8_t * data = new uint8_t[nbytes+16];
-		random_data(data, nbytes+16);
-		data[0] %= (1 << (nbits % 8));
+		int nbytes = (nbits+7)/8;
+		uint8_t * data = (uint8_t *)new block[(nbytes+15)/16];
+		random_data(data, nbytes);
+		if (nbits % 8 != 0)
+			data[0] %= (1 << (nbits % 8));
 		mpz_import(out, nbytes, 1, 1, 0, 0, data);
+		delete [] data;
 	}
 
 	void random_mpz(mpz_t rop, const mpz_t n) {
@@ -145,7 +154,6 @@ class PRG { public:
 		}
 	}
 };
-
-PRG* PRG::rnd = nullptr;
+}
 /**@}*/
 #endif// PRP_H__

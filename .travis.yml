@@ -41,12 +41,12 @@ matrix:
 
 before_install:
   - eval "${MATRIX_EVAL}"
-  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git -y
+  - sudo apt-get install libssl-dev libgmp-dev build-essential cmake git libboost-all-dev -y
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make
+  - cmake -DUSE_RANDOM_DEVICE=ON -DCMAKE_BUILD_TYPE=$TYPE . && make
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg

@@ -3,13 +3,11 @@
 #include <iostream>
 #include <string>
 #include "emp-tool/io/net_io_channel.h"
-using namespace std;
-
 /** @addtogroup IO
     @{
   */
   
-
+namespace emp {
 class CheckIO: public IOChannel<CheckIO> { public:
 	NetIO * netio;
 	bool check_result = true;
@@ -47,5 +45,6 @@ class CheckIO: public IOChannel<CheckIO> { public:
 		check_size += len;
 	}
 };
+}
 /**@}*/
 #endif//CHECK_IO_CHANNEL

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <fstream>
 
+namespace emp {
 class PlainCircExec: public CircuitExecution {
 public:
 	const static unsigned long long P1 = 1;
@@ -16,9 +17,9 @@ public:
 	bool print = false;
 	block public_one, public_zero;
 	uint64_t gates = 0;
-	std::ofstream &fout;
+	std::ofstream fout;
 
-	PlainCircExec(bool print, string filename):fout(fout) {
+	PlainCircExec(bool print, string filename) {
 		public_one = zero_block();
 		public_zero = zero_block();
 		this->print = print;
@@ -32,22 +33,25 @@ public:
 			//place holder for circuit information
 			for (int i = 0; i < 200; ++i)//good for 32-bit sized circuits
 				fout << " ";
-			fout<<endl;
+			fout<<std::endl;
 		}
 		filename = filename;
 	}
 	void finalize() {
-		if(print)
+		if(print) {
+			fout.clear();
 			fout.close();
+			fout.clear();
+		}
 	}
 	bool is_public(const block & b, int party) {
 		uint64_t *arr = (uint64_t*) &b;
 		return arr[0] == P0 or arr[0] == P1;
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return b? public_one : public_zero;
 	}
-	block and_gate(const block& a, const block& b) {
+	block and_gate(const block& a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
@@ -68,7 +72,7 @@ public:
 			return res;
 		}
 	}
-	block xor_gate(const block&a, const block& b) {
+	block xor_gate(const block&a, const block& b) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		uint64_t *arr_b = (uint64_t*) &b;
 		if (arr_a[0] == P1) {
@@ -107,7 +111,7 @@ public:
 			return false;
 		else return true;
 	}
-	block not_gate(const block&a) {
+	block not_gate(const block&a) override {
 		uint64_t *arr_a = (uint64_t*) &a;
 		if (arr_a[0] == P1) {
 			return public_zero;
@@ -139,4 +143,5 @@ private:
 		else return S1;
 	}
 };
+}
 #endif

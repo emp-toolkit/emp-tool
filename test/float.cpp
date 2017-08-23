@@ -2,6 +2,7 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
+using namespace emp;
 
 bool accurate(double a, double b, double err) {
 	if (fabs(a - b) < err*a and fabs(a - b) < err*b)

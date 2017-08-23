@@ -1,6 +1,7 @@
 #ifndef COMPARABLE_H__
 #define COMPARABLE_H__
 
+namespace emp {
 template<typename T>
 class Comparable { public:
 	Bit operator>=(const T&rhs) const {
@@ -25,4 +26,5 @@ class Comparable { public:
 		return !(*static_cast<const T*>(this) == rhs);
 	}
 };
+}
 #endif

@@ -12,12 +12,12 @@
 #include <sys/socket.h>
 #include <string>
 #include "emp-tool/io/io_channel.h"
-using namespace std;
 
 /** @addtogroup IO
     @{
   */
   
+namespace emp {
 class FileIO: public IOChannel<FileIO> { public:
 	uint64_t bytes_sent = 0;
 	int mysocket = -1;
@@ -69,4 +69,5 @@ class FileIO: public IOChannel<FileIO> { public:
 	}
 };
 /**@}*/
+}
 #endif//FILE_IO_CHANNEL

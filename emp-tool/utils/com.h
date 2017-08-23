@@ -7,6 +7,7 @@
     @{
   */
 
+namespace emp {
 typedef char Com[20];
 typedef block Decom[1];
 
@@ -30,5 +31,6 @@ class Commitment{ public:
 		return strncmp(com, res, Hash::DIGEST_SIZE)==0;
 	}
 };
+}
 /**@}*/
 #endif// COM_H__

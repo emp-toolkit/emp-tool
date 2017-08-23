@@ -5,7 +5,6 @@
 #include "emp-tool/utils/constants.h"
 #include <openssl/sha.h>
 #include <stdio.h>
-//#include "emp-tool/utils_ec.h"
 
 extern "C" {
 #include <relic/relic.h>
@@ -14,7 +13,7 @@ extern "C" {
 /** @addtogroup BP
   @{
  */
-
+namespace emp {
 class Hash { public:
 	SHA_CTX hash;
 	char buffer[HASH_BUFFER_SIZE];
@@ -68,5 +67,6 @@ class Hash { public:
 		}
 	}
 };
+}
 /**@}*/
 #endif// HASH_H__

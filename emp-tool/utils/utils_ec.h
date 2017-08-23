@@ -6,6 +6,8 @@ extern "C" {
 }
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/hash.h"
+
+namespace emp {
 #define ECC_PACK false
 #define BIT_LEN 128
 #define EB_SIZE 65
@@ -14,12 +16,12 @@ typedef eb_t eb_tpl[2];
 typedef bn_t bn_tpl[2];
 
 #define __batch(func)\
+	template <typename H> void func##l(H p) {\
+		func(p);\
+	}\
 	template <typename H, typename... T> void func##l(H p, T... t) {\
 		func(p);\
 		func##l(t...);\
-	}\
-	template <typename H> void func##l(H p) {\
-		func(p);\
 	}
 
 __batch(eb_new);
@@ -55,4 +57,5 @@ void initialize_relic();
 
 block KDF(eb_t in);
 #include "emp-tool/utils/utils_ec.hpp"
+}
 #endif// UTILS_EC_H__
