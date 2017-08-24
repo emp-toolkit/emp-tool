@@ -25,11 +25,17 @@ set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
 OPTION(USE_RANDOM_DEVICE "Option description" OFF)
 IF(USE_RANDOM_DEVICE)
-    ADD_DEFINITIONS(-DEMP_USE_RANDOM_DEVICE)
+	ADD_DEFINITIONS(-DUSE_RANDOM_DEVICE)
+	message("Use Random Device: on")
 ENDIF(USE_RANDOM_DEVICE)
-
+OPTION(THREADING "Option description" OFF)
+IF(THREADING)
+	ADD_DEFINITIONS(-DTHREADING)
+	message("Multi Threading: on")
+ENDIF(THREADING)
 
 set(sources
 emp-tool/emp-tool.cpp
