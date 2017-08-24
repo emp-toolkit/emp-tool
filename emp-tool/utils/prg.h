@@ -20,7 +20,7 @@ class PRG { public:
 			reseed(seed, id);
 		} else {
 			block v;
-#ifdef EMP_USE_RANDOM_DEVICE
+#ifdef USE_RANDOM_DEVICE
 			int * data = (int *)(&v);
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
