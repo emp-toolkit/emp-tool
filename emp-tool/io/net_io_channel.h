@@ -1,5 +1,6 @@
 #ifndef NETWORK_IO_CHANNEL
 #define NETWORK_IO_CHANNEL
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,14 +9,16 @@
 #include "emp-tool/io/io_channel.h"
 using std::string;
 
-namespace emp {
 #ifdef UNIX_PLATFORM
+
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <netinet/tcp.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+
+namespace emp {
 /** @addtogroup IO
   @{
  */
@@ -135,10 +138,16 @@ class NetIO: public IOChannel<NetIO> { public:
 	}
 };
 /**@}*/
-#else
+
+}
+
+#else  // not UNIX_PLATFORM
 
 #include <boost/asio.hpp>
 using boost::asio::ip::tcp;
+
+namespace emp {
+
 /** @addtogroup IO
   @{
  */
@@ -164,7 +173,7 @@ public:
 			a.accept(s);
 		} else {
 			tcp::resolver resolver(io_service);
-			tcp::resolver::query query(tcp::v4(), address, to_string(port).c_str());
+			tcp::resolver::query query(tcp::v4(), address, std::to_string(port).c_str());
 			tcp::resolver::iterator iterator = resolver.resolve(query);
 
 			s = tcp::socket(io_service);
@@ -233,6 +242,8 @@ public:
 		}
 	}
 };
-#endif
+
 }
-#endif//NETWORK_IO_CHANNEL
+
+#endif  //UNIX_PLATFORM
+#endif  //NETWORK_IO_CHANNEL
