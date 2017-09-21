@@ -34,9 +34,9 @@ void sort(int n) {
 		A[i].reveal<string>();
 }
 int main(int argc, char** argv) {
-	setup_circuit_generator(true, "sort");
-//	sort(1024*4);	
+	setup_plain_prot(true, "sort.txt");
+	sort(128);	
 //	mult(2048);
-	ham(1<<20);
-	finalize_circuit_generator();
+//	ham(1<<10);
+	finalize_plain_prot ();
 }
