@@ -7,7 +7,11 @@
 #include <gmp.h>
 #include <random>
 
+#ifdef USE_RANDOM_DEVICE
+#else
 #include <x86intrin.h>
+#endif
+
 
 /** @addtogroup BP
   @{
