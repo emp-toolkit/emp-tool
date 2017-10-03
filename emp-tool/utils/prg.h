@@ -7,6 +7,8 @@
 #include <gmp.h>
 #include <random>
 
+#include <x86intrin.h>
+
 /** @addtogroup BP
   @{
  */
