@@ -7,7 +7,7 @@
 #include <gmp.h>
 #include <random>
 
-#ifdef USE_RANDOM_DEVICE
+#ifdef EMP_USE_RANDOM_DEVICE
 #else
 #include <x86intrin.h>
 #endif
@@ -26,7 +26,7 @@ class PRG { public:
 			reseed(seed, id);
 		} else {
 			block v;
-#ifdef USE_RANDOM_DEVICE
+#ifdef EMP_USE_RANDOM_DEVICE
 			int * data = (int *)(&v);
 			std::random_device rand_div;
 			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
