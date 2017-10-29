@@ -1,0 +1,26 @@
+machine:
+  xcode:
+    version: 9.0
+
+checkout:
+  post:
+   - git clone https://github.com/emp-toolkit/emp-readme.git
+   - bash ./emp-readme/scripts/install_packages.sh
+   - bash ./emp-readme/scripts/install_relic.sh
+
+test: 
+  override:
+   - cmake -DUSE_RANDOM_DEVICE=ON . 
+   - make
+   - echo "Testing Basic Primitives"
+   - ./bin/prp
+   - ./bin/prg
+   - ./bin/com
+   - ./bin/hash
+   - ./bin/garble 1 12345 & ./bin/garble 2 12345
+   - ./bin/netio 1 12345 & ./bin/netio 2 12345
+   - echo "Testing Circuits"
+   - ./bin/bit
+   - ./bin/int
+   - ./bin/float
+   
