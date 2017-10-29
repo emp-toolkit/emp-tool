@@ -52,6 +52,10 @@
 #ifndef LIBGARBLE_AES_H
 #define LIBGARBLE_AES_H
 
+#if !defined (__AES__)
+    # error "AES-NI instructions not enabled"
+#endif
+
 #include "emp-tool/utils/block.h"
 
 namespace emp { 
