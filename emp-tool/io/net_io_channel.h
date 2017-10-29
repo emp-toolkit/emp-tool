@@ -218,6 +218,10 @@ public:
 	void send_data(const void * data, int len) {
 		counter += len;
 		if (len >= buffer_cap) {
+			if(has_send) {
+				flush();
+			}
+			has_send = false;
 			boost::asio::write(s, boost::asio::buffer(data, len));
 			return;
 		}
@@ -233,6 +237,7 @@ public:
 		if(has_send) {
 			flush();
 		}
+		has_send = false;
 		while(sent < len) {
 			int res = s.read_some(boost::asio::buffer(sent + (char *)data, len - sent));
 			if (res >= 0)
