@@ -59,13 +59,21 @@ class NetIO: public IOChannel<NetIO> { public:
 		}
 		else {
 			addr = string(address);
-			struct sockaddr_in dest; 
-			consocket = socket(AF_INET, SOCK_STREAM, 0);
+			
+			struct sockaddr_in dest;
 			memset(&dest, 0, sizeof(dest));
 			dest.sin_family = AF_INET;
 			dest.sin_addr.s_addr = inet_addr(address);
 			dest.sin_port = htons(port);
-			while(connect(consocket, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == -1) {
+
+			while(1) {
+				consocket = socket(AF_INET, SOCK_STREAM, 0);
+
+				if (connect(consocket, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0) {
+					break;
+				}
+				
+				close(consocket);
 				usleep(1000);
 			}
 		}
