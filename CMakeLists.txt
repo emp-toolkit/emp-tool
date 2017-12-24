@@ -1,6 +1,7 @@
 cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 if(POLICY CMP0042)
   cmake_policy(SET CMP0042 NEW) # use rpath on macOS
@@ -18,8 +19,9 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 find_package(OpenSSL REQUIRED)
 find_package(relic REQUIRED)
+find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
+include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
 set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed")
 set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
@@ -49,7 +51,7 @@ install(TARGETS ${NAME} DESTINATION lib)
 
 macro (add_test _name)
 	add_executable(${_name} "test/${_name}.cpp" ${sources})
-	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} gmp) 
+	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} ${GMP_LIBRARIES}) 
 endmacro()
 
 add_test(prg)
