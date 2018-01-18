@@ -38,8 +38,8 @@ void test_float(double precision, int runs = 1000) {
 }
 
 void scratch_pad() {
-	Float a(24, 9, 0.21, PUBLIC);
-	Float b(24, 9, 0.41, PUBLIC);
+	Float a(24, 9, 0.3531, PUBLIC);
+	Float b(24, 9, 0.8531, PUBLIC);
 	cout << a.reveal<double>(PUBLIC)<<endl;
 	cout << b.reveal<double>(PUBLIC)<<endl;
 	cout << (a+b).reveal<double>(PUBLIC)<<endl;
@@ -51,7 +51,7 @@ void scratch_pad() {
 
 int main(int argc, char** argv) {
 	setup_plain_prot(false, "");
-//	scratch_pad();return 0;
+	scratch_pad();return 0;
 	test_float<std::plus<float>, std::plus<Float>>(1e-3);
 	test_float<std::minus<float>, std::minus<Float>>(1e-3);
 	test_float<std::multiplies<float>, std::multiplies<Float>>(1e-3);
