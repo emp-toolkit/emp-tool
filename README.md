@@ -87,6 +87,8 @@ assert(c.open(decom, com, data, 1024*1024)); // open, return if the decommitment
    year={2016}
 }
 ```
+## Acknowledgement
+This work was supported in part by the National Science Foundation under Awards #1111599 and #1563722.
 
 # Question
 Please send email to wangxiao@cs.umd.edu
