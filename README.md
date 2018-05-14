@@ -78,17 +78,6 @@ assert(c.open(decom, com, data, 1024*1024)); // open, return if the decommitment
 
 ## On-the-fly Circuit Compiler
 
-# Citation
-```latex
-@misc{emp-toolkit,
-   author = {Xiao Wang and Alex J. Malozemoff and Jonathan Katz},
-   title = {{EMP-toolkit: Efficient MultiParty computation toolkit}},
-   howpublished = {\url{https://github.com/emp-toolkit}},
-   year={2016}
-}
-```
-## Acknowledgement
-This work was supported in part by the National Science Foundation under Awards #1111599 and #1563722.
 
-# Question
-Please send email to wangxiao@cs.umd.edu
+## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
+
