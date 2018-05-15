@@ -21,5 +21,5 @@ IF(${USE_RANDOM_DEVICE})
 	message("${Red}-- Source of Randomness: random_device${ColourReset}")
 ELSE(${USE_RANDOM_DEVICE})
 	message("${Green}-- Source of Randomness: rdseed${ColourReset}")
-ENDIF(USE_RANDOM_DEVICE)
+ENDIF(${USE_RANDOM_DEVICE})
 
