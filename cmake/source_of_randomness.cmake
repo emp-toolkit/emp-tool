@@ -20,12 +20,12 @@ ENDIF(NOT ${RDSEED_COMPILE_RESULT})
 
 
 IF(${USE_RANDOM_DEVICE})
-  ADD_DEFINITIONS(-DEMP_USE_RANDOM_DEVICE)
-  set(EMP_USE_RANDOM_DEVICE ON) # for configure_file below
-  message("${Red}-- Source of Randomness: random_device${ColourReset}")
+	ADD_DEFINITIONS(-DEMP_USE_RANDOM_DEVICE)
+	set(EMP_USE_RANDOM_DEVICE ON) # for configure_file below
+	message("${Red}-- Source of Randomness: random_device${ColourReset}")
 ELSE(${USE_RANDOM_DEVICE})
-  message("${Green}-- Source of Randomness: rdseed${ColourReset}")
-  set(EMP_USE_RANDOM_DEVICE OFF) # for configure_file below
+	message("${Green}-- Source of Randomness: rdseed${ColourReset}")
+	set(EMP_USE_RANDOM_DEVICE OFF) # for configure_file below
 ENDIF(${USE_RANDOM_DEVICE})
 
 configure_file(${CMAKE_SOURCE_DIR}/emp-tool/definitions/definitions.h.in ${CMAKE_SOURCE_DIR}/emp-tool/definitions/definitions.h @ONLY)
