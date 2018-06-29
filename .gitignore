@@ -33,3 +33,6 @@ install_manifest.txt
 *.exe
 *.out
 *.app
+
+# Built .h files
+emp-tool/definitions/*.h

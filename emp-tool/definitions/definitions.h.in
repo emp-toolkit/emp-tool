@@ -1,0 +1,5 @@
+// Have the cmake detected source of randomness
+// persist whenever emp-tool is used (unless overridden)
+#ifndef EMP_USE_RANDOM_DEVICE
+  #cmakedefine EMP_USE_RANDOM_DEVICE
+#endif

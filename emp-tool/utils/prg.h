@@ -4,6 +4,7 @@
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/constants.h"
 #include "emp-tool/utils/utils_ec.h"
+#include "emp-tool/definitions/definitions.h"
 #include <gmp.h>
 #include <random>
 
