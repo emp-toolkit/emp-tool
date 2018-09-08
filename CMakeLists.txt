@@ -16,6 +16,7 @@ include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_
 # Installation
 set(sources
 emp-tool/emp-tool.cpp
+emp-tool/utils/constants.cpp
 )
 
 add_library(${NAME} SHARED ${sources})
