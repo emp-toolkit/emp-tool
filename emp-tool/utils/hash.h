@@ -54,7 +54,7 @@ class Hash { public:
 		(void )SHA256((const unsigned char *)data, nbyte, (unsigned char *)digest);
 	}
 	static block hash_for_block(const void * data, int nbyte) {
-		char digest[20];
+		char digest[DIGEST_SIZE];
 		hash_once(digest, data, nbyte);
 		return _mm_load_si128((__m128i*)&digest[0]);
 	}
