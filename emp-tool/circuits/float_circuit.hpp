@@ -1,9 +1,9 @@
 inline Float::Float(int value_length, int expnt_length, double input, int party) {
-   double abs = input > 0 ? input:-1*input;
+   double abs = std::abs(input);
    double lo = pow(2, value_length-2);
    double up = pow(2, value_length-1);
    int p = 0;
-   while(abs < lo) {abs*=2;--p;}
+   while(abs > 0. && abs < lo) {abs*=2;--p;}
    while(abs >= up) {abs/=2;++p;}
    expnt = Integer(expnt_length, p, party);
    value = Integer(value_length, (long long)(abs*(input > 0 ? 1: -1)), party);
