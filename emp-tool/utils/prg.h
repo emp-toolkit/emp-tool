@@ -94,7 +94,7 @@ class PRG { public:
 
 	void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
 		int digits;
-		SPLIT(bits, digits, bits, BN_DIG_LOG);
+		SPLIT(bits, digits, bits, DIG_LOG);
 		digits += (bits > 0 ? 1 : 0);
 		bn_grow(a, digits);
 		random_data((uint8_t*)a->dp, digits * sizeof(dig_t));
