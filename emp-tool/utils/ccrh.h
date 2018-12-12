@@ -16,18 +16,21 @@ class CCRH: public PRP { public:
 
 	block H(block in) {
 		block t;
-		t = in = xorBlocks(_mm_shuffle_epi32(in, 78), _mm_shuffle_epi32(in, 4)); 
+		t = in = sigma(in);
 		permute_block(&t, 1);
 		return xorBlocks(t, in);
 	}
 
+	static block sigma(block a) {
+		return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
+	}
 #pragma GCC push_options
 #pragma GCC optimize ("unroll-loops")
 	template<int n>
 	void H(block out[n], block in[n]) {
 		block tmp[n];
 		for (int i = 0; i < n; ++i)
-			tmp[i] = out[i] = xorBlocks(_mm_shuffle_epi32(in[i], 78), _mm_shuffle_epi32(in[i], 4));
+			tmp[i] = out[i] = sigma(in[i]);
 		permute_block(tmp, n);
 		xorBlocks_arr(out, tmp, out, n);
 	}
@@ -41,7 +44,7 @@ class CCRH: public PRP { public:
 		}
 
 		for (int i = 0; i < length; ++i)
-			scratch[i] = out[i] = xorBlocks(_mm_shuffle_epi32(in[i], 78), _mm_shuffle_epi32(in[i], 4));
+			scratch[i] = out[i] = sigma(in[i]);
 		permute_block(scratch, length);
 		xorBlocks_arr(out, scratch, out, length);
 
