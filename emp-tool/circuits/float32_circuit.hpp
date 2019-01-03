@@ -20,7 +20,8 @@ inline Float32::Float32(double input, int party) {
 	val = val + sgnfc;
 	val = val + (expnt << SGNFC_LEN);
 	val[FLOAT_LEN-1] = sign;
-	memcpy(value, val.bits, 32*sizeof(Bit));
+	for(int i = 0; i < 32; ++i)
+		value[i] = val.bits[i];
 }
 
 template<>

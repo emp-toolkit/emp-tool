@@ -6,6 +6,7 @@
 #include "emp-tool/circuits/swappable.h"
 #include "emp-tool/circuits/number.h"
 #include <math.h>
+#include <array>
 
 #define FLOAT_LEN 32
 #define BIAS 127
@@ -15,7 +16,7 @@
 namespace emp {
 
 class Float32: Swappable<Float32> { public:
-	Bit value[32];
+	std::array<Bit,32> value;
 	
 	Float32(Float32 && in):
 		value(std::move(in.value)) {

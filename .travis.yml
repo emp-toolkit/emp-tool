@@ -57,4 +57,4 @@ script:
   - echo "Testing Circuits"
   - ./bin/bit
   - ./bin/int
-  - ./bin/float
+  - ./bin/float32
