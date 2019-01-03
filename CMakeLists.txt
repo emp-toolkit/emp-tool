@@ -16,6 +16,21 @@ include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_
 # Installation
 set(sources
 emp-tool/emp-tool.cpp
+emp-tool/circuits/float32_add.cpp
+emp-tool/circuits/float32_cos.cpp
+emp-tool/circuits/float32_div.cpp
+emp-tool/circuits/float32_eq.cpp
+emp-tool/circuits/float32_le.cpp
+emp-tool/circuits/float32_leq.cpp
+emp-tool/circuits/float32_mul.cpp
+emp-tool/circuits/float32_sin.cpp
+emp-tool/circuits/float32_sq.cpp
+emp-tool/circuits/float32_sqrt.cpp
+emp-tool/circuits/float32_sub.cpp
+emp-tool/circuits/float32_exp2.cpp
+emp-tool/circuits/float32_exp.cpp
+emp-tool/circuits/float32_ln.cpp
+emp-tool/circuits/float32_log2.cpp
 )
 
 add_library(${NAME} SHARED ${sources})
@@ -26,7 +41,7 @@ install(TARGETS ${NAME} DESTINATION lib)
 
 # Test cases
 macro (add_test _name)
-	add_test_with_lib(${_name} "")
+	add_test_with_lib(${_name} "${NAME}")
 endmacro()
 
 add_test(prg)
@@ -37,5 +52,6 @@ add_test(netio)
 add_test(bit)
 add_test(int)
 add_test(float)
+add_test(float32)
 add_test(garble)
 add_test(gen_circuit)
