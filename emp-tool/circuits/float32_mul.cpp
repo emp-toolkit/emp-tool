@@ -2,8 +2,7 @@
 using emp::Float32;
 using emp::Bit;
 
-#pragma GCC push_options
-#pragma GCC optimize ("O2")
+__attribute__ ((optimize("2")))
 Float32 Float32::operator*(const Float32& rhs) const {
 	Float32 res(*this);
 
@@ -8701,5 +8700,3 @@ Float32 Float32::operator*(const Float32& rhs) const {
 
 	return res;
 }
-
-#pragma GCC pop_options

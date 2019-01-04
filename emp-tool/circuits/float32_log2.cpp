@@ -2,8 +2,7 @@
 using emp::Float32;
 using emp::Bit;
 
-#pragma GCC push_options
-#pragma GCC optimize ("O1")
+__attribute__ ((optimize("1")))
 Float32 Float32::log2() const {
 	Float32 res(*this);
 
@@ -17718,4 +17717,3 @@ Float32 Float32::log2() const {
 
 	return res;
 }
-#pragma GCC pop_options
