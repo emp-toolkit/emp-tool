@@ -46,7 +46,7 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && travis_wait 30 make
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && travis_wait 40 make
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg
