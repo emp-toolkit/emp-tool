@@ -33,9 +33,8 @@ inline string bin_to_dec(const string& bin2) {
 	if(bin2[0] == '0')
 		return change_base(bin2, 2, 10);
 	string bin = bin2;
-	bin[0] = '0';
 	bool flip = false;
-	for(int i = bin.size()-1; i>=1; --i) {
+	for(int i = bin.size()-1; i>=0; --i) {
 		if(flip)
 			bin[i] = (bin[i] == '1' ? '0': '1');
 		if(bin[i] == '1')
