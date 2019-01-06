@@ -31,13 +31,13 @@ inline string Float32::reveal<string>(int party) const {
 	Integer sgnfc = Integer(1+SGNFC_LEN, 0, party);
 	for(int i = 0; i < SGNFC_LEN; i++)
 		sgnfc[i] = value[i];
-	double val = sgnfc.reveal<long long>(party);
+	double val = sgnfc.reveal<int64_t>(party);
 	val += lo;
 
 	Integer expnt = Integer(1+EXPNT_LEN, 0, party);
 	for(int i = 0; i < EXPNT_LEN; i++)
 		expnt[i] = value[i+SGNFC_LEN];
-	double exp = expnt.reveal<long long>(party);
+	double exp = expnt.reveal<int64_t>(party);
 	if(exp == 0) 
 		return std::to_string(0.0);
 	else if(exp == ((1<<8)-1))
@@ -59,13 +59,13 @@ inline double Float32::reveal<double>(int party) const {
 	Integer sgnfc = Integer(1+SGNFC_LEN, 0, party);
 	for(int i = 0; i < SGNFC_LEN; i++)
 		sgnfc[i] = value[i];
-	double val = sgnfc.reveal<long long>(party);
+	double val = sgnfc.reveal<int64_t>(party);
 	val += lo;
 
 	Integer expnt = Integer(1+EXPNT_LEN, 0, party);
 	for(int i = 0; i < EXPNT_LEN; i++)
 		expnt[i] = value[i+SGNFC_LEN];
-	double exp = expnt.reveal<long long>(party);
+	double exp = expnt.reveal<int64_t>(party);
 	if(exp == 0)
 		return 0.0;
 	else if(exp == ((1<<8)-1))

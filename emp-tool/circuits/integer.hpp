@@ -189,10 +189,6 @@ inline int64_t Integer::reveal<int64_t>(int party) const {
 	string s = reveal<string>(party);
 	return stoll(s);
 }
-template<>
-inline long long Integer::reveal<long long>(int party) const {
-	return reveal<int64_t>(party);
-}
 
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
