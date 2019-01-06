@@ -49,4 +49,14 @@ script:
   - cmake -DCMAKE_BUILD_TYPE=$TYPE . 
   - while sleep 5m; do echo "=====[ $SECONDS seconds ]====="; done &
   - make 2>&1
+  - echo "Testing Basic Primitives"
+  - ./bin/prp
+  - ./bin/prg
+  - ./bin/com
+  - ./bin/hash
+  - ./bin/garble 1 12345 & ./bin/garble 2 12345
+  - ./bin/netio 1 12345 & ./bin/netio 2 12345
+  - echo "Testing Circuits"
+  - ./bin/bit
+  - ./bin/int
   - ./bin/float32
