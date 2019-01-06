@@ -2,7 +2,14 @@
 using emp::Float32;
 using emp::Bit;
 
-__attribute__ ((optimize("1")))
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC push_options
+		#pragma GCC optimize ("O1")
+	#else
+		__attribute__((optnone))
+	#endif
+#endif
 Float32 Float32::exp() const {
 	Float32 res(*this);
 
@@ -19670,3 +19677,8 @@ Float32 Float32::exp() const {
 
 	return res;
 }
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC pop_options
+	#endif
+#endif
