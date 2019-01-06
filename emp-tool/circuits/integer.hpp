@@ -192,18 +192,22 @@ inline int64_t Integer::reveal<int64_t>(int party) const {
 
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
-	Integer tmp = *this;
-	tmp.resize(tmp.size()+1, false);
-	string s = tmp.reveal<string>(party);
-	return stoul(s);
+	std::bitset<32> bs;
+	bool b[32];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 32);
+	for (int i = 0; i < 32; ++i)
+		bs.set(i, b[i]);
+	return bs.to_ulong();
 }
 
 template<>
 inline uint64_t Integer::reveal<uint64_t>(int party) const {
-	Integer tmp = *this;
-	tmp.resize(tmp.size()+1, false);
-	string s = tmp.reveal<string>(party);
-	return stoull(s);
+	std::bitset<64> bs;
+	bool b[64];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 64);
+	for (int i = 0; i < 64; ++i)
+		bs.set(i, b[i]);
+	return bs.to_ullong();
 }
 
 inline int Integer::size() const {
