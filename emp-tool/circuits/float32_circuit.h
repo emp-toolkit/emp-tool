@@ -52,7 +52,11 @@ class Float32: Swappable<Float32> { public:
 	Float32 sqr() const;
 	Float32 sqrt() const;
 	Float32 sin() const;
+	Float32 cos() const;
 	Float32 exp2() const;
+	Float32 exp() const;
+	Float32 ln() const;
+	Float32 log2() const;
 
 	Bit& operator[](int index);
 	const Bit & operator[](int index) const;
