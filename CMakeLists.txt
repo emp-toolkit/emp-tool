@@ -17,7 +17,6 @@ include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_
 set(sources
 emp-tool/emp-tool.cpp
 emp-tool/circuits/float32_add.cpp
-emp-tool/circuits/float32_cos.cpp
 emp-tool/circuits/float32_div.cpp
 emp-tool/circuits/float32_eq.cpp
 emp-tool/circuits/float32_le.cpp
@@ -28,9 +27,6 @@ emp-tool/circuits/float32_sq.cpp
 emp-tool/circuits/float32_sqrt.cpp
 emp-tool/circuits/float32_sub.cpp
 emp-tool/circuits/float32_exp2.cpp
-emp-tool/circuits/float32_exp.cpp
-emp-tool/circuits/float32_ln.cpp
-emp-tool/circuits/float32_log2.cpp
 )
 
 add_library(${NAME} SHARED ${sources})

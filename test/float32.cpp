@@ -80,9 +80,6 @@ void test_float(int func_id, double precision, double minimize, int runs = 1000)
 		Float32 res = Float32(0.0, PUBLIC);
 		float comp = 0.0;
 		switch(func_id) {
-			case 3: res = a.cos();
-				comp = std::cos(da*pi);
-				break;
 			case 0: res = a.sqr();
 				comp = std::pow(da, 2.0);
 				break;
@@ -94,15 +91,6 @@ void test_float(int func_id, double precision, double minimize, int runs = 1000)
 				break;
 			case 4: res = a.exp2();
 				comp = std::exp2(da);
-				break;
-			case 5: res = a.exp();
-				comp = std::exp(da);
-				break;
-			case 6: res = a.abs().ln();
-				comp = std::log(da>0?da:(-da));
-				break;
-			case 7: res = a.abs().log2();
-				comp = std::log2(da>0?da:(-da));
 				break;
 		}
 		if(precision == 0.0) {
@@ -186,11 +174,7 @@ int main(int argc, char** argv) {
 	test_float(0, 0.0, 1e12);
 	test_float(1, 0.0, 1e12);
 	test_float(2, 1e-3, 1e15);
-	test_float(3, 1e-3, 1e15);	
 	test_float(4, 1e-3, 1e18);
-	test_float(5, 1e-3, 1e18);
-	test_float(6, 1e-3, 1e12);
-	test_float(7, 1e-3, 1e12);
 
 	finalize_plain_prot();
 	return 0;
