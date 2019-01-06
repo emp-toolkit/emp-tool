@@ -12,6 +12,7 @@
 #include "emp-tool/circuits/circuit_file.h"
 #include "emp-tool/circuits/comparable.h"
 #include "emp-tool/circuits/float_circuit.h"
+#include "emp-tool/circuits/float32_circuit.h"
 #include "emp-tool/circuits/integer.h"
 #include "emp-tool/circuits/number.h"
 #include "emp-tool/circuits/swappable.h"

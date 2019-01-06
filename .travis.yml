@@ -46,7 +46,9 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE . 
+  - while sleep 5m; do echo "=====[ $SECONDS seconds ]====="; done &
+  - make 2>&1
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg
@@ -57,4 +59,4 @@ script:
   - echo "Testing Circuits"
   - ./bin/bit
   - ./bin/int
-  - ./bin/float
+  - ./bin/float32
