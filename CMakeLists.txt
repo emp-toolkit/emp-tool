@@ -2,48 +2,46 @@ cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
 
-if(POLICY CMP0042)
-  cmake_policy(SET CMP0042 NEW) # use rpath on macOS
-endif()
-
-include_directories(${CMAKE_SOURCE_DIR})
-
-if(NOT CMAKE_BUILD_TYPE)
-set(CMAKE_BUILD_TYPE Release)
-endif(NOT CMAKE_BUILD_TYPE)
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-
-set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+include(cmake/common.cmake)
+include(cmake/source_of_randomness.cmake)
+include(cmake/threading.cmake)
 
 find_package(OpenSSL REQUIRED)
 find_package(relic REQUIRED)
+find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS})
-
-set (CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed")
-set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-OPTION(USE_RANDOM_DEVICE "Option description" OFF)
-IF(USE_RANDOM_DEVICE)
-    ADD_DEFINITIONS(-DEMP_USE_RANDOM_DEVICE)
-ENDIF(USE_RANDOM_DEVICE)
+include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
 
+# Installation
 set(sources
 emp-tool/emp-tool.cpp
+emp-tool/circuits/float32_add.cpp
+emp-tool/circuits/float32_cos.cpp
+emp-tool/circuits/float32_div.cpp
+emp-tool/circuits/float32_eq.cpp
+emp-tool/circuits/float32_le.cpp
+emp-tool/circuits/float32_leq.cpp
+emp-tool/circuits/float32_mul.cpp
+emp-tool/circuits/float32_sin.cpp
+emp-tool/circuits/float32_sq.cpp
+emp-tool/circuits/float32_sqrt.cpp
+emp-tool/circuits/float32_sub.cpp
+emp-tool/circuits/float32_exp2.cpp
+emp-tool/circuits/float32_exp.cpp
+emp-tool/circuits/float32_ln.cpp
+emp-tool/circuits/float32_log2.cpp
 )
 
 add_library(${NAME} SHARED ${sources})
 
-install(FILES cmake/emp-tool-config.cmake cmake/relic-config.cmake DESTINATION cmake/)
 install(DIRECTORY emp-tool DESTINATION include/)
+install(DIRECTORY cmake/ DESTINATION cmake/)
 install(TARGETS ${NAME} DESTINATION lib)
 
+# Test cases
 macro (add_test _name)
-	add_executable(${_name} "test/${_name}.cpp" ${sources})
-	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} gmp) 
+	add_test_with_lib(${_name} "${NAME}")
 endmacro()
 
 add_test(prg)
@@ -54,5 +52,6 @@ add_test(netio)
 add_test(bit)
 add_test(int)
 add_test(float)
+add_test(float32)
 add_test(garble)
-#add_test(gen_circuit)
+add_test(gen_circuit)

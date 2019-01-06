@@ -8,7 +8,11 @@ namespace emp {
 class ProtocolExecution { 
 public:
 	int cur_party;
+#ifndef THREADING
 	static ProtocolExecution * prot_exec;
+#else
+	static __thread ProtocolExecution * prot_exec;
+#endif
 
 	ProtocolExecution(int party = PUBLIC) : cur_party (party) {}
 	virtual ~ProtocolExecution() {}

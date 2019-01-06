@@ -8,7 +8,7 @@
   */
 
 namespace emp {
-typedef char Com[20];
+typedef char Com[Hash::DIGEST_SIZE];
 typedef block Decom[1];
 
 class Commitment{ public:

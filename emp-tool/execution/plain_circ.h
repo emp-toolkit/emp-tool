@@ -96,7 +96,7 @@ public:
 		}
 	}
 	block private_label(bool b) {
-		block res;
+		block res = zero_block();
 		uint64_t *arr = (uint64_t*) &res;
 		arr[0] = b ? S1 : S0;
 		arr[1] = this->gid;

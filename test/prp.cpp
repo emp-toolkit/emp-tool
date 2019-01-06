@@ -7,6 +7,7 @@ int main() {
 	PRP prp;//using a public seed by default
 
 	block rand_block[3];
+	memset(rand_block, 0, sizeof(block)*3);
 	prp.permute_block(rand_block, 3);//applying pi on each block of data
 		
 	int rand_ints[100];
