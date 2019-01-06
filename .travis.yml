@@ -46,5 +46,7 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . && make 2>&1
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE . 
+  - while sleep 5m; do echo "=====[ $SECONDS seconds ]====="; done &
+  - make 2>&1
   - ./bin/float32
