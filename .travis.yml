@@ -14,7 +14,9 @@ matrix:
 
     - os: osx
       sudo: required
-      env: TYPE=Release
+      env: 
+        - TYPE=Release
+        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
  
       
 before_install:
