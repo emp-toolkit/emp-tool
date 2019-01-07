@@ -17,14 +17,14 @@ inline string Float32::reveal<string>(int party) const {
 }
 
 template<>
-inline double Float32::reveal<float>(int party) const {
+inline double Float32::reveal<double>(int party) const {
 	int out = 0;
 	for(int i = FLOAT_LEN-1; i >= 0; --i) {
 		out <<= 1;
 		out += value[i].reveal<bool>(party);
 	}
 	float *fp = (float*)(&out);
-	return *fp;
+	return (double)*fp;
 
 }
 
