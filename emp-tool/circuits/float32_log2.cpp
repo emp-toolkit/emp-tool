@@ -17724,7 +17724,6 @@ Float32 Float32::log2() const {
 
 	return res;
 }
-
 #ifdef __GNUC__
 	#ifndef __clang__
 		#pragma GCC pop_options

@@ -31,7 +31,7 @@ class Float32: Swappable<Float32> { public:
 		return *this;
 	}
 
-	Float32(double input, int party = PUBLIC);
+	Float32(float input, int party = PUBLIC);
 
 	template<typename O> 
 	O reveal(int party = PUBLIC) const;
