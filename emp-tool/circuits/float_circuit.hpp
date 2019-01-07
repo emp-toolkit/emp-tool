@@ -18,15 +18,15 @@ inline Float Float::If(const Bit & select, const Float& d) {
 
 template<>
 inline string Float::reveal<string>(int party) const {
-   double val = value.reveal<long long>(party);
-   double exp = expnt.reveal<long long>(party);
+   double val = value.reveal<int64_t>(party);
+   double exp = expnt.reveal<int64_t>(party);
    return std::to_string(val*pow(2.0, exp)); 
 }
 
 template<>
 inline double Float::reveal<double>(int party) const {
-   double val = value.reveal<long long>(party);
-   double exp = expnt.reveal<long long>(party);
+   double val = value.reveal<int64_t>(party);
+   double exp = expnt.reveal<int64_t>(party);
    return val*pow(2.0, exp); 
 }
 

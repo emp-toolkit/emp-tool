@@ -32,7 +32,7 @@ class HalfGateGen:public CircuitExecution { public:
 	void set_delta(const block &_delta) {
 		this->delta = make_delta(_delta);
 	}
-	block public_label(bool b) {
+	block public_label(bool b) override {
 		return b? one_block() : zero_block();
 	}
 	bool isDelta(const block & b) {

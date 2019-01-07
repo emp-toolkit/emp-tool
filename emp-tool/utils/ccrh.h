@@ -24,8 +24,14 @@ class CCRH: public PRP { public:
 	static block sigma(block a) {
 		return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
 	}
-#pragma GCC push_options
-#pragma GCC optimize ("unroll-loops")
+
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC push_options
+		#pragma GCC optimize ("unroll-loops")
+	#endif
+#endif
+
 	template<int n>
 	void H(block out[n], block in[n]) {
 		block tmp[n];
@@ -34,7 +40,13 @@ class CCRH: public PRP { public:
 		permute_block(tmp, n);
 		xorBlocks_arr(out, tmp, out, n);
 	}
-#pragma GCC pop_options
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC pop_options
+	#endif
+#endif
+
+
 
 	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
 		bool del = false;

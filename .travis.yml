@@ -1,44 +1,29 @@
 language: cpp
 
-
 matrix:
   include:
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       env: TYPE=Debug
 
     - os: linux
-      dist: trusty
+      dist: xenial
       sudo: required
       env: TYPE=Release
-      
-    - os: linux
-      dist: trusty
+
+    - os: osx
       sudo: required
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-3.9
-          packages:
-            - clang-3.9
-      env:
-        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+      env: 
         - TYPE=Release
+        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
 
-    - os: linux
-      dist: trusty
+    - os: osx
       sudo: required
-      addons:
-        apt:
-          sources:
-            - llvm-toolchain-trusty-3.9
-          packages:
-            - clang-3.9
-      env:
-        - MATRIX_EVAL="CC=clang-3.9 && CXX=clang++-3.9"
+      env: 
         - TYPE=Debug
-
+        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
+      
 before_install:
   - eval "${MATRIX_EVAL}"
   - git clone https://github.com/emp-toolkit/emp-readme.git
@@ -46,9 +31,9 @@ before_install:
   - bash ./emp-readme/scripts/install_relic.sh
 
 script:
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE . 
-  - while sleep 5m; do echo "=====[ $SECONDS seconds ]====="; done &
-  - make 2>&1
+  - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE .
+  - make 
   - echo "Testing Basic Primitives"
   - ./bin/prp
   - ./bin/prg

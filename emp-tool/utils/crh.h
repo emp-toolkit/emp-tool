@@ -20,8 +20,14 @@ public:
 		permute_block(&t, 1);
 		return xorBlocks(t, in);
 	}
-#pragma GCC push_options
-#pragma GCC optimize ("unroll-loops")
+
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC push_options
+		#pragma GCC optimize ("unroll-loops")
+	#endif
+#endif
+
 	template<int n>
 	void H(block out[n], block in[n]) {
 		block tmp[n];
@@ -30,7 +36,11 @@ public:
 		permute_block(tmp, n);
 		xorBlocks_arr(out, in, tmp, n);
 	}
-#pragma GCC pop_options
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC pop_options
+	#endif
+#endif
 
 	void Hn(block*out, block* in, int n, block * scratch = nullptr) {
 		bool del = false;

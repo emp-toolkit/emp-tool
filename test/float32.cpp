@@ -41,15 +41,15 @@ bool accurate(double a, double b, double err) {
 	else return false;
 }
 
+PRG prg;
 template<typename Op, typename Op2>
 void test_float(double precision, int runs = 1000) {
-	PRG prg;
 	for(int i = 0; i < runs; ++i) {
-		long ia, ib;
+		int ia = 0, ib = 0;
 		prg.random_data(&ia, 4);
 		prg.random_data(&ib, 4);
-		float da = ia / 10000000.0;
-		float db = ib / 10000000.0;
+		float da = (float)(ia) / 10000000.0;
+		float db = (float)(ib) / 10000000.0;
 
 		Float32 a(da, PUBLIC);
 		Float32 b(db, PUBLIC);

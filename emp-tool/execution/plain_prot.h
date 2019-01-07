@@ -20,7 +20,7 @@ public:
 	 cast_circ_exec = static_cast<PlainCircExec *> (CircuitExecution::circ_exec);
 	}
 
-	void finalize() {
+	void finalize() override {
 		if(print) {
 			fstream fout(filename, std::fstream::in | std::fstream::out);
 			fout<<cast_circ_exec->gates<<" "<<cast_circ_exec->gid<<endl;

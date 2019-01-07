@@ -6,6 +6,7 @@
 #include "emp-tool/circuits/comparable.h"
 #include "emp-tool/circuits/swappable.h"
 #include <vector>
+#include <bitset>
 #include <algorithm>
 #include <math.h>
 #include <execinfo.h>

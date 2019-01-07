@@ -20,8 +20,13 @@ class TCCRH: public PRP { public:
 		return xorBlocks(t, in);
 	}
 
-#pragma GCC push_options
-#pragma GCC optimize ("unroll-loops")
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC push_options
+		#pragma GCC optimize ("unroll-loops")
+	#endif
+#endif
+
 	template<int n>
 	void H(block out[n], block in[n], uint64_t id) {
 		block tmp[n];
@@ -35,7 +40,13 @@ class TCCRH: public PRP { public:
 		permute_block(out, n);
 		xorBlocks_arr(out, tmp, out, n);
 	}
-#pragma GCC pop_options
+
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC pop_options
+	#endif
+#endif
+
 
 	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
 		bool del = false;
