@@ -15,7 +15,7 @@ class TCCRH: public PRP { public:
 	}
 	block H(block in, uint64_t i) {
 		permute_block(&in, 1);
-		block t = xorBlocks(in, _mm_loadl_epi64( (__m128i const *) (&i)));
+		block t = xorBlocks(in, makeBlock(0, i));
 		permute_block(&t, 1);
 		return xorBlocks(t, in);
 	}
@@ -34,7 +34,7 @@ class TCCRH: public PRP { public:
 			tmp[i] = in[i];
 		permute_block(tmp, n);
 		for(int i = 0; i < n; ++i) {
-			out[i] = xorBlocks(tmp[i], _mm_loadl_epi64( (__m128i const *) (&id)));
+			out[i] = xorBlocks(tmp[i], makeBlock(0, id));
 			++id;
 		}
 		permute_block(out, n);
@@ -58,7 +58,7 @@ class TCCRH: public PRP { public:
 			scratch[i] = in[i];
 		permute_block(scratch, length);
 		for(int i = 0; i < length; ++i) {
-			out[i] = xorBlocks(scratch[i], _mm_loadl_epi64( (__m128i const *) (&id)));
+			out[i] = xorBlocks(scratch[i], makeBlock(0, id));
 			++id;
 		}
 		permute_block(out, length);
