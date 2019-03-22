@@ -52,7 +52,6 @@ __batch3(bn_add);
 
 void bn_to_block(block * b, const bn_t bn);
 void block_to_bn(bn_t bn, const block * b);
-static bool initialized = false;
 void initialize_relic();
 
 block KDF(eb_t in);

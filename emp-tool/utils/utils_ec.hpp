@@ -6,13 +6,13 @@ inline void block_to_bn(bn_t bn, const block * b) {
 	bn_read_bin(bn, (const uint8_t*)b, sizeof(block));
 }
 inline void initialize_relic() {
+	static bool initialized = false;
 	if(initialized) return;
 	initialized = true;
 	if (core_init() != STS_OK) {
 		core_clean();
 		exit(1);
 	}
-
 	eb_param_set(EBACS_B251);
 }
 
