@@ -56,6 +56,7 @@ class NetIO: public IOChannel<NetIO> { public:
 				exit(1);
 			}
 			consocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
+			close(mysocket);
 		}
 		else {
 			addr = string(address);
