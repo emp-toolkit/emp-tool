@@ -92,9 +92,9 @@ class PRG { public:
 			random_bn(t);
 		}
 
-	void random_bn(bn_t a, int sign = BN_POS, int bits = BIT_LEN) {
+	void random_bn(bn_t a, int sign = RLC_POS, int bits = BIT_LEN) {
 		int digits;
-		SPLIT(bits, digits, bits, DIG_LOG);
+		RLC_RIP(bits, digits, bits);
 		digits += (bits > 0 ? 1 : 0);
 		bn_grow(a, digits);
 		random_data((uint8_t*)a->dp, digits * sizeof(dig_t));
@@ -107,7 +107,7 @@ class PRG { public:
 		bn_trim(a);
 	}
 
-	void random_bn(bn_t *a, int length=1, int sign = BN_POS, int bits = BIT_LEN) {
+	void random_bn(bn_t *a, int length=1, int sign = RLC_POS, int bits = BIT_LEN) {
 		for(int i = 0; i < length; ++i)
 			random_bn(a[i]);
 	}
@@ -123,7 +123,7 @@ class PRG { public:
 		bn_new(k);
 		bn_new(n);
 		eb_curve_get_ord(n);
-		random_bn(k, BN_POS, bn_bits(n));
+		random_bn(k, RLC_POS, bn_bits(n));
 		bn_mod(k, k, n);
 		eb_mul_gen(p, k);
 	}
@@ -134,7 +134,7 @@ class PRG { public:
 		bn_new(n);
 		eb_curve_get_ord(n);
 		for(int i = 0; i < length; ++i) {
-			random_bn(k, BN_POS, bn_bits(n));
+			random_bn(k, RLC_POS, bn_bits(n));
 			bn_mod(k, k, n);
 			eb_mul_gen(p[i], k);
 		}

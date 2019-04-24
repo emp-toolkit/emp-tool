@@ -9,7 +9,7 @@ inline void initialize_relic() {
 	static bool initialized = false;
 	if(initialized) return;
 	initialized = true;
-	if (core_init() != STS_OK) {
+	if (core_init() != RLC_OK) {
 		core_clean();
 		exit(1);
 	}
