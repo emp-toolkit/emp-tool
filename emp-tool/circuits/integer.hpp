@@ -411,7 +411,7 @@ inline Integer Integer::modExp(Integer p, Integer q) {
 	Integer res(size(),1);
 	for(int i = 0; i < p.size(); ++i) {
 		Integer tmp = (res * base) % q;
-		res.select(p[i], tmp);
+		res = res.select(p[i], tmp);
 		base = (base*base) % q; 
 	}
 	return res;
