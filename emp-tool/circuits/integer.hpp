@@ -408,10 +408,10 @@ inline Integer Integer::hamming_weight() const {
 inline Integer Integer::modExp(Integer p, Integer q) {
 	// the value of q should be less than half of the MAX_INT
 	Integer base = *this;
-	Integer res(1, size());
+	Integer res(size(),1);
 	for(int i = 0; i < p.size(); ++i) {
 		Integer tmp = (res * base) % q;
-		res.select(p[i], tmp);
+		res = res.select(p[i], tmp);
 		base = (base*base) % q; 
 	}
 	return res;
