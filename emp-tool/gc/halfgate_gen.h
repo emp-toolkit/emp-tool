@@ -13,6 +13,7 @@ template<typename T, RTCktOpt rt = on>
 class HalfGateGen:public CircuitExecution { public:
 	int64_t gid = 0;
 	block delta;
+	block start_point;
 	PRP prp;
 	block seed;
 	T * io;
@@ -20,6 +21,7 @@ class HalfGateGen:public CircuitExecution { public:
 	block fix_point;
 	HalfGateGen(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
+		prg.random_block(&start_point, 1);
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
@@ -50,7 +52,7 @@ class HalfGateGen:public CircuitExecution { public:
 			return a;
 		} else {
 			garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-					&out[0], &out[1], delta, table, gid++, &prp.aes);
+					&out[0], &out[1], delta, table, gid++, start_point);
 			io->send_block(table, 2);
 			return out[0];
 		}
@@ -102,6 +104,7 @@ class HalfGateGen<T,RTCktOpt::off>:public CircuitExecution {
 public:
 	int64_t gid = 0;
 	block delta;
+	block start_point;
 	PRP prp;
 	block seed;
 	T * io;
@@ -124,6 +127,7 @@ public:
 	void set_delta(const block &_delta) {
 		this->delta = make_delta(_delta);
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
+		prg2.random_block(&start_point, 1);
 		constant[1] = xorBlocks(constant[1],delta);
 	}
 	block public_label(bool b) override {
@@ -132,7 +136,7 @@ public:
 	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
 		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-				&out[0], &out[1], delta, table, gid++, &prp.aes);
+				&out[0], &out[1], delta, table, gid++, start_point);
 		io->send_block(table, 2);
 		return out[0];
 	}
