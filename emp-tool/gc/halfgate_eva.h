@@ -96,7 +96,7 @@ public:
 	block constant[2];
 	HalfGateEva(T * io) :io(io) {
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
-		prg.random_block(&start_point, 1);
+		prg2.random_block(&start_point, 1);
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
