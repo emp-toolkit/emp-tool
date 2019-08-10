@@ -1,3 +1,12 @@
+/********************************************************************/
+/* Copyright(c) 2014, Intel Corp.                                   */
+/* Developers and authors: Shay Gueron (1) (2)                      */
+/* (1) University of Haifa, Israel                                  */
+/* (2) Intel, Israel                                                */
+/* IPG, Architecture, Israel Development Center, Haifa, Israel      */
+/********************************************************************/
+
+
 #ifndef LIBGARBLE_AES_OPT_H
 #define LIBGARBLE_AES_OPT_H
 
