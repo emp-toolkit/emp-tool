@@ -62,18 +62,21 @@ void recv_point(NetIO *io, const Group &G, Point &A)
 
 string ot(NetIO *io, int party, string m[], int c)
 {
-    BigInt a, b;
+    Group G;
+    BigInt a, b,order;
+    G.get_order(order);
     if (party == ALICE)
     {
-        a.from_dec("324123");
+        //a.from_dec("324123");
+        a.rand_mod(order);
     }
     else
     {
-        b.from_dec("4134213");
+        b.rand_mod(order);
     }
     //stupid random 
 
-    Group G;
+    
     Point A, B;
     Point g;
     G.init(A);
@@ -85,7 +88,8 @@ string ot(NetIO *io, int party, string m[], int c)
     if (party == ALICE)
     {
         A = g;
-        G.mul(A, A, a);
+        //G.mul(A, A, a);
+        G.mul_gen(A,a);
         //send A
         send_point(io,G,A);
     }

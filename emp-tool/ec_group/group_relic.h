@@ -1,6 +1,6 @@
 #ifndef GROUP_H
 #define GROUP_H
-
+#include "relic/relic_eb.h"
 #include <emp-tool/emp-tool.h>
 #include "emp-ot/emp-ot.h"
 #include <string>
@@ -52,6 +52,9 @@ public:
         char *number_str = new char[len];
         bn_write_str(number_str,len,n,16);
         return number_str;
+    }
+    void rand_mod(BigInt m){
+        bn_rand_mod(n,m.n);
     }
 
     BigInt &add(const BigInt &oth)
@@ -108,12 +111,13 @@ public:
 class Group
 {
 private:
-
+    eb_t gTbl[RLC_EB_TABLE_MAX];
 public:
     Group()
     {
         init_relic();
         eb_param_set(EBACS_B251);
+        precompute();
     }
     ~Group()
     {
@@ -121,9 +125,14 @@ public:
     void get_generator(Point &g){
         eb_curve_get_gen(g.p);
     }
+    void get_order(BigInt &n){
+        eb_curve_get_ord(n.n);
+    }
     void precompute()
     {
-        //TODO
+        eb_t g;
+        eb_curve_get_gen(g);
+        eb_mul_pre(gTbl,g);
     }
     //precomputation table for some group element
     friend class Point;
@@ -132,6 +141,7 @@ public:
     void add(Point &res, const Point &lhs, const Point &rhs);
     void inv(Point &res, const Point &p);
     void mul(Point &res, const Point &lhs, const BigInt &m);
+    void mul_gen(Point &res, const BigInt &m);
     char* to_hex(const Point &p) const;
     void from_hex(Point &p,const char *s) const;
 };
@@ -159,6 +169,11 @@ void Group::inv(Point &res, const Point &p)
 void Group::mul(Point &res, const Point &lhs, const BigInt &m)
 {
     eb_mul(res.p,lhs.p,m.n);
+    eb_norm(res.p,res.p);
+}
+void Group::mul_gen(Point &res,const BigInt &m)
+{
+    eb_mul_fix(res.p,gTbl,m.n);
     eb_norm(res.p,res.p);
 }
 

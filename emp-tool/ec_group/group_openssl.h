@@ -51,7 +51,9 @@ public:
         char *number_str = BN_bn2hex(n);
         return number_str;
     }
-
+    void rand_mod(const BigInt &m){
+        BN_rand_range(n,m.n);
+    }
     BigInt &add(const BigInt &oth)
     {
         BN_add(n, n, oth.n);
@@ -81,6 +83,10 @@ public:
     {
     }
     void get_generator(Point &g);
+
+    void get_order(BigInt &n){
+        EC_GROUP_get_order(ec_group,n.n,NULL);
+    }
     void precompute()
     {
         EC_GROUP_precompute_mult(ec_group, NULL);
@@ -92,6 +98,7 @@ public:
     void add(Point &res, const Point &lhs, const Point &rhs);
     void inv(Point &res, const Point &p);
     void mul(Point &res, const Point &lhs, const BigInt &m);
+    void mul_gen(Point &res, const BigInt &m);
     char* to_hex(const Point &p) const;
     void from_hex(Point &p,const char *s) const;
 };
@@ -145,6 +152,10 @@ void Group::inv(Point &res, const Point &p)
 void Group::mul(Point &res, const Point &lhs, const BigInt &m)
 {
     EC_POINT_mul(ec_group, res.p, NULL, lhs.p, m.n, NULL);
+}
+void Group::mul_gen(Point &res, const BigInt &m)
+{
+    EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, NULL);
 }
 char* Group::to_hex(const Point &p) const
 {
