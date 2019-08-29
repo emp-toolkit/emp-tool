@@ -14,7 +14,7 @@ find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
-
+ 
 if(${USE_RELIC})
 	set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -DECC_USE_RELIC")
 endif()
