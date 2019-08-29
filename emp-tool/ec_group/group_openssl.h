@@ -59,6 +59,11 @@ public:
         BN_add(n, n, oth.n);
         return *this;
     }
+    BigInt &mul(const BigInt &oth)
+    {
+        BN_mul(n, n, oth.n,NULL);
+        return *this;
+    }
     // mod
     BigInt &mod(const BigInt &oth)
     {

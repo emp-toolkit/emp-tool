@@ -1,3 +1,4 @@
+
 inline void bn_to_block(block * b, const bn_t bn) {
 	bn_write_bin((uint8_t*)b, sizeof(block), bn);
 }

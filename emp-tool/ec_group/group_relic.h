@@ -62,10 +62,15 @@ public:
         bn_add(n, n, oth.n);
         return *this;
     }
+    BigInt &mul(const BigInt &oth)
+    {
+        bn_mul(n, n, oth.n);
+        return *this;
+    }
     // mod
     BigInt &mod(const BigInt &oth)
     {
-        bn_mod(n, n, oth.n, NULL);
+        bn_mod(n, n, oth.n);
         return *this;
     }
     friend class Group;
