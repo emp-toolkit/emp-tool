@@ -17,6 +17,8 @@ inline void initialize_relic() {
 	eb_param_set(EBACS_B251);
 }
 
+
+
 //TODO: fix the following.
 inline block KDF(eb_t in) {
 	uint8_t tmp[100];
@@ -24,4 +26,7 @@ inline block KDF(eb_t in) {
 	eb_write_bin(tmp, eb_size, in, ECC_PACK);
 	return Hash::hash_for_block(tmp, eb_size);
 }
-
+inline block KDF(const Group &G,Point &in) {
+	char* tmp=G.to_hex(in);
+	return Hash::hash_for_block(tmp, strlen(tmp));
+}

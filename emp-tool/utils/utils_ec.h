@@ -6,6 +6,7 @@ extern "C" {
 }
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/hash.h"
+#include "emp-tool/ec_group/group.h"
 
 namespace emp {
 #define ECC_PACK false
@@ -50,11 +51,13 @@ __batch3(bn_mul);
 __batch3(bn_sub);
 __batch3(bn_add);
 
+
 void bn_to_block(block * b, const bn_t bn);
 void block_to_bn(bn_t bn, const block * b);
 void initialize_relic();
 
 block KDF(eb_t in);
+block KDF(Group &G,Point &in);
 #include "emp-tool/utils/utils_ec.hpp"
 }
 #endif// UTILS_EC_H__

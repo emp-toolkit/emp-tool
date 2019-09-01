@@ -4,6 +4,7 @@
 #include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/utils/prg.h"
 
+
 /** @addtogroup IO
   @{
  */
@@ -183,6 +184,26 @@ public:
 			bn_read_raw(bn[i], buffer, bn_size);
 		}
 	}
+	
+	void send_pt(const Group &G,const Point &A)
+	{
+		char *data = G.to_hex(A);
+		int len = strlen(data);
+		send_data(&len, 4);
+		send_data(data, len);
+	}
+
+	void recv_pt(const Group &G,Point &A)
+	{
+
+		int len;
+		char *data;
+		recv_data(&len, 4);
+		data = new char[len + 1];
+		data[len] = 0;
+		recv_data(data, len);
+		G.from_hex(A, data);
+	}	
 
 private:
 	T& derived() {
