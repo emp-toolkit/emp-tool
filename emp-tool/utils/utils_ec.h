@@ -57,7 +57,7 @@ void block_to_bn(bn_t bn, const block * b);
 void initialize_relic();
 
 block KDF(eb_t in);
-block KDF(Group &G,Point &in);
+block KDF_pt(const Group &G,Point &in);
 #include "emp-tool/utils/utils_ec.hpp"
 }
 #endif// UTILS_EC_H__
