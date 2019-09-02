@@ -53,8 +53,8 @@ public:
         char *number_str = BN_bn2hex(n);
         return number_str;
     }
-    void rand_mod(const BigInt &m){
-        BN_rand_range(n,m.n);
+    void from_bin(const char *tmp,int len){
+        BN_bin2bn((const unsigned char*)tmp,len,n);
     }
     BigInt &add(const BigInt &oth)
     {

@@ -53,8 +53,8 @@ public:
         bn_write_str(number_str,len,n,16);
         return number_str;
     }
-    void rand_mod(BigInt m){
-        bn_rand_mod(n,m.n);
+    void from_bin(const char *tmp,int len){
+		bn_read_bin(n,(const uint8_t*)tmp,len);
     }
 
     BigInt &add(const BigInt &oth)

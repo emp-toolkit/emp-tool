@@ -4,6 +4,7 @@
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/constants.h"
 #include "emp-tool/utils/utils_ec.h"
+#include "emp-tool/ec_group/group.h"
 #include <gmp.h>
 #include <random>
 
@@ -112,6 +113,14 @@ class PRG { public:
 			random_bn(a[i]);
 	}
 
+	
+	void random_bi(BigInt &a,  int bits = BIT_LEN) {
+		//assert(bits%8==0);
+		char *tmp=new char[bits/8];
+		random_data(tmp,bits/8);
+		a.from_bin(tmp,bits/8);
+		delete[] tmp;
+	}
 	template<typename T, typename ... L>
 		void random_eb(T t, L... l) {
 			random_eb(l...);
