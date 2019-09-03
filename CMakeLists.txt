@@ -12,10 +12,13 @@ find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
-if(NOT ECC_USE_OPENSSL)
+option(ECC_USE_OPENSSL "Use OpenSSL" OFF)
 
+if(${ECC_USE_OPENSSL})
+	message("${Red}-- Using OpenSSL${ColourReset}")
+	add_definitions(-DECC_USE_OPENSSL)
 else()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DECC_USE_OPENSSL")
+	message("${Green}-- Using Relic${ColourReset}")
 endif()
 
 # Installation
@@ -60,4 +63,4 @@ add_test(float)
 add_test(float32)
 add_test(garble)
 add_test(gen_circuit)
-add_test(ot)
+
