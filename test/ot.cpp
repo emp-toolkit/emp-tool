@@ -165,11 +165,11 @@ int main(int argc, char **argv)
 #else	
 	cout<<"using relic"<<endl;
 #endif
-
+	
     string m[2];
     m[0] = "hello";
     m[1] = "goodbye";
-
+	NetIO *io;
     assert( ot(io, party, m, 0) =="hello");
 	cout<<"yes"<<endl;
     return 0;
