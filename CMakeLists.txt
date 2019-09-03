@@ -7,10 +7,9 @@ include(cmake/source_of_randomness.cmake)
 include(cmake/threading.cmake)
 
 find_package(OpenSSL REQUIRED)
-find_package(relic REQUIRED)
 find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
+include_directories(${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
 option(ECC_USE_OPENSSL "Use OpenSSL" OFF)
 
@@ -18,7 +17,9 @@ if(${ECC_USE_OPENSSL})
 	message("${Red}-- Using OpenSSL${ColourReset}")
 	add_definitions(-DECC_USE_OPENSSL)
 else()
+	find_package(relic REQUIRED)
 	message("${Green}-- Using Relic${ColourReset}")
+	include_directories(${RELIC_INCLUDE_DIR})
 endif()
 
 # Installation

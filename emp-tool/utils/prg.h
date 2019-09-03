@@ -3,7 +3,6 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/constants.h"
-#include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/ec_group/group.h"
 #include <gmp.h>
 #include <random>
@@ -86,7 +85,7 @@ class PRG { public:
 		}
 		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, &aes);
 	}
-
+/* TODO
 	template<typename T, typename ... L>
 		void random_bn(T t, L... l) {
 			random_bn(l...);
@@ -148,7 +147,7 @@ class PRG { public:
 			eb_mul_gen(p[i], k);
 		}
 	}
-
+*/
 	void random_mpz(mpz_t out, int nbits) {
 		int nbytes = (nbits+7)/8;
 		uint8_t * data = (uint8_t *)new block[(nbytes+15)/16];
