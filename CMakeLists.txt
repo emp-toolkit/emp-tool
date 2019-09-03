@@ -2,8 +2,6 @@ cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
 
-set (USE_RELIC TRUE) 
-
 include(cmake/common.cmake)
 include(cmake/source_of_randomness.cmake)
 include(cmake/threading.cmake)
@@ -14,9 +12,10 @@ find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
 include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
- 
-if(${USE_RELIC})
-	set (CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -DECC_USE_RELIC")
+if(NOT ECC_USE_OPENSSL)
+
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DECC_USE_OPENSSL")
 endif()
 
 # Installation
@@ -61,4 +60,4 @@ add_test(float)
 add_test(float32)
 add_test(garble)
 add_test(gen_circuit)
-#add_test(ot)
+add_test(ot)

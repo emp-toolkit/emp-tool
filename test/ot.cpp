@@ -67,12 +67,11 @@ string ot(NetIO *io, int party, string m[], int c)
     G.get_order(order);
     if (party == ALICE)
     {
-        //a.from_dec("324123");
-        a.rand_mod(order);
+        a.from_dec("324123");
     }
     else
     {
-        b.rand_mod(order);
+        b.from_dec("1878123");
     }
     //stupid random 
 
@@ -162,27 +161,17 @@ string ot(NetIO *io, int party, string m[], int c)
 
 int main(int argc, char **argv)
 {
-#ifndef ECC_USE_RELIC
-    cout<<"using openssl"<<endl;
-#else
-    cout<<"using relic"<<endl;
+#ifdef ECC_USE_OPENSSL
+	cout<<"using openssl"<<endl;
+#else	
+	cout<<"using relic"<<endl;
 #endif
-
-    if (argc < 2)
-    {
-        cout << "./ot <party>";
-        exit(0);
-    }
-
-    int party, port = 12345;
-    sscanf(argv[1], "%d", &party);
-    NetIO *io = new NetIO(party == ALICE ? nullptr : "127.0.0.1", port);
 
     string m[2];
     m[0] = "hello";
     m[1] = "goodbye";
 
-    cout << ot(io, party, m, 0) << endl;
-
+    assert( ot(io, party, m, 0) =="hello");
+	cout<<"yes"<<endl;
     return 0;
 }
