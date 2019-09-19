@@ -7,7 +7,7 @@
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer. 
+ *    notice, this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in
@@ -52,13 +52,9 @@
 #ifndef LIBGARBLE_AES_H
 #define LIBGARBLE_AES_H
 
-#if !defined (__AES__)
-    #error "AES-NI instructions not enabled"
-#endif
-
 #include "emp-tool/utils/block.h"
 
-namespace emp { 
+namespace emp {
 
 typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
 
@@ -73,7 +69,8 @@ typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
     v2 = _mm_shuffle_epi32(v2,shuff_const);                                 \
     v1 = _mm_xor_si128(v1,v2)
 
-static inline void
+inline void
+__attribute__((target("aes,sse2")))
 AES_set_encrypt_key(const block userkey, AES_KEY *key)
 {
     block x0, x1, x2;
@@ -103,7 +100,8 @@ AES_set_encrypt_key(const block userkey, AES_KEY *key)
     key->rounds = 10;
 }
 
-static inline void
+inline void
+__attribute__((target("aes,sse2")))
 AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key)
 {
     for (unsigned int i = 0; i < nblks; ++i)
@@ -115,7 +113,8 @@ AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key)
         blks[i] = _mm_aesenclast_si128(blks[i], key->rd_key[key->rounds]);
 }
 
-static inline void
+inline void
+__attribute__((target("aes,sse2")))
 AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey)
 {
     int j = 0;
@@ -129,7 +128,8 @@ AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey)
     dkey->rd_key[i] = ekey->rd_key[j];
 }
 
-static inline void
+inline void
+__attribute__((target("aes,sse2")))
 AES_set_decrypt_key(block userkey, AES_KEY *key)
 {
     AES_KEY temp_key;
@@ -137,7 +137,8 @@ AES_set_decrypt_key(block userkey, AES_KEY *key)
     AES_set_decrypt_key_fast(key, &temp_key);
 }
 
-static inline void
+inline void
+__attribute__((target("aes,sse2")))
 AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key)
 {
     unsigned i, j, rnds = key->rounds;
