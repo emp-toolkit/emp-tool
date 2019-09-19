@@ -228,7 +228,7 @@ inline block RIGHTSHIFT(block bl) {
 
 	  Contact GitHub API Training Shop Blog About
 	 */
-__attribute__((target("sse2,vpclmulqdq")))
+__attribute__((target("sse2,pclmul")))
 inline void mul128(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
 	/*	block a0xora1 = xorBlocks(a, _mm_srli_si128(a, 8));
 		block b0xorb1 = xorBlocks(b, _mm_srli_si128(b, 8));
