@@ -26,7 +26,7 @@ class XorTree{public:
 	}
 	void circuitN(block* out, block * in, int dim = N) {
 		assert(dim <= N);
-	
+
 		for(int i = 0; i < dim; ++i) {
 			block res = zero_block();
 			for(int j = 0; j < M; ++j) {
@@ -52,7 +52,7 @@ class XorTree{public:
 		prg->random_data(tmp, M);
 		for(int i = 0; i < M; ++i)
 			out[i] = (tmp[i]%2==1);
-	
+
 		for(int i = 0; i < dim; ++i) {
 			bool res = false;
 			for(int j = 0; j < M; ++j) {
