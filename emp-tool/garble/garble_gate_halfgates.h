@@ -4,8 +4,7 @@
 #include "emp-tool/garble/aes_opt.h"
 #include <string.h>
 namespace emp {
-inline void garble_gate_eval_halfgates(block A, block B, 
-		block *out, const block *table, uint64_t idx, const block rd_S) {
+inline void garble_gate_eval_halfgates(block A, block B, block *out, const block *table, ROUND_KEYS *KEYS, block *key_ini) {
 	block HA, HB, W;
 	int sa, sb;
 
@@ -20,7 +19,7 @@ inline void garble_gate_eval_halfgates(block A, block B,
 		keys[1] = sigma(B);
 		masks[0] = keys[0];
 		masks[1] = keys[1];
-		AES_ecb_ccr_ks2_enc2(rd_S, idx, keys, keys);
+		AES_ecb_ccr_ks2_enc2(keys, keys, KEYS, key_ini);
 		HA = xorBlocks(keys[0], masks[0]);
 		HB = xorBlocks(keys[1], masks[1]);
 	}
@@ -35,7 +34,7 @@ inline void garble_gate_eval_halfgates(block A, block B,
 	*out = W;
 }
 
-inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B1, block *out0, block *out1, block delta, block *table, uint64_t idx, const block rd_S) {
+inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B1, block *out0, block *out1, block delta, block *table, ROUND_KEYS *KEYS, block *key_ini) {
 	long pa = getLSB(LA0);
 	long pb = getLSB(LB0);
 	block HLA0, HA1, HLB0, HB1;
@@ -49,7 +48,7 @@ inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B
 		keys[2] = sigma(LB0);
 		keys[3] = sigma(B1);
 		memcpy(masks, keys, sizeof keys);
-		AES_ecb_ccr_ks2_enc4(rd_S, idx, keys, keys);
+		AES_ecb_ccr_ks2_enc4(keys, keys, KEYS, key_ini);
 		HLA0 = xorBlocks(keys[0], masks[0]);
 		HA1 = xorBlocks(keys[1], masks[1]);
 		HLB0 = xorBlocks(keys[2], masks[2]);

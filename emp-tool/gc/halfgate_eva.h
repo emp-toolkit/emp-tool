@@ -18,6 +18,9 @@ class HalfGateEva:public CircuitExecution{ public:
 	bool with_file_io = false;
 	FileIO * fio;
 	block fix_point;
+	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
+	block key_ini[KS_BATCH_N];		// key schedule
+	int key_used = 0;
 	HalfGateEva(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
 		prg.random_block(&start_point, 1);
@@ -42,7 +45,13 @@ class HalfGateEva:public CircuitExecution{ public:
 				fio->send_block(table, 2);
 				return prp.H(a, gid++);
 			}
-			garble_gate_eval_halfgates(a, b, &out, table, gid++, start_point);
+			if(key_used == KS_BATCH_N) {
+				AES_ks8(start_point, gid, key_schedule, key_ini);
+				key_used = 0;
+			}
+			garble_gate_eval_halfgates(a, b, &out, table, &key_schedule[key_used*2], &key_ini[key_used*2]);
+			gid++;
+			key_used += 2;
 			return out;
 		}
 	}
@@ -94,6 +103,9 @@ public:
 	bool with_file_io = false;
 	FileIO * fio;
 	block constant[2];
+	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
+	block key_ini[KS_BATCH_N];		// key schedule
+	int key_used = 0;
 	HalfGateEva(T * io) :io(io) {
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
 		prg2.random_block(&start_point, 1);
@@ -116,7 +128,11 @@ public:
 			fio->send_block(table, 2);
 			return prp.H(a, gid++);
 		}
-		garble_gate_eval_halfgates(a, b, &out, table, gid++, start_point);
+		if(key_used == KS_BATCH_N) {
+			AES_ks8(start_point, gid, key_schedule, key_ini);
+			key_used = 0;
+		}
+		garble_gate_eval_halfgates(a, b, &out, table, &key_schedule[key_used*2], &key_ini[key_used*2]);
 		return out;
 	}
 	block xor_gate(const block& a, const block& b) override {
