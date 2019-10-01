@@ -27,9 +27,9 @@
 #include "emp-tool/utils/ccrh.h"
 #include "emp-tool/utils/tccrh.h"
 #include "emp-tool/utils/utils.h"
-#include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/utils/xor_tree.h"
 #include "emp-tool/utils/ThreadPool.h"
+#include "emp-tool/utils/group.h"
 
 #include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"

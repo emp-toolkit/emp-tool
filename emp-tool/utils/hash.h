@@ -6,10 +6,6 @@
 #include <openssl/sha.h>
 #include <stdio.h>
 
-extern "C" {
-#include <relic/relic.h>
-}
-
 /** @addtogroup BP
   @{
  */
@@ -59,14 +55,12 @@ class Hash { public:
 		hash_once(digest, data, nbyte);
 		return _mm_load_si128((__m128i*)&digest[0]);
 	}
-	void put_eb(const eb_t * eb, int length) {
-		uint8_t buffer[100];//large enough to hold one.
-		for(int i = 0; i < length; ++i) {
-			int eb_size = eb_size_bin(eb[i], false);
-			eb_write_bin(buffer, eb_size, eb[i], false);
-			put(buffer, eb_size);
-		}
+
+	static block KDF(const Group &G, Point &in) {
+		char* tmp=G.to_hex(in);
+		return hash_for_block(tmp, strlen(tmp));
 	}
+
 };
 }
 /**@}*/

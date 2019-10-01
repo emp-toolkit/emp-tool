@@ -17,15 +17,6 @@ int main() {
 	int rand_ints[100];
 	prg.random_data_unaligned(rand_ints+2, sizeof(int)*98);//when the array is not 128-bit-aligned
 
-	initialize_relic();
-	bn_t bn1, bn2, bn3;
-	bn_newl(bn1, bn2, bn3);
-	prg.random_bn(bn1, bn2, bn3);
-
-	eb_t eb1, eb2, eb3;
-	eb_newl(eb1, eb2, eb3);
-	prg.random_eb(eb1, eb2, eb3);
-
 	mpz_t integ;
 	mpz_init(integ);
 	prg.random_mpz(integ, 1024);//random number with 1024 bits.

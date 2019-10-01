@@ -1,7 +1,6 @@
 #ifndef IO_CHANNEL_H__
 #define IO_CHANNEL_H__
 #include "emp-tool/utils/block.h"
-#include "emp-tool/utils/utils_ec.h"
 #include "emp-tool/utils/prg.h"
 
 /** @addtogroup IO
@@ -62,21 +61,6 @@ public:
 		delete[] tmp;
 	}
 
-	void send_bn_enc(const bn_t * bn, size_t num) {
-		uint64_t buffer[4];
-		uint64_t buffer2[4];
-		uint32_t bn_size;
-		for(size_t i = 0; i < num; ++i) {
-			bn_size = bn_size_raw(bn[i]);
-			prg->random_data(buffer2, bn_size*sizeof(uint64_t));
-			bn_write_raw(buffer, bn_size, bn[i]);
-			for(size_t k = 0; k < bn_size; ++k)
-				buffer[k]^=buffer2[k];
-			send_data(&bn_size, sizeof(int));
-			send_data(buffer, bn_size*sizeof(uint64_t));
-		}
-	}
-
 	void recv_data_enc(void * data, int len) {
 		recv_data(data, len);
 		if(prg == nullptr)return;
@@ -97,92 +81,25 @@ public:
 		delete[] tmp;
 	}
 
-	void send_eb_enc(const eb_t * eb, size_t num) {
-		uint8_t buffer[EB_SIZE];
-		uint8_t buffer2[EB_SIZE];
-		for(size_t i = 0; i < num; ++i) {
-			uint32_t eb_size = eb_size_bin(eb[i], ECC_PACK);
-			send_data(&eb_size, sizeof(int));
-			prg->random_data(buffer2, eb_size);
-			eb_write_bin(buffer, eb_size, eb[i], ECC_PACK);
-			for(size_t k = 0; k < eb_size; ++k) {
-				buffer[k] = (char)(buffer[k]^buffer2[k]);
-			}
-			send_data(buffer, eb_size*sizeof(uint8_t));
-		}
+	void send_pt(const Group &G,const Point &A)
+	{
+		char *data = G.to_hex(A);
+		int len = strlen(data);
+		send_data(&len, 4);
+		send_data(data, len);
 	}
 
-	void recv_eb_enc(eb_t* eb, size_t num) {
-		uint8_t buffer[EB_SIZE];
-		uint8_t buffer2[EB_SIZE];
-		uint32_t eb_size;
-		for(size_t i = 0; i < num; ++i) {
-			recv_data(&eb_size, sizeof(int));
-			recv_data(buffer, eb_size*sizeof(uint8_t));
-			if(prg == nullptr)continue;
-			prg->random_data(buffer2, eb_size);
-			for(size_t k = 0; k < eb_size; ++k) {
-				buffer[k] = (char)(buffer[k]^buffer2[k]);
-			}
-			eb_read_bin(eb[i], buffer, eb_size);
-		}
-	}
+	void recv_pt(const Group &G,Point &A)
+	{
 
-	void recv_bn_enc(bn_t* bn, size_t num) {
-		uint64_t buffer[4];
-		uint64_t buffer2[4];
-		uint32_t bn_size;
-		for(size_t i = 0; i < num; ++i) {
-			recv_data(&bn_size, sizeof(int));
-			recv_data(buffer, bn_size*sizeof(uint64_t));
-			if(prg == nullptr)continue;
-			prg->random_data(buffer2, sizeof(uint64_t)*bn_size);
-			for(size_t k = 0; k < bn_size; ++k)
-				buffer[k] ^=buffer2[k];
-			bn_read_raw(bn[i], buffer, bn_size);
-		}
-	}
-
-	void send_eb(const eb_t * eb, size_t num) {
-		uint8_t buffer[EB_SIZE];
-		for(size_t i = 0; i < num; ++i) {
-			int eb_size = eb_size_bin(eb[i], ECC_PACK);
-			eb_write_bin(buffer, eb_size, eb[i], ECC_PACK);
-			send_data(&eb_size, sizeof(int));
-			send_data(buffer, eb_size*sizeof(uint8_t));
-		}
-	}
-
-	void recv_eb(eb_t* eb, size_t num) {
-		uint8_t buffer[EB_SIZE];
-		int eb_size;
-		for(size_t i = 0; i < num; ++i) {
-			recv_data(&eb_size, sizeof(int));
-			recv_data(buffer, eb_size*sizeof(uint8_t));
-			eb_read_bin(eb[i], buffer, eb_size);
-		}
-	}
-
-	void send_bn(const bn_t * bn, size_t num) {
-		uint64_t buffer[4];
-		int bn_size;
-		for(size_t i = 0; i < num; ++i) {
-			bn_size = bn_size_raw(bn[i]);	
-			bn_write_raw(buffer, bn_size, bn[i]);
-			send_data(&bn_size, sizeof(int));
-			send_data(buffer, bn_size*sizeof(uint64_t));
-		}
-	}
-
-	void recv_bn(bn_t* bn, size_t num) {
-		uint64_t buffer[4];
-		int bn_size;
-		for(size_t i = 0; i < num; ++i) {
-			recv_data(&bn_size, sizeof(int));
-			recv_data(buffer, bn_size*sizeof(uint64_t));
-			bn_read_raw(bn[i], buffer, bn_size);
-		}
-	}
+		int len;
+		char *data;
+		recv_data(&len, 4);
+		data = new char[len + 1];
+		data[len] = 0;
+		recv_data(data, len);
+		G.from_hex(A, data);
+	}	
 
 private:
 	T& derived() {
