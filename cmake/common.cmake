@@ -18,9 +18,7 @@ if(NOT WIN32)
   set(BoldWhite   "${Esc}[1;37m")
 endif()
 
-if(POLICY CMP0042)
-  cmake_policy(SET CMP0042 NEW) # use rpath on macOS
-endif()
+set(CMAKE_MACOSX_RPATH 0)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
