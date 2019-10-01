@@ -107,9 +107,9 @@ class PRG { public:
 	}
 
 //TODO:
-	void random_bi(BigInt &a,  int bits = 10) {
+	void random_bi(BigInt &a,  int bits = 100) {
 		//assert(bits%8==0);
-		char *tmp=new char[bits/8];
+		unsigned char *tmp=new unsigned char[bits/8];
 		random_data(tmp,bits/8);
 		a.from_bin(tmp,bits/8);
 		delete[] tmp;
