@@ -81,22 +81,26 @@ public:
 		delete[] tmp;
 	}
 
-	void send_pt(Group &G,const Point &A) {
-		size_t length = 0;
-		unsigned char *data = G.to_bin(&length, A);
-		send_data(&length, 4);
-		send_data(data, length);
-		delete [] data;
+	void send_pt(Group &G, const Point *A, int num_pts = 1) {
+		for(int i = 0; i < num_pts; ++i) {
+			size_t len = G.size_bin(A);
+			unsigned char * data = new unsigned char[len];
+			send_data(&len, 4);
+			G.to_bin(data, A + i, len);
+			send_data(data, len);
+			delete [] data;
+		}
 	}
 
-	void recv_pt(Group &G, Point &A) {
+	void recv_pt(Group &G, Point *A, int num_pts = 1) {
 		size_t len = 0;
-		unsigned char *data;
-		recv_data(&len, 4);
-		data = new unsigned char[len];
-		recv_data(data, len);
-		G.from_bin(data, len, A);
-		delete[] data;
+		for(int i = 0; i < num_pts; ++i) {
+			recv_data(&len, 4);
+			unsigned char *data = new unsigned char[len];
+			recv_data(data, len);
+			G.from_bin(data, A + i, len);
+			delete[] data;
+		}
 	}	
 
 private:

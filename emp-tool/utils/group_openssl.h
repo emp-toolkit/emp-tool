@@ -153,15 +153,17 @@ class Group {
 			EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, NULL);
 		}
 
-		unsigned char * to_bin(size_t * length, const Point & point) {
-			*length = EC_POINT_point2oct(ec_group, point.p, POINT_CONVERSION_UNCOMPRESSED, nullptr, 0, bn_ctx);
-			unsigned char * buf = new unsigned char[*length];
-			*length = EC_POINT_point2oct(ec_group, point.p, POINT_CONVERSION_UNCOMPRESSED, buf, *length, bn_ctx);
-			return buf;
+		void to_bin(unsigned char * buf, const Point * point, size_t buf_len) {
+			EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, bn_ctx);
 		}
 
-		void from_bin(const unsigned char * s, int length, const Point & point) {
-			EC_POINT_oct2point(ec_group, point.p, s, length, bn_ctx);
+		size_t size_bin(const Point * point) {
+			size_t len = EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, nullptr, 0, bn_ctx);
+			return len;
+		}
+
+		void from_bin(const unsigned char * buf, Point * point, size_t buf_len) {
+			EC_POINT_oct2point(ec_group, point->p, buf, buf_len, bn_ctx);
 		}
 
 		char* to_hex(const Point &p) const {
