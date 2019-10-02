@@ -1,9 +1,9 @@
 #ifndef GROUP_OPENSSL_H__
 #define GROUP_OPENSSL_H__
 
-#include "openssl/ec.h"
-#include "openssl/bn.h"
-#include "openssl/obj_mac.h"
+#include <openssl/ec.h>
+#include <openssl/bn.h>
+#include <openssl/obj_mac.h>
 #include <string>
 #include <cstring>
 
@@ -111,11 +111,13 @@ class Group {
 	private:
 		EC_GROUP *ec_group = nullptr;
 		BN_CTX * bn_ctx = nullptr;
+		BigInt p;
 
 	public:
 		Group() {
 			ec_group = EC_GROUP_new_by_curve_name(NID_secp256k1);
 			EC_GROUP_precompute_mult(ec_group, NULL);
+			get_order(p);
 		}
 		~Group(){
 			if(ec_group != nullptr)
@@ -126,7 +128,11 @@ class Group {
 		}
 
 		void get_order(BigInt &n) {
-			EC_GROUP_get_order(ec_group,n.n,NULL);
+			EC_GROUP_get_order(ec_group, n.n, NULL);
+		}
+		
+		void get_rand_bn(BigInt & n) {
+			BN_rand_range(n.n, p.n);
 		}
 
 		void get_generator(Point &g) {
