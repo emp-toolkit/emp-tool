@@ -116,7 +116,8 @@ class Group {
 	public:
 		Group() {
 			ec_group = EC_GROUP_new_by_curve_name(NID_secp256k1);
-			EC_GROUP_precompute_mult(ec_group, NULL);
+			bn_ctx = BN_CTX_new();
+			EC_GROUP_precompute_mult(ec_group, bn_ctx);
 			get_order(p);
 		}
 		~Group(){
@@ -128,7 +129,7 @@ class Group {
 		}
 
 		void get_order(BigInt &n) {
-			EC_GROUP_get_order(ec_group, n.n, NULL);
+			EC_GROUP_get_order(ec_group, n.n, bn_ctx);
 		}
 		
 		void get_rand_bn(BigInt & n) {
@@ -144,19 +145,19 @@ class Group {
 		}
 
 		void add(Point &res, const Point &lhs, const Point &rhs) {
-			EC_POINT_add(ec_group, res.p, lhs.p, rhs.p, NULL);
+			EC_POINT_add(ec_group, res.p, lhs.p, rhs.p, bn_ctx);
 		}
 
 		void inv(Point &res, const Point &p) {
 			res = p;
-			EC_POINT_invert(ec_group, res.p, NULL);
+			EC_POINT_invert(ec_group, res.p, bn_ctx);
 		}
 
 		void mul(Point &res, const Point &lhs, const BigInt &m) {
-			EC_POINT_mul(ec_group, res.p, NULL, lhs.p, m.n, NULL);
+			EC_POINT_mul(ec_group, res.p, NULL, lhs.p, m.n, bn_ctx);
 		}
 		void mul_gen(Point &res, const BigInt &m) {
-			EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, NULL);
+			EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, bn_ctx);
 		}
 
 		void to_bin(unsigned char * buf, const Point * point, size_t buf_len) {
