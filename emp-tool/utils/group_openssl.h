@@ -2,6 +2,55 @@
 #define GROUP_OPENSSL_H__
 
 namespace emp {
+BigInt::BigInt() {
+	n = BN_new();
+}
+BigInt::BigInt(const BigInt &oth) {
+	n = BN_new();
+	BN_copy(n, oth.n);
+}
+BigInt& BigInt::operator=(BigInt oth) {
+	std::swap(n, oth.n);
+	return *this;
+}
+BigInt::~BigInt() {
+	if (n != nullptr)
+		BN_free(n);
+}
+
+int BigInt::size() {
+	return BN_num_bytes(n);
+}
+
+void BigInt::to_bin(unsigned char * in) {
+	BN_bn2bin(n, in);
+}
+
+void BigInt::from_bin(const unsigned char * in, int length) {
+	BN_free(n);
+	n = BN_bin2bn(in, length, nullptr);
+}
+
+BigInt BigInt::add(const BigInt &oth) {
+	BigInt ret;
+	BN_add(ret.n, n, oth.n);
+	return ret;
+}
+
+BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) {
+	BigInt ret;
+	BN_mul(ret.n, n, oth.n, ctx);
+	return ret;
+}
+
+BigInt BigInt::mod(const BigInt &oth, BN_CTX *ctx) {
+	BigInt ret;
+	BN_mod(n, n, oth.n, ctx);
+	return ret;
+}
+
+
+
 Point::Point (Group * g) {
 	if (g == nullptr) return;
 	this->group = g;
@@ -114,6 +163,5 @@ inline Point Group::mul_gen(const BigInt &m) {
 	if(ret == 0) error("ECC GEN MUL");
 	return res;
 }
-
 }
 #endif
