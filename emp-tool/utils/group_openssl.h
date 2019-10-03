@@ -6,8 +6,9 @@
 #include <openssl/obj_mac.h>
 #include <string>
 #include <cstring>
+#include "emp-tool/utils/utils.h"
 
-namespace emp{
+namespace emp {
 using std::string;
 
 class Point;
@@ -30,7 +31,7 @@ class BigInt {
 	}
 	~BigInt() {
 		if (n != nullptr)
-		BN_free(n);
+			BN_free(n);
 	}
 	void from_dec(const string &s) {
 		char *p_str;
@@ -69,7 +70,7 @@ class BigInt {
 	}
 
 	BigInt &mul(const BigInt &oth) {
-		BN_mul(n, n, oth.n,NULL);
+		BN_mul(n, n, oth.n, NULL);
 		return *this;
 	}
 
@@ -83,43 +84,35 @@ class BigInt {
 };
 
 class Point {
-	private:
-		EC_POINT *p;
-
+	//private:
 	public:
+		EC_POINT *p = nullptr;
+
 		Point() {
-			p = NULL;
 		}
+
 		~Point() {
 			if(p!=nullptr)
 				EC_POINT_free(p);
-		}
-
-		Point(const Point &oth) {
-			EC_POINT_copy(p, oth.p);
-		}
-		Point &operator=(const Point &oth) {
-			EC_POINT_copy(p, oth.p);
-			return *this;
 		}
 
 		friend class Group;
 };
 
 class Group {
+	public:
 	friend class Point;
-	private:
+	//private:
 		EC_GROUP *ec_group = nullptr;
 		BN_CTX * bn_ctx = nullptr;
 		BigInt p;
-	public:
 		unsigned char * scratch;
 		size_t scratch_size = 256;
 		Group() {
 			ec_group = EC_GROUP_new_by_curve_name(NID_secp256k1);
 			bn_ctx = BN_CTX_new();
 			EC_GROUP_precompute_mult(ec_group, bn_ctx);
-			get_order(p);
+			EC_GROUP_get_order(ec_group, p.n, bn_ctx);
 			scratch = new unsigned char[scratch_size];
 		}
 
@@ -142,16 +135,13 @@ class Group {
 			}
 		}
 
-		void get_order(BigInt &n) {
-			EC_GROUP_get_order(ec_group, n.n, bn_ctx);
-		}
-		
 		void get_rand_bn(BigInt & n) {
 			BN_rand_range(n.n, p.n);
 		}
 
 		void get_generator(Point &g) {
-			EC_POINT_copy(g.p, EC_GROUP_get0_generator(ec_group));
+			int ret = EC_POINT_copy(g.p, EC_GROUP_get0_generator(ec_group));
+			if(ret == 0) error("");
 		}
 
 		void init(Point &p) {
@@ -159,32 +149,39 @@ class Group {
 		}
 
 		void add(Point &res, const Point &lhs, const Point &rhs) {
-			EC_POINT_add(ec_group, res.p, lhs.p, rhs.p, bn_ctx);
+			int ret = EC_POINT_add(ec_group, res.p, lhs.p, rhs.p, bn_ctx);
+			if(ret == 0) error("ECC ADD");
 		}
 
 		void inv(Point &res, const Point &p) {
-			res = p;
-			EC_POINT_invert(ec_group, res.p, bn_ctx);
+			int ret = EC_POINT_copy(res.p, p.p);
+			ret += EC_POINT_invert(ec_group, res.p, bn_ctx);
+			if(ret != 2) error("ECC INV");
 		}
 
 		void mul(Point &res, const Point &lhs, const BigInt &m) {
-			EC_POINT_mul(ec_group, res.p, NULL, lhs.p, m.n, bn_ctx);
+			int ret = EC_POINT_mul(ec_group, res.p, NULL, lhs.p, m.n, bn_ctx);
+			if(ret == 0) error("ECC MUL");
 		}
 		void mul_gen(Point &res, const BigInt &m) {
-			EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, bn_ctx);
+			int ret = EC_POINT_mul(ec_group, res.p, m.n ,NULL, NULL, bn_ctx);
+			if(ret == 0) error("ECC GEN MUL");
 		}
 
 		void to_bin(unsigned char * buf, const Point * point, size_t buf_len) {
-			EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, bn_ctx);
+			int ret = EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, bn_ctx);
+			if(ret == 0) error("ECC TO_BIN");
 		}
 
 		size_t size_bin(const Point * point) {
-			size_t len = EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, nullptr, 0, bn_ctx);
-			return len;
+			size_t ret = EC_POINT_point2oct(ec_group, point->p, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, bn_ctx);
+			if(ret == 0) error("ECC SIZE_BIN");
+			return ret;
 		}
 
 		void from_bin(const unsigned char * buf, Point * point, size_t buf_len) {
-			EC_POINT_oct2point(ec_group, point->p, buf, buf_len, bn_ctx);
+			int ret = EC_POINT_oct2point(ec_group, point->p, buf, buf_len, bn_ctx);
+			if(ret == 0) error("ECC FROM_BIN");
 		}
 
 		char* to_hex(const Point &p) const {
