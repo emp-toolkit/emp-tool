@@ -83,7 +83,7 @@ public:
 
 	void send_pt(Group *G, const Point *A, int num_pts = 1) {
 		for(int i = 0; i < num_pts; ++i) {
-			size_t len = G.size_bin(A);
+			size_t len = G->size_bin(A);
 			unsigned char * data = new unsigned char[len];
 			send_data(&len, 4);
 			G->to_bin(data, A + i, len);
