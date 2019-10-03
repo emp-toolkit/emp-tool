@@ -112,20 +112,34 @@ class Group {
 		EC_GROUP *ec_group = nullptr;
 		BN_CTX * bn_ctx = nullptr;
 		BigInt p;
-
 	public:
+		unsigned char * scratch;
+		size_t scratch_size = 256;
 		Group() {
 			ec_group = EC_GROUP_new_by_curve_name(NID_secp256k1);
 			bn_ctx = BN_CTX_new();
 			EC_GROUP_precompute_mult(ec_group, bn_ctx);
 			get_order(p);
+			scratch = new unsigned char[scratch_size];
 		}
+
 		~Group(){
 			if(ec_group != nullptr)
 				EC_GROUP_free(ec_group);
 
 			if(bn_ctx != nullptr)
 				BN_CTX_free(bn_ctx);
+
+			if(scratch != nullptr)
+				delete[] scratch;
+		}
+		
+		void resize_scratch(size_t size) {
+			if (size > scratch_size) {
+				delete[] scratch;
+				scratch_size = size;
+				scratch = new unsigned char[scratch_size];
+			}
 		}
 
 		void get_order(BigInt &n) {

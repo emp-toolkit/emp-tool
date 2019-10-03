@@ -3,7 +3,6 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/constants.h"
-#include "emp-tool/utils/group.h"
 #include <gmp.h>
 #include <random>
 
@@ -104,15 +103,6 @@ class PRG { public:
 				break;
 			}
 		}
-	}
-
-//TODO:
-	void random_bi(BigInt &a,  int bits = 100) {
-		//assert(bits%8==0);
-		unsigned char *tmp=new unsigned char[bits/8];
-		random_data(tmp,bits/8);
-		a.from_bin(tmp,bits/8);
-		delete[] tmp;
 	}
 };
 }
