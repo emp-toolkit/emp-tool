@@ -27,23 +27,25 @@ public:
 		recv_data(data, nblock*sizeof(block));
 	}
 
-	void send_pt(Group *G, const Point *A, int num_pts = 1) {
+	void send_pt(Point *A, int num_pts = 1) {
 		for(int i = 0; i < num_pts; ++i) {
-			size_t len = G->size_bin(A);
-			G->resize_scratch(len);
+			size_t len = A[i].size();
+			A[i].group->resize_scratch(len);
+			unsigned char * tmp = A[i].group->scratch;
 			send_data(&len, 4);
-			G->to_bin(G->scratch, A + i, len);
-			send_data(G->scratch, len);
+			A[i].to_bin(tmp, len);
+			send_data(tmp, len);
 		}
 	}
 
-	void recv_pt(Group *G, Point *A, int num_pts = 1) {
+	void recv_pt(Point *A, int num_pts = 1) {
 		size_t len = 0;
 		for(int i = 0; i < num_pts; ++i) {
 			recv_data(&len, 4);
-			G->resize_scratch(len);
-			recv_data(G->scratch, len);
-			G->from_bin(G->scratch, A + i, len);
+			A[i].group->resize_scratch(len);
+			unsigned char * tmp = A[i].group->scratch;
+			recv_data(tmp, len);
+			A[i].from_bin(tmp, len);
 		}
 	}	
 

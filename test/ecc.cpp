@@ -7,26 +7,39 @@
 using namespace std;
 using namespace emp;
 
+
 int main() {
 	Group G;
-	Point a, b, c, d, e;
-	G.init(a);
-	G.init(b);
-	G.init(c);
-	G.init(d);
-	G.init(e);
 	BigInt ia, ib, ic, id;
 	G.get_rand_bn(ia);
 	G.get_rand_bn(ib);
 	G.get_rand_bn(ic);
 	G.get_rand_bn(id);
-	G.mul_gen(a, ia);//g^a
-	G.mul_gen(b, ib);//g^a
+	Point * a = new Point();
+	Point b;
+	*a = G.mul_gen(ia);//g^a
+	b = G.mul_gen(ib);//g^a
 	ic = ia;
 	ic.add(ib);
-	G.mul_gen(c, ic);//g^{a+b}
-	G.add(d, a, b);//g^ag^b
-	int res = EC_POINT_cmp(G.ec_group, d.p, c.p,nullptr);	
+	Point c = G.mul_gen(ic);//g^{a+b}
+	Point d = a->add(b);
+	int res = (d == c);
 	cout << res<<endl;
+
+
+	c = a->mul(ib);//c=a^ib = g^ab
+	d = b.mul(ia);//c=a^ib = g^ab
+	
+	res = (d == c);
+	cout << res<<endl;
+
+	int size = a->size();
+	unsigned char * tmp = new unsigned char[size];
+	a->to_bin(tmp, size);
+	b.from_bin(tmp, size);
+
+	res = (*a==b);
+	cout << res<<endl;
+	
 	return 0;
 }
