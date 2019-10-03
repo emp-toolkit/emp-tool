@@ -56,11 +56,15 @@ class Hash { public:
 		return _mm_load_si128((__m128i*)&digest[0]);
 	}
 
-	static block KDF(const Group &G, Point &in) {
-		char* tmp=G.to_hex(in);
-		return hash_for_block(tmp, strlen(tmp));
+	static block KDF(Group &G, Point &in, uint64_t id = 1) {
+		size_t len = G.size_bin(&in);
+		unsigned char * tmp = new unsigned char[len+8];
+		G.to_bin(tmp, &in, len);
+		memcpy(tmp+len, &id, 8);
+		block ret = hash_for_block(tmp, len+8);
+		delete[] tmp;
+		return ret;
 	}
-
 };
 }
 /**@}*/
