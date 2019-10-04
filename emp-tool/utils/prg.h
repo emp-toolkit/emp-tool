@@ -3,7 +3,6 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/constants.h"
-#include "emp-tool/utils/utils_ec.h"
 #include <gmp.h>
 #include <random>
 
@@ -84,60 +83,6 @@ class PRG { public:
 			AES_ecb_encrypt_blks(data+i, AES_BATCH_SIZE, &aes);
 		}
 		AES_ecb_encrypt_blks(data+i, (AES_BATCH_SIZE >  nblocks-i) ? nblocks-i:AES_BATCH_SIZE, &aes);
-	}
-
-	template<typename T, typename ... L>
-		void random_bn(T t, L... l) {
-			random_bn(l...);
-			random_bn(t);
-		}
-
-	void random_bn(bn_t a, int sign = RLC_POS, int bits = BIT_LEN) {
-		int digits;
-		RLC_RIP(bits, digits, bits);
-		digits += (bits > 0 ? 1 : 0);
-		bn_grow(a, digits);
-		random_data((uint8_t*)a->dp, digits * sizeof(dig_t));
-		a->used = digits;
-		a->sign = sign;
-		if (bits > 0) {
-			dig_t mask = ((dig_t)1 << (dig_t)bits) - 1;
-			a->dp[a->used - 1] &= mask;
-		}
-		bn_trim(a);
-	}
-
-	void random_bn(bn_t *a, int length=1, int sign = RLC_POS, int bits = BIT_LEN) {
-		for(int i = 0; i < length; ++i)
-			random_bn(a[i]);
-	}
-
-	template<typename T, typename ... L>
-		void random_eb(T t, L... l) {
-			random_eb(l...);
-			random_eb(t);
-		}
-
-	void random_eb(eb_t p) {
-		bn_t n, k;
-		bn_new(k);
-		bn_new(n);
-		eb_curve_get_ord(n);
-		random_bn(k, RLC_POS, bn_bits(n));
-		bn_mod(k, k, n);
-		eb_mul_gen(p, k);
-	}
-
-	void random_eb(eb_t *p, int length=1) {
-		bn_t n, k;
-		bn_new(k);
-		bn_new(n);
-		eb_curve_get_ord(n);
-		for(int i = 0; i < length; ++i) {
-			random_bn(k, RLC_POS, bn_bits(n));
-			bn_mod(k, k, n);
-			eb_mul_gen(p[i], k);
-		}
 	}
 
 	void random_mpz(mpz_t out, int nbits) {

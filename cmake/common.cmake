@@ -18,9 +18,7 @@ if(NOT WIN32)
   set(BoldWhite   "${Esc}[1;37m")
 endif()
 
-if(POLICY CMP0042)
-  cmake_policy(SET CMP0042 NEW) # use rpath on macOS
-endif()
+set(CMAKE_MACOSX_RPATH 0)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
@@ -45,5 +43,5 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 #Testing macro
 macro (add_test_with_lib _name libs)
 	add_executable(${_name} "test/${_name}.cpp")
-	target_link_libraries(${_name}  ${RELIC_LIBRARIES} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} ${GMP_LIBRARIES} ${libs}) 
+	target_link_libraries(${_name} ${OPENSSL_LIBRARIES} ${Boost_LIBRARIES} ${GMP_LIBRARIES} ${libs}) 
 endmacro()

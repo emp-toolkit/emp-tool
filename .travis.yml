@@ -28,7 +28,6 @@ before_install:
   - eval "${MATRIX_EVAL}"
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_packages.sh
-  - bash ./emp-readme/scripts/install_relic.sh
 
 script:
   - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &

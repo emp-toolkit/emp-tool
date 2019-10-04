@@ -50,6 +50,7 @@ inline const char* hex_char_to_bin(char c);
 void inline parse_party_and_port(char ** arg, int * party, int * port) {
 	parse_party_and_port(arg, 2, party, port);
 }
+
 #include "emp-tool/utils/utils.hpp"
 }
 #endif// UTILS_H__
