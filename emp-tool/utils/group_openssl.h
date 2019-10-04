@@ -2,79 +2,77 @@
 #define GROUP_OPENSSL_H__
 
 namespace emp {
-BigInt::BigInt() {
+inline BigInt::BigInt() {
 	n = BN_new();
 }
-BigInt::BigInt(const BigInt &oth) {
+inline BigInt::BigInt(const BigInt &oth) {
 	n = BN_new();
 	BN_copy(n, oth.n);
 }
-BigInt& BigInt::operator=(BigInt oth) {
+inline BigInt& BigInt::operator=(BigInt oth) {
 	std::swap(n, oth.n);
 	return *this;
 }
-BigInt::~BigInt() {
+inline BigInt::~BigInt() {
 	if (n != nullptr)
 		BN_free(n);
 }
 
-int BigInt::size() {
+inline int BigInt::size() {
 	return BN_num_bytes(n);
 }
 
-void BigInt::to_bin(unsigned char * in) {
+inline void BigInt::to_bin(unsigned char * in) {
 	BN_bn2bin(n, in);
 }
 
-void BigInt::from_bin(const unsigned char * in, int length) {
+inline void BigInt::from_bin(const unsigned char * in, int length) {
 	BN_free(n);
 	n = BN_bin2bn(in, length, nullptr);
 }
 
-BigInt BigInt::add(const BigInt &oth) {
+inline BigInt BigInt::add(const BigInt &oth) {
 	BigInt ret;
 	BN_add(ret.n, n, oth.n);
 	return ret;
 }
 
-BigInt BigInt::mul_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
+inline BigInt BigInt::mul_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
 	BigInt ret;
 	BN_mod_mul(ret.n, n, b.n, m.n, ctx);
 	return ret;
 }
 
-BigInt BigInt::add_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
+inline BigInt BigInt::add_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
 	BigInt ret;
 	BN_mod_add(ret.n, n, b.n, m.n, ctx);
 	return ret;
 }
 
-BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) {
+inline BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) {
 	BigInt ret;
 	BN_mul(ret.n, n, oth.n, ctx);
 	return ret;
 }
 
-BigInt BigInt::mod(const BigInt &oth, BN_CTX *ctx) {
+inline BigInt BigInt::mod(const BigInt &oth, BN_CTX *ctx) {
 	BigInt ret;
 	BN_mod(ret.n, n, oth.n, ctx);
 	return ret;
 }
 
-
-
-Point::Point (Group * g) {
+inline Point::Point (Group * g) {
 	if (g == nullptr) return;
 	this->group = g;
 	point = EC_POINT_new(group->ec_group);
 }
 
-Point::~Point() {
+inline Point::~Point() {
 	if(point != nullptr)
 		EC_POINT_free(point);
 }
 
-Point::Point(const Point & p) {
+inline Point::Point(const Point & p) {
 	if (p.group == nullptr) return;
 	this->group = p.group;
 	point = EC_POINT_new(group->ec_group);
@@ -82,24 +80,24 @@ Point::Point(const Point & p) {
 	if(ret == 0) error("ECC COPY");
 }
 
-Point& Point::operator=(Point p) {
+inline Point& Point::operator=(Point p) {
 	std::swap(p.point, point);
 	std::swap(p.group, group);
 	return *this;
 }
 
-void Point::to_bin(unsigned char * buf, size_t buf_len) {
+inline void Point::to_bin(unsigned char * buf, size_t buf_len) {
 	int ret = EC_POINT_point2oct(group->ec_group, point, POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, group->bn_ctx);
 	if(ret == 0) error("ECC TO_BIN");
 }
 
-size_t Point::size() {
+inline size_t Point::size() {
 	size_t ret = EC_POINT_point2oct(group->ec_group, point, POINT_CONVERSION_UNCOMPRESSED, NULL, 0, group->bn_ctx);
 	if(ret == 0) error("ECC SIZE_BIN");
 	return ret;
 }
 
-void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len) {
+inline void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len) {
 	if (point == nullptr) {
 		group = g;
 		point = EC_POINT_new(group->ec_group);
@@ -108,27 +106,27 @@ void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len) {
 	if(ret == 0) error("ECC FROM_BIN");
 }
 
-Point Point::add(Point & rhs) {
+inline Point Point::add(Point & rhs) {
 	Point ret(group);
 	int res = EC_POINT_add(group->ec_group, ret.point, point, rhs.point, group->bn_ctx);
 	if(res == 0) error("ECC ADD");
 	return ret;
 }
 
-Point Point::mul(const BigInt &m) {
+inline Point Point::mul(const BigInt &m) {
 	Point ret (group);
 	int res = EC_POINT_mul(group->ec_group, ret.point, NULL, point, m.n, group->bn_ctx);
 	if(res == 0) error("ECC MUL");
 	return ret;
 }
 
-Point Point::inv() {
+inline Point Point::inv() {
 	Point ret (*this);
 	int res = EC_POINT_invert(group->ec_group, ret.point, group->bn_ctx);
 	if(res == 0) error("ECC INV");
 	return ret;
 }
-bool Point::operator==(Point & rhs) {
+inline bool Point::operator==(Point & rhs) {
 	int ret = EC_POINT_cmp(group->ec_group, point, rhs.point, group->bn_ctx);
 	if(ret == -1) error("ECC CMP");
 	return (ret == 0);
