@@ -38,14 +38,14 @@ public:
 		}
 	}
 
-	void recv_pt(Point *A, int num_pts = 1) {
+	void recv_pt(Group * g, Point *A, int num_pts = 1) {
 		size_t len = 0;
 		for(int i = 0; i < num_pts; ++i) {
 			recv_data(&len, 4);
-			A[i].group->resize_scratch(len);
-			unsigned char * tmp = A[i].group->scratch;
+			g->resize_scratch(len);
+			unsigned char * tmp = g->scratch;
 			recv_data(tmp, len);
-			A[i].from_bin(tmp, len);
+			A[i].from_bin(g, tmp, len);
 		}
 	}	
 

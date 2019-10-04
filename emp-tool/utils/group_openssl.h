@@ -37,6 +37,18 @@ BigInt BigInt::add(const BigInt &oth) {
 	return ret;
 }
 
+BigInt BigInt::mul_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
+	BigInt ret;
+	BN_mod_mul(ret.n, n, b.n, m.n, ctx);
+	return ret;
+}
+
+BigInt BigInt::add_mod(const BigInt & b, const BigInt &m,  BN_CTX *ctx) {
+	BigInt ret;
+	BN_mod_add(ret.n, n, b.n, m.n, ctx);
+	return ret;
+}
+
 BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) {
 	BigInt ret;
 	BN_mul(ret.n, n, oth.n, ctx);
@@ -45,7 +57,7 @@ BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) {
 
 BigInt BigInt::mod(const BigInt &oth, BN_CTX *ctx) {
 	BigInt ret;
-	BN_mod(n, n, oth.n, ctx);
+	BN_mod(ret.n, n, oth.n, ctx);
 	return ret;
 }
 
@@ -87,7 +99,11 @@ size_t Point::size() {
 	return ret;
 }
 
-void Point::from_bin(const unsigned char * buf, size_t buf_len) {
+void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len) {
+	if (point == nullptr) {
+		group = g;
+		point = EC_POINT_new(group->ec_group);
+	}
 	int ret = EC_POINT_oct2point(group->ec_group, point, buf, buf_len, group->bn_ctx);
 	if(ret == 0) error("ECC FROM_BIN");
 }

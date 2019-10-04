@@ -19,8 +19,7 @@ int main() {
 	Point b;
 	*a = G.mul_gen(ia);//g^a
 	b = G.mul_gen(ib);//g^a
-	ic = ia;
-	ic.add(ib);
+	ic = ia.add_mod(ib, G.order);
 	Point c = G.mul_gen(ic);//g^{a+b}
 	Point d = a->add(b);
 	int res = (d == c);
@@ -36,7 +35,7 @@ int main() {
 	int size = a->size();
 	unsigned char * tmp = new unsigned char[size];
 	a->to_bin(tmp, size);
-	b.from_bin(tmp, size);
+	b.from_bin(&G, tmp, size);
 
 	res = (*a==b);
 	cout << res<<endl;

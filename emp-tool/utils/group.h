@@ -27,6 +27,8 @@ class BigInt { public:
 	BigInt add(const BigInt &oth);
 	BigInt mul(const BigInt &oth, BN_CTX *ctx = nullptr);
 	BigInt mod(const BigInt &oth, BN_CTX *ctx = nullptr);
+	BigInt add_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx = nullptr);
+	BigInt mul_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx = nullptr);
 };
 class Group;
 class Point {
@@ -40,9 +42,12 @@ class Point {
 
 		void to_bin(unsigned char * buf, size_t buf_len);
 		size_t size();
-		void from_bin(const unsigned char * buf, size_t buf_len);
+		void from_bin(Group * g, const unsigned char * buf, size_t buf_len);
 
 		Point add(Point & rhs);
+//		Point sub(Point & rhs);
+//		bool is_at_infinity();
+//		bool is_on_curve();
 		Point mul(const BigInt &m);
 		Point inv();
 		bool operator==(Point & rhs);
