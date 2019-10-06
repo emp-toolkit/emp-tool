@@ -85,9 +85,13 @@ inline bool isOne(const block * b) {
 	return _mm_testz_si128(neq, neq) > 0;
 }
 
+	
 //Modified from
 //https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
 // with inner most loops changed to _mm_set_epi8 and _mm_set_epi16
+#define INP(x, y) inp[(x)*ncols / 8 + (y) / 8]
+#define OUT(x, y) out[(y)*nrows / 8 + (x) / 8]
+
 __attribute__((target("sse2")))
 void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
                uint64_t ncols) {
