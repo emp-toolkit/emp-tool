@@ -93,7 +93,7 @@ inline bool isOne(const block * b) {
 #define OUT(x, y) out[(y)*nrows / 8 + (x) / 8]
 
 __attribute__((target("sse2")))
-void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
+inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
                uint64_t ncols) {
   uint64_t rr, cc;
   int i, h;
