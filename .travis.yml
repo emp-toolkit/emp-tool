@@ -16,13 +16,11 @@ matrix:
       sudo: required
       env: 
         - TYPE=Release
-        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
 
     - os: osx
       sudo: required
       env: 
         - TYPE=Debug
-        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
       
 before_install:
   - eval "${MATRIX_EVAL}"
