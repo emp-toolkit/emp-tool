@@ -2,15 +2,21 @@ cmake_minimum_required (VERSION 2.8.11)
 project (emptool)
 set(NAME "emp-tool")
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	if(NOT DEFINED OPENSSL_ROOT_DIR)
+		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")	
+		message(STATUS "OPENSSL_ROOT_DIR set to default: ${OPENSSL_ROOT_DIR}")
+	endif()
+endif()
 include(cmake/common.cmake)
 include(cmake/source_of_randomness.cmake)
 include(cmake/threading.cmake)
 
+
 find_package(OpenSSL REQUIRED)
-find_package(relic REQUIRED)
 find_package(GMP REQUIRED)
 find_package(Boost REQUIRED COMPONENTS system)
-include_directories(${RELIC_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
+include_directories(${OPENSSL_INCLUDE_DIR} ${Boost_INCLUDE_DIRS} ${GMP_INCLUDE_DIR})
 
 
 # Installation
@@ -50,6 +56,7 @@ add_test(prp)
 add_test(com)
 add_test(netio)
 add_test(bit)
+add_test(ecc)
 add_test(int)
 add_test(float)
 add_test(float32)

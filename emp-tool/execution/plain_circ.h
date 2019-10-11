@@ -35,8 +35,8 @@ public:
 				fout << " ";
 			fout<<std::endl;
 		}
-		filename = filename;
 	}
+
 	void finalize() {
 		if(print) {
 			fout.clear();

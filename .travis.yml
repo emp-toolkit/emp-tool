@@ -16,19 +16,16 @@ matrix:
       sudo: required
       env: 
         - TYPE=Release
-        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
 
     - os: osx
       sudo: required
       env: 
         - TYPE=Debug
-        - OPENSSL_ROOT_DIR=/usr/local/opt/openssl/
       
 before_install:
   - eval "${MATRIX_EVAL}"
   - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_packages.sh
-  - bash ./emp-readme/scripts/install_relic.sh
 
 script:
   - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &
