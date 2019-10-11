@@ -46,7 +46,7 @@ class HalfGateEva:public CircuitExecution{ public:
 				return prp.H(a, gid++);
 			}
 			if(key_used == KS_BATCH_N) {
-				AES_ks8(start_point, gid, key_schedule, key_ini);
+				AES_ks8_circ(start_point, gid, key_schedule, key_ini);
 				key_used = 0;
 			}
 			garble_gate_eval_halfgates(a, b, &out, table, &key_schedule[key_used*2], &key_ini[key_used*2]);
@@ -129,7 +129,7 @@ public:
 			return prp.H(a, gid++);
 		}
 		if(key_used == KS_BATCH_N) {
-			AES_ks8(start_point, gid, key_schedule, key_ini);
+			AES_ks8_circ(start_point, gid, key_schedule, key_ini);
 			key_used = 0;
 		}
 		garble_gate_eval_halfgates(a, b, &out, table, &key_schedule[key_used*2], &key_ini[key_used*2]);

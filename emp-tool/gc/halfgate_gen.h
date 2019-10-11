@@ -55,7 +55,7 @@ class HalfGateGen:public CircuitExecution { public:
 			return a;
 		} else {
 			if(key_used == KS_BATCH_N) {
-				AES_ks8(start_point, gid, key_schedule, key_ini);
+				AES_ks8_circ(start_point, gid, key_schedule, key_ini);
 				key_used = 0;
 			}
 			garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
@@ -148,7 +148,7 @@ public:
 	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
 		if(key_used == KS_BATCH_N) {
-			AES_ks8(start_point, gid, key_schedule, key_ini);
+			AES_ks8_circ(start_point, gid, key_schedule, key_ini);
 			key_used = 0;
 		}
 		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
