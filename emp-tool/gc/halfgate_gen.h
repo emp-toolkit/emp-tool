@@ -5,6 +5,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
+#include "emp-tool/utils/mitccrh.h"
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
@@ -19,12 +20,14 @@ class HalfGateGen:public CircuitExecution { public:
 	T * io;
 	bool with_file_io = false;
 	block fix_point;
-	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
+	MITCCRH mitccrh;
+/*	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
 	block key_ini[KS_BATCH_N];		// key schedule
-	int key_used = 0;
+	int key_used = 0;	*/
 	HalfGateGen(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
 		prg.random_block(&start_point, 1);
+		mitccrh.start_point = start_point;
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
@@ -54,14 +57,12 @@ class HalfGateGen:public CircuitExecution { public:
 		} else if (isOne(&b)){
 			return a;
 		} else {
-			if(key_used == KS_BATCH_N) {
-				AES_ks8_circ(start_point, gid, key_schedule, key_ini);
-				key_used = 0;
+			if(mitccrh.key_used == KS_BATCH_N) {
+				mitccrh.renew_ks(gid);
 			}
 			garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-					&out[0], &out[1], delta, table, &key_schedule[key_used*2], &key_ini[key_used*2]);
+					&out[0], &out[1], delta, table, &mitccrh);
 			gid++;
-			key_used += 2;
 			io->send_block(table, 2);
 			return out[0];
 		}
@@ -119,9 +120,10 @@ public:
 	T * io;
 	bool with_file_io = false;
 	block constant[2];
-	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
+	MITCCRH mitccrh;
+/*	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
 	block key_ini[KS_BATCH_N];		// key schedule
-	int key_used = 0;
+	int key_used = 0;	*/
 	HalfGateGen(T * io) :io(io) {
 		PRG tmp;
 		tmp.random_block(&seed, 1);
@@ -140,6 +142,7 @@ public:
 		this->delta = make_delta(_delta);
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
 		prg2.random_block(&start_point, 1);
+		mitccrh.start_point = start_point;
 		constant[1] = xorBlocks(constant[1],delta);
 	}
 	block public_label(bool b) override {
@@ -147,14 +150,12 @@ public:
 	}
 	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
-		if(key_used == KS_BATCH_N) {
-			AES_ks8_circ(start_point, gid, key_schedule, key_ini);
-			key_used = 0;
+		if(mitccrh.key_used == KS_BATCH_N) {
+			mitccrh.renew_ks(gid);
 		}
 		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-				&out[0], &out[1], delta, table, &key_schedule[key_used*2], &key_ini[key_used*2]);
+				&out[0], &out[1], delta, table, &mitccrh);
 		gid++;
-		key_used += 2;
 		io->send_block(table, 2);
 		return out[0];
 	}

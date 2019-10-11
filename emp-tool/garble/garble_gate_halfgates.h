@@ -4,25 +4,17 @@
 #include "emp-tool/garble/aes_opt.h"
 #include <string.h>
 namespace emp {
-inline void garble_gate_eval_halfgates(block A, block B, block *out, const block *table, ROUND_KEYS *KEYS, block *key_ini) {
+inline void garble_gate_eval_halfgates(block A, block B, block *out, const block *table, MITCCRH *mitccrh) {
 	block HA, HB, W;
 	int sa, sb;
 
 	sa = getLSB(A);
 	sb = getLSB(B);
 
-	{
-		block keys[2];
-		block masks[2];
-
-		keys[0] = sigma(A);
-		keys[1] = sigma(B);
-		masks[0] = keys[0];
-		masks[1] = keys[1];
-		AES_ecb_ccr_ks2_enc2(keys, keys, KEYS, key_ini);
-		HA = xorBlocks(keys[0], masks[0]);
-		HB = xorBlocks(keys[1], masks[1]);
-	}
+	block H[2];
+	mitccrh->k2_h2(A, B, H);
+	HA = H[0];
+	HB = H[1];
 
 	W = xorBlocks(HA, HB);
 	if (sa)
@@ -34,26 +26,18 @@ inline void garble_gate_eval_halfgates(block A, block B, block *out, const block
 	*out = W;
 }
 
-inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B1, block *out0, block *out1, block delta, block *table, ROUND_KEYS *KEYS, block *key_ini) {
+inline void garble_gate_garble_halfgates(block LA0, block A1, block LB0, block B1, block *out0, block *out1, block delta, block *table, MITCCRH *mitccrh) {
 	long pa = getLSB(LA0);
 	long pb = getLSB(LB0);
 	block HLA0, HA1, HLB0, HB1;
 	block tmp, W0;
 
-	{
-		block masks[4], keys[4];
-
-		keys[0] = sigma(LA0);
-		keys[1] = sigma(A1);
-		keys[2] = sigma(LB0);
-		keys[3] = sigma(B1);
-		memcpy(masks, keys, sizeof keys);
-		AES_ecb_ccr_ks2_enc4(keys, keys, KEYS, key_ini);
-		HLA0 = xorBlocks(keys[0], masks[0]);
-		HA1 = xorBlocks(keys[1], masks[1]);
-		HLB0 = xorBlocks(keys[2], masks[2]);
-		HB1 = xorBlocks(keys[3], masks[3]);
-	}
+	block H[4];
+	mitccrh->k2_h4(LA0, A1, LB0, B1, H);
+	HLA0 = H[0];
+	HA1 = H[1];
+	HLB0 = H[2];
+	HB1 = H[3];
 
 	table[0] = xorBlocks(HLA0, HA1);
 	if (pb)
