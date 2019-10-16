@@ -119,15 +119,15 @@ public:
 	bool with_file_io = false;
 	block constant[2];
 	MITCCRH mitccrh;
-/*	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
-	block key_ini[KS_BATCH_N];		// key schedule
-	int key_used = 0;	*/
 	HalfGateGen(T * io) :io(io) {
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
 		tmp.random_block(&a, 1);
 		set_delta(a);
+		tmp.random_block(&start_point, 1);
+		io->send_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	bool is_public(const block & b, int party) {
 		return false;
@@ -139,8 +139,6 @@ public:
 	void set_delta(const block &_delta) {
 		this->delta = make_delta(_delta);
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
-		prg2.random_block(&start_point, 1);
-		mitccrh.start_point = start_point;
 		constant[1] = xorBlocks(constant[1],delta);
 	}
 	block public_label(bool b) override {

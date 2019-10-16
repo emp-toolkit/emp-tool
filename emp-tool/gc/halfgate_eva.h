@@ -102,13 +102,12 @@ public:
 	FileIO * fio;
 	block constant[2];
 	MITCCRH mitccrh;
-/*	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
-	block key_ini[KS_BATCH_N];		// key schedule
-	int key_used = 0;	*/
 	HalfGateEva(T * io) :io(io) {
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
 		prg2.random_block(&start_point, 1);
 		mitccrh.start_point = start_point;
+		io->recv_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
