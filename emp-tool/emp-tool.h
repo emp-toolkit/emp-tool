@@ -30,6 +30,8 @@
 #include "emp-tool/utils/xor_tree.h"
 #include "emp-tool/utils/ThreadPool.h"
 #include "emp-tool/utils/group.h"
+#include "emp-tool/utils/mitccrh.h"
+#include "emp-tool/utils/aes_opt.h"
 
 #include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"

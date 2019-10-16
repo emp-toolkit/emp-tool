@@ -21,18 +21,16 @@ class HalfGateGen:public CircuitExecution { public:
 	bool with_file_io = false;
 	block fix_point;
 	MITCCRH mitccrh;
-/*	ROUND_KEYS key_schedule[KS_BATCH_N];	// key schedule
-	block key_ini[KS_BATCH_N];		// key schedule
-	int key_used = 0;	*/
 	HalfGateGen(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
-		prg.random_block(&start_point, 1);
-		mitccrh.start_point = start_point;
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
 		tmp.random_block(&a, 1);
 		set_delta(a);
+		tmp.random_block(&start_point, 1);
+		io->send_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	bool is_public(const block & b, int party) {
 		return isZero(&b) or isOne(&b);

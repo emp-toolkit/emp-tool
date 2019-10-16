@@ -178,8 +178,24 @@ typedef struct KEY_SCHEDULE
 	_mm_storeu_si128((__m128i *)(keys[7].KEY+i*16), keyH);	\
 	}
 
-#define READ_KEYS(i) {keyA = _mm_loadu_si128((__m128i const*)(keys[0].KEY+i*16));\
+#define READ_KEYS_2(i) {keyA = _mm_loadu_si128((__m128i const*)(keys[0].KEY+i*16));\
 	keyB = _mm_loadu_si128((__m128i const*)(keys[1].KEY+i*16));\
+	}
+
+#define READ_KEYS_4(i) {keyA = _mm_loadu_si128((__m128i const*)(keys[0].KEY+i*16));\
+	keyB = _mm_loadu_si128((__m128i const*)(keys[1].KEY+i*16));\
+	keyC = _mm_loadu_si128((__m128i const*)(keys[2].KEY+i*16));\
+	keyD = _mm_loadu_si128((__m128i const*)(keys[3].KEY+i*16));\
+	}
+
+#define READ_KEYS_8(i) {keyA = _mm_loadu_si128((__m128i const*)(keys[0].KEY+i*16));\
+	keyB = _mm_loadu_si128((__m128i const*)(keys[1].KEY+i*16));\
+	keyC = _mm_loadu_si128((__m128i const*)(keys[2].KEY+i*16));\
+	keyD = _mm_loadu_si128((__m128i const*)(keys[3].KEY+i*16));\
+	keyE = _mm_loadu_si128((__m128i const*)(keys[4].KEY+i*16));\
+	keyF = _mm_loadu_si128((__m128i const*)(keys[5].KEY+i*16));\
+	keyG = _mm_loadu_si128((__m128i const*)(keys[6].KEY+i*16));\
+	keyH = _mm_loadu_si128((__m128i const*)(keys[7].KEY+i*16));\
 	}
 		
 #define ENC_round_22(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
@@ -202,11 +218,52 @@ typedef struct KEY_SCHEDULE
 	block4=_mm_aesenclast_si128(block4, (*(__m128i const*)(keys[1].KEY+i*16))); \
 }
 
+#define ENC_round_48(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block3=_mm_aesenc_si128(block3, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block4=_mm_aesenc_si128(block4, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block5=_mm_aesenc_si128(block5, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block6=_mm_aesenc_si128(block6, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block7=_mm_aesenc_si128(block7, (*(__m128i const*)(keys[3].KEY+i*16))); \
+	block8=_mm_aesenc_si128(block8, (*(__m128i const*)(keys[3].KEY+i*16))); \
+
+}	
+	
+#define ENC_round_48_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block3=_mm_aesenclast_si128(block3, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block4=_mm_aesenclast_si128(block4, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block5=_mm_aesenclast_si128(block5, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block6=_mm_aesenclast_si128(block6, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block7=_mm_aesenclast_si128(block7, (*(__m128i const*)(keys[3].KEY+i*16))); \
+	block8=_mm_aesenclast_si128(block8, (*(__m128i const*)(keys[3].KEY+i*16))); \
+}
+
+#define ENC_round_88(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block3=_mm_aesenc_si128(block3, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block4=_mm_aesenc_si128(block4, (*(__m128i const*)(keys[3].KEY+i*16))); \
+	block5=_mm_aesenc_si128(block5, (*(__m128i const*)(keys[4].KEY+i*16))); \
+	block6=_mm_aesenc_si128(block6, (*(__m128i const*)(keys[5].KEY+i*16))); \
+	block7=_mm_aesenc_si128(block7, (*(__m128i const*)(keys[6].KEY+i*16))); \
+	block8=_mm_aesenc_si128(block8, (*(__m128i const*)(keys[7].KEY+i*16))); \
+}	
+	
+#define ENC_round_88_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
+	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
+	block3=_mm_aesenclast_si128(block3, (*(__m128i const*)(keys[2].KEY+i*16))); \
+	block4=_mm_aesenclast_si128(block4, (*(__m128i const*)(keys[3].KEY+i*16))); \
+	block5=_mm_aesenclast_si128(block5, (*(__m128i const*)(keys[4].KEY+i*16))); \
+	block6=_mm_aesenclast_si128(block6, (*(__m128i const*)(keys[5].KEY+i*16))); \
+	block7=_mm_aesenclast_si128(block7, (*(__m128i const*)(keys[6].KEY+i*16))); \
+	block8=_mm_aesenclast_si128(block8, (*(__m128i const*)(keys[7].KEY+i*16))); \
+}
+
 static block sigma(block a) {
 	return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
 }
 
-static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
 	register __m128i keyA, keyB, con, mask, x2, keyA_aux, keyB_aux, globAux;
@@ -241,12 +298,9 @@ static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
 
 	KS_round_2(9)
 	KS_round_2_last(10)
-
-	key_ini[0] = keyA;
-	key_ini[1] = keyB;
 }
 
-static inline void AES_ks4(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks4(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
 	register __m128i keyA, keyB, keyC, keyD, con, mask, x2, keyA_aux, keyB_aux, keyC_aux, keyD_aux, globAux;
@@ -288,14 +342,9 @@ static inline void AES_ks4(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
 
 	KS_round_4(9)
 	KS_round_4_last(10)
-
-	key_ini[0] = keyA;
-	key_ini[1] = keyB;
-	key_ini[2] = keyC;
-	key_ini[3] = keyD;
 }
 
-static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
 	register __m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH, keyA_aux, keyB_aux, keyC_aux, keyD_aux, keyE_aux, keyF_aux, keyG_aux, keyH_aux;
@@ -349,26 +398,17 @@ static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS, block *key_ini) {
 
 	KS_round_8(9)
 	KS_round_8_last(10)
-
-	key_ini[0] = keyA;
-	key_ini[1] = keyB;
-	key_ini[2] = keyC;
-	key_ini[3] = keyD;
-	key_ini[4] = keyE;
-	key_ini[5] = keyF;
-	key_ini[6] = keyG;
-	key_ini[7] = keyH;
 }
 
-static inline void AES_ks2_circ(block random, uint64_t idx, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks2_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[2];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
 
-	AES_ks2(user_key, KEYS, key_ini);
+	AES_ks2(user_key, KEYS);
 }
 
-static inline void AES_ks4_circ(block random, uint64_t idx, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks4_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[4];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
@@ -376,10 +416,10 @@ static inline void AES_ks4_circ(block random, uint64_t idx, ROUND_KEYS *KEYS, bl
 	user_key[2] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[3] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
 	
-	AES_ks4(user_key, KEYS, key_ini);
+	AES_ks4(user_key, KEYS);
 }
 
-static inline void AES_ks8_circ(block random, uint64_t idx, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ks8_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[8];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
@@ -393,17 +433,17 @@ static inline void AES_ks8_circ(block random, uint64_t idx, ROUND_KEYS *KEYS, bl
 	user_key[6] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[7] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
 	
-	AES_ks8(user_key, KEYS, key_ini);
+	AES_ks8(user_key, KEYS);
 }
 
-static inline void AES_ecb_ccr_ks2_enc2(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ecb_ccr_ks2_enc2(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS) {
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA = key_ini[0], keyB = key_ini[1];
+	register __m128i keyA, keyB;
 	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
 	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
-	READ_KEYS(0)
+	READ_KEYS_2(0)
 	
 	block1 = _mm_xor_si128(keyA, block1);
 	block2 = _mm_xor_si128(keyB, block2);
@@ -424,18 +464,18 @@ static inline void AES_ecb_ccr_ks2_enc2(block *plaintext, block *ciphertext, ROU
 
 }
 
-static inline void AES_ecb_ccr_ks2_enc4(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS, block *key_ini) {
+static inline void AES_ecb_ccr_ks2_enc4(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS) {
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA = key_ini[0], keyB = key_ini[1];
+	register __m128i keyA, keyB;
 	
 	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
 	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
 	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
 	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));	
 		
-	READ_KEYS(0)
+	READ_KEYS_2(0)
 	
 	block1 = _mm_xor_si128(keyA, block1);
 	block2 = _mm_xor_si128(keyA, block2);
@@ -457,6 +497,100 @@ static inline void AES_ecb_ccr_ks2_enc4(block *plaintext, block *ciphertext, ROU
 	_mm_storeu_si128((__m128i *)(CT+1*16), block2);	
 	_mm_storeu_si128((__m128i *)(CT+2*16), block3);	
 	_mm_storeu_si128((__m128i *)(CT+3*16), block4);	
+}
+
+static inline void AES_ecb_ccr_ks4_enc8(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS) {
+	unsigned char* PT = (unsigned char*)plaintext;
+	unsigned char* CT = (unsigned char*)ciphertext;
+	ROUND_KEYS *keys = KEYS;
+	register __m128i keyA, keyB, keyC, keyD;
+	
+	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
+	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
+	register __m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
+	register __m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
+	register __m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
+	register __m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
+
+	READ_KEYS_4(0)
+	
+	block1 = _mm_xor_si128(keyA, block1);
+	block2 = _mm_xor_si128(keyA, block2);
+	block3 = _mm_xor_si128(keyB, block3);
+	block4 = _mm_xor_si128(keyB, block4);
+	block5 = _mm_xor_si128(keyC, block5);
+	block6 = _mm_xor_si128(keyC, block6);
+	block7 = _mm_xor_si128(keyD, block7);
+	block8 = _mm_xor_si128(keyD, block8);
+
+	ENC_round_48(1)
+	ENC_round_48(2)
+	ENC_round_48(3)
+	ENC_round_48(4)
+	ENC_round_48(5)
+	ENC_round_48(6)
+	ENC_round_48(7)
+	ENC_round_48(8)
+	ENC_round_48(9)
+	ENC_round_48_last(10)
+	
+	_mm_storeu_si128((__m128i *)(CT+0*16), block1);	
+	_mm_storeu_si128((__m128i *)(CT+1*16), block2);	
+	_mm_storeu_si128((__m128i *)(CT+2*16), block3);	
+	_mm_storeu_si128((__m128i *)(CT+3*16), block4);	
+	_mm_storeu_si128((__m128i *)(CT+4*16), block5);	
+	_mm_storeu_si128((__m128i *)(CT+5*16), block6);	
+	_mm_storeu_si128((__m128i *)(CT+6*16), block7);	
+	_mm_storeu_si128((__m128i *)(CT+7*16), block8);
+}
+
+static inline void AES_ecb_ccr_ks8_enc8(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS) {
+	unsigned char* PT = (unsigned char*)plaintext;
+	unsigned char* CT = (unsigned char*)ciphertext;
+	ROUND_KEYS *keys = KEYS;
+	register __m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH;
+	
+	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
+	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
+	register __m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
+	register __m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
+	register __m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
+	register __m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
+
+	READ_KEYS_8(0)
+	
+	block1 = _mm_xor_si128(keyA, block1);
+	block2 = _mm_xor_si128(keyB, block2);
+	block3 = _mm_xor_si128(keyC, block3);
+	block4 = _mm_xor_si128(keyD, block4);
+	block5 = _mm_xor_si128(keyE, block5);
+	block6 = _mm_xor_si128(keyF, block6);
+	block7 = _mm_xor_si128(keyG, block7);
+	block8 = _mm_xor_si128(keyH, block8);
+
+	ENC_round_88(1)
+	ENC_round_88(2)
+	ENC_round_88(3)
+	ENC_round_88(4)
+	ENC_round_88(5)
+	ENC_round_88(6)
+	ENC_round_88(7)
+	ENC_round_88(8)
+	ENC_round_88(9)
+	ENC_round_88_last(10)
+	
+	_mm_storeu_si128((__m128i *)(CT+0*16), block1);	
+	_mm_storeu_si128((__m128i *)(CT+1*16), block2);	
+	_mm_storeu_si128((__m128i *)(CT+2*16), block3);	
+	_mm_storeu_si128((__m128i *)(CT+3*16), block4);	
+	_mm_storeu_si128((__m128i *)(CT+4*16), block5);	
+	_mm_storeu_si128((__m128i *)(CT+5*16), block6);	
+	_mm_storeu_si128((__m128i *)(CT+6*16), block7);	
+	_mm_storeu_si128((__m128i *)(CT+7*16), block8);
 }
 
 }

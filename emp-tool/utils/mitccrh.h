@@ -1,5 +1,5 @@
 #include "emp-tool/utils/block.h"
-#include "emp-tool/garble/aes_opt.h"
+#include "emp-tool/utils/aes_opt.h"
 #include <stdio.h>
 #ifndef MITCCRH_H__
 #define MITCCRH_H__
@@ -11,21 +11,24 @@ namespace emp {
 class MITCCRH{ public:
 
 	ROUND_KEYS key_schedule[KS_BATCH_N];
-	block key_ini[KS_BATCH_N];
 	int key_used = 0;
 	block start_point;
 
 	MITCCRH() {
 	}
 
+	void setS(block sin) {
+		this->start_point = sin;
+	}
+
 	void renew_ks(uint64_t gid) {
 		switch(KS_BATCH_N) {
 			case 2:
-				AES_ks2_circ(start_point, gid, key_schedule, key_ini); break;
+				AES_ks2_circ(start_point, gid, key_schedule); break;
 			case 4:
-				AES_ks4_circ(start_point, gid, key_schedule, key_ini); break;
+				AES_ks4_circ(start_point, gid, key_schedule); break;
 			case 8:
-				AES_ks8_circ(start_point, gid, key_schedule, key_ini); break;
+				AES_ks8_circ(start_point, gid, key_schedule); break;
 			default:
 				abort();
 		}
@@ -39,7 +42,7 @@ class MITCCRH{ public:
 		masks[0] = keys[0];
 		masks[1] = keys[1];
 
-		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used*2], &key_ini[key_used*2]);
+		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used*2]);
 		key_used += 2;
 
 		H[0] = xorBlocks(keys[0], masks[0]);
@@ -54,7 +57,7 @@ class MITCCRH{ public:
 		keys[3] = sigma(B1);
 		memcpy(masks, keys, sizeof keys);
 
-		AES_ecb_ccr_ks2_enc4(keys, keys, &key_schedule[key_used*2], &key_ini[key_used*2]);
+		AES_ecb_ccr_ks2_enc4(keys, keys, &key_schedule[key_used*2]);
 		key_used += 2;
 
 		H[0] = xorBlocks(keys[0], masks[0]);
