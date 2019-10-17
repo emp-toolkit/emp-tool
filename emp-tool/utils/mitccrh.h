@@ -49,14 +49,8 @@ class MITCCRH{ public:
 		masks[0] = keys[0];
 		masks[1] = keys[1];
 
-		//print_block(keys[0]);
-		//print_block(keys[1]);
-
 		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used]);
 		key_used += 2;
-
-		//print_block(keys[0]);
-		//print_block(keys[1]);
 
 		H[0] = xorBlocks(keys[0], masks[0]);
 		H[1] = xorBlocks(keys[1], masks[1]);
