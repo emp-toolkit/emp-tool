@@ -1,8 +1,8 @@
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/aes_opt.h"
-#include <stdio.h>
 #ifndef MITCCRH_H__
 #define MITCCRH_H__
+#include "emp-tool/utils/aes_opt.h"
+#include <stdio.h>
+
 /** @addtogroup BP
   @{
  */
@@ -11,7 +11,7 @@ namespace emp {
 class MITCCRH{ public:
 
 	ROUND_KEYS key_schedule[KS_BATCH_N];
-	int key_used = 0;
+	int key_used = KS_BATCH_N;
 	block start_point;
 
 	MITCCRH() {
@@ -35,6 +35,13 @@ class MITCCRH{ public:
 		key_used = 0;
 	}
 
+	void print_block(block a) {
+		printf("aes_opt\n");
+		unsigned char *p = (unsigned char*)(&a);
+		for(int j = 0; j < 16; j++)
+			printf("%02X", p[j]);
+		printf("\n");
+	}
 	void k2_h2(block A, block B, block *H) {
 		block keys[2], masks[2];
 		keys[0] = sigma(A);
@@ -42,11 +49,17 @@ class MITCCRH{ public:
 		masks[0] = keys[0];
 		masks[1] = keys[1];
 
-		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used*2]);
+		//print_block(keys[0]);
+		//print_block(keys[1]);
+
+		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used]);
 		key_used += 2;
 
+		//print_block(keys[0]);
+		//print_block(keys[1]);
+
 		H[0] = xorBlocks(keys[0], masks[0]);
-		H[1] = xorBlocks(keys[0], masks[1]);
+		H[1] = xorBlocks(keys[1], masks[1]);
 	}
 
 	void k2_h4(block A0, block A1, block B0, block B1, block *H) {
@@ -57,7 +70,7 @@ class MITCCRH{ public:
 		keys[3] = sigma(B1);
 		memcpy(masks, keys, sizeof keys);
 
-		AES_ecb_ccr_ks2_enc4(keys, keys, &key_schedule[key_used*2]);
+		AES_ecb_ccr_ks2_enc4(keys, keys, &key_schedule[key_used]);
 		key_used += 2;
 
 		H[0] = xorBlocks(keys[0], masks[0]);

@@ -200,23 +200,23 @@ typedef struct KEY_SCHEDULE
 		
 #define ENC_round_22(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
-}	
+	}	
 	
 #define ENC_round_22_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
-}
+	}
 
 #define ENC_round_24(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block3=_mm_aesenc_si128(block3, (*(__m128i const*)(keys[1].KEY+i*16))); \
 	block4=_mm_aesenc_si128(block4, (*(__m128i const*)(keys[1].KEY+i*16))); \
-}	
+	}	
 	
 #define ENC_round_24_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block3=_mm_aesenclast_si128(block3, (*(__m128i const*)(keys[1].KEY+i*16))); \
 	block4=_mm_aesenclast_si128(block4, (*(__m128i const*)(keys[1].KEY+i*16))); \
-}
+	}
 
 #define ENC_round_48(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
@@ -226,8 +226,7 @@ typedef struct KEY_SCHEDULE
 	block6=_mm_aesenc_si128(block6, (*(__m128i const*)(keys[2].KEY+i*16))); \
 	block7=_mm_aesenc_si128(block7, (*(__m128i const*)(keys[3].KEY+i*16))); \
 	block8=_mm_aesenc_si128(block8, (*(__m128i const*)(keys[3].KEY+i*16))); \
-
-}	
+	}	
 	
 #define ENC_round_48_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[0].KEY+i*16))); \
@@ -237,7 +236,7 @@ typedef struct KEY_SCHEDULE
 	block6=_mm_aesenclast_si128(block6, (*(__m128i const*)(keys[2].KEY+i*16))); \
 	block7=_mm_aesenclast_si128(block7, (*(__m128i const*)(keys[3].KEY+i*16))); \
 	block8=_mm_aesenclast_si128(block8, (*(__m128i const*)(keys[3].KEY+i*16))); \
-}
+	}
 
 #define ENC_round_88(i) {block1=_mm_aesenc_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenc_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
@@ -247,7 +246,7 @@ typedef struct KEY_SCHEDULE
 	block6=_mm_aesenc_si128(block6, (*(__m128i const*)(keys[5].KEY+i*16))); \
 	block7=_mm_aesenc_si128(block7, (*(__m128i const*)(keys[6].KEY+i*16))); \
 	block8=_mm_aesenc_si128(block8, (*(__m128i const*)(keys[7].KEY+i*16))); \
-}	
+	}	
 	
 #define ENC_round_88_last(i) {block1=_mm_aesenclast_si128(block1, (*(__m128i const*)(keys[0].KEY+i*16))); \
 	block2=_mm_aesenclast_si128(block2, (*(__m128i const*)(keys[1].KEY+i*16))); \
@@ -257,7 +256,7 @@ typedef struct KEY_SCHEDULE
 	block6=_mm_aesenclast_si128(block6, (*(__m128i const*)(keys[5].KEY+i*16))); \
 	block7=_mm_aesenclast_si128(block7, (*(__m128i const*)(keys[6].KEY+i*16))); \
 	block8=_mm_aesenclast_si128(block8, (*(__m128i const*)(keys[7].KEY+i*16))); \
-}
+	}
 
 static block sigma(block a) {
 	return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
