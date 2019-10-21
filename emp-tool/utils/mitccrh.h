@@ -35,13 +35,6 @@ class MITCCRH{ public:
 		key_used = 0;
 	}
 
-	void print_block(block a) {
-		printf("aes_opt\n");
-		unsigned char *p = (unsigned char*)(&a);
-		for(int j = 0; j < 16; j++)
-			printf("%02X", p[j]);
-		printf("\n");
-	}
 	void k2_h2(block A, block B, block *H) {
 		block keys[2], masks[2];
 		keys[0] = sigma(A);
