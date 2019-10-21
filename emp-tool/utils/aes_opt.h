@@ -262,6 +262,9 @@ static block sigma(block a) {
 	return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
 }
 
+/*
+ * AES key scheduling for 2/4/8 keys
+ */
 static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
@@ -399,6 +402,9 @@ static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS) {
 	KS_round_8_last(10)
 }
 
+/*
+ * AES key scheduling for circuit generation with 2/4/8 keys
+ */
 static inline void AES_ks2_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[2];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
@@ -435,6 +441,13 @@ static inline void AES_ks8_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	AES_ks8(user_key, KEYS);
 }
 
+/*
+ * AES encryptin with 
+ * 2 keys 2 ciphers
+ * 2 keys 4 ciphers
+ * 4 keys 8 ciphers
+ * 8 keys 8 ciphers
+ */
 static inline void AES_ecb_ccr_ks2_enc2(block *plaintext, block *ciphertext, ROUND_KEYS *KEYS) {
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
