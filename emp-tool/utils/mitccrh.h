@@ -24,11 +24,11 @@ class MITCCRH{ public:
 	void renew_ks(uint64_t gid) {
 		switch(KS_BATCH_N) {
 			case 2:
-				AES_ks2_circ(start_point, gid, key_schedule); break;
+				AES_ks2_index(start_point, gid, key_schedule); break;
 			case 4:
-				AES_ks4_circ(start_point, gid, key_schedule); break;
+				AES_ks4_index(start_point, gid, key_schedule); break;
 			case 8:
-				AES_ks8_circ(start_point, gid, key_schedule); break;
+				AES_ks8_index(start_point, gid, key_schedule); break;
 			default:
 				abort();
 		}

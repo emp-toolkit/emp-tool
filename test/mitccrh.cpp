@@ -140,8 +140,10 @@ int main() {
 		mitccrh.k2_h2(hash[0], hash[1], out);
 		aes_k2_h2_ori(hash, start_point, gid);
 
-		if(cmpBlock(hash, out, 2) == false)
+		if(cmpBlock(hash, out, 2) == false) {
 			cout << "incorrect encryption for k2 h2" << endl;
+			exit(1);
+		}
 		gid++;
 	}
 
@@ -158,8 +160,10 @@ int main() {
 		mitccrh1.k2_h4(hash[0], hash[1], hash[2], hash[3], out);
 		aes_k2_h4_ori(hash, start_point, gid);
 
-		if(cmpBlock(hash, out, 4) == false)
+		if(cmpBlock(hash, out, 4) == false) {
 			cout << "incorrect encryption for k2 h4" << endl;
+			exit(1);
+		}
 		gid++;
 	}
 
@@ -170,16 +174,20 @@ int main() {
 		ROUND_KEYS keys[8];
 		block random;
 		prg.random_block(&random, 1);
-		AES_ks8_circ(random, gid, keys);
+		AES_ks8_index(random, gid, keys);
 		block plaintext[8], ciphertext[8];
 		prg.random_block(plaintext, 8);
 		AES_ecb_ccr_ks8_enc8(plaintext, ciphertext, keys);
 
 		aes_k8_h8_ori(plaintext, random, gid);
-		if(cmpBlock(plaintext, ciphertext, 8) == false)
-			cout << "incorrect encryption for k8 h8" << endl;
+		if(cmpBlock(plaintext, ciphertext, 8) == false) {
+			cout << "incorrect encryption for k8 h8" << endl; 
+			exit(1);
+		}
 		gid++;
 	}
+
+	cout << "PASS"<<endl;
 
 	return 0;
 }

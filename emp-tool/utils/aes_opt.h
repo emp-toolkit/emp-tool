@@ -268,7 +268,7 @@ static block sigma(block a) {
 static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB, con, mask, x2, keyA_aux, keyB_aux, globAux;
+	__m128i keyA, keyB, con, mask, x2, keyA_aux, keyB_aux, globAux;
 	int _con1[4]={1,1,1,1};
 	int _con2[4]={0x1b,0x1b,0x1b,0x1b};
 	int _mask[4]={0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d};
@@ -305,7 +305,7 @@ static inline void AES_ks2(block* user_key, ROUND_KEYS *KEYS) {
 static inline void AES_ks4(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB, keyC, keyD, con, mask, x2, keyA_aux, keyB_aux, keyC_aux, keyD_aux, globAux;
+	__m128i keyA, keyB, keyC, keyD, con, mask, x2, keyA_aux, keyB_aux, keyC_aux, keyD_aux, globAux;
 	int _con1[4]={1,1,1,1};
 	int _con2[4]={0x1b,0x1b,0x1b,0x1b};
 	int _mask[4]={0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d};
@@ -349,8 +349,8 @@ static inline void AES_ks4(block* user_key, ROUND_KEYS *KEYS) {
 static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS) {
 	unsigned char *first_key = (unsigned char*)user_key;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH, keyA_aux, keyB_aux, keyC_aux, keyD_aux, keyE_aux, keyF_aux, keyG_aux, keyH_aux;
-	register __m128i con, mask, x2, globAux;
+	__m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH, keyA_aux, keyB_aux, keyC_aux, keyD_aux, keyE_aux, keyF_aux, keyG_aux, keyH_aux;
+	__m128i con, mask, x2, globAux;
 	int _con1[4]={1,1,1,1};
 	int _con2[4]={0x1b,0x1b,0x1b,0x1b};
 	int _mask[4]={0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d};
@@ -405,7 +405,7 @@ static inline void AES_ks8(block* user_key, ROUND_KEYS *KEYS) {
 /*
  * AES key scheduling for circuit generation with 2/4/8 keys
  */
-static inline void AES_ks2_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
+static inline void AES_ks2_index(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[2];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
@@ -413,7 +413,7 @@ static inline void AES_ks2_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	AES_ks2(user_key, KEYS);
 }
 
-static inline void AES_ks4_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
+static inline void AES_ks4_index(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[4];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
@@ -424,7 +424,7 @@ static inline void AES_ks4_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	AES_ks4(user_key, KEYS);
 }
 
-static inline void AES_ks8_circ(block random, uint64_t idx, ROUND_KEYS *KEYS) {
+static inline void AES_ks8_index(block random, uint64_t idx, ROUND_KEYS *KEYS) {
 	block user_key[8];
 	user_key[0] = xorBlocks(makeBlock(2 * idx, (uint64_t)0), random);
 	user_key[1] = xorBlocks(makeBlock(2 * idx + 1, (uint64_t)0), random);
@@ -452,9 +452,9 @@ static inline void AES_ecb_ccr_ks2_enc2(block *plaintext, block *ciphertext, ROU
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB;
-	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
-	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	__m128i keyA, keyB;
+	__m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	__m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
 	READ_KEYS_2(0)
 	
 	block1 = _mm_xor_si128(keyA, block1);
@@ -480,12 +480,12 @@ static inline void AES_ecb_ccr_ks2_enc4(block *plaintext, block *ciphertext, ROU
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB;
+	__m128i keyA, keyB;
 	
-	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
-	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
-	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
-	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));	
+	__m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	__m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	__m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
+	__m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));	
 		
 	READ_KEYS_2(0)
 	
@@ -515,16 +515,16 @@ static inline void AES_ecb_ccr_ks4_enc8(block *plaintext, block *ciphertext, ROU
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB, keyC, keyD;
+	__m128i keyA, keyB, keyC, keyD;
 	
-	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
-	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
-	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
-	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
-	register __m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
-	register __m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
-	register __m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
-	register __m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
+	__m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	__m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	__m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
+	__m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
+	__m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
+	__m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
+	__m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
+	__m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
 
 	READ_KEYS_4(0)
 	
@@ -562,16 +562,16 @@ static inline void AES_ecb_ccr_ks8_enc8(block *plaintext, block *ciphertext, ROU
 	unsigned char* PT = (unsigned char*)plaintext;
 	unsigned char* CT = (unsigned char*)ciphertext;
 	ROUND_KEYS *keys = KEYS;
-	register __m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH;
+	__m128i keyA, keyB, keyC, keyD, keyE, keyF, keyG, keyH;
 	
-	register __m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
-	register __m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
-	register __m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
-	register __m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
-	register __m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
-	register __m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
-	register __m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
-	register __m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
+	__m128i block1 = _mm_loadu_si128((__m128i const*)(0*16+PT));	
+	__m128i block2 = _mm_loadu_si128((__m128i const*)(1*16+PT));	
+	__m128i block3 = _mm_loadu_si128((__m128i const*)(2*16+PT));	
+	__m128i block4 = _mm_loadu_si128((__m128i const*)(3*16+PT));		
+	__m128i block5 = _mm_loadu_si128((__m128i const*)(4*16+PT));	
+	__m128i block6 = _mm_loadu_si128((__m128i const*)(5*16+PT));	
+	__m128i block7 = _mm_loadu_si128((__m128i const*)(6*16+PT));	
+	__m128i block8 = _mm_loadu_si128((__m128i const*)(7*16+PT));	
 
 	READ_KEYS_8(0)
 	
