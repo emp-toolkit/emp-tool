@@ -1,3 +1,4 @@
+.exrc
 build/
 CMakeCache.txt
 CMakeFiles/

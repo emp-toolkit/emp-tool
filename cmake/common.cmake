@@ -20,10 +20,17 @@ endif()
 
 set(CMAKE_MACOSX_RPATH 0)
 
+
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include_directories(${CMAKE_SOURCE_DIR})
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	if(NOT DEFINED OPENSSL_ROOT_DIR)
+		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")	
+		message(STATUS "OPENSSL_ROOT_DIR set to default: ${OPENSSL_ROOT_DIR}")
+	endif()
+endif()
 
 #Compilation flags
 set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed")
