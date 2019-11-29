@@ -42,6 +42,7 @@ public:
     auto enqueue(F&& f, Args&&... args) 
         -> std::future<typename std::result_of<F(Args...)>::type>;
     ~ThreadPool();
+	int size() const;
 private:
     // need to keep track of threads so we can join them
     std::vector< std::thread > workers;
@@ -54,6 +55,9 @@ private:
     bool stop;
 };
  
+int inline ThreadPool::size() const {
+	return workers.size();
+}
 // the constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads)
     :   stop(false)
