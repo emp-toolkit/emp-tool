@@ -5,6 +5,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
+#include "emp-tool/utils/mitccrh.h"
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
@@ -13,11 +14,13 @@ template<typename T, RTCktOpt rt = on>
 class HalfGateGen:public CircuitExecution { public:
 	int64_t gid = 0;
 	block delta;
+	block start_point;
 	PRP prp;
 	block seed;
 	T * io;
 	bool with_file_io = false;
 	block fix_point;
+	MITCCRH mitccrh;
 	HalfGateGen(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
 		PRG tmp;
@@ -25,6 +28,9 @@ class HalfGateGen:public CircuitExecution { public:
 		block a;
 		tmp.random_block(&a, 1);
 		set_delta(a);
+		tmp.random_block(&start_point, 1);
+		io->send_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	bool is_public(const block & b, int party) {
 		return isZero(&b) or isOne(&b);
@@ -49,8 +55,12 @@ class HalfGateGen:public CircuitExecution { public:
 		} else if (isOne(&b)){
 			return a;
 		} else {
+			if(mitccrh.key_used == KS_BATCH_N) {
+				mitccrh.renew_ks(gid);
+			}
 			garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-					&out[0], &out[1], delta, table, gid++, &prp.aes);
+					&out[0], &out[1], delta, table, &mitccrh);
+			gid++;
 			io->send_block(table, 2);
 			return out[0];
 		}
@@ -102,17 +112,22 @@ class HalfGateGen<T,RTCktOpt::off>:public CircuitExecution {
 public:
 	int64_t gid = 0;
 	block delta;
+	block start_point;
 	PRP prp;
 	block seed;
 	T * io;
 	bool with_file_io = false;
 	block constant[2];
+	MITCCRH mitccrh;
 	HalfGateGen(T * io) :io(io) {
 		PRG tmp;
 		tmp.random_block(&seed, 1);
 		block a;
 		tmp.random_block(&a, 1);
 		set_delta(a);
+		tmp.random_block(&start_point, 1);
+		io->send_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	bool is_public(const block & b, int party) {
 		return false;
@@ -131,8 +146,12 @@ public:
 	}
 	block and_gate(const block& a, const block& b) override {
 		block out[2], table[2];
+		if(mitccrh.key_used == KS_BATCH_N) {
+			mitccrh.renew_ks(gid);
+		}
 		garble_gate_garble_halfgates(a, xorBlocks(a,delta), b, xorBlocks(b,delta), 
-				&out[0], &out[1], delta, table, gid++, &prp.aes);
+				&out[0], &out[1], delta, table, &mitccrh);
+		gid++;
 		io->send_block(table, 2);
 		return out[0];
 	}

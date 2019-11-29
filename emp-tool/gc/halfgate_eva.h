@@ -5,6 +5,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
+#include "emp-tool/utils/mitccrh.h"
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/garble/garble_gate_halfgates.h"
 #include <iostream>
@@ -12,13 +13,17 @@ namespace emp {
 template<typename T, RTCktOpt rt = on>
 class HalfGateEva:public CircuitExecution{ public:
 	int64_t gid = 0;
+	block start_point;
 	PRP prp;
 	T * io;
 	bool with_file_io = false;
 	FileIO * fio;
 	block fix_point;
+	MITCCRH mitccrh;
 	HalfGateEva(T * io) :io(io) {
 		PRG prg(fix_key);prg.random_block(&fix_point, 1);
+		io->recv_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
@@ -40,7 +45,11 @@ class HalfGateEva:public CircuitExecution{ public:
 				fio->send_block(table, 2);
 				return prp.H(a, gid++);
 			}
-			garble_gate_eval_halfgates(a, b, &out, table, gid++, &prp.aes);
+			if(mitccrh.key_used == KS_BATCH_N) {
+				mitccrh.renew_ks(gid);
+			}
+			garble_gate_eval_halfgates(a, b, &out, table, &mitccrh);
+			gid++;
 			return out;
 		}
 	}
@@ -86,13 +95,19 @@ template<typename T>
 class HalfGateEva<T,RTCktOpt::off>:public CircuitExecution {
 public:
 	int64_t gid = 0;
+	block start_point;
 	PRP prp;
 	T * io;
 	bool with_file_io = false;
 	FileIO * fio;
 	block constant[2];
+	MITCCRH mitccrh;
 	HalfGateEva(T * io) :io(io) {
 		PRG prg2(fix_key);prg2.random_block(constant, 2);
+		prg2.random_block(&start_point, 1);
+		mitccrh.start_point = start_point;
+		io->recv_block(&start_point, 1);
+		mitccrh.setS(start_point);
 	}
 	void set_file_io(FileIO * fio) {
 		with_file_io = true;
@@ -112,7 +127,10 @@ public:
 			fio->send_block(table, 2);
 			return prp.H(a, gid++);
 		}
-		garble_gate_eval_halfgates(a, b, &out, table, gid++, &prp.aes);
+		if(mitccrh.key_used == KS_BATCH_N) {
+			mitccrh.renew_ks(gid);
+		}
+		garble_gate_eval_halfgates(a, b, &out, table, &mitccrh);
 		return out;
 	}
 	block xor_gate(const block& a, const block& b) override {

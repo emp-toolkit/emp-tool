@@ -1,3 +1,10 @@
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	if(NOT DEFINED OPENSSL_ROOT_DIR)
+		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")	
+		message(STATUS "OPENSSL_ROOT_DIR set to default: ${OPENSSL_ROOT_DIR}")
+	endif()
+endif()
+
 if(NOT WIN32)
   string(ASCII 27 Esc)
   set(ColourReset "${Esc}[m")
