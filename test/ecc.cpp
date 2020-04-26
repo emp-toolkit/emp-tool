@@ -19,7 +19,7 @@ int main() {
 	Point b;
 	*a = G.mul_gen(ia);//g^a
 	b = G.mul_gen(ib);//g^a
-	ic = ia.add_mod(ib, G.order);
+	ic = ia.add_mod(ib, G.order, G.bn_ctx);
 	Point c = G.mul_gen(ic);//g^{a+b}
 	Point d = a->add(b);
 	int res = (d == c);

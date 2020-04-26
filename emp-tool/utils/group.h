@@ -25,10 +25,10 @@ class BigInt { public:
 	void from_bin(const unsigned char * in, int length);
 
 	BigInt add(const BigInt &oth);
-	BigInt mul(const BigInt &oth, BN_CTX *ctx = nullptr);
-	BigInt mod(const BigInt &oth, BN_CTX *ctx = nullptr);
-	BigInt add_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx = nullptr);
-	BigInt mul_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx = nullptr);
+	BigInt mul(const BigInt &oth, BN_CTX *ctx);
+	BigInt mod(const BigInt &oth, BN_CTX *ctx);
+	BigInt add_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx);
+	BigInt mul_mod(const BigInt & b, const BigInt& m, BN_CTX *ctx);
 };
 class Group;
 class Point {

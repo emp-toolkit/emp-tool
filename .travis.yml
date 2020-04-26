@@ -42,3 +42,4 @@ script:
   - ./bin/bit
   - ./bin/int
   - ./bin/float32
+  - ./bin/ecc
