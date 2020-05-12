@@ -3,6 +3,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/prg.h"
 #include "emp-tool/utils/group.h"
+#include <memory>
 
 namespace emp {
 template<typename T> 

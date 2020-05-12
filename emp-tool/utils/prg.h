@@ -3,6 +3,7 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/constants.h"
+#include <memory>
 
 #ifdef ENABLE_RDSEED
 #include <x86intrin.h>
