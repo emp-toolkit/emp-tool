@@ -5,28 +5,12 @@ matrix:
     - os: linux
       dist: bionic
       sudo: required
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-         - TYPE=Debug
+      addons: TYPE=Debug
 
     - os: linux
       dist: bionic
       sudo: required
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
-      env:
-         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
-         - TYPE=Release
+      addons: TYPE=Release
 
     - os: osx
       sudo: required
@@ -42,6 +26,11 @@ before_install:
   - eval "${MATRIX_EVAL}"
   - git clone -brelease-2 https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_packages.sh
+  - sudo apt-get install g++-8 gcc-8
+  - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 8
+  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-8 8
+  - g++ --version
+
 
 script:
   - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &

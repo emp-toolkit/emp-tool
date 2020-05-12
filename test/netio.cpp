@@ -5,7 +5,7 @@ using namespace emp;
 
 int port, party;
 template<typename T>
-void test(T * io){
+void test(T * io) {
 	if(party == ALICE) {
 		for (long long length = 2; length <= 8192*16; length*=2) {
 			long long times = 1024*1024*128/length;
@@ -20,10 +20,10 @@ void test(T * io){
 		}
 	} else {//party == BOB
 		for (long long length = 2; length <= 8192*16; length*=2) {
-			long long times = 1024*1024*128/32;//length;
+			long long times = 1024*1024*128/length;
 			block * data = new block[length];
 			for (int i = 0; i < times; ++i) {
-				io->recv_block(data, 32);
+				io->recv_block(data, length);
 			}
 			delete[] data;
 		}
