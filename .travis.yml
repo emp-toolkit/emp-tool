@@ -3,12 +3,12 @@ language: cpp
 matrix:
   include:
     - os: linux
-      dist: xenial
+      dist: bionic
       sudo: required
       env: TYPE=Debug
 
     - os: linux
-      dist: xenial
+      dist: bionic
       sudo: required
       env: TYPE=Release
 
@@ -39,6 +39,6 @@ script:
   - ./run ./bin/netio
   - ./bin/bit
   - ./bin/int
-  - ./bin/float32
+  - ./bin/float
   - ./bin/ecc
   - ./bin/f2k
