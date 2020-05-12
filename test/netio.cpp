@@ -42,6 +42,8 @@ void test(T * io){
 		io->recv_bool(data2+7, 1024*1024-7);
 		assert(memcmp(data2+7, data+7, 1024*1024-7) == 0);
 	}
+	delete[] data;
+	delete[] data2;
 }
 int main(int argc, char** argv) {
 	parse_party_and_port(argv, &party, &port);
@@ -55,6 +57,5 @@ int main(int argc, char** argv) {
 	HighSpeedNetIO * hsio = new HighSpeedNetIO(party == ALICE ? nullptr:"127.0.0.1", port);
 	test<HighSpeedNetIO>(hsio);
 	delete hsio;
-
 }
 

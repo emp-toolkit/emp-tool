@@ -139,7 +139,7 @@ void hash1(block *ret, block r, block *a, int sz) {
 	prg.reseed(&r);
 	block *chi = new block[sz];
 	prg.random_block(chi, sz);
-	block r2=zero_block, tmp;
+	block r2=zero_block, tmp = zero_block;
 	int i = 0;
 	for(; i < sz/HASH_BLOCK_SZ; ++i) {
 		vector_inn_prdt_sum_red<HASH_BLOCK_SZ>(&tmp, a+i*HASH_BLOCK_SZ, chi+i*HASH_BLOCK_SZ);
@@ -160,7 +160,7 @@ void hash2(block *ret, block r, block *a, int sz) {
 	if(sz % HASH_BLOCK_SZ != 0)
 		uni_hash_coeff_gen(coeff+i*HASH_BLOCK_SZ, r, sz%HASH_BLOCK_SZ);
 	i = 0;
-	block r2=zero_block, tmp;
+	block r2=zero_block, tmp = zero_block;
 	for(; i < sz/HASH_BLOCK_SZ; ++i) {
 		vector_inn_prdt_sum_red<HASH_BLOCK_SZ>(&tmp, a+i*HASH_BLOCK_SZ, coeff+i*HASH_BLOCK_SZ);
 		r2 = r2 ^ tmp;

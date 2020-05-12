@@ -24,12 +24,12 @@ matrix:
       
 before_install:
   - eval "${MATRIX_EVAL}"
-  - git clone -brelease-2 https://github.com/emp-toolkit/emp-readme.git
+  - git clone https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_packages.sh
 
 script:
   - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE .
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE -DENABLE_FLOAT=On .
   - make 
   - echo "Testing Basic Primitives"
   - ./bin/prp
