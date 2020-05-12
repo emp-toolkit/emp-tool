@@ -1,11 +1,6 @@
-
-#ifndef ABANDON_IO_CHANNEL
-#define ABANDON_IO_CHANNEL
+#ifndef EMP_ABANDON_IO_CHANNEL_H__
+#define EMP_ABANDON_IO_CHANNEL_H__
 #include "emp-tool/io/io_channel.h"
-
-/** @addtogroup IO
-  @{
- */
 
 namespace emp {
 // Essentially drop all communication
@@ -19,5 +14,4 @@ class AbandonIO: public IOChannel<AbandonIO> { public:
 	}
 };
 }
-/**@}*/
 #endif

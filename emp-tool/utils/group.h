@@ -1,5 +1,5 @@
-#ifndef GROUP_H__
-#define GROUP_H__
+#ifndef EMP_GROUP_H__
+#define EMP_GROUP_H__
 
 #include <openssl/ec.h>
 #include <openssl/bn.h>

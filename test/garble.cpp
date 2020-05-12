@@ -4,7 +4,6 @@ using namespace std;
 using namespace emp;
 
 int port, party;
-template<RTCktOpt rt>
 void test(NetIO * netio) {
 	block *a = new block[128];
 	block *b = new block[128];
@@ -18,13 +17,13 @@ void test(NetIO * netio) {
 	CircuitFile cf(file.c_str());
 
 	if(party == BOB) {
-		HalfGateEva<NetIO, rt>::circ_exec = new HalfGateEva<NetIO, rt>(netio);
+		HalfGateEva<NetIO>::circ_exec = new HalfGateEva<NetIO>(netio);
 		for(int i = 0; i < 10000; ++i)
 			cf.compute(c, a, b);
-		delete HalfGateEva<NetIO, rt>::circ_exec;
+		delete HalfGateEva<NetIO>::circ_exec;
 	} else {
 		AbandonIO * aio = new AbandonIO();
-		HalfGateGen<AbandonIO, rt>::circ_exec = new HalfGateGen<AbandonIO, rt>(aio);
+		HalfGateGen<AbandonIO>::circ_exec = new HalfGateGen<AbandonIO>(aio);
 
 		auto start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
@@ -33,10 +32,10 @@ void test(NetIO * netio) {
 		double interval = time_from(start);
 		cout << "Pure AES garbling speed : "<< 10000*6800/interval<<" million gate per second\n";
 		delete aio;
-		delete HalfGateGen<AbandonIO, rt>::circ_exec;
+		delete HalfGateGen<AbandonIO>::circ_exec;
 
 		MemIO * mio = new MemIO(cf.table_size()*100);
-		HalfGateGen<MemIO, rt>::circ_exec = new HalfGateGen<MemIO, rt>(mio);
+		HalfGateGen<MemIO>::circ_exec = new HalfGateGen<MemIO>(mio);
 
 		start = clock_start();
 		for(int i = 0; i < 100; ++i) {
@@ -47,9 +46,9 @@ void test(NetIO * netio) {
 		interval = time_from(start);
 		cout << "AES garbling + Writing to Memory : "<< 10000*6800/interval<<" million gate per second\n";
 		delete mio;
-		delete HalfGateGen<MemIO, rt>::circ_exec;
+		delete HalfGateGen<MemIO>::circ_exec;
 
-		HalfGateGen<NetIO, rt>::circ_exec = new HalfGateGen<NetIO, rt>(netio);
+		HalfGateGen<NetIO>::circ_exec = new HalfGateGen<NetIO>(netio);
 
 		start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
@@ -58,7 +57,7 @@ void test(NetIO * netio) {
 		interval = time_from(start);
 		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval<<" million gate per second\n";
 
-		delete HalfGateGen<NetIO, rt>::circ_exec;
+		delete HalfGateGen<NetIO>::circ_exec;
 	}
 
 	delete[] a;
@@ -66,9 +65,8 @@ void test(NetIO * netio) {
 	delete[] c;
 }
 int main(int argc, char** argv) {
-	parse_party_and_port(argv, argc, &party, &port);
+	parse_party_and_port(argv, &party, &port);
 	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
-	test<RTCktOpt::on>(netio);
-	test<RTCktOpt::off>(netio);
+	test(netio);
 	delete netio;
 }

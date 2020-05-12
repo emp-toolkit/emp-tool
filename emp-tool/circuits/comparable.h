@@ -1,5 +1,5 @@
-#ifndef COMPARABLE_H__
-#define COMPARABLE_H__
+#ifndef EMP_COMPARABLE_H__
+#define EMP_COMPARABLE_H__
 
 namespace emp {
 template<typename T>

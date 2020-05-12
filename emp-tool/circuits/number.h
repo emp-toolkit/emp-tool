@@ -1,5 +1,5 @@
-#ifndef NUMBER_H__
-#define NUMBER_H__
+#ifndef EMP_NUMBER_H__
+#define EMP_NUMBER_H__
 #include "emp-tool/circuits/bit.h"
 
 namespace emp {

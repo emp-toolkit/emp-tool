@@ -58,7 +58,6 @@ inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * o
 		dest[i] = op1[i] ^ op2[i] ^ borrow;
 }
 inline void mul_full(Bit * dest, const Bit * op1, const Bit * op2, int size) {
-	//	OblivBit temp[MAX_BITS]={},sum[MAX_BITS]={};
 	Bit * sum = new Bit[size];
 	Bit * temp = new Bit[size];
 	for(int i = 0; i < size; ++i)sum[i]=false;
@@ -122,35 +121,25 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-inline void init(Bit * bits, const bool* b, int length, int party) {
-	block * bbits = (block *) bits;
+inline void init(vector<Bit>& bits, const bool* b, int length, int party) {
 	if (party == PUBLIC) {
 		block one = CircuitExecution::circ_exec->public_label(true);
 		block zero = CircuitExecution::circ_exec->public_label(false);
 		for(int i = 0; i < length; ++i)
-			bbits[i] = b[i] ? one : zero;
+			bits[i] = b[i] ? one : zero;
 	}
 	else {
-		ProtocolExecution::prot_exec->feed((block *)bits, party, b, length); 
+		ProtocolExecution::prot_exec->feed((block *)bits.data(), party, b, length); 
 	}
 }
 
-/*inline Integer::Integer(const bool * b, int length, int party) {
-  bits = new Bit[length];
-  init(bits,b,length, party);
-  }*/
-
-inline Integer::Integer(int len, const string& str, int party) : length(len) {
+inline Integer::Integer(int len, int64_t input, int party) {
 	bool* b = new bool[len];
-	bool_data(b, len, str);
-	bits = new Bit[length];
-	init(bits,b,length, party);
+	int_to_bool<int64_t>(b, input, len);
+	bits.resize(len);
+	init(bits, b, len, party);
 	delete[] b;
 }
-
-inline Integer::Integer(int len, long long input, int party)
-	: Integer(len, std::to_string(input), party) {
-	}
 
 inline Integer Integer::select(const Bit & select, const Integer & a) const{
 	Integer res(*this);
@@ -168,50 +157,47 @@ inline const Bit &Integer::operator[](int index) const {
 }
 
 template<>
-inline string Integer::reveal<string>(int party) const {
-	bool * b = new bool[length];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits,  length);
-	string bin="";
-	for(int i = length-1; i >= 0; --i)
-		bin += (b[i]? '1':'0');
-	delete [] b;
-	return bin_to_dec(bin);
-}
-
-template<>
 inline int32_t Integer::reveal<int32_t>(int party) const {
-	string s = reveal<string>(party);
-	return stoi(s);
+	bool b[32];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), 32);
+	return bool_to_int<int32_t>(b);
 }
 
 template<>
 inline int64_t Integer::reveal<int64_t>(int party) const {
-	string s = reveal<string>(party);
-	return stoll(s);
+	bool b[64];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), 64);
+	return bool_to_int<int64_t>(b);
 }
 
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
-	std::bitset<32> bs;
 	bool b[32];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 32);
-	for (int i = 0; i < 32; ++i)
-		bs.set(i, b[i]);
-	return bs.to_ulong();
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), 32);
+	return bool_to_int<uint32_t>(b);
 }
 
 template<>
 inline uint64_t Integer::reveal<uint64_t>(int party) const {
-	std::bitset<64> bs;
 	bool b[64];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 64);
-	for (int i = 0; i < 64; ++i)
-		bs.set(i, b[i]);
-	return bs.to_ullong();
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), 64);
+	return bool_to_int<uint64_t>(b);
 }
 
+template<>
+inline string Integer::reveal<string>(int party) const {
+	bool * b = new bool[size()];
+	string res = "";
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+	for(int i = 0; i < size(); ++i)
+		res+=(b[i]? "0" : "1");
+	delete[] b;
+	return res;
+}
+
+
 inline int Integer::size() const {
-	return length;
+	return bits.size();
 }
 
 //circuits
@@ -223,14 +209,8 @@ inline Integer Integer::abs() const {
 }
 
 inline Integer& Integer::resize(int len, bool signed_extend) {
-	Bit * old = bits;
-	bits = new Bit[len];
-	memcpy(bits, old, min(len, size())*sizeof(Bit));
-	Bit extended_bit = old[length-1] & signed_extend;
-	for(int i = min(len, size()); i < len; ++i)
-		bits[i] = extended_bit;
-	this->length = len;
-	delete[] old;
+	Bit MSB = *bits.end() & Bit(signed_extend, PUBLIC);
+	bits.resize(len, MSB);
 	return *this;
 }
 
@@ -303,12 +283,6 @@ inline Integer Integer::operator>>(const Integer& shamt) const{
 //Comparisons
 inline Bit Integer::geq (const Integer& rhs) const {
 	assert(size() == rhs.size());
-/*	Bit res(false);
-	for(int i = 0; i < size(); ++i) {
-		res = ((bits[i]^res)&(rhs[i]^res))^bits[i];
-	} 
-	return res; 
-*/
 	Integer tmp = (*this) - rhs;
 	return !tmp[tmp.size()-1];
 }
@@ -326,22 +300,21 @@ inline Bit Integer::equal(const Integer& rhs) const {
 inline Integer Integer::operator+(const Integer & rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
-	add_full(res.bits, nullptr, bits, rhs.bits, nullptr, size());
+	add_full(res.bits.data(), nullptr, bits.data(), rhs.bits.data(), nullptr, size());
 	return res;
 }
 
 inline Integer Integer::operator-(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
-	sub_full(res.bits, nullptr, bits, rhs.bits, nullptr, size());
+	sub_full(res.bits.data(), nullptr, bits.data(), rhs.bits.data(), nullptr, size());
 	return res;
 }
-
 
 inline Integer Integer::operator*(const Integer& rhs) const {
 	assert(size() == rhs.size());
 	Integer res(*this);
-	mul_full(res.bits, bits, rhs.bits, size());
+	mul_full(res.bits.data(), bits.data(), rhs.bits.data(), size());
 	return res;
 }
 
@@ -351,8 +324,8 @@ inline Integer Integer::operator/(const Integer& rhs) const {
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();
 	Bit sign = bits[size()-1] ^ rhs[size()-1];
-	div_full(res.bits, nullptr, i1.bits, i2.bits, size());
-	condNeg(sign, res.bits, res.bits, size());
+	div_full(res.bits.data(), nullptr, i1.bits.data(), i2.bits.data(), size());
+	condNeg(sign, res.bits.data(), res.bits.data(), size());
 	return res;
 }
 inline Integer Integer::operator%(const Integer& rhs) const {
@@ -361,8 +334,8 @@ inline Integer Integer::operator%(const Integer& rhs) const {
 	Integer i1 = abs();
 	Integer i2 = rhs.abs();
 	Bit sign = bits[size()-1];
-	div_full(nullptr, res.bits, i1.bits, i2.bits, size());
-	condNeg(sign, res.bits, res.bits, size());
+	div_full(nullptr, res.bits.data(), i1.bits.data(), i2.bits.data(), size());
+	condNeg(sign, res.bits.data(), res.bits.data(), size());
 	return res;
 }
 

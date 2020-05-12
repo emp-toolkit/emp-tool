@@ -1,5 +1,5 @@
-#ifndef PLAIN_ENV_H__
-#define PLAIN_ENV_H__
+#ifndef EMP_PLAIN_ENV_H__
+#define EMP_PLAIN_ENV_H__
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 #include <fstream>
@@ -14,7 +14,7 @@ public:
 	bool print;
 	string filename;
 	PlainCircExec * cast_circ_exec;
-	vector<int64_t>output_vec;
+	std::vector<int64_t>output_vec;
 	PlainProt(bool _print, string _filename) : print(_print), 
 	filename(_filename) {
 	 cast_circ_exec = static_cast<PlainCircExec *> (CircuitExecution::circ_exec);

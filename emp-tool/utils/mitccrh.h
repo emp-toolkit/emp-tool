@@ -1,72 +1,63 @@
-#ifndef MITCCRH_H__
-#define MITCCRH_H__
+#ifndef EMP_MITCCRH_H__
+#define EMP_MITCCRH_H__
 #include "emp-tool/utils/aes_opt.h"
 #include <stdio.h>
 
-/** @addtogroup BP
-  @{
- */
 namespace emp {
 
-class MITCCRH{ public:
+/*
+ * [REF] Implementation of "Better Concrete Security for Half-Gates Garbling (in the Multi-Instance Setting)"
+ * https://eprint.iacr.org/2019/1168.pdf
+ */
 
-	ROUND_KEYS key_schedule[KS_BATCH_N];
-	int key_used = KS_BATCH_N;
+template<int BatchSize = 8>
+class MITCCRH { public:
+	AES_KEY scheduled_key[BatchSize];
+	block keys[BatchSize];
+	int key_used = BatchSize;
 	block start_point;
-
-	MITCCRH() {
-	}
+	uint64_t gid = 0;
 
 	void setS(block sin) {
 		this->start_point = sin;
 	}
 
 	void renew_ks(uint64_t gid) {
-		switch(KS_BATCH_N) {
-			case 2:
-				AES_ks2_index(start_point, gid, key_schedule); break;
-			case 4:
-				AES_ks4_index(start_point, gid, key_schedule); break;
-			case 8:
-				AES_ks8_index(start_point, gid, key_schedule); break;
-			default:
-				abort();
-		}
+		this->gid = gid;
+		renew_ks();
+	}
+
+	void renew_ks() {
+		for(int i = 0; i < BatchSize; ++i)
+			keys[i] = start_point ^ makeBlock(gid++, 0);
+		AES_opt_key_schedule<BatchSize>(keys, scheduled_key);
 		key_used = 0;
 	}
 
-	void k2_h2(block A, block B, block *H) {
-		block keys[2], masks[2];
-		keys[0] = sigma(A);
-		keys[1] = sigma(B);
-		masks[0] = keys[0];
-		masks[1] = keys[1];
-
-		AES_ecb_ccr_ks2_enc2(keys, keys, &key_schedule[key_used]);
-		key_used += 2;
-
-		H[0] = xorBlocks(keys[0], masks[0]);
-		H[1] = xorBlocks(keys[1], masks[1]);
+	template<int K, int H>
+	void hash_cir(block * blks) {
+		for(int i = 0; i < K*H; ++i)
+			blks[i] = sigma(blks[i]);
+		hash<K, H>(blks);
 	}
 
-	void k2_h4(block A0, block A1, block B0, block B1, block *H) {
-		block keys[4], masks[4];
-		keys[0] = sigma(A0);
-		keys[1] = sigma(A1);
-		keys[2] = sigma(B0);
-		keys[3] = sigma(B1);
-		memcpy(masks, keys, sizeof keys);
+	template<int K, int H>
+	void hash(block * blks) {
+		assert(K <= BatchSize);
+		assert(BatchSize % K == 0);
+		if(key_used == BatchSize) renew_ks();
 
-		AES_ecb_ccr_ks2_enc4(keys, keys, &key_schedule[key_used]);
-		key_used += 2;
-
-		H[0] = xorBlocks(keys[0], masks[0]);
-		H[1] = xorBlocks(keys[1], masks[1]);
-		H[2] = xorBlocks(keys[2], masks[2]);
-		H[3] = xorBlocks(keys[3], masks[3]);
+		block tmp[K*H];
+		for(int i = 0; i < K*H; ++i)
+			tmp[i] = blks[i];
+		
+		ParaEnc<K,H>(tmp, scheduled_key+key_used);
+		key_used += K;
+		
+		for(int i = 0; i < K*H; ++i)
+			blks[i] = blks[i] ^ tmp[i];
 	}
 
 };
 }
-/**@}*/
 #endif// MITCCRH_H__

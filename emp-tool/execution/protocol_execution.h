@@ -1,5 +1,5 @@
-#ifndef PROTOCOL_EXECUTION_H__
-#define PROTOCOL_EXECUTION_H__
+#ifndef EMP_PROTOCOL_EXECUTION_H__
+#define EMP_PROTOCOL_EXECUTION_H__
 #include <pthread.h>  
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/constants.h"

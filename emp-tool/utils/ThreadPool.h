@@ -22,8 +22,8 @@ freely, subject to the following restrictions:
    3. This notice may not be removed or altered from any source
    distribution.
 */
-#ifndef THREAD_POOL_H
-#define THREAD_POOL_H
+#ifndef EMP_THREAD_POOL_H
+#define EMP_THREAD_POOL_H
 
 #include <vector>
 #include <queue>

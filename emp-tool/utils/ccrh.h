@@ -1,10 +1,7 @@
+#ifndef EMP_CCRH_H__
+#define EMP_CCRH_H__
 #include "emp-tool/utils/prp.h"
 #include <stdio.h>
-#ifndef CCRH_H__
-#define CCRH_H__
-/** @addtogroup BP
-  @{
- */
 namespace emp {
 
 class CCRH: public PRP { public:
@@ -18,11 +15,7 @@ class CCRH: public PRP { public:
 		block t;
 		t = in = sigma(in);
 		permute_block(&t, 1);
-		return xorBlocks(t, in);
-	}
-
-	static block sigma(block a) {
-		return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
+		return t ^ in;
 	}
 
 #ifdef __GNUC__
@@ -46,8 +39,6 @@ class CCRH: public PRP { public:
 	#endif
 #endif
 
-
-
 	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
 		bool del = false;
 		if(scratch == nullptr) {
@@ -57,6 +48,7 @@ class CCRH: public PRP { public:
 
 		for (int i = 0; i < length; ++i)
 			scratch[i] = out[i] = sigma(in[i]);
+
 		permute_block(scratch, length);
 		xorBlocks_arr(out, scratch, out, length);
 
@@ -65,8 +57,7 @@ class CCRH: public PRP { public:
 			scratch = nullptr;
 		}
 	}
-
 };
-}
-/**@}*/
+
+}//namespace
 #endif// CCRH_H__

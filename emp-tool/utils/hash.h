@@ -1,14 +1,12 @@
-#ifndef HASH_H__
-#define HASH_H__
+#ifndef EMP_HASH_H__
+#define EMP_HASH_H__
 
 #include "emp-tool/utils/block.h"
+#include "emp-tool/utils/group.h"
 #include "emp-tool/utils/constants.h"
 #include <openssl/sha.h>
 #include <stdio.h>
 
-/** @addtogroup BP
-  @{
- */
 namespace emp {
 class Hash { public:
 	SHA256_CTX hash;
@@ -67,5 +65,4 @@ class Hash { public:
 	}
 };
 }
-/**@}*/
 #endif// HASH_H__

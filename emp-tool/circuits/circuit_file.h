@@ -1,5 +1,5 @@
-#ifndef CIRCUIT_FILE
-#define CIRCUIT_FILE
+#ifndef EMP_CIRCUIT_FILE
+#define EMP_CIRCUIT_FILE
 
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"

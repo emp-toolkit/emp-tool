@@ -1,13 +1,10 @@
+#ifndef EMP_MEM_IO_CHANNEL
+#define EMP_MEM_IO_CHANNEL
+
 #include <string>
 #include "emp-tool/io/io_channel.h"
 #include "emp-tool/io/file_io_channel.h"
 
-#ifndef MEM_IO_CHANNEL
-#define MEM_IO_CHANNEL
-
-/** @addtogroup IO
-  @{
- */
 namespace emp {
 class MemIO: public IOChannel<MemIO> { public:
 	char * buffer = nullptr;
@@ -56,6 +53,5 @@ class MemIO: public IOChannel<MemIO> { public:
 		}
 	}
 };
-/**@}*/
 }
 #endif//MEM_IO_CHANNEL_H__

@@ -1,9 +1,9 @@
-#include "emp-tool/circuits/float32_circuit.h"
-using emp::Float32;
+#include "emp-tool/circuits/float32.h"
+using emp::Float;
 using emp::Bit;
 
-Bit Float32::less_than(const Float32 & rhs) const {
-	Float32 res(*this);
+Bit Float::less_than(const Float & rhs) const {
+	Float res(*this);
 	Bit *B = new Bit[378];
 
 	B[0] = res[0];

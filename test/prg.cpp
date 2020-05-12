@@ -6,27 +6,25 @@ using namespace emp;
 int main() {
 	PRG prg;//using a random seed
 
-	int rand_int;
-	prg.random_data(&rand_int, sizeof(rand_int));
-
 	block rand_block[3];
 	prg.random_block(rand_block, 3);
 		
 	prg.reseed(&rand_block[1]);//reset the PRG with another seed
 
 	int rand_ints[100];
-	prg.random_data_unaligned(rand_ints+2, sizeof(int)*98);//when the array is not 128-bit-aligned
-
-	mpz_t integ;
-	mpz_init(integ);
-	prg.random_mpz(integ, 1024);//random number with 1024 bits.
-
+	int a = 0;
+	prg.random_data_unaligned(rand_ints+1, sizeof(int)*99);//when the array is not 128-bit-aligned
+	cout << a<<"\n";
+	
+	prg.reseed(fix_key);
 	for (long long length = 2; length <= 8192; length*=2) {
 		long long times = 1024*1024*32/length;
-		block * data = new block[length];
+		block * data = new block[length+1];
+		char * data2 = (char *)data;
 		auto start = clock_start();
 		for (int i = 0; i < times; ++i) {
-			prg.random_block(data, length);
+			prg.random_data(data2, length*16);
+			//prg.random_data_unaligned(data2+1, length*16);
 		}
 		double interval = time_from(start);
 		delete[] data;

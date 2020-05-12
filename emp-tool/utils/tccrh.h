@@ -1,10 +1,8 @@
+#ifndef EMP_TCCRH_H__
+#define EMP_TCCRH_H__
 #include "emp-tool/utils/prp.h"
 #include <stdio.h>
-#ifndef TCCRH_H__
-#define TCCRH_H__
-/** @addtogroup BP
-  @{
- */
+
 namespace emp {
 
 class TCCRH: public PRP { public:
@@ -15,9 +13,9 @@ class TCCRH: public PRP { public:
 	}
 	block H(block in, uint64_t i) {
 		permute_block(&in, 1);
-		block t = xorBlocks(in, makeBlock(0, i));
+		block t = in ^ makeBlock(0, i);
 		permute_block(&t, 1);
-		return xorBlocks(t, in);
+		return t ^ in;
 	}
 
 #ifdef __GNUC__
@@ -34,7 +32,7 @@ class TCCRH: public PRP { public:
 			tmp[i] = in[i];
 		permute_block(tmp, n);
 		for(int i = 0; i < n; ++i) {
-			out[i] = xorBlocks(tmp[i], makeBlock(0, id));
+			out[i] = tmp[i] ^ makeBlock(0, id);
 			++id;
 		}
 		permute_block(out, n);
@@ -58,7 +56,7 @@ class TCCRH: public PRP { public:
 			scratch[i] = in[i];
 		permute_block(scratch, length);
 		for(int i = 0; i < length; ++i) {
-			out[i] = xorBlocks(scratch[i], makeBlock(0, id));
+			out[i] = scratch[i] ^ makeBlock(0, id);
 			++id;
 		}
 		permute_block(out, length);
@@ -72,5 +70,4 @@ class TCCRH: public PRP { public:
 
 };
 }
-/**@}*/
 #endif// TCCRH_H__

@@ -1,5 +1,5 @@
-#ifndef BIT_H__
-#define BIT_H__
+#ifndef EMP_BIT_H__
+#define EMP_BIT_H__
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"
 #include "emp-tool/utils/utils.h"

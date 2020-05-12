@@ -1,5 +1,5 @@
-#include "emp-tool/circuits/float32_circuit.h"
-using emp::Float32;
+#include "emp-tool/circuits/float32.h"
+using emp::Float;
 using emp::Bit;
 
 #ifdef __GNUC__
@@ -10,8 +10,8 @@ using emp::Bit;
 		__attribute__((optnone))
 	#endif
 #endif
-Float32 Float32::sin() const {
-	Float32 res(*this);
+Float Float::sin() const {
+	Float res(*this);
 
 	Bit *B = new Bit[9222];
 

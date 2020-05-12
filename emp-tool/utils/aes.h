@@ -49,8 +49,8 @@
  *
  */
 
-#ifndef LIBGARBLE_AES_H
-#define LIBGARBLE_AES_H
+#ifndef EMP_AES_H
+#define EMP_AES_H
 
 #include "emp-tool/utils/block.h"
 
@@ -71,8 +71,7 @@ typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
 
 inline void
 __attribute__((target("aes,sse2")))
-AES_set_encrypt_key(const block userkey, AES_KEY *key)
-{
+AES_set_encrypt_key(const block userkey, AES_KEY *key) {
     block x0, x1, x2;
     block *kp = key->rd_key;
     kp[0] = x0 = userkey;
@@ -102,8 +101,7 @@ AES_set_encrypt_key(const block userkey, AES_KEY *key)
 
 inline void
 __attribute__((target("aes,sse2")))
-AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key)
-{
+AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
     for (unsigned int i = 0; i < nblks; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
     for (unsigned int j = 1; j < key->rounds; ++j)
@@ -113,10 +111,33 @@ AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key)
         blks[i] = _mm_aesenclast_si128(blks[i], key->rd_key[key->rounds]);
 }
 
+#ifdef __GNUC__
+	#ifndef __clang__
+		#pragma GCC push_options
+		#pragma GCC optimize ("unroll-loops")
+	#endif
+#endif
+template<int N>
 inline void
 __attribute__((target("aes,sse2")))
-AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey)
-{
+AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
+    for (unsigned int i = 0; i < N; ++i)
+        blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
+    for (unsigned int j = 1; j < key->rounds; ++j)
+        for (unsigned int i = 0; i < N; ++i)
+            blks[i] = _mm_aesenc_si128(blks[i], key->rd_key[j]);
+    for (unsigned int i = 0; i < N; ++i)
+        blks[i] = _mm_aesenclast_si128(blks[i], key->rd_key[key->rounds]);
+}
+#ifdef __GNUC_
+	#ifndef __clang___
+		#pragma GCC pop_options
+	#endif
+#endif
+
+inline void
+__attribute__((target("aes,sse2")))
+AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey) {
     int j = 0;
     int i = ekey->rounds;
 #if (OCB_KEY_LEN == 0)
@@ -130,8 +151,7 @@ AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey)
 
 inline void
 __attribute__((target("aes,sse2")))
-AES_set_decrypt_key(block userkey, AES_KEY *key)
-{
+AES_set_decrypt_key(block userkey, AES_KEY *key) {
     AES_KEY temp_key;
     AES_set_encrypt_key(userkey, &temp_key);
     AES_set_decrypt_key_fast(key, &temp_key);
@@ -139,8 +159,7 @@ AES_set_decrypt_key(block userkey, AES_KEY *key)
 
 inline void
 __attribute__((target("aes,sse2")))
-AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key)
-{
+AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key) {
     unsigned i, j, rnds = key->rounds;
     for (i = 0; i < nblks; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);

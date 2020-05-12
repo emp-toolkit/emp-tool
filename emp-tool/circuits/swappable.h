@@ -1,5 +1,5 @@
-#ifndef SWAPPABLE_H__
-#define SWAPPABLE_H__
+#ifndef EMP_SWAPPABLE_H__
+#define EMP_SWAPPABLE_H__
 #include "emp-tool/circuits/bit.h"
 namespace emp {
 class Bit;

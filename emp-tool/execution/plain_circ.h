@@ -1,5 +1,5 @@
-#ifndef PLAIN_CIRC_EXEC_H__
-#define PLAIN_CIRC_EXEC_H__
+#ifndef EMP_PLAIN_CIRC_EXEC_H__
+#define EMP_PLAIN_CIRC_EXEC_H__
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/execution/circuit_execution.h"
@@ -20,8 +20,8 @@ public:
 	std::ofstream fout;
 
 	PlainCircExec(bool print, string filename) {
-		public_one = zero_block();
-		public_zero = zero_block();
+		public_one = zero_block;
+		public_zero = zero_block;
 		this->print = print;
 		uint64_t *arr = (uint64_t*) &public_one;
 		arr[0] = P1;
@@ -61,7 +61,7 @@ public:
 		} else if(arr_a[0] == P0 or arr_b[0] == P0) {
 			return public_zero;
 		} else {
-			block res = zero_block();
+			block res = zero_block;
 			uint64_t *arr = (uint64_t*) &res;
 			arr[0] = compute_and(arr_a[0], arr_b[0]);
 			arr[1] = gid;
@@ -84,7 +84,7 @@ public:
 		} else if(arr_b[0] == P0){
 			return a;
 		} else {
-			block res = zero_block();
+			block res = zero_block;
 			uint64_t *arr = (uint64_t*) &res;
 			arr[0] = compute_xor(arr_a[0], arr_b[0]);
 			arr[1] = gid;
@@ -96,7 +96,7 @@ public:
 		}
 	}
 	block private_label(bool b) {
-		block res = zero_block();
+		block res = zero_block;
 		uint64_t *arr = (uint64_t*) &res;
 		arr[0] = b ? S1 : S0;
 		arr[1] = this->gid;
@@ -118,7 +118,7 @@ public:
 		} else if (arr_a[0] == P0) {
 			return public_one;
 		} else {
-			block res = zero_block();
+			block res = zero_block;
 			uint64_t *arr = (uint64_t*) &res;
 			if(arr_a[0] == S0) arr[0] = S1;
 			else arr[0] = S0;

@@ -1,16 +1,41 @@
-#ifndef PRIVACY_FREE_EVA_H__
-#define PRIVACY_FREE_EVA_H__
+#ifndef EMP_PRIVACY_FREE_EVA_H__
+#define EMP_PRIVACY_FREE_EVA_H__
 #include "emp-tool/io/io_channel.h"
-#include "emp-tool/io/net_io_channel.h"
-#include "emp-tool/io/file_io_channel.h"
 #include "emp-tool/utils/block.h"
-#include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/prp.h"
-#include "emp-tool/utils/hash.h"
 #include "emp-tool/execution/circuit_execution.h"
-#include "emp-tool/garble/garble_gate_privacy_free.h"
 #include <iostream>
 namespace emp {
+
+inline block privacy_free_eval(block A, block B, const block &table, uint64_t idx, 
+	const AES_KEY *key) {
+	block HA, W;
+	bool sa;
+	block tweak;
+
+	sa = getLSB(A);
+
+	tweak = makeBlock(2 * idx, (uint64_t) 0);
+
+	{
+		block tmp, mask;
+
+		tmp = sigma(A) ^ tweak;
+		mask = tmp;
+		AES_ecb_encrypt_blks(&tmp, 1, key);
+		HA = tmp ^ mask;
+	}
+	if (sa) {
+		*((char *) &HA) |= 0x01;
+		W = HA ^ table[0];
+		W = W ^ B;
+	} else {
+		*((char *) &HA) &= 0xfe;
+		W = HA;
+	}
+	return W;
+}
+
 template<typename T>
 class PrivacyFreeEva:public CircuitExecution{ public:
 	PRP prp;
@@ -29,27 +54,15 @@ class PrivacyFreeEva:public CircuitExecution{ public:
 		return constant[b];
 	}
 	block and_gate(const block& a, const block& b) {
-		block out[2], table[1];
-		io->recv_block(table, 1);
-		garble_gate_eval_privacy_free(a, b, out, table, gid++, &prp.aes);
-		return out[0];
+		block table;
+		io->recv_block(&table, 1);
+		return privacy_free_eval(a, b, table, gid++, &prp.aes);
 	}
 	block xor_gate(const block& a, const block& b) {
-		return xorBlocks(a,b);
+		return a^b;
 	}
 	block not_gate(const block& a) {
-		return xor_gate(a, public_label(true));
-	}
-	void privacy_free_to_xor(block* new_block, const block * old_block, const bool* b, int length){
-		block h[2];
-		for(int i = 0; i < length; ++i) {
-			io->recv_block(h, 2);
-			if(!b[i]){
-				new_block[i] = xorBlocks(h[0], prp.H(old_block[i], i));
-			} else {
-				new_block[i] = xorBlocks(h[1], prp.H(old_block[i], i));
-			}
-		}
+		return a ^ public_label(true);
 	}
 };
 }

@@ -1,9 +1,9 @@
-#include "emp-tool/circuits/float32_circuit.h"
-using emp::Float32;
+#include "emp-tool/circuits/float32.h"
+using emp::Float;
 using emp::Bit;
 
-Float32 Float32::operator-(const Float32& rhs) const {
-	Float32 res(*this);
+Float Float::operator-(const Float& rhs) const {
+	Float res(*this);
 	
 	Bit *B = new Bit[2031];
 
