@@ -24,7 +24,7 @@ matrix:
       
 before_install:
   - eval "${MATRIX_EVAL}"
-  - git clone https://github.com/emp-toolkit/emp-readme.git
+  - git clone -brelease-2 https://github.com/emp-toolkit/emp-readme.git
   - bash ./emp-readme/scripts/install_packages.sh
 
 script:
