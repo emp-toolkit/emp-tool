@@ -51,7 +51,12 @@ inline void int_to_bool(bool * data, T input, int len) {
 	}
 }
 
-inline block bool_to128(const bool * data) {
+inline block bool_to_block(const bool * data) {
 	return makeBlock(bool_to_int<uint64_t>(data+64), bool_to_int<uint64_t>(data));
 }
 
+inline void  block_to_bool(bool * data, block b) {
+	uint64_t* ptr = (uint64_t*)(&b);
+	int_to_bool<uint64_t>(data, ptr[0], 64);
+	int_to_bool<uint64_t>(data+64, ptr[1], 64);
+}

@@ -47,7 +47,7 @@ before_install:
 
 script:
   - while sleep 400; do echo "=====[ $SECONDS seconds ]====="; done &
-  - cmake -DCMAKE_BUILD_TYPE=$TYPE -DENABLE_FLOAT=On .
+  - cmake -DCMAKE_BUILD_TYPE=$TYPE .
   - make 
   - echo "Testing Basic Primitives"
   - ./bin/prp
@@ -57,6 +57,5 @@ script:
   - ./run ./bin/netio
   - ./bin/bit
   - ./bin/int
-  - ./bin/float
   - ./bin/ecc
   - ./bin/f2k

@@ -63,6 +63,6 @@ class Float: Swappable<Float> { public:
 	size_t size() const {return 32;};
 };
 
-#include "emp-tool/circuits/float32_circuit.hpp"
+#include "emp-tool/circuits/float32.hpp"
 }
 #endif// DOUBLE_H__

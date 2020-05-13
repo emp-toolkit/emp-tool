@@ -28,16 +28,17 @@ inline void parse_party_and_port(char ** arg, int * party, int * port);
 inline time_point<high_resolution_clock> clock_start();
 inline double time_from(const time_point<high_resolution_clock>& s);
 
+
+//Conversions
 template<typename T>
 inline T bool_to_int(const bool * data);
 
 template<typename T>
-inline T int_to_bool(bool * data, T input);
+inline void int_to_bool(bool * data, T input);
 
+block bool_to_block(const bool * data);
 
-//block conversions
-block bool_to128(const bool * data);
-void int64_to_bool(bool * data, int64_t input, int length);
+void block_to_bool(bool * data, block b);
 
 #include "emp-tool/utils/utils.hpp"
 }
