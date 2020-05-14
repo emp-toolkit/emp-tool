@@ -4,7 +4,8 @@ using namespace std;
 using namespace emp;
 
 int port, party;
-void test(NetIO * netio) {
+template<typename T>
+void test(T * netio) {
 	block *a = new block[128];
 	block *b = new block[128];
 	block *c = new block[128];
@@ -17,10 +18,10 @@ void test(NetIO * netio) {
 	CircuitFile cf(file.c_str());
 
 	if(party == BOB) {
-		HalfGateEva<NetIO>::circ_exec = new HalfGateEva<NetIO>(netio);
+		HalfGateEva<T>::circ_exec = new HalfGateEva<T>(netio);
 		for(int i = 0; i < 10000; ++i)
 			cf.compute(c, a, b);
-		delete HalfGateEva<NetIO>::circ_exec;
+		delete HalfGateEva<T>::circ_exec;
 	} else {
 		AbandonIO * aio = new AbandonIO();
 		HalfGateGen<AbandonIO>::circ_exec = new HalfGateGen<AbandonIO>(aio);
@@ -48,7 +49,7 @@ void test(NetIO * netio) {
 		delete mio;
 		delete HalfGateGen<MemIO>::circ_exec;
 
-		HalfGateGen<NetIO>::circ_exec = new HalfGateGen<NetIO>(netio);
+		HalfGateGen<T>::circ_exec = new HalfGateGen<T>(netio);
 
 		start = clock_start();
 		for(int i = 0; i < 10000; ++i) {
@@ -57,7 +58,7 @@ void test(NetIO * netio) {
 		interval = time_from(start);
 		cout << "AES garbling + Loopback Network : "<< 10000*6800/interval<<" million gate per second\n";
 
-		delete HalfGateGen<NetIO>::circ_exec;
+		delete HalfGateGen<T>::circ_exec;
 	}
 
 	delete[] a;
@@ -66,7 +67,13 @@ void test(NetIO * netio) {
 }
 int main(int argc, char** argv) {
 	parse_party_and_port(argv, &party, &port);
+	cout <<"Using NetIO\n";
 	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
-	test(netio);
+	test<NetIO>(netio);
 	delete netio;
+
+	cout <<"Using HighSpeedNetIO\n";
+	HighSpeedNetIO* hsnetio = new HighSpeedNetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
+	test<HighSpeedNetIO>(hsnetio);
+	delete hsnetio;
 }
