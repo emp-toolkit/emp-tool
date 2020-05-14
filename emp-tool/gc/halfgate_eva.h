@@ -7,7 +7,6 @@
 namespace emp {
 
 block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mitccrh) {
-	block select[2] = {zero_block, all_one_block};
 	block HA, HB, W;
 	int sa, sb;
 
@@ -22,9 +21,9 @@ block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mitccrh) 
 	HB = H[1];
 
 	W = HA ^ HB;
-	W = W ^ (select[sa] & table[0]);
-	W = W ^ (select[sb] & table[1]);
-	W = W ^ (select[sb] & A);
+	W = W ^ (select_mask[sa] & table[0]);
+	W = W ^ (select_mask[sb] & table[1]);
+	W = W ^ (select_mask[sb] & A);
 	return W;
 }
 

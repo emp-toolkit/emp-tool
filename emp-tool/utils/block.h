@@ -30,6 +30,7 @@ inline block sigma(block a) {
 
 const block zero_block = makeBlock(0, 0);
 const block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
+const block select_mask[2] = {zero_block, all_one_block};
 
 __attribute__((target("sse2")))
 inline block set_bit(const block & a, int i) {

@@ -12,7 +12,6 @@ namespace emp {
  * https://eprint.iacr.org/2014/756.pdf
  */
 block halfgates_garble(block LA0, block A1, block LB0, block B1, block delta, block *table, MITCCRH<8> *mitccrh) {
-	block select[2] = {zero_block, all_one_block};
 	bool pa = getLSB(LA0);
 	bool pb = getLSB(LB0);
 	block HLA0, HA1, HLB0, HB1;
@@ -30,13 +29,13 @@ block halfgates_garble(block LA0, block A1, block LB0, block B1, block delta, bl
 	HB1 = H[3];
 
 	table[0] = HLA0 ^ HA1;
-	table[0] = table[0] ^ (select[pb] & delta);
+	table[0] = table[0] ^ (select_mask[pb] & delta);
 	W0 = HLA0;
-	W0 = W0 ^ (select[pa] & table[0]);
+	W0 = W0 ^ (select_mask[pa] & table[0]);
 	tmp = HLB0 ^ HB1;
 	table[1] = tmp ^ LA0;
 	W0 = W0 ^ HLB0;
-	W0 = W0 ^ (select[pb] & tmp);
+	W0 = W0 ^ (select_mask[pb] & tmp);
 
 	return W0;
 }
