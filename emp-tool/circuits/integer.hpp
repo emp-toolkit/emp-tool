@@ -193,9 +193,10 @@ inline int64_t Integer::reveal<int64_t>(int party) const {
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
 	std::bitset<32> bs;
-	bool b[32];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 32);
-	for (int i = 0; i < 32; ++i)
+	bs.reset();
+	bool b[length];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, length);
+	for (int i = 0; i < min(32, length); ++i)
 		bs.set(i, b[i]);
 	return bs.to_ulong();
 }
@@ -203,9 +204,10 @@ inline uint32_t Integer::reveal<uint32_t>(int party) const {
 template<>
 inline uint64_t Integer::reveal<uint64_t>(int party) const {
 	std::bitset<64> bs;
-	bool b[64];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, 64);
-	for (int i = 0; i < 64; ++i)
+	bs.reset();
+	bool b[length];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits, length);
+	for (int i = 0; i < min(64, length); ++i)
 		bs.set(i, b[i]);
 	return bs.to_ullong();
 }
