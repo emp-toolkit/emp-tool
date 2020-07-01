@@ -11,8 +11,8 @@ if (GMP_INCLUDE_DIR AND GMP_LIBRARIES)
 endif (GMP_INCLUDE_DIR AND GMP_LIBRARIES)
 
 find_path(GMP_INCLUDE_DIR NAMES gmp.h )
-find_library(GMP_LIBRARIES NAMES gmp libgmp )
-find_library(GMPXX_LIBRARIES NAMES gmpxx libgmpxx )
+find_library(GMP_LIBRARIES NAMES gmp )
+find_library(GMPXX_LIBRARIES NAMES gmpxx )
 MESSAGE(STATUS "GMP libs: " ${GMP_LIBRARIES} " " ${GMPXX_LIBRARIES} )
 
 include(FindPackageHandleStandardArgs)
