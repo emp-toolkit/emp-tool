@@ -11,7 +11,7 @@ namespace emp {
  * [REF] Implementation of "Two Halves Make a Whole"
  * https://eprint.iacr.org/2014/756.pdf
  */
-block halfgates_garble(block LA0, block A1, block LB0, block B1, block delta, block *table, MITCCRH<8> *mitccrh) {
+inline block halfgates_garble(block LA0, block A1, block LB0, block B1, block delta, block *table, MITCCRH<8> *mitccrh) {
 	bool pa = getLSB(LA0);
 	bool pb = getLSB(LB0);
 	block HLA0, HA1, HLB0, HB1;
