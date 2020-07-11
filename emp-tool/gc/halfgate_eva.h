@@ -6,7 +6,7 @@
 #include <iostream>
 namespace emp {
 
-block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mitccrh) {
+inline block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mitccrh) {
 	block HA, HB, W;
 	int sa, sb;
 
