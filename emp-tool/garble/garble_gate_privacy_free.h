@@ -18,7 +18,7 @@ static inline void garble_gate_eval_privacy_free(block A, block B,
 	{
 		block tmp, mask;
 
-		tmp = xorBlocks(double_block(A), tweak);
+		tmp = xorBlocks(sigma(A), tweak);
 		mask = tmp;
 		AES_ecb_encrypt_blks(&tmp, 1, key);
 		HA = xorBlocks(tmp, mask);
@@ -55,8 +55,8 @@ static inline void garble_gate_garble_privacy_free(block LA0, block A1,
 	{
 		block masks[2], keys[2];
 
-		keys[0] = xorBlocks(double_block(LA0), tweak);
-		keys[1] = xorBlocks(double_block(A1), tweak);
+		keys[0] = xorBlocks(sigma(LA0), tweak);
+		keys[1] = xorBlocks(sigma(A1), tweak);
 		memcpy(masks, keys, sizeof keys);
 		AES_ecb_encrypt_blks(keys, 2, key);
 		HLA0 = xorBlocks(keys[0], masks[0]);

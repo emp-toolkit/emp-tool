@@ -47,7 +47,7 @@ class PRP { public:
 	}
 
 	block H(block in, uint64_t id) {
-		in = double_block(in);
+		in = sigma(in);
 		__m128i k_128 = _mm_loadl_epi64( (__m128i const *) (&id));
 		in = xorBlocks(in, k_128);
 		block t = in;
@@ -59,7 +59,7 @@ class PRP { public:
 		void H(block out[n], block in[n], uint64_t id) {
 			block scratch[n];
 			for(int i = 0; i < n; ++i) {
-				out[i] = scratch[i] = xorBlocks(double_block(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
+				out[i] = scratch[i] = xorBlocks(sigma(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
 				++id;
 			}
 			permute_block(scratch, n);
@@ -73,7 +73,7 @@ class PRP { public:
 			scratch = new block[length];
 		}
 		for(int i = 0; i < length; ++i){
-			out[i] = scratch[i] = xorBlocks(double_block(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
+			out[i] = scratch[i] = xorBlocks(sigma(in[i]), _mm_loadl_epi64( (__m128i const *) (&id)));
 			++id;
 		}
 		permute_block(scratch, length);

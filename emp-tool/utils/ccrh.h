@@ -21,9 +21,6 @@ class CCRH: public PRP { public:
 		return xorBlocks(t, in);
 	}
 
-	static block sigma(block a) {
-		return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
-	}
 
 #ifdef __GNUC__
 	#ifndef __clang__

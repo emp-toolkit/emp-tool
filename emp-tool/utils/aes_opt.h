@@ -258,10 +258,6 @@ typedef struct KEY_SCHEDULE
 	block8=_mm_aesenclast_si128(block8, (*(__m128i const*)(keys[7].KEY+i*16))); \
 	}
 
-static block sigma(block a) {
-	return xorBlocks(_mm_shuffle_epi32(a, 78), _mm_and_si128(a, _mm_set_epi64x(0xFFFFFFFFFFFFFFFF, 0x00)));
-}
-
 /*
  * AES key scheduling for 2/4/8 keys
  */
