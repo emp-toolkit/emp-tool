@@ -26,7 +26,7 @@ void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 1000
 		Integer res = Op2()(a,b);
 
 		if (res.reveal<int>(PUBLIC) != Op()(ia,ib)) {
-			cout << ia <<"\t"<<ib<<"\t"<<Op()(ia,ib)<<"\t"<<res.reveal<int>(PUBLIC)<<endl<<flush;
+			cout << ia <<"\t"<<ib<<"\t"<<Op()(ia,ib)<<"\t"<<res.reveal<int>(PUBLIC)<<endl;
 		}
 		assert(res.reveal<int>(PUBLIC) == Op()(ia,ib));
 	}
