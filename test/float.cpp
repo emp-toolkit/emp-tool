@@ -30,7 +30,7 @@ void test_float(double precision, int runs = 1000) {
 		Float res = Op2()(a,b);
 
 		if (not accurate(res.reveal<double>(PUBLIC), Op()(da,db), precision)) {
-			cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+			cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
 		}
 		assert(accurate(res.reveal<double>(PUBLIC),  Op()(da,db), precision*10));
 	}
