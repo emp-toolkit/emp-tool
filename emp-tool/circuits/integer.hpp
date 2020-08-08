@@ -1,3 +1,4 @@
+#include <bitset>
 //https://github.com/samee/obliv-c/blob/obliv-c/src/ext/oblivc/obliv_bits.c#L1487
 inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2,
 		const Bit * carryIn, int size) {
