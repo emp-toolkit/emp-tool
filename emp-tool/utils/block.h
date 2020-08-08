@@ -3,6 +3,7 @@
 #include <immintrin.h>
 #include <assert.h>
 #include <cstring>
+#include <iostream>
 #include <iomanip>
 
 namespace emp {
