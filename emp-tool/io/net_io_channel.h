@@ -95,8 +95,8 @@ class NetIO: public IOChannel<NetIO> { public:
 	}
 
 	~NetIO(){
-		fflush(stream);
-		close(consocket);
+		flush();
+		fclose(stream);
 		delete[] buffer;
 	}
 

@@ -57,11 +57,11 @@ void test_float(double precision, int runs = 1000) {
 		
 		if(precision > 0.0) {
 			if (not accurate(res.reveal<double>(PUBLIC), Op()(da,db), precision)) {
-				cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+				cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
 			}
 		} else {
 			if (not equal(res, Op()(da,db))) {
-				cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+				cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
 			}
 		}
 	}
@@ -107,12 +107,12 @@ void test_float(int func_id, double precision, double minimize, int runs = 1000)
 		}
 		if(precision == 0.0) {
 			if (not equal(res, comp)) {
-				cout << "Inaccuracy:\t"<<da<<"\t"<<"\t"<<comp<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+				cout << "Inaccuracy:\t"<<da<<"\t"<<"\t"<<comp<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
 				rate_cnt++;
 			}
 		} else {
 			if (not accurate(res.reveal<double>(PUBLIC), comp, precision)) {
-				cout << "Inaccuracy:\t"<<da<<"\t"<<"\t"<<comp<<"\t"<<res.reveal<double>(PUBLIC)<<endl<<flush;
+				cout << "Inaccuracy:\t"<<da<<"\t"<<"\t"<<comp<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
 				rate_cnt++;
 			}
 		}

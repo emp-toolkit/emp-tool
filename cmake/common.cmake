@@ -1,10 +1,3 @@
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-	if(NOT DEFINED OPENSSL_ROOT_DIR)
-		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")	
-		message(STATUS "OPENSSL_ROOT_DIR set to default: ${OPENSSL_ROOT_DIR}")
-	endif()
-endif()
-
 if(NOT WIN32)
   string(ASCII 27 Esc)
   set(ColourReset "${Esc}[m")
@@ -40,10 +33,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 #Compilation flags
-set(CMAKE_C_FLAGS "-pthread -Wall -march=native -O3 -maes -mrdseed -funroll-loops")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -ggdb")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "-pthread -Wall -march=native -maes -mrdseed -funroll-loops")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -ggdb -O0")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
 
 ## Build type
 if(NOT CMAKE_BUILD_TYPE)
