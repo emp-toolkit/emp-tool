@@ -157,7 +157,9 @@ void fp_if(double a, double b) {
 	Float z = x.If(one, y);
 	cout << z.reveal<string>() << " ";
 	z = x.If(zero, y);
-	cout << z.reveal<string>() << endl;
+	cout << z.reveal<string>() << endl<<endl;
+	swap(Bit(true, PUBLIC), x, y);
+	cout << x.reveal<string>() << " "<<y.reveal<string>();
 }
 
 void fp_abs(double a) {
