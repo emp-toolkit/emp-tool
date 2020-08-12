@@ -58,4 +58,17 @@ inline Float32 Float32::operator-() const {
 	return res;
 }
 
+inline Float32 Float32::operator^(const Float32& rhs) const {
+	Float32 res(*this);
+	for(int i = 0; i < 32; ++i)
+		res[i] = res[i] ^ rhs[i];
+	return res;
+}
+
+inline Float32 Float32::operator&(const Float32& rhs) const {
+	Float32 res(*this);
+	for(int i = 0; i < 32; ++i)
+		res[i] = res[i] & rhs[i];
+	return res;
+}
 

@@ -48,6 +48,8 @@ class Float32: Swappable<Float32> { public:
 	Float32 operator-() const;
 	Float32 operator*(const Float32& rhs) const;
 	Float32 operator/(const Float32& rhs) const;
+	Float32 operator^(const Float32& rhs) const;
+	Float32 operator&(const Float32& rhs) const;
 
 	Float32 sqr() const;
 	Float32 sqrt() const;

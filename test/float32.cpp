@@ -151,13 +151,12 @@ void fp_if(double a, double b) {
 	cout << "if true/false: " << a << " " << b << " - ";
 	Float32 x(a, PUBLIC);
 	Float32 y(b, PUBLIC);
-	Bit one = Bit(true, PUBLIC);
-	Bit zero = Bit(false, PUBLIC); 
+	cout << "before swap:"<<x.reveal<string>()<<" "<<y.reveal<string>()<<endl;
 
-	Float32 z = x.If(one, y);
-	cout << z.reveal<string>() << " ";
-	z = x.If(zero, y);
-	cout << z.reveal<string>() << endl;
+	swap(Bit(false, PUBLIC), x, y);
+	cout << "before no swap:"<<x.reveal<string>()<<" "<<y.reveal<string>()<<endl;
+	swap(Bit(true, PUBLIC), x, y);
+	cout << "after yes swap:"<<x.reveal<string>()<<" "<<y.reveal<string>()<<endl;
 }
 
 void fp_abs(double a) {
