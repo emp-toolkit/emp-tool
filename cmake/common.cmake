@@ -27,7 +27,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	if(NOT DEFINED OPENSSL_ROOT_DIR)
-		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")	
+		set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl")
 		message(STATUS "OPENSSL_ROOT_DIR set to default: ${OPENSSL_ROOT_DIR}")
 	endif()
 endif()
@@ -35,8 +35,6 @@ endif()
 #Compilation flags
 set(CMAKE_C_FLAGS "-pthread -Wall -march=native -maes -mrdseed -funroll-loops")
 set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -ggdb -O0")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
 
 ## Build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -45,11 +43,13 @@ endif(NOT CMAKE_BUILD_TYPE)
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
-message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -ggdb")
+message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
 endif()
 
 if (CMAKE_BUILD_TYPE MATCHES Release)
-message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS_RELEASE}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
 endif()
 
 OPTION(THREADING "Option description" OFF)
@@ -66,5 +66,5 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 #Testing macro
 macro (add_test_with_lib _name libs)
 	add_executable(${_name} "test/${_name}.cpp")
-	target_link_libraries(${_name} ${OPENSSL_LIBRARIES} ${libs}) 
+	target_link_libraries(${_name} ${OPENSSL_LIBRARIES} ${libs})
 endmacro()
