@@ -14,7 +14,7 @@ IF(NOT ${RDSEED_RUN_SUCCESS})
 ENDIF(NOT ${RDSEED_RUN_SUCCESS})
 
 IF(${USE_RANDOM_DEVICE})
-	ADD_DEFINITIONS(-DEMP_USE_RANDOM_DEVICE)
+	ADD_DEFINITIONS(-DEMP_ENABLE_RDSEED)
 	message("${Red}-- Source of Randomness: random_device${ColourReset}")
 ELSE(${USE_RANDOM_DEVICE})
 	message("${Green}-- Source of Randomness: rdseed${ColourReset}")
