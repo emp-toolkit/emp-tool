@@ -3,14 +3,6 @@ void run_function(void *function, const Ts&... args) {
 	reinterpret_cast<void(*)(Ts...)>(function)(args...);
 }
 
-template<typename T>
-void inline delete_array_null(T * ptr){
-	if(ptr != nullptr) {
-		delete[] ptr;
-		ptr = nullptr;
-	}
-}
-
 template <typename T>
 std::string m128i_to_string(const __m128i var) {
 	std::stringstream sstr;

@@ -15,9 +15,6 @@ using std::chrono::time_point;
 using std::chrono::high_resolution_clock;
 
 namespace emp {
-template<typename T>
-void inline delete_array_null(T * ptr);
-
 inline void error(const char * s, int line = 0, const char * file = nullptr);
 
 template<class... Ts>
