@@ -60,3 +60,12 @@ inline void  block_to_bool(bool * data, block b) {
 	int_to_bool<uint64_t>(data, ptr[0], 64);
 	int_to_bool<uint64_t>(data+64, ptr[1], 64);
 }
+
+inline bool file_exists(const std::string &name) {
+	if (FILE *file = fopen(name.c_str(), "r")) {
+		fclose(file);
+		return true;
+	}else return false;
+}
+
+

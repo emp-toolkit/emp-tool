@@ -40,6 +40,8 @@ block bool_to_block(const bool * data);
 
 void block_to_bool(bool * data, block b);
 
+bool file_exists(const std::string &name);
+
 #include "emp-tool/utils/utils.hpp"
 }
 #endif// UTILS_H__
