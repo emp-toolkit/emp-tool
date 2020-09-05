@@ -1,4 +1,4 @@
-# emp-tool [![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=stable)](https://travis-ci.org/emp-toolkit/emp-tool)
+# emp-tool [![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=master)](https://travis-ci.org/emp-toolkit/emp-tool)
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
 # Installation
