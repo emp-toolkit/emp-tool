@@ -1,10 +1,13 @@
-# emp-tool [![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=stable)](https://travis-ci.org/emp-toolkit/emp-tool)
+# emp-tool [![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=v0.1)](https://travis-ci.org/emp-toolkit/emp-tool)
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
+
+# History Version
+This branch will only accept bug fix, new features are being added only to v0.2 branch.
 
 # Installation
 
-1. Install prerequisites using instructions [here](https://github.com/emp-toolkit/emp-readme#detailed-installation).
-2. `git clone https://github.com/emp-toolkit/emp-tool.git`
+1. Install prerequisites using instructions [here](https://github.com/emp-toolkit/emp-readme/tree/v0.1#detailed-installation).
+2. `git clone -bv0.1 https://github.com/emp-toolkit/emp-tool.git`
 3. `cd emp-tool && cmake . && sudo make install`
     1. Alternatively, you can `cd emp-tool && mkdir -p build && cd build && cmake .. && sudo make install` if out-of-source build is preferred.
     2. By default it will build for Release. `-DCMAKE_BUILD_TYPE=[Release|Debug]` option is also available.
@@ -79,5 +82,5 @@ assert(c.open(decom, com, data, 1024*1024)); // open, return if the decommitment
 ## On-the-fly Circuit Compiler
 
 
-## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
+## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/tree/v0.1#citation)
 
