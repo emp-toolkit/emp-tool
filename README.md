@@ -1,7 +1,7 @@
 # emp-tool [![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=v0.1)](https://travis-ci.org/emp-toolkit/emp-tool)
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
-# History Version
+## History Version
 This branch will only accept bug fix, new features are being added only to v0.2 branch.
 
 # Installation
