@@ -2,15 +2,10 @@
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
 # Installation
-
-1. Install prerequisites using instructions [here](https://github.com/emp-toolkit/emp-readme#detailed-installation).
-2. `git clone https://github.com/emp-toolkit/emp-tool.git`
-3. `cd emp-tool && cmake . && sudo make install`
-    1. Alternatively, you can `cd emp-tool && mkdir -p build && cd build && cmake .. && sudo make install` if out-of-source build is preferred.
-    2. By default it will build for Release. `-DCMAKE_BUILD_TYPE=[Release|Debug]` option is also available.
-    3. No sudo? Change [`CMAKE_INSTALL_PREFIX`](https://cmake.org/cmake/help/v2.8.8/cmake.html#variable%3aCMAKE_INSTALL_PREFIX).
-
-# Performance
+1. `wget https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/scripts/install.py`
+2. `python install.py -install -tool`
+    1. By default it will build for Release. `-DCMAKE_BUILD_TYPE=[Release|Debug]` option is also available.
+    2. No sudo? Change [`CMAKE_INSTALL_PREFIX`](https://cmake.org/cmake/help/v2.8.8/cmake.html#variable%3aCMAKE_INSTALL_PREFIX).
 
 # Usage
 
