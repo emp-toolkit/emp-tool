@@ -40,9 +40,8 @@ matrix:
       
 before_install:
   - eval "${MATRIX_EVAL}"
-  - git clone https://github.com/emp-toolkit/emp-readme.git
-  - bash ./emp-readme/scripts/install_packages.sh
-  - g++ --version
+  - wget https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/scripts/install.py
+  - python install.py -install
 
 
 script:
