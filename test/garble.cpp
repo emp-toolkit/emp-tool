@@ -14,8 +14,8 @@ void test(T * netio) {
 	prg.random_block(a, 128);
 	prg.random_block(b, 128);
 
-	string file = "emp-tool/circuits/files/AES-non-expanded.txt";
-	CircuitFile cf(file.c_str());
+	string file = "emp-tool/circuits/files/bristol_format/AES-non-expanded.txt";
+	BristolFormat cf(file.c_str());
 
 	if(party == BOB) {
 		HalfGateEva<T>::circ_exec = new HalfGateEva<T>(netio);
@@ -35,7 +35,7 @@ void test(T * netio) {
 		delete aio;
 		delete HalfGateGen<AbandonIO>::circ_exec;
 
-		MemIO * mio = new MemIO(cf.table_size()*100);
+		MemIO * mio = new MemIO();
 		HalfGateGen<MemIO>::circ_exec = new HalfGateGen<MemIO>(mio);
 
 		start = clock_start();
