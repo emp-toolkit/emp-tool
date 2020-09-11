@@ -28,8 +28,8 @@ class PRG { public:
 				data[i] = rand_div();
 #else
 			unsigned long long r0, r1;
-			_rdseed64_step(&r0);
-			_rdseed64_step(&r1);
+			while(_rdseed64_step(&r0)==0) { }
+			while(_rdseed64_step(&r1)==0) { }
 			v = makeBlock(r0, r1);
 #endif
 			reseed(&v);
