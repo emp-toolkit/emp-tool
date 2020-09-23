@@ -121,23 +121,20 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-inline void init(vector<Bit>& bits, const bool* b, int length, int party) {
-	if (party == PUBLIC) {
-		block one = CircuitExecution::circ_exec->public_label(true);
-		block zero = CircuitExecution::circ_exec->public_label(false);
-		for(int i = 0; i < length; ++i)
-			bits[i] = b[i] ? one : zero;
-	}
-	else {
-		ProtocolExecution::prot_exec->feed((block *)bits.data(), party, b, length); 
-	}
-}
-
 inline Integer::Integer(int len, int64_t input, int party) {
 	bool* b = new bool[len];
 	int_to_bool<int64_t>(b, input, len);
 	bits.resize(len);
-	init(bits, b, len, party);
+	if (party == PUBLIC) {
+		block one = CircuitExecution::circ_exec->public_label(true);
+		block zero = CircuitExecution::circ_exec->public_label(false);
+		for(int i = 0; i < len; ++i)
+			bits[i] = b[i] ? one : zero;
+	}
+	else {
+		ProtocolExecution::prot_exec->feed((block *)bits.data(), party, b, len); 
+	}
+
 	delete[] b;
 }
 

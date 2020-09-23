@@ -54,7 +54,6 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	const Bit & operator[](int index) const;	
 };
 
-void init(Bit * bits, const bool* b, int length, int party = PUBLIC);
 #include "emp-tool/circuits/integer.hpp"
 }
 #endif// INTEGER_H__
