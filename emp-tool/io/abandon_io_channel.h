@@ -5,12 +5,10 @@
 namespace emp {
 // Essentially drop all communication
 class AbandonIO: public IOChannel<AbandonIO> { public:
-	int size = 0;
-	void send_data(const void * data, int len) {
-		size += len;
+	void send_data_internal(const void * data, int len) {
 	}
 
-	void recv_data(void  * data, int len) {
+	void recv_data_internal(void  * data, int len) {
 	}
 };
 }

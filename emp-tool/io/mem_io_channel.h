@@ -27,12 +27,12 @@ class MemIO: public IOChannel<MemIO> { public:
 		this->cap = size;
 		this->read_pos = 0;
 		this->size = size;
-		fio->recv_data(buffer, size);
+		fio->recv_data_internal(buffer, size);
 	}
 	void clear() {
 		size = 0;
 	}
-	void send_data(const void * data, int64_t len) {
+	void send_data_internal(const void * data, int64_t len) {
 		if(size + len >= cap){
 			char * new_buffer = new char[2*(cap+len)];
 			memcpy(new_buffer, buffer, size);
@@ -44,7 +44,7 @@ class MemIO: public IOChannel<MemIO> { public:
 		size += len;
 	}
 
-	void recv_data(void  * data, int64_t len) {
+	void recv_data_internal(void  * data, int64_t len) {
 		if(read_pos + len <= size) {
 			memcpy(data, buffer + read_pos, len);
 			read_pos += len;

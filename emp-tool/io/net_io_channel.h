@@ -85,11 +85,11 @@ class NetIO: public IOChannel<NetIO> { public:
 	void sync() {
 		int tmp = 0;
 		if(is_server) {
-			send_data(&tmp, 1);
-			recv_data(&tmp, 1);
+			send_data_internal(&tmp, 1);
+			recv_data_internal(&tmp, 1);
 		} else {
-			recv_data(&tmp, 1);
-			send_data(&tmp, 1);
+			recv_data_internal(&tmp, 1);
+			send_data_internal(&tmp, 1);
 			flush();
 		}
 	}
@@ -114,7 +114,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		fflush(stream);
 	}
 
-	void send_data(const void * data, int len) {
+	void send_data_internal(const void * data, int len) {
 		int sent = 0;
 		while(sent < len) {
 			int res = fwrite(sent + (char*)data, 1, len - sent, stream);
@@ -126,7 +126,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		has_sent = true;
 	}
 
-	void recv_data(void  * data, int len) {
+	void recv_data_internal(void  * data, int len) {
 		if(has_sent)
 			fflush(stream);
 		has_sent = false;

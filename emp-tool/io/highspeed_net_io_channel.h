@@ -233,14 +233,14 @@ class HighSpeedNetIO: public IOChannel<HighSpeedNetIO> { public:
 		FSM = 0;
 	}
 	
-	void send_data(const void * data, int len) {
+	void send_data_internal(const void * data, int len) {
 		if(FSM == 1) {
 			rchannel->flush();
 		}
 		schannel->send_data(data, len);
 		FSM = 2;
 	}
-	void recv_data(void * data, int len) {
+	void recv_data_internal(void * data, int len) {
 		if(FSM == 2) {
 			schannel->flush();
 		}

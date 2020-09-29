@@ -11,11 +11,11 @@ class IOChannel { public:
 	int counter = 0;
 	void send_data(const void * data, int nbyte) {
 		counter +=nbyte;
-		derived().send_data(data, nbyte);
+		derived().send_data_internal(data, nbyte);
 	}
 
 	void recv_data(void * data, int nbyte) {
-		derived().recv_data(data, nbyte);
+		derived().recv_data_internal(data, nbyte);
 	}
 
 	void send_block(const block* data, int nblock) {
