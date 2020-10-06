@@ -173,7 +173,7 @@ public:
 	boost::asio::io_service io_service;
 	tcp::socket s = tcp::socket(io_service);
 	NetIO(const char * address, int port, bool quiet = false) {
-		this->port = port;
+		this->port = port & 0xFFFF;
 		is_server = (address == nullptr);
 		if (address == nullptr) {
 			tcp::acceptor a(io_service, tcp::endpoint(tcp::v4(), port));
