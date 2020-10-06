@@ -175,17 +175,17 @@ class HighSpeedNetIO: public IOChannel<HighSpeedNetIO> { public:
 		return sock;
 
 	}
-	HighSpeedNetIO(const char * address, int port, bool quiet = true): quiet(quiet), port(port) {
+	HighSpeedNetIO(const char * address, int port, bool quiet = true): quiet(quiet), port(port & 0xFFFF) {
 		is_server = (address == nullptr);
 		if (is_server) {
 			recv_sock = server_listen(port);
 			usleep(2000);
-			send_sock = server_listen(port+1);
+			send_sock = server_listen(port);
 		}
 		else {
 			addr = string(address);
 			send_sock = client_connect(address, port);
-			recv_sock = client_connect(address, port+1);
+			recv_sock = client_connect(address, port);
 		}
 		FSM = 0;
 		set_delay_opt(send_sock, true);

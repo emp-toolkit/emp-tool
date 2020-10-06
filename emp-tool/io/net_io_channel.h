@@ -29,7 +29,7 @@ class NetIO: public IOChannel<NetIO> { public:
 	string addr;
 	int port;
 	NetIO(const char * address, int port, bool quiet = false) {
-		this->port = port;
+		this->port = port & 0xFFFF;
 		is_server = (address == nullptr);
 		if (address == nullptr) {
 			struct sockaddr_in dest;
