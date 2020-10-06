@@ -180,12 +180,12 @@ class HighSpeedNetIO: public IOChannel<HighSpeedNetIO> { public:
 		if (is_server) {
 			recv_sock = server_listen(port);
 			usleep(2000);
-			send_sock = server_listen(port);
+			send_sock = server_listen((port+1)&0xFFFF);
 		}
 		else {
 			addr = string(address);
 			send_sock = client_connect(address, port);
-			recv_sock = client_connect(address, port);
+			recv_sock = client_connect(address, (port+1)&0xFFFF);
 		}
 		FSM = 0;
 		set_delay_opt(send_sock, true);
