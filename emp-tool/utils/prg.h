@@ -32,8 +32,15 @@ class PRG { public:
 				data[i] = rand_div();
 #else
 			unsigned long long r0, r1;
-			while(_rdseed64_step(&r0)==0) { }
-			while(_rdseed64_step(&r1)==0) { }
+			int i = 0;
+			for(; i < 10; ++i)
+				if(_rdseed64_step(&r0) == 1) break;
+			if(i == 10)errr("RDSEED FAILURE");
+
+			for(i = 0; i < 10; ++i)
+				if(_rdseed64_step(&r1) == 1) break;
+			if(i == 10)errr("RDSEED FAILURE");
+
 			v = makeBlock(r0, r1);
 #endif
 			reseed(&v);
