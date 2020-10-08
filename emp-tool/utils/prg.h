@@ -34,7 +34,7 @@ class PRG { public:
 			if(i == 10)errr("RDSEED FAILURE");
 
 			for(i = 0; i < 10; ++i)
-				if(_rdseed64_step(&r0) == 1) break;
+				if(_rdseed64_step(&r1) == 1) break;
 			if(i == 10)errr("RDSEED FAILURE");
 
 			v = makeBlock(r0, r1);
