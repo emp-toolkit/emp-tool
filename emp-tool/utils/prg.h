@@ -2,6 +2,7 @@
 #define PRG_H__
 #include "emp-tool/utils/block.h"
 #include "emp-tool/garble/aes.h"
+#include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/constants.h"
 #include <gmp.h>
 #include <random>
@@ -35,11 +36,11 @@ class PRG { public:
 			int i = 0;
 			for(; i < 10; ++i)
 				if(_rdseed64_step(&r0) == 1) break;
-			if(i == 10)errr("RDSEED FAILURE");
+			if(i == 10)error("RDSEED FAILURE");
 
 			for(i = 0; i < 10; ++i)
 				if(_rdseed64_step(&r1) == 1) break;
-			if(i == 10)errr("RDSEED FAILURE");
+			if(i == 10)error("RDSEED FAILURE");
 
 			v = makeBlock(r0, r1);
 #endif

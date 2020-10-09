@@ -2,10 +2,10 @@
 #define UTILS_H__
 #include <string>
 #include "emp-tool/utils/block.h"
+#include "emp-tool/utils/constants.h"
 #include <sstream>
 #include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
 #include <gmp.h>
-#include "emp-tool/utils/prg.h"
 #include <chrono>
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
