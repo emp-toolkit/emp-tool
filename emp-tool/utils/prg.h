@@ -2,6 +2,7 @@
 #define EMP_PRG_H__
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/aes.h"
+#include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/constants.h"
 #include <memory>
 
