@@ -10,7 +10,7 @@ namespace emp {
  */
 
 class TCCRH: public PRP { public:
-	TCCRH(const block& fix_key = zero_block): PRP(fix_key) {
+	TCCRH(const block& key = zero_block): PRP(key) {
 	}
 	block H(block in, uint64_t i) {
 		permute_block(&in, 1);

@@ -9,7 +9,7 @@ namespace emp {
  * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
  */
 class CCRH: public PRP { public:
-	CCRH(const block& fix_key = zero_block): PRP(fix_key) {
+	CCRH(const block& key = zero_block): PRP(key) {
 	}
 
 	block H(block in) {
