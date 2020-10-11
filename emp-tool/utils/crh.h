@@ -5,11 +5,12 @@
 
 namespace emp {
 
+/* 
+ * By default, CRH use zero_block as the AES key.
+ * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
+ */
 class CRH: public PRP { public:
-	CRH(const char * seed = fix_key):PRP(seed) {
-	}
-
-	CRH(const block& seed): PRP(seed) {
+	CRH(const block& key = zero_block): PRP(key) {
 	}
 
 	block H(block in) {

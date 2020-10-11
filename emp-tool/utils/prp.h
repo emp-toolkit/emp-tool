@@ -6,18 +6,22 @@
 
 namespace emp {
 
+/*
+ * When the key is public, we usually need to model AES with this public key
+ * as a random permutation.
+ * [REF] "Efficient Garbling from a Fixed-Key Blockcipher"
+ * https://eprint.iacr.org/2013/426.pdf
+ */
 class PRP { public:
 	AES_KEY aes;
 
-	PRP(const char * seed = fix_key) {
-		aes_set_key(seed);
+	PRP(const char * key = nullptr) {
+		if(key == nullptr)
+			aes_set_key(zero_block);
 	}
 
-	PRP(const block& seed): PRP((const char *)&seed) {
-	}
-
-	void aes_set_key(const char * key) {
-		aes_set_key(_mm_loadu_si128((block*)key));
+	PRP(const block& key) {
+		aes_set_key(key);
 	}
 
 	void aes_set_key(const block& v) {

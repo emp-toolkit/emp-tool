@@ -17,9 +17,10 @@ namespace emp {
 class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
+	block key;
 	PRG(const void * seed = nullptr, int id = 0) {	
 		if (seed != nullptr) {
-			reseed(seed, id);
+			reseed((const block *)seed, id);
 		} else {
 			block v;
 #ifndef ENABLE_RDSEED
@@ -32,20 +33,21 @@ class PRG { public:
 			int i = 0;
 			for(; i < 10; ++i)
 				if(_rdseed64_step(&r0) == 1) break;
-			if(i == 10)errr("RDSEED FAILURE");
+			if(i == 10)error("RDSEED FAILURE");
 
 			for(i = 0; i < 10; ++i)
 				if(_rdseed64_step(&r1) == 1) break;
-			if(i == 10)errr("RDSEED FAILURE");
+			if(i == 10)error("RDSEED FAILURE");
 
 			v = makeBlock(r0, r1);
 #endif
 			reseed(&v);
 		}
 	}
-	void reseed(const void * key, uint64_t id = 0) {
-		block v = _mm_loadu_si128((block*)key);
+	void reseed(const block* seed, uint64_t id = 0) {
+		block v = *seed;
 		v ^= makeBlock(0LL, id);
+		key = v;
 		AES_set_encrypt_key(v, &aes);
 		counter = 0;
 	}

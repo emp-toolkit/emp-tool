@@ -43,9 +43,10 @@ class PrivacyFreeEva:public CircuitExecution{ public:
 	block constant[2];
 	int64_t gid = 0;
 	PrivacyFreeEva(T * io) :io(io) {
-		PRG prg2(fix_key);prg2.random_block(constant, 2);
-		 *((char *) &constant[0]) &= 0xfe;
-       *((char *) &constant[1]) |= 0x01;
+		set_delta();
+	}
+	void set_delta() {
+		io->recv_block(constant, 2);
 	}
 	bool is_public(const block & b, int party) {
 		return false;

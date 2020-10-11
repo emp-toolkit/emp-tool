@@ -56,9 +56,10 @@ public:
 	}
 	void set_delta(const block &_delta) {
 		this->delta = set_bit(_delta, 0);
-		PRG prg2(fix_key);prg2.random_block(constant, 2);
+		PRG().random_block(constant, 2);
 		*((char *) &constant[0]) &= 0xfe;
 		*((char *) &constant[1]) |= 0x01;
+		io->send_block(constant, 2);
 		constant[1] = constant[1] ^ delta;
 	}
 	block public_label(bool b) {
