@@ -28,7 +28,7 @@ void test(T * io) {
 			delete[] data;
 		}
 	}
-	PRG prg(fix_key);
+	PRG prg(&zero_block);
 	bool * data = new bool[1024*1024];
 	bool * data2 = new bool[1024*1024];
 	prg.random_bool(data, 1024*1024);

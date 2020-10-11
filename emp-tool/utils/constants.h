@@ -13,6 +13,5 @@ const static int PUBLIC = 0;
 const static int ALICE = 1;
 const static int BOB = 2;
 
-const char fix_key[] = "\x61\x7e\x8d\xa2\xa0\x51\x1e\x96\x5e\x41\xc2\x9b\x15\x3f\xc7\x7a";
 }
 #endif// CONFIG_H__

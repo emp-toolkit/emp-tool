@@ -44,22 +44,20 @@ template<typename T>
 class HalfGateGen:public CircuitExecution {
 public:
 	block delta;
-	block start_point;
 	T * io;
 	block constant[2];
 	MITCCRH<8> mitccrh;
 	HalfGateGen(T * io) :io(io) {
-		PRG tmp;
-		block a;
-		tmp.random_block(&a, 1);
-		set_delta(a);
-		tmp.random_block(&start_point, 1);
-		io->send_block(&start_point, 1);
-		mitccrh.setS(start_point);
+		block tmp[2];
+		PRG().random_block(tmp, 2);
+		set_delta(tmp[0]);
+		io->send_block(tmp+1, 1);
+		mitccrh.setS(tmp[1]);
 	}
 	void set_delta(const block & _delta) {
 		delta = set_bit(_delta, 0);
-		PRG(fix_key).random_block(constant, 2);
+		PRG().random_block(constant, 2);
+		io->send_block(constant, 2);
 		constant[1] = constant[1] ^ delta;
 	}
 	block public_label(bool b) override {

@@ -31,16 +31,17 @@ inline block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mi
 template<typename T>
 class HalfGateEva:public CircuitExecution {
 public:
-	block start_point;
 	T * io;
 	block constant[2];
 	MITCCRH<8> mitccrh;
 	HalfGateEva(T * io) :io(io) {
-		PRG prg2(fix_key);prg2.random_block(constant, 2);
-		prg2.random_block(&start_point, 1);
-		mitccrh.start_point = start_point;
-		io->recv_block(&start_point, 1);
-		mitccrh.setS(start_point);
+		set_delta();
+		block tmp;
+		io->recv_block(&tmp, 1);
+		mitccrh.setS(tmp);
+	}
+	void set_delta() {
+		io->recv_block(constant, 2);
 	}
 	block public_label(bool b) override {
 		return constant[b];

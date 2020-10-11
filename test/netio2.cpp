@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
 	int length = NETWORK_BUFFER_SIZE2/5+100;
 	char * data = new char[length];
 	char * data2 = new char[length];
-	PRG prg(fix_key);
+	PRG prg(&zero_block);
 	for(int i = 0; i < 1000; ++i)
 	if(party == ALICE) {
 		prg.random_data(data, length);

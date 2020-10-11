@@ -16,7 +16,7 @@ int main() {
 	prg.random_data_unaligned(rand_ints+1, sizeof(int)*99);//when the array is not 128-bit-aligned
 	cout << a<<"\n";
 	
-	prg.reseed(fix_key);
+	prg.reseed(&zero_block);
 	for (long long length = 2; length <= 8192; length*=2) {
 		long long times = 1024*1024*32/length;
 		block * data = new block[length+1];

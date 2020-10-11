@@ -4,12 +4,13 @@
 #include <stdio.h>
 
 namespace emp {
+/* 
+ * By default, TCCRH use zero_block as the AES key.
+ * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
+ */
 
 class TCCRH: public PRP { public:
-	TCCRH(const char * seed = fix_key):PRP(seed) {
-	}
-
-	TCCRH(const block& seed): PRP(seed) {
+	TCCRH(const block& fix_key = zero_block): PRP(fix_key) {
 	}
 	block H(block in, uint64_t i) {
 		permute_block(&in, 1);
