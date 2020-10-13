@@ -176,7 +176,7 @@ int main() {
 	block a, b;
 	block res[4];
 
-	cout << "Simplifeid GF2^128 multiplication ... ";	
+	cout << "Simplified GF2^128 multiplication ... ";
 
 	for(int i = 0; i < 65536; ++i) {
 		prg.random_block(&a, 1);
@@ -206,7 +206,7 @@ int main() {
 	}
 	cout << 1024*1024*128*2/(time_from(start))*1e6 << " operations/second" << endl;
 
-	cout << "\nSimplifeid GF2^128 multiplication ... ";	
+	cout << "\nSimplified GF2^128 multiplication ... ";	
 
 	for(int i = 0; i < 65536; ++i) {
 		prg.random_block(&a, 1);
