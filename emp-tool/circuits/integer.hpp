@@ -191,7 +191,7 @@ inline string Integer::reveal<string>(int party) const {
 	string res = "";
 	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
 	for(int i = 0; i < size(); ++i)
-		res+=(b[i]? "0" : "1");
+		res+=(b[i]? "1" : "0");
 	delete[] b;
 	return res;
 }
