@@ -210,7 +210,9 @@ inline Integer Integer::abs() const {
 }
 
 inline Integer& Integer::resize(int len, bool signed_extend) {
-	Bit MSB = *bits.end() & Bit(signed_extend, PUBLIC);
+	Bit MSB(false, PUBLIC); 
+	if(signed_extend)
+		MSB = *bits.end();
 	bits.resize(len, MSB);
 	return *this;
 }
@@ -284,7 +286,10 @@ inline Integer Integer::operator>>(const Integer& shamt) const{
 //Comparisons
 inline Bit Integer::geq (const Integer& rhs) const {
 	assert(size() == rhs.size());
-	Integer tmp = (*this) - rhs;
+	Integer thisExtend(*this), rhsExtend(rhs);
+	thisExtend.resize(size()+1, true);
+	rhsExtend.resize(size()+1, true);
+	Integer tmp = thisExtend-rhsExtend;
 	return !tmp[tmp.size()-1];
 }
 
