@@ -34,7 +34,7 @@ template<typename T>
 inline T bool_to_int(const bool * data);
 
 template<typename T>
-inline void int_to_bool(bool * data, T input);
+inline void int_to_bool(bool * data, T input, int len);
 
 block bool_to_block(const bool * data);
 

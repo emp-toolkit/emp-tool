@@ -212,7 +212,7 @@ inline Integer Integer::abs() const {
 inline Integer& Integer::resize(int len, bool signed_extend) {
 	Bit MSB(false, PUBLIC); 
 	if(signed_extend)
-		MSB = *bits.end();
+		MSB = bits[bits.size()-1];
 	bits.resize(len, MSB);
 	return *this;
 }
