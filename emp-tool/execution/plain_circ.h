@@ -16,7 +16,7 @@ public:
 	int64_t gid = 0;
 	bool print = false;
 	block public_one, public_zero;
-	uint64_t gates = 0;
+	uint64_t gates = 0, ands = 0;
 	std::ofstream fout;
 
 	PlainCircExec(bool print, string filename) {
@@ -69,6 +69,7 @@ public:
 				fout <<"2 1 "<<arr_a[1] <<" "<<arr_b[1]<<" "<<gid<<" AND"<<std::endl;
 			gid++;
 			gates++;
+			ands++;
 			return res;
 		}
 	}
@@ -129,6 +130,9 @@ public:
 			gates++;
 			return res;
 		}
+	}
+	size_t num_and() override {
+		return ands;
 	}
 
 private:

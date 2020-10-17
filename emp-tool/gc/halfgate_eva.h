@@ -57,6 +57,9 @@ public:
 	block not_gate(const block&a) override {
 		return xor_gate(a, public_label(true));
 	}
+	size_t num_and() override {
+		return mitccrh.gid;
+	}
 };
 }
 #endif// HALFGATE_EVA_H__
