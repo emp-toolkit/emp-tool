@@ -27,10 +27,20 @@ class PRG { public:
 		} else {
 			block v;
 #ifdef EMP_USE_RANDOM_DEVICE
-			int * data = (int *)(&v);
-			std::random_device rand_div;
-			for (size_t i = 0; i < sizeof(block) / sizeof(int); ++i)
-				data[i] = rand_div();
+			unsigned char r[16];
+			int fd = open("/dev/urandom", O_RDONLY);
+			if(fd == -1)
+				error("urandom open fail!\n");
+			int filled = 0;
+			while (filled < 16) {
+				int res = read(fd, r+filled, 16-filled);
+				if(res == -1)
+					error("urandom read fail!\n");
+				filled+=res;
+			}
+			close(fd);
+			v = _mm_loadu_si128(r);
+
 #else
 			unsigned long long r0, r1;
 			int i = 0;
