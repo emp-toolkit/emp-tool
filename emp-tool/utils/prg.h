@@ -6,8 +6,10 @@
 #include "emp-tool/utils/constants.h"
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <gmp.h>
 #include <x86intrin.h>
+#include <emmintrin.h>
 
 
 /** @addtogroup BP
