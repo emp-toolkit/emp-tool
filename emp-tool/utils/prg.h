@@ -4,13 +4,10 @@
 #include "emp-tool/garble/aes.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/constants.h"
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <gmp.h>
-#include <random>
-
-#ifdef EMP_USE_RANDOM_DEVICE
-#else
 #include <x86intrin.h>
-#endif
 
 
 /** @addtogroup BP
