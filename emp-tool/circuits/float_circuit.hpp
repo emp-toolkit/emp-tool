@@ -1,5 +1,5 @@
 inline Float::Float(int value_length, int expnt_length, double input, int party) {
-   double abs = std::abs(input);
+   double abs = input > 0? input: -1*input;
    double lo = pow(2, value_length-2);
    double up = pow(2, value_length-1);
    int p = 0;

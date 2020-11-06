@@ -38,7 +38,7 @@ class PRG { public:
 				filled+=res;
 			}
 			close(fd);
-			v = _mm_loadu_si128(r);
+			v = _mm_loadu_si128((const __m128i *)r);
 
 #else
 			unsigned long long r0, r1;
