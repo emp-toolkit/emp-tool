@@ -94,7 +94,7 @@ namespace emp {
 		gfmul(coeff[2], seed, &multiplier);
 		coeff[3] = multiplier;
 		int i = 4;
-		for(; i < sz; i+=4) {
+		for(; i < sz-3; i+=4) {
 			gfmul(coeff[i-4], multiplier, &coeff[i]);
 			gfmul(coeff[i-3], multiplier, &coeff[i+1]);
 			gfmul(coeff[i-2], multiplier, &coeff[i+2]);
