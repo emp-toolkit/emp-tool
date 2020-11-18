@@ -45,7 +45,7 @@ class PRG { public:
 		}
 	}
 	void reseed(const block* seed, uint64_t id = 0) {
-		block v = *seed;
+		block v = _mm_loadu_si128(seed);
 		v ^= makeBlock(0LL, id);
 		key = v;
 		AES_set_encrypt_key(v, &aes);
