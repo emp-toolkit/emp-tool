@@ -33,8 +33,8 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 #Compilation flags
-set(CMAKE_C_FLAGS "-pthread -Wall -march=native -maes -mrdseed -funroll-loops")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -march=native -maes -mrdseed -funroll-loops")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS} -std=c++11")
 
 ## Build type
 if(NOT CMAKE_BUILD_TYPE)
