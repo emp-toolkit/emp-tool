@@ -70,7 +70,9 @@ typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
     v1 = _mm_xor_si128(v1,v2)
 
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_set_encrypt_key(const block userkey, AES_KEY *key) {
     block x0, x1, x2;
     block *kp = key->rd_key;
@@ -100,7 +102,9 @@ AES_set_encrypt_key(const block userkey, AES_KEY *key) {
 }
 
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
     for (unsigned int i = 0; i < nblks; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
@@ -119,7 +123,9 @@ AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
 #endif
 template<int N>
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
     for (unsigned int i = 0; i < N; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
@@ -136,7 +142,9 @@ AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
 #endif
 
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey) {
     int j = 0;
     int i = ekey->rounds;
@@ -150,7 +158,9 @@ AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey) {
 }
 
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_set_decrypt_key(block userkey, AES_KEY *key) {
     AES_KEY temp_key;
     AES_set_encrypt_key(userkey, &temp_key);
@@ -158,7 +168,9 @@ AES_set_decrypt_key(block userkey, AES_KEY *key) {
 }
 
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key) {
     unsigned i, j, rnds = key->rounds;
     for (i = 0; i < nblks; ++i)

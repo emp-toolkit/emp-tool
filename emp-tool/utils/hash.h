@@ -47,7 +47,9 @@ class Hash { public:
 	static void hash_once(void * digest, const void * data, int nbyte) {
 		(void )SHA256((const unsigned char *)data, nbyte, (unsigned char *)digest);
 	}
+	#ifdef __x86_64__
 	__attribute__((target("sse2")))
+	#endif
 	static block hash_for_block(const void * data, int nbyte) {
 		char digest[DIGEST_SIZE];
 		hash_once(digest, data, nbyte);

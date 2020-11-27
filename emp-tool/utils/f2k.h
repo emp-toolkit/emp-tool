@@ -4,7 +4,9 @@
 
 namespace emp {
 	/* multiplication in galois field without reduction */
+	#ifdef __x86_64__
 	__attribute__((target("sse2,pclmul")))
+	#endif
 	inline void mul128(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
 		__m128i tmp3, tmp4, tmp5, tmp6;
 		tmp3 = _mm_clmulepi64_si128(a, b, 0x00);
@@ -23,7 +25,9 @@ namespace emp {
 	}
 
 	/* multiplication in galois field with reduction */
+	#ifdef __x86_64__
 	__attribute__((target("sse2,pclmul")))
+	#endif
 	inline void gfmul (__m128i a, __m128i b, __m128i *res){
 		__m128i tmp3, tmp6, tmp7, tmp8, tmp9, tmp10, tmp11, tmp12;
 		__m128i XMMMASK = _mm_setr_epi32(0xffffffff, 0x0, 0x0, 0x0);
