@@ -1,43 +1,23 @@
 language: cpp
 
+env:
+- TYPE=Debug
+- TYPE=Release
+
 matrix:
   include:
     - os: linux
       dist: focal
       sudo: required
-      env:
-         - TYPE=Debug
-
-    - os: linux
-      dist: focal
-      sudo: required
-      env:
-         - TYPE=Release
 
     - os: linux
       arch: arm64
       dist: focal
       sudo: required
-      env:
-         - TYPE=Debug
-
-    - os: linux
-      arch: arm64
-      dist: focal
-      sudo: required
-      env:
-         - TYPE=Release
 
     - os: osx
       sudo: required
-      env: 
-        - TYPE=Release
 
-    - os: osx
-      sudo: required
-      env: 
-        - TYPE=Debug
-      
 before_install:
   - eval "${MATRIX_EVAL}"
   - wget https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/scripts/install.py
