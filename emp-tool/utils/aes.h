@@ -103,7 +103,9 @@ AES_set_encrypt_key(const block userkey, AES_KEY *key) {
 
 #ifdef __x86_64__
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
     for (unsigned int i = 0; i < nblks; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
@@ -136,7 +138,9 @@ AES_ecb_encrypt_blks(block *_blks, unsigned int nblks, const AES_KEY *key) {
 #ifdef __x86_64__
 template<int N>
 inline void
+#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
+#endif
 AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
     for (unsigned int i = 0; i < N; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
