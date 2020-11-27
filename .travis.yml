@@ -3,9 +3,11 @@ language: cpp
 os:
 - osx
 - linux
+
 env:
 - TYPE=Debug
 - TYPE=Release
+
 arch:
 - amd64
 - arm64
@@ -14,6 +16,7 @@ jobs:
   include:
     - os: linux
       dist: focal
+
   exclude:
     - os: osx
     - arch: arm64
