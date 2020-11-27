@@ -84,20 +84,37 @@ class PRG { public:
 		}
 	}
 
+#ifdef __x86_64__
 	void random_block(block * data, int nblocks=1) {
 		block tmp[AES_BATCH_SIZE];
 		for(int i = 0; i < nblocks/AES_BATCH_SIZE; ++i) {
-			for (int j = 0; j < AES_BATCH_SIZE; ++j) 
+			for (int j = 0; j < AES_BATCH_SIZE; ++j)
 				tmp[j] = makeBlock(0LL, counter++);
 			AES_ecb_encrypt_blks<AES_BATCH_SIZE>(tmp, &aes);
 			memcpy(data + i*AES_BATCH_SIZE, tmp, AES_BATCH_SIZE*sizeof(block));
 		}
 		int remain = nblocks % AES_BATCH_SIZE;
-		for (int j = 0; j < remain; ++j) 
+		for (int j = 0; j < remain; ++j)
 			tmp[j] = makeBlock(0LL, counter++);
 		AES_ecb_encrypt_blks(tmp, remain, &aes);
 		memcpy(data + (nblocks/AES_BATCH_SIZE)*AES_BATCH_SIZE, tmp, remain*sizeof(block));
 	}
+#elif __aarch64__
+	void random_block(block * data, int nblocks=1) {
+		block * tmp;
+		for(int i = 0; i < nblocks/AES_BATCH_SIZE; ++i) {
+			block * tmp = data + i*AES_BATCH_SIZE;
+			for (int j = 0; j < AES_BATCH_SIZE; ++j) 
+				tmp[j] = makeBlock(0LL, counter++);
+			AES_ecb_encrypt_blks<AES_BATCH_SIZE>(tmp, &aes);
+		}
+		tmp = data + (nblocks/AES_BATCH_SIZE)*AES_BATCH_SIZE;
+		int remain = nblocks % AES_BATCH_SIZE;
+		for (int j = 0; j < remain; ++j) 
+			tmp[j] = makeBlock(0LL, counter++);
+		AES_ecb_encrypt_blks(tmp, remain, &aes);
+	}
+#endif
 };
 }
 #endif// PRP_H__
