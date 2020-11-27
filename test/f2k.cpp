@@ -192,19 +192,19 @@ int main() {
 
 	cout << "Benchmark: ";
 	auto start = clock_start();
-	for(int i = 0; i < 1024*1024*128; ++i) {
+	for(int i = 0; i < 1024*1024*32; ++i) {
 		mul128_0(res[0], res[1], res+2, res+3);
 		mul128_0(res[2], res[3], res, res+1);
 	}
-	cout << 1024*1024*128*2/(time_from(start))*1e6 << " operations/second" << endl;
+	cout << 1024*1024*32*2/(time_from(start))*1e6 << " operations/second" << endl;
 
 	cout << "Benchmark: ";
 	start = clock_start();
-	for(int i = 0; i < 1024*1024*128; ++i) {
+	for(int i = 0; i < 1024*1024*32; ++i) {
 		mul128_1(res[0], res[1], res+2, res+3);
 		mul128_1(res[2], res[3], res, res+1);
 	}
-	cout << 1024*1024*128*2/(time_from(start))*1e6 << " operations/second" << endl;
+	cout << 1024*1024*32*2/(time_from(start))*1e6 << " operations/second" << endl;
 
 	cout << "\nSimplified GF2^128 multiplication ... ";	
 
@@ -222,19 +222,19 @@ int main() {
 
 	cout << "Benchmark: ";
 	start = clock_start();
-	for(int i = 0; i < 1024*1024*128; ++i) {
+	for(int i = 0; i < 1024*1024*32; ++i) {
 		gfmul_0(res[0], res[1], res+2);
 		gfmul_0(res[2], res[3], res);
 	}
-	cout << 1024*1024*128*2/(time_from(start))*1e6 << " operations/second" << endl;
+	cout << 1024*1024*32*2/(time_from(start))*1e6 << " operations/second" << endl;
 
 	cout << "Benchmark: ";
 	start = clock_start();
-	for(int i = 0; i < 1024*1024*128; ++i) {
+	for(int i = 0; i < 1024*1024*32; ++i) {
 		gfmul_1(res[0], res[1], res+2);
 		gfmul_1(res[2], res[3], res);
 	}
-	cout << 1024*1024*128*2/(time_from(start))*1e6 << " operations/second" << endl;
+	cout << 1024*1024*32*2/(time_from(start))*1e6 << " operations/second" << endl;
 
 	cout << "\nVector inner product (with reduction)\n";
 	block v0[128], v1[128];

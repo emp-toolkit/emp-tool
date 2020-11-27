@@ -59,6 +59,39 @@ static inline void AES_opt_key_schedule(block* user_key, AES_KEY *keys) {
 /*
  * With numKeys keys, use each key to encrypt numEncs blocks.
  */
+#ifdef __x86_64__
+template<int numKeys, int numEncs>
+static inline void ParaEnc(block *blks, AES_KEY *keys) {
+	block * first = blks;
+	for(size_t i = 0; i < numKeys; ++i) {
+		block K = keys[i].rd_key[0];
+		for(size_t j = 0; j < numEncs; ++j) {
+			*blks = *blks ^ K;
+			++blks;
+		}
+	}
+
+	for (unsigned int r = 1; r < 10; ++r) { 
+		blks = first;
+		for(size_t i = 0; i < numKeys; ++i) {
+			block K = keys[i].rd_key[r];
+			for(size_t j = 0; j < numEncs; ++j) {
+				*blks = _mm_aesenc_si128(*blks, K);
+				++blks;
+			}
+		}
+	}
+
+	blks = first;
+	for(size_t i = 0; i < numKeys; ++i) {
+		block K = keys[i].rd_key[10];
+		for(size_t j = 0; j < numEncs; ++j) {
+			*blks = _mm_aesenclast_si128(*blks, K);
+			++blks;
+		}
+	}
+}
+#elif __aarch64__
 template<int numKeys, int numEncs>
 static inline void ParaEnc(block *_blks, AES_KEY *keys) {
 	uint8x16_t * first = (uint8x16_t*)(_blks);
@@ -75,7 +108,7 @@ static inline void ParaEnc(block *_blks, AES_KEY *keys) {
 		}
 	}
 }
-
+#endif
 
 }
 #endif
