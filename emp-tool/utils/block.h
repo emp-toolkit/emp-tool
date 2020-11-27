@@ -34,10 +34,14 @@ inline bool getLSB(const block & x) {
 
 #ifdef __x86_64__
 __attribute__((target("sse2")))
-#endif
 inline block makeBlock(uint64_t high, uint64_t low) {
 	return _mm_set_epi64x(high, low);
 }
+#elif __aarch64__
+inline block makeBlock(uint64_t high, uint64_t low) {
+	return (block)vcombine_u64((uint64x1_t)low, (uint64x1_t)high);
+}
+#endif
 
 
 /* Linear orthomorphism function
@@ -56,18 +60,14 @@ const block zero_block = makeBlock(0, 0);
 const block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
 const block select_mask[2] = {zero_block, all_one_block};
 
-#ifdef __x86_64__
-__attribute__((target("sse2")))
-#endif
 inline block set_bit(const block & a, int i) {
 	if(i < 64)
-		return _mm_or_si128(makeBlock(0L, 1ULL<<i), a);
+		return makeBlock(0L, 1ULL<<i) | a;
 	else
-		return _mm_or_si128(makeBlock(1ULL<<(i-64), 0), a);
+		return makeBlock(1ULL<<(i-64), 0) | a;
 }
 
-inline std::ostream& operator<<(std::ostream& out, const block& blk)
-{
+inline std::ostream& operator<<(std::ostream& out, const block& blk) {
 	out << std::hex;
 	uint64_t* data = (uint64_t*)&blk;
 
@@ -85,6 +85,7 @@ inline void xorBlocks_arr(block* res, const block* x, const block* y, int nblock
 		*(res++) = *(x++) ^ *(y++);
 	}
 }
+
 inline void xorBlocks_arr(block* res, const block* x, block y, int nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;) 
