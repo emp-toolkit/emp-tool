@@ -1,7 +1,5 @@
 language: cpp
 
-sudo: required
-
 jobs:
   include:
     - os: linux
