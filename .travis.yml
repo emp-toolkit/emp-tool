@@ -1,25 +1,32 @@
 language: cpp
 
-os:
-  - osx
-  - linux
-
-env:
-  - TYPE=Debug
-  - TYPE=Release
-
-arch:
-  - amd64
-  - arm64
+sudo: required
 
 jobs:
   include:
     - os: linux
       dist: focal
+      env: TYPE=Debug
 
-  exclude:
+    - os: linux
+      dist: focal
+      env: TYPE=Release
+
+    - os: linux
+      arch: arm64
+      dist: focal
+      env: TYPE=Debug
+
+    - os: linux
+      arch: arm64
+      dist: focal
+      env: TYPE=Release
+
     - os: osx
-    - arch: arm64
+      env: TYPE=Release
+
+    - os: osx
+      env: TYPE=Debug
 
 before_install:
   - eval "${MATRIX_EVAL}"
