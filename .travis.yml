@@ -4,15 +4,15 @@ env:
 - TYPE=Debug
 - TYPE=Release
 
-matrix:
+jobs:
   include:
     - os: linux
       dist: focal
       sudo: required
 
     - os: linux
-      arch: arm64
       dist: focal
+      arch: arm64
       sudo: required
 
     - os: osx
