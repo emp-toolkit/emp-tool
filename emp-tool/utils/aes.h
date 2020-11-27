@@ -121,11 +121,10 @@ AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
 		#pragma GCC optimize ("unroll-loops")
 	#endif
 #endif
+#ifdef __x86_64__
 template<int N>
 inline void
-#ifdef __x86_64__
 __attribute__((target("aes,sse2")))
-#endif
 AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
     for (unsigned int i = 0; i < N; ++i)
         blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
@@ -135,6 +134,17 @@ AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
     for (unsigned int i = 0; i < N; ++i)
         blks[i] = _mm_aesenclast_si128(blks[i], key->rd_key[key->rounds]);
 }
+#elif __aarch64__
+template<int N>
+inline void
+AES_ecb_encrypt_blks(block *_blks, const AES_KEY *key) {
+    uint8x16_t * blks = (uint8x16_t*)(_blks);
+    uint8x16_t * keys = (uint8x16_t*)(key->rd_key);
+    for (unsigned int j = 0; j < key->rounds; ++j)
+        for (unsigned int i = 0; i < N; ++i)
+	   blks[i] = vaesmcq_u8(vaeseq_u8(blks[i], keys[j]));
+}
+#endif
 #ifdef __GNUC_
 	#ifndef __clang___
 		#pragma GCC pop_options
