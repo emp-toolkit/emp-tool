@@ -1,16 +1,16 @@
 language: cpp
 
 os:
-- osx
-- linux
+  - osx
+  - linux
 
 env:
-- TYPE=Debug
-- TYPE=Release
+  - TYPE=Debug
+  - TYPE=Release
 
 arch:
-- amd64
-- arm64
+  - amd64
+  - arm64
 
 jobs:
   include:
