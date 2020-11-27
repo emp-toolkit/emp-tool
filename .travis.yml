@@ -3,35 +3,29 @@ language: cpp
 matrix:
   include:
     - os: linux
-      arch:
-        - amd64
-        - arm64
-      dist: bionic
+      dist: focal
       sudo: required
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
       env:
-         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
          - TYPE=Debug
 
     - os: linux
-      arch:
-        - amd64
-        - arm64
-      dist: bionic
+      dist: focal
       sudo: required
-      addons:
-        apt:
-          sources:
-            - ubuntu-toolchain-r-test
-          packages:
-            - g++-8
       env:
-         - MATRIX_EVAL="CC=gcc-8 && CXX=g++-8"
+         - TYPE=Release
+
+    - os: linux
+      arch: arm64
+      dist: focal
+      sudo: required
+      env:
+         - TYPE=Debug
+
+    - os: linux
+      arch: arm64
+      dist: focal
+      sudo: required
+      env:
          - TYPE=Release
 
     - os: osx
