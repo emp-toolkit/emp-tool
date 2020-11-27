@@ -34,7 +34,7 @@ endif()
 
 #Compilation flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -march=native -funroll-loops")
-message("Platform: ${CMAKE_SYSTEM_PROCESSOR}")
+message("${Blue}-- Platform: ${CMAKE_SYSTEM_PROCESSOR}${ColourReset}")
 IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
 ELSE(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -maes -mrdseed")
@@ -45,7 +45,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS} -std=c++11")
 if(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE Release)
 endif(NOT CMAKE_BUILD_TYPE)
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "${Blue}Build type: ${CMAKE_BUILD_TYPE}${ColourReset}")
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -ggdb")
