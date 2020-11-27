@@ -33,7 +33,12 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 #Compilation flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -march=native -maes -mrdseed -funroll-loops")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -march=native -funroll-loops")
+message("Platform: ${CMAKE_SYSTEM_PROCESSOR}")
+IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+ELSE(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -maes -mrdseed")
+ENDIF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS} -std=c++11")
 
 ## Build type

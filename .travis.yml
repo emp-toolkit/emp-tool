@@ -3,6 +3,9 @@ language: cpp
 matrix:
   include:
     - os: linux
+      arch:
+        - amd64
+        - arm64
       dist: bionic
       sudo: required
       addons:
@@ -16,6 +19,9 @@ matrix:
          - TYPE=Debug
 
     - os: linux
+      arch:
+        - amd64
+        - arm64
       dist: bionic
       sudo: required
       addons:

@@ -18,23 +18,23 @@ class BristolFormat { public:
 	vector<int> gates;
 	vector<block> wires;
 	BristolFormat(const char * file) {
-		int tmp, tmp2;
+		int tmp;
 		FILE * f = fopen(file, "r");
-		tmp2=fscanf(f, "%d%d\n", &num_gate, &num_wire);
-		tmp2=fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
-		tmp2=fscanf(f, "\n");
+		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
+		(void)fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
+		(void)fscanf(f, "\n");
 		char str[10];
 		gates.resize(num_gate*4);
 		wires.resize(num_wire);
 		for(int i = 0; i < num_gate; ++i) {
-			tmp2=fscanf(f, "%d", &tmp);
+			(void)fscanf(f, "%d", &tmp);
 			if (tmp == 2) {
-				tmp2=fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
+				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
 				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
 				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
 			}
 			else if (tmp == 1) {
-				tmp2=fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
+				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
 				gates[4*i+3] = NOT_GATE;
 			}
 		}
@@ -64,18 +64,18 @@ class BristolFashion { public:
 	vector<int> gates;
 	vector<block> wires;
 	BristolFashion(const char * file) {
-		int tmp, tmp2;
+		int tmp;
 		FILE * f = fopen(file, "r");
-		tmp2=fscanf(f, "%d%d\n", &num_gate, &num_wire);
+		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		int niov = 0;
-		tmp2=fscanf(f, "%d", &niov);
+		(void)fscanf(f, "%d", &niov);
 		for(int i = 0; i < niov; ++i) {
-			tmp2=fscanf(f, "%d", &tmp);
+			(void)fscanf(f, "%d", &tmp);
 			num_input += tmp;
 		}
-		tmp2=fscanf(f, "%d", &niov);
+		(void)fscanf(f, "%d", &niov);
 		for(int i = 0; i < niov; ++i) {
-			tmp2=fscanf(f, "%d", &tmp);
+			(void)fscanf(f, "%d", &tmp);
 			num_output += tmp;
 		}
 
@@ -83,14 +83,14 @@ class BristolFashion { public:
 		gates.resize(num_gate*4);
 		wires.resize(num_wire);
 		for(int i = 0; i < num_gate; ++i) {
-			tmp2=fscanf(f, "%d", &tmp);
+			(void)fscanf(f, "%d", &tmp);
 			if (tmp == 2) {
-				tmp2=fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
+				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
 				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
 				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
 			}
 			else if (tmp == 1) {
-				tmp2=fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
+				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
 				gates[4*i+3] = NOT_GATE;
 			}
 		}

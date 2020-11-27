@@ -1,6 +1,24 @@
 #ifndef EMP_UTIL_BLOCK_H__
 #define EMP_UTIL_BLOCK_H__
+
+#ifdef __x86_64__
 #include <immintrin.h>
+#elif __aarch64__
+#include "sse2neon.h"
+inline __m128i _mm_aesimc_si128(__m128i a) {
+	return vreinterpretq_m128i_u8(vaesimcq_u8(vreinterpretq_u8_m128i(a)));
+}
+inline __m128i _mm_aesdec_si128 (__m128i a, __m128i RoundKey)
+{
+    return vreinterpretq_m128i_u8(vaesimcq_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0)) ^ vreinterpretq_u8_m128i(RoundKey)));
+}
+
+inline __m128i _mm_aesdeclast_si128 (__m128i a, __m128i RoundKey)
+{
+    return vreinterpretq_m128i_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0)) ^ vreinterpretq_u8_m128i(RoundKey));
+}
+#endif
+
 #include <assert.h>
 #include <cstring>
 #include <iostream>
@@ -14,7 +32,9 @@ inline bool getLSB(const block & x) {
 	return (x[0] & 1) == 1;
 }
 
+#ifdef __x86_64__
 __attribute__((target("sse2")))
+#endif
 inline block makeBlock(uint64_t high, uint64_t low) {
 	return _mm_set_epi64x(high, low);
 }
@@ -24,7 +44,10 @@ inline block makeBlock(uint64_t high, uint64_t low) {
  * [REF] Implementation of "Efficient and Secure Multiparty Computation from Fixed-Key Block Ciphers"
  * https://eprint.iacr.org/2019/074.pdf
  */
+#ifdef __x86_64__
 __attribute__((target("sse2")))
+#endif
+
 inline block sigma(block a) {
 	return _mm_shuffle_epi32(a, 78) ^ (a & makeBlock(0xFFFFFFFFFFFFFFFF, 0x00));
 }
@@ -33,7 +56,9 @@ const block zero_block = makeBlock(0, 0);
 const block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
 const block select_mask[2] = {zero_block, all_one_block};
 
+#ifdef __x86_64__
 __attribute__((target("sse2")))
+#endif
 inline block set_bit(const block & a, int i) {
 	if(i < 64)
 		return _mm_or_si128(makeBlock(0L, 1ULL<<i), a);
@@ -66,7 +91,9 @@ inline void xorBlocks_arr(block* res, const block* x, block y, int nblocks) {
 		*(res++) =  *(x++) ^ y;
 }
 
+#ifdef __x86_64__
 __attribute__((target("sse4")))
+#endif
 inline bool cmpBlock(const block * x, const block * y, int nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;) {
@@ -83,7 +110,9 @@ inline bool cmpBlock(const block * x, const block * y, int nblocks) {
 #define INP(x, y) inp[(x)*ncols / 8 + (y) / 8]
 #define OUT(x, y) out[(y)*nrows / 8 + (x) / 8]
 
+#ifdef __x86_64__
 __attribute__((target("sse2")))
+#endif
 inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
                uint64_t ncols) {
   uint64_t rr, cc;
