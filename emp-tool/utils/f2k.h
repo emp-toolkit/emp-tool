@@ -6,7 +6,6 @@ namespace emp {
 	/* multiplication in galois field without reduction */
 	#ifdef __x86_64__
 	__attribute__((target("sse2,pclmul")))
-	#endif
 	inline void mul128(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
 		__m128i tmp3, tmp4, tmp5, tmp6;
 		tmp3 = _mm_clmulepi64_si128(a, b, 0x00);
@@ -23,6 +22,28 @@ namespace emp {
 		*res1 = tmp3;
 		*res2 = tmp6;
 	}
+	#elif __aarch64__
+	inline void mul128(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
+		__m128i tmp3, tmp4, tmp5, tmp6;
+		poly64_t a_lo = (poly64_t)vget_low_u64(vreinterpretq_u64_m128i(a));
+		poly64_t a_hi = (poly64_t)vget_high_u64(vreinterpretq_u64_m128i(a));
+		poly64_t b_lo = (poly64_t)vget_low_u64(vreinterpretq_u64_m128i(b));
+		poly64_t b_hi = (poly64_t)vget_high_u64(vreinterpretq_u64_m128i(b));
+		tmp3 = (__m128i)vmull_p64(a_lo, b_lo);
+		tmp4 = (__m128i)vmull_p64(a_hi, b_lo);
+		tmp5 = (__m128i)vmull_p64(a_lo, b_hi);
+		tmp6 = (__m128i)vmull_p64(a_hi, b_hi);
+
+		tmp4 = _mm_xor_si128(tmp4, tmp5);
+		tmp5 = _mm_slli_si128(tmp4, 8);
+		tmp4 = _mm_srli_si128(tmp4, 8);
+		tmp3 = _mm_xor_si128(tmp3, tmp5);
+		tmp6 = _mm_xor_si128(tmp6, tmp4);
+		// initial mul now in tmp3, tmp6
+		*res1 = tmp3;
+		*res2 = tmp6;
+	}
+	#endif
 
 	/* multiplication in galois field with reduction */
 	#ifdef __x86_64__
