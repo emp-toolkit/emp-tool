@@ -51,7 +51,6 @@ inline block makeBlock(uint64_t high, uint64_t low) {
 #ifdef __x86_64__
 __attribute__((target("sse2")))
 #endif
-
 inline block sigma(block a) {
 	return _mm_shuffle_epi32(a, 78) ^ (a & makeBlock(0xFFFFFFFFFFFFFFFF, 0x00));
 }
