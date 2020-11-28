@@ -93,11 +93,11 @@ int main() {
 	block hash[8];
 	prg.random_block(hash, 2);
 	auto start = clock_start();
-	while(gid < 1024*1024*128) {
+	while(gid < 1024*1024*10) {
 		mitccrh.hash_cir<2,1>(hash);
 		gid++;
 	}
-	cout << 1024*1024*128*2/(time_from(start))*1e6 << " blocks/second" << endl;
+	cout << 1024*1024*10*2/(time_from(start))*1e6 << " blocks/second" << endl;
 
 	// 2 key schedules for 4 hashes
 	cout << "Correctness of 2 key scheduling and 4 blocks hasing ... ";
@@ -127,10 +127,10 @@ int main() {
 	mitccrh1.renew_ks(0);
 	prg.random_block(hash, 4);
 	start = clock_start();
-	while(mitccrh1.gid < 1024*1024*128) {
+	while(mitccrh1.gid < 1024*1024*10) {
 		mitccrh1.hash_cir<2,2>(hash);
 	}
-	cout << 1024*1024*128*4/(time_from(start))*1e6 << " blocks/second" << endl;
+	cout << 1024*1024*10*4/(time_from(start))*1e6 << " blocks/second" << endl;
 
 	
 	cout << "Benchmark K8E8: ";
@@ -138,11 +138,11 @@ int main() {
 	prg.random_block(hash, 8);
 	start = clock_start();
 	mitccrh1.renew_ks(0);
-	while(mitccrh1.gid < 1024*1024*128) {
+	while(mitccrh1.gid < 1024*1024*10) {
 		mitccrh1.hash_cir<8,1>(hash);
 	}
 
-	cout << 1024*1024*128*8/(time_from(start))*1e6 << " blocks/second" << endl;
+	cout << 1024*1024*10*8/(time_from(start))*1e6 << " blocks/second" << endl;
 
 	return 0;
 }
