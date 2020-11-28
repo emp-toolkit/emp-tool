@@ -13,6 +13,11 @@ jobs:
     - os: linux
       arch: arm64
       dist: focal
+      env: TYPE=Debug
+
+    - os: linux
+      arch: arm64
+      dist: focal
       env: TYPE=Release
 
     - os: osx
