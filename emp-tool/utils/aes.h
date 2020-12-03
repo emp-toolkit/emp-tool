@@ -117,11 +117,18 @@ inline void AES_ecb_encrypt_blks(block *_blks, unsigned int nblks, const AES_KEY
    uint8x16_t * blks = (uint8x16_t*)(_blks);
    uint8x16_t * keys = (uint8x16_t*)(key->rd_key);
    auto * first = blks;
-   for (unsigned int j = 0; j < key->rounds; ++j) {
+   for (unsigned int j = 0; j < key->rounds-1; ++j) {
+		block key_j = keys[j];
       blks = first;
       for (unsigned int i = 0; i < nblks; ++i, ++blks)
-	       *blks = vaesmcq_u8(vaeseq_u8(*blks, keys[j]));
+	       *blks = vaeseq_u8(*blks, key_j);
+      blks = first;
+      for (unsigned int i = 0; i < nblks; ++i, ++blks)
+	       *blks = vaesmcq_u8(*blks);
    }
+	block last_key = keys[key->rounds-1];
+	for (unsigned int i = 0; i < nblks; ++i, ++first)
+		 *first = vaeseq_u8(*first, last_key) ^ last_key;
 }
 #endif
 
@@ -131,25 +138,10 @@ inline void AES_ecb_encrypt_blks(block *_blks, unsigned int nblks, const AES_KEY
 		#pragma GCC optimize ("unroll-loops")
 	#endif
 #endif
-#ifdef __x86_64__
 template<int N>
 inline void AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
 	AES_ecb_encrypt_blks(blks, N, key);
 }
-#elif __aarch64__
-template<int N>
-inline void
-AES_ecb_encrypt_blks(block *_blks, const AES_KEY *key) {
-    uint8x16_t * blks = (uint8x16_t*)(_blks);
-    uint8x16_t * keys = (uint8x16_t*)(key->rd_key);
-    auto * first = blks;
-    for (unsigned int j = 0; j < key->rounds; ++j) {
-	blks = first;
-	for (unsigned int i = 0; i < N; ++i, ++blks)
-	   *blks = vaesmcq_u8(vaeseq_u8(*blks, keys[j]));
-    }
-}
-#endif
 #ifdef __GNUC_
 	#ifndef __clang___
 		#pragma GCC pop_options
