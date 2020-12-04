@@ -41,7 +41,7 @@ class BristolFormat { public:
 		fclose(f);
 	}
 
-	void compute(block * out, block * in1, block * in2) {
+	void compute(block * out, const block * in1, const block * in2) {
 		memcpy(wires.data(), in1, n1*sizeof(block));
 		memcpy(wires.data()+n1, in2, n2*sizeof(block));
 		for(int i = 0; i < num_gate; ++i) {
@@ -97,7 +97,7 @@ class BristolFashion { public:
 		fclose(f);
 	}
 
-	void compute(block * out, block * in) {
+	void compute(block * out, const block * in) {
 		memcpy(wires.data(), in, num_input*sizeof(block));
 		for(int i = 0; i < num_gate; ++i) {
 			if(gates[4*i+3] == AND_GATE) {
