@@ -77,7 +77,7 @@
 
 /* Architecture-specific build options */
 /* FIXME: #pragma GCC push_options is only available on GCC */
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(__clang__)
 #if defined(__arm__) && __ARM_ARCH == 7
 /* According to ARM C Language Extensions Architecture specification,
  * __ARM_NEON is defined to a value indicating the Advanced SIMD (NEON)
@@ -994,7 +994,7 @@ FORCE_INLINE __m128i _mm_move_epi64(__m128i a)
 // https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_undefined_ps
 FORCE_INLINE __m128 _mm_undefined_ps(void)
 {
-    __m128 a;
+    __m128 a = (__m128)_mm_setzero_si128();
     return a;
 }
 
@@ -5949,7 +5949,7 @@ FORCE_INLINE uint64_t _mm_crc32_u64(uint64_t crc, uint64_t v)
 #pragma pop_macro("FORCE_INLINE")
 #endif
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC pop_options
 #endif
 
