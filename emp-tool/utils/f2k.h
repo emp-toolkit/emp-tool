@@ -112,24 +112,36 @@ namespace emp {
 
 	/* coefficients of almost universal hash function */
 	inline void uni_hash_coeff_gen(block* coeff, block seed, int sz) {
+		// Handle the case with small `sz`
 		coeff[0] = seed;
+		if(sz == 1) return;
+		
 		gfmul(seed, seed, &coeff[1]);
+		if(sz == 2) return;
+		
 		gfmul(coeff[1], seed, &coeff[2]);
+		if(sz == 3) return;
+		
 		block multiplier;
 		gfmul(coeff[2], seed, &multiplier);
 		coeff[3] = multiplier;
+		if(sz == 4) return;
+		
+		// Computing the rest with a batch of 4
 		int i = 4;
-		for(; i < sz-3; i+=4) {
-			gfmul(coeff[i-4], multiplier, &coeff[i]);
-			gfmul(coeff[i-3], multiplier, &coeff[i+1]);
-			gfmul(coeff[i-2], multiplier, &coeff[i+2]);
-			gfmul(coeff[i-1], multiplier, &coeff[i+3]);
+		for(; i < sz - 3; i += 4) {
+			gfmul(coeff[i - 4], multiplier, &coeff[i]);
+			gfmul(coeff[i - 3], multiplier, &coeff[i + 1]);
+			gfmul(coeff[i - 2], multiplier, &coeff[i + 2]);
+			gfmul(coeff[i - 1], multiplier, &coeff[i + 3]);
 		}
-		int remainder = sz%4;
+		
+		// Cleaning up with the rest
+		int remainder = sz % 4;
 		if(remainder != 0) {
 			i = sz - remainder;
 			for(; i < sz; ++i)
-				gfmul(coeff[i-1], seed, &coeff[i]);
+				gfmul(coeff[i - 1], seed, &coeff[i]);
 		}
 	}
 
