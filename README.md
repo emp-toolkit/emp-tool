@@ -35,7 +35,7 @@ PRP is implemented based on AES-NI. Code sample:
 ```cpp
 block key;
 PRG().random_block(&key,1)
-PRP prp(&key); //if no parameter is provided, a public, fixed key will be used
+PRP prp(key); //if no parameter is provided, a public, fixed key will be used
 
 block rand_block[3], b3[3];
 int rand_ints[100];
