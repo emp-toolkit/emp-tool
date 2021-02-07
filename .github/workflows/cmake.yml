@@ -13,7 +13,10 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
+        build_type: [Debug, Release]
 
+    env: 
+      BUILD_TYPE: ${{matrix.build_type}}
     steps:
     - uses: actions/checkout@v2
 
