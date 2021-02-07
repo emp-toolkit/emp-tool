@@ -25,26 +25,3 @@ jobs:
         ./bin/float
         ./bin/ecc
         ./bin/f2k
-
-  build_arm64:
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-    runs-on: [self-hosted]
-    env: 
-      BUILD_TYPE: ${{matrix.build_type}}
-    steps:
-    - uses: actions/checkout@v2
-    - name: Create Build Environment
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On && make
-    - name: Test
-      shell: bash
-      run: |
-        ./bin/prp
-        ./bin/prg
-        ./bin/mitccrh
-        ./bin/bit
-        ./bin/int
-        ./bin/float
-        ./bin/ecc
-        ./bin/f2k
