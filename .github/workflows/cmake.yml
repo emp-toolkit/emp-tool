@@ -30,7 +30,7 @@ jobs:
     strategy:
       matrix:
         build_type: [Debug, Release]
-    runs-on: [ARM64]
+    runs-on: [self-hosted]
     env: 
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
