@@ -8,11 +8,11 @@ env:
 
 jobs:
   build:
-    # The CMake configure and build commands are platform agnostic and should work equally
-    # well on Windows or Mac.  You can convert this to a matrix build if you need
-    # cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
 
     steps:
     - uses: actions/checkout@v2
@@ -47,10 +47,10 @@ jobs:
         ./bin/prp
         ./bin/prg
         ./bin/mitccrh
-        ./run ./bin/garble
-        ./run ./bin/netio
+        ./bin/garble 1 12345 & ./bin/garble 2 12345 
+        ./bin/netio 1 12345  & ./bin/netio 2 12345
         ./bin/bit
         ./bin/int
         ./bin/float
-         ./bin/ecc
+        ./bin/ecc
         ./bin/f2k
