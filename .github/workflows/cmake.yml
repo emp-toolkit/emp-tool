@@ -13,8 +13,7 @@ jobs:
     steps:
     - name: Compile
       shell: bash
-      working-directory: ${{github.workspace}}
-      run: cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On .
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On . && make
     - name: Test
       shell: bash
       run: |
