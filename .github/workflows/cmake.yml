@@ -47,8 +47,6 @@ jobs:
         ./bin/prp
         ./bin/prg
         ./bin/mitccrh
-        ./bin/garble 1 12345 & ./bin/garble 2 12345 
-        ./bin/netio 1 12345  & ./bin/netio 2 12345
         ./bin/bit
         ./bin/int
         ./bin/float
