@@ -25,6 +25,7 @@ jobs:
         ./bin/float
         ./bin/ecc
         ./bin/f2k
+        ./run ./bin/garble
   build_arm:
     strategy:
       matrix:
@@ -34,6 +35,10 @@ jobs:
     env: 
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
+    - name: Runner workspace path
+      run: |
+        echo "Cleaning up previous run"
+        rm -rf "${{ github.workspace }}"
     - uses: actions/checkout@v2
     - name: Create Build Environment
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On && make
