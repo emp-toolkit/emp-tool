@@ -1,7 +1,6 @@
 # emp-tool
 ![arm](https://github.com/emp-toolkit/emp-tool/workflows/arm/badge.svg)
 ![x86](https://github.com/emp-toolkit/emp-tool/workflows/x86/badge.svg)
-[![Build Status](https://travis-ci.org/emp-toolkit/emp-tool.svg?branch=master)](https://travis-ci.org/emp-toolkit/emp-tool)
 
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
