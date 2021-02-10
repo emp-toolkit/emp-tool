@@ -1,19 +1,19 @@
-name: x86
+name: arm
 on: [push]
 
 jobs:
-  build_x86:
+  build_arm:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         build_type: [Debug, Release]
-    runs-on: ${{ matrix.os }}
+    runs-on: [self-hosted]
     env: 
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
     - uses: actions/checkout@v2
     - name: Create Build Environment
-      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On && make
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE && make
     - name: Test
       shell: bash
       run: |
@@ -22,8 +22,8 @@ jobs:
         ./bin/mitccrh
         ./bin/bit
         ./bin/int
-        ./bin/float
         ./bin/ecc
         ./bin/f2k
         ./run ./bin/garble
         ./run ./bin/netio
+ 
