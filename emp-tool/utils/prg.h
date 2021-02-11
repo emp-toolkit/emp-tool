@@ -25,7 +25,7 @@ class PRG { public:
 			block v;
 #ifndef ENABLE_RDSEED
 			uint32_t * data = (uint32_t *)(&v);
-			std::random_device rand_div;
+			std::random_device rand_div("/dev/urandom");
 			for (size_t i = 0; i < sizeof(block) / sizeof(uint32_t); ++i)
 				data[i] = rand_div();
 #else
