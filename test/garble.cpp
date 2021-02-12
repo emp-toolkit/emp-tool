@@ -68,12 +68,12 @@ void test(T * netio) {
 int main(int argc, char** argv) {
 	parse_party_and_port(argv, &party, &port);
 	cout <<"Using NetIO\n";
-	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
+	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", port);
 	test<NetIO>(netio);
 	delete netio;
 
 	cout <<"Using HighSpeedNetIO\n";
-	HighSpeedNetIO* hsnetio = new HighSpeedNetIO(party == ALICE?nullptr:"127.0.0.1", 54213);
+	HighSpeedNetIO* hsnetio = new HighSpeedNetIO(party == ALICE?nullptr:"127.0.0.1", port);
 	test<HighSpeedNetIO>(hsnetio);
 	delete hsnetio;
 }
