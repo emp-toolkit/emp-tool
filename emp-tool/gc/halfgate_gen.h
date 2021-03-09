@@ -76,7 +76,7 @@ public:
 		return xor_gate(a, public_label(true));
 	}
 	size_t num_and() override {
-		return mitccrh.gid;
+		return mitccrh.gid/2;
 	}
 };
 }
