@@ -144,7 +144,7 @@ inline Integer::Integer(int len, int64_t input, int party) {
 template<typename T>
 inline Integer::Integer(int len, T * input, int party) {
 	bool* b = new bool[len];
-	to_bool<T>(b, input, len, true);
+	to_bool<T>(b, input, len);
   init(b, len, party);
 	delete[] b;
 }
@@ -153,7 +153,7 @@ template<typename T>
 inline Integer::Integer(T * input, int party) {
   size_t len = 8 * sizeof(T);
 	bool* b = new bool[len];
-	to_bool<T>(b, input, len, true);
+	to_bool<T>(b, input, len);
   init(b, len, party);
 	delete[] b;
 }
@@ -224,7 +224,7 @@ inline void Integer::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
 	string res = "";
 	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
-  from_bool(b, output, size(), true);
+  from_bool(b, output, size());
   delete[] b;
 }
 

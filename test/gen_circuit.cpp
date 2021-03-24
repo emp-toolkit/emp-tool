@@ -29,7 +29,7 @@ void sort(int n) {
 		A[i] = Integer(32, n - i, ALICE);
   }
 	for(int i = 0; i < n; ++i) {
-		B[i] = Integer(32, i BOB);
+		B[i] = Integer(32, i, BOB);
   }
 	for(int i = 0; i < n; ++i)
 		A[i] = A[i] ^ B[i];
