@@ -121,9 +121,7 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-inline Integer::Integer(int len, int64_t input, int party) {
-	bool* b = new bool[len];
-	int_to_bool<int64_t>(b, input, len);
+inline void Integer::init(bool * b, int len, int party) {
 	bits.resize(len);
 	if (party == PUBLIC) {
 		block one = CircuitExecution::circ_exec->public_label(true);
@@ -134,9 +132,33 @@ inline Integer::Integer(int len, int64_t input, int party) {
 	else {
 		ProtocolExecution::prot_exec->feed((block *)bits.data(), party, b, len); 
 	}
+}
 
+inline Integer::Integer(int len, int64_t input, int party) {
+	bool* b = new bool[len];
+	int_to_bool<int64_t>(b, input, len);
+  init(b, len, party);
 	delete[] b;
 }
+
+template<typename T>
+inline Integer::Integer(int len, T * input, int party) {
+	bool* b = new bool[len];
+	to_bool<T>(b, input, len);
+  init(b, len, party);
+	delete[] b;
+}
+
+template<typename T>
+inline Integer::Integer(T * input, int party) {
+  size_t len = 8 * sizeof(T);
+	bool* b = new bool[len];
+	to_bool<T>(b, input, len);
+  init(b, len, party);
+	delete[] b;
+}
+
+
 
 inline Integer Integer::select(const Bit & select, const Integer & a) const{
 	Integer res(*this);

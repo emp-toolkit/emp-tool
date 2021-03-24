@@ -51,6 +51,31 @@ inline void int_to_bool(bool * data, T input, int len) {
 	}
 }
 
+
+// Set the first len bools in the array data to be the first len bits from wherever input points to
+// (memory accesses are independent of the contents of data or input)
+// (does not mutate the memory to which input points)
+template<typename T>
+inline void to_bool(bool * data, const T * input, const int len) {
+	for (int i = 0; i < len; ++i) {
+		data[i] = (bool) ((((uint8_t *) input)[i / 8] & (((uint8_t) 128) >> (i % 8))) != 0);
+	}
+}
+
+// Set the first len bits wherever output points to to be the first len bools from array data.
+// (memory accesses are independent of the contents of data or output)
+// (does not mutate the contents of data)
+// assumes that if x is a bool, then ((uint8_t) x) is either 1 or 0.
+template<typename T>
+inline void from_bool(const bool * data, T * output, const int len) {
+	for (int i = 0; i < len; ++i) {
+    ((uint8_t *) output)[i / 8] &= (~(((uint8_t) 128) >> (i % 8))); // sets bit to 0
+    ((uint8_t *) output)[i / 8] |= (((uint8_t) data[i]) << (7 - (i % 8))); // sets bit to bool[i]
+	}
+}
+
+
+
 inline block bool_to_block(const bool * data) {
 	return makeBlock(bool_to_int<uint64_t>(data+64), bool_to_int<uint64_t>(data));
 }

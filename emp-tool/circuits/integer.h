@@ -18,6 +18,12 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	}
 	Integer(int length, int64_t input, int party = PUBLIC);
 
+  template<typename T>
+	Integer(int length, T * input, int party = PUBLIC);
+
+  template<typename T>
+	Integer(T * input, int party = PUBLIC);
+
 //Comparable
 	Bit geq(const Integer & rhs) const;
 	Bit equal(const Integer & rhs) const;
@@ -52,6 +58,9 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 
 	Bit& operator[](int index);
 	const Bit & operator[](int index) const;	
+
+  private:
+    void init(bool * b, int len, int party);
 };
 
 #include "emp-tool/circuits/integer.hpp"
