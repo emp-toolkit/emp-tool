@@ -38,10 +38,10 @@ inline void int_to_bool(bool * data, T input, int len);
 
 
 template<typename T>
-inline void to_bool(bool * data, const T * input, const int len);
+inline void to_bool(bool * data, const T * input, const int len, const bool reverse = false);
 
 template<typename T>
-inline void from_bool(const bool * data, T * output, const int len);
+inline void from_bool(const bool * data, T * output, const int len, const bool reverse = false);
 
 
 block bool_to_block(const bool * data);

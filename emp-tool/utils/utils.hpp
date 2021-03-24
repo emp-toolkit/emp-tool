@@ -56,9 +56,9 @@ inline void int_to_bool(bool * data, T input, int len) {
 // (memory accesses are independent of the contents of data or input)
 // (does not mutate the memory to which input points)
 template<typename T>
-inline void to_bool(bool * data, const T * input, const int len) {
+inline void to_bool(bool * data, const T * input, const int len, const bool reverse) {
 	for (int i = 0; i < len; ++i) {
-		data[i] = (bool) ((((uint8_t *) input)[i / 8] & (((uint8_t) 128) >> (i % 8))) != 0);
+		data[reverse ? len - i : i] = (bool) ((((uint8_t *) input)[i / 8] & (((uint8_t) 128) >> (i % 8))) != 0);
 	}
 }
 
@@ -67,10 +67,10 @@ inline void to_bool(bool * data, const T * input, const int len) {
 // (does not mutate the contents of data)
 // assumes that if x is a bool, then ((uint8_t) x) is either 1 or 0.
 template<typename T>
-inline void from_bool(const bool * data, T * output, const int len) {
+inline void from_bool(const bool * data, T * output, const int len, const bool reverse) {
 	for (int i = 0; i < len; ++i) {
     ((uint8_t *) output)[i / 8] &= (~(((uint8_t) 128) >> (i % 8))); // sets bit to 0
-    ((uint8_t *) output)[i / 8] |= (((uint8_t) data[i]) << (7 - (i % 8))); // sets bit to bool[i]
+    ((uint8_t *) output)[i / 8] |= (((uint8_t) data[reverse ? len - i : i]) << (7 - (i % 8))); // sets bit to bool[i]
 	}
 }
 
