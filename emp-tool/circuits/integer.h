@@ -35,6 +35,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	int size() const;
 	template<typename T>
 	T reveal(int party=PUBLIC) const;
+	template<typename T>
+	void reveal(T * output, const int party=PUBLIC) const;
 
 	Integer abs() const;
 	Integer& resize(int length, bool signed_extend = true);

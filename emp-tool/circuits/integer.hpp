@@ -218,6 +218,16 @@ inline string Integer::reveal<string>(int party) const {
 	return res;
 }
 
+// write the bits of this integer directly into memory wherever output points. 
+template<typename T>
+inline void Integer::reveal(T * output, const int party) const {
+	bool * b = new bool[size()];
+	string res = "";
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+  from_bool(b, output, size());
+  delete[] b;
+}
+
 
 inline int Integer::size() const {
 	return bits.size();
