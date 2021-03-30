@@ -1,5 +1,7 @@
 #include "emp-tool/emp-tool.h"
 using namespace emp;
+
+
 void ham(int n) {
 	Integer a(n, 0, ALICE);
 	Integer b(n, 0, BOB);
@@ -23,10 +25,12 @@ void modexp(int n1, int n2) {
 void sort(int n) {
 	Integer *A = new Integer[n];
 	Integer *B = new Integer[n];
-	for(int i = 0; i < n; ++i)
-		A[i] = Integer(32, 0, ALICE);
-	for(int i = 0; i < n; ++i)
-		B[i] = Integer(32, 0, BOB);
+	for(uint64_t i = 0; i < n; ++i) {
+		A[i] = Integer(32, n - i, ALICE);
+  }
+	for(int i = 0; i < n; ++i) {
+		B[i] = Integer(32, i, BOB);
+  }
 	for(int i = 0; i < n; ++i)
 		A[i] = A[i] ^ B[i];
 	sort(A, n);
