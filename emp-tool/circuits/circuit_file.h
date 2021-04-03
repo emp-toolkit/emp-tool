@@ -6,6 +6,8 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
+#include <fstream>
+
 using std::vector;
 
 namespace emp {
@@ -17,6 +19,34 @@ class BristolFormat { public:
 	int num_gate, num_wire, n1, n2, n3;
 	vector<int> gates;
 	vector<block> wires;
+
+	BristolFormat(int num_gate, int num_wire, int n1, int n2, int n3, int * gate_arr) {
+		this->num_gate = num_gate;
+		this->num_wire = num_wire;
+		this->n1 = n1;
+		this->n2 = n2;
+		this->n3 = n3;
+		gates.resize(num_gate*4);
+		wires.resize(num_wire);
+		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
+	}
+	std::ofstream fout;
+	void to_file(const char * filename, const char * prefix) {
+		fout.open(filename);
+		fout << "int "<<string(prefix)+"_num_gate = "<<num_gate<<";\n";
+		fout << "int "<<string(prefix)+"_num_wire = "<<num_wire<<";\n";
+		fout << "int "<<string(prefix)+"_n1 = "<<n1<<";\n";
+		fout << "int "<<string(prefix)+"_n2 = "<<n2<<";\n";
+		fout << "int "<<string(prefix)+"_n3 = "<<n3<<";\n";
+		fout << "int "<<string(prefix)+"_gate_arr ["<< num_gate*4 <<"] = {\n";
+		for(int i = 0; i < num_gate; ++i) {
+			for(int j = 0; j < 4; ++j)
+				fout<<gates[4*i+j]<<", ";
+			fout<<"\n";
+		}
+		fout <<"};\n";
+		fout.close();
+	}
 	BristolFormat(const char * file) {
 		int tmp;
 		FILE * f = fopen(file, "r");
