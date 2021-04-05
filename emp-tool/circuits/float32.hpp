@@ -65,6 +65,12 @@ inline Float Float::operator^(const Float& rhs) const {
 	return res;
 }
 
+inline Float Float::operator^=(const Float& rhs) {
+	for(int i = 0; i < 32; ++i)
+		value[i] ^= rhs[i];
+	return (*this);
+}
+
 inline Float Float::operator&(const Float& rhs) const {
 	Float res(*this);
 	for(int i = 0; i < 32; ++i)

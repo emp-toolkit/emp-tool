@@ -43,6 +43,10 @@ inline Bit Bit::operator ^(const Bit& rhs) const{
 	res.bit = CircuitExecution::circ_exec->xor_gate(bit, rhs.bit);
 	return res;
 }
+inline Bit Bit::operator ^=(const Bit& rhs) {
+	this->bit = CircuitExecution::circ_exec->xor_gate(bit, rhs.bit);
+	return (*this);
+}
 
 inline Bit Bit::operator |(const Bit& rhs) const{
 	return (*this ^ rhs) ^ (*this & rhs);

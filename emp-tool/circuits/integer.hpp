@@ -175,6 +175,10 @@ inline const Bit &Integer::operator[](int index) const {
 	return bits[min(index, size()-1)];
 }
 
+inline void Integer::revealBools(bool *bools, int party) const {
+	ProtocolExecution::prot_exec->reveal(bools, party, (block *)bits.data(), size());
+}
+
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
 	std::bitset<32> bs;
@@ -211,7 +215,7 @@ template<>
 inline string Integer::reveal<string>(int party) const {
 	bool * b = new bool[size()];
 	string res = "";
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+  revealBools(b, party);
 	for(int i = 0; i < size(); ++i)
 		res+=(b[i]? "1" : "0");
 	delete[] b;
@@ -222,8 +226,7 @@ inline string Integer::reveal<string>(int party) const {
 template<typename T>
 inline void Integer::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
-	string res = "";
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+  revealBools(b, party);
   from_bool(b, output, size());
   delete[] b;
 }
@@ -255,6 +258,12 @@ inline Integer Integer::operator^(const Integer& rhs) const {
 	for(int i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] ^ rhs.bits[i];
 	return res;
+}
+
+inline Integer Integer::operator^=(const Integer& rhs) {
+	for(size_t i = 0; i < size(); ++i)
+		this->bits[i] ^= rhs.bits[i];
+	return (*this);
 }
 
 inline Integer Integer::operator|(const Integer& rhs) const {

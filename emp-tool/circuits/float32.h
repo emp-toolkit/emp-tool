@@ -49,6 +49,7 @@ class Float: Swappable<Float> { public:
 	Float operator*(const Float& rhs) const;
 	Float operator/(const Float& rhs) const;
 	Float operator^(const Float& rhs) const;
+	Float operator^=(const Float& rhs);
 	Float operator&(const Float& rhs) const;
 
 	Float sqr() const;
