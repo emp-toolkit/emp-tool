@@ -27,6 +27,7 @@ class Bit : public Swappable<Bit>{ public:
 	//swappable
 	Bit select(const Bit & select, const Bit & new_v)const ;
 	Bit operator ^(const Bit& rhs) const;
+	Bit operator ^=(const Bit& rhs);
 
 	//batcher
 	template<typename... Args>

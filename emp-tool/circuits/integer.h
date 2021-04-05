@@ -31,6 +31,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 //Swappable
 	Integer select(const Bit & sel, const Integer & rhs) const;
 	Integer operator^(const Integer& rhs) const;
+	Integer operator^=(const Integer& rhs);
 
 	int size() const;
 	template<typename T>
@@ -61,8 +62,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	Bit& operator[](int index);
 	const Bit & operator[](int index) const;	
 
-  private:
-    void init(bool * b, int len, int party);
+  void init(bool * b, int len, int party);
+	void revealBools(bool *bools, int party=PUBLIC) const;
 };
 
 #include "emp-tool/circuits/integer.hpp"

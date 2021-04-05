@@ -17,9 +17,9 @@ inline T If(const Bit & select, const T & o1, const T & o2) {
 template<typename T>
 inline void swap(const Bit & swap, T & o1, T & o2) {
 	T o = If(swap, o1, o2);
-	o = o ^ o2;
-	o1 = o ^ o1;
-	o2 = o ^ o2;
+	o ^= o2;
+	o1 ^= o;
+	o2 ^= o;
 }
 }
 #endif
