@@ -159,7 +159,6 @@ inline Integer::Integer(T * input, int party) {
 }
 
 
-
 inline Integer Integer::select(const Bit & select, const Integer & a) const{
 	Integer res(*this);
 	for(int i = 0; i < size(); ++i)
@@ -226,7 +225,12 @@ inline string Integer::reveal<string>(int party) const {
 template<typename T>
 inline void Integer::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
+<<<<<<< HEAD
   revealBools(b, party);
+=======
+	string res = "";
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+>>>>>>> emp-toolkit/master
   from_bool(b, output, size());
   delete[] b;
 }

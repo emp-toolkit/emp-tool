@@ -24,7 +24,6 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
   template<typename T>
 	Integer(T * input, int party = PUBLIC);
 
-
 //Comparable
 	Bit geq(const Integer & rhs) const;
 	Bit equal(const Integer & rhs) const;
