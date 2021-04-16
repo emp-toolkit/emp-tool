@@ -33,12 +33,12 @@ class BristolFormat { public:
 	}
 
 	BristolFormat(FILE * file) {
-    this->from_file(file);
-  }
+		this->from_file(file);
+	}
 
 	BristolFormat(const char * file) {
-    this->from_file(file);
-  }
+		this->from_file(file);
+	}
 
 
 	void to_file(const char * filename, const char * prefix) {
@@ -81,11 +81,11 @@ class BristolFormat { public:
 		}
 	}
 
-  void from_file(const char * file) {
+	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
-    this->from_file(f);
-    fclose(f);
-  }
+		this->from_file(f);
+		fclose(f);
+	}
 
 	void compute(Bit * out, const Bit * in1, const Bit * in2) {
 		compute((block*)out, (block *)in1, (block*)in2);
@@ -115,14 +115,14 @@ class BristolFashion { public:
 	vector<block> wires;
 
 	BristolFashion(FILE * file) {
-    this->from_file(file);
-  }
+		this->from_file(file);
+	}
 
 	BristolFashion(const char * file) {
-    this->from_file(file);
-  }
+		this->from_file(file);
+	}
 
-  void from_file(FILE * f) {
+	void from_file(FILE * f) {
 		int tmp;
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		int niov = 0;
@@ -154,11 +154,11 @@ class BristolFashion { public:
 		}
 	}
 
-  void from_file(const char * file) {
+	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
-    this->from_file(f);
-    fclose(f);
-  }
+		this->from_file(f);
+		fclose(f);
+	}
 
 	void compute(Bit * out, const Bit * in) {
 		compute((block*)out, (block *)in);
