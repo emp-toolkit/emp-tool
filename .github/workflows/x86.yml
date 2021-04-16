@@ -1,5 +1,5 @@
 name: x86
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build_x86:
@@ -8,7 +8,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         build_type: [Debug, Release]
     runs-on: ${{ matrix.os }}
-    env: 
+    env:
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
     - uses: actions/checkout@v2

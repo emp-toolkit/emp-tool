@@ -1,5 +1,5 @@
 name: arm
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build_arm:
@@ -8,7 +8,7 @@ jobs:
         os: [ubuntu-latest]
         build_type: [Debug, Release]
     runs-on: [self-hosted]
-    env: 
+    env:
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
     - uses: actions/checkout@v2
@@ -26,4 +26,3 @@ jobs:
         ./bin/f2k
         ./run ./bin/garble
         ./run ./bin/netio
- 
