@@ -1,14 +1,15 @@
-#include "emp-tool/emp-tool.h"
 #include <iostream>
+
+#include "emp-tool/emp-tool.h"
 using namespace std;
 using namespace emp;
 
 int port, party;
-template<typename T>
-void test(T * netio) {
-	block *a = new block[128];
-	block *b = new block[128];
-	block *c = new block[128];
+template <typename T>
+void test(T* netio) {
+	block* a = new block[128];
+	block* b = new block[128];
+	block* c = new block[128];
 
 	PRG prg;
 	prg.random_block(a, 128);
@@ -17,46 +18,46 @@ void test(T * netio) {
 	string file = "emp-tool/circuits/files/bristol_format/AES-non-expanded.txt";
 	BristolFormat cf(file.c_str());
 
-	if(party == BOB) {
+	if (party == BOB) {
 		HalfGateEva<T>::circ_exec = new HalfGateEva<T>(netio);
-		for(int i = 0; i < 2000; ++i)
+		for (int i = 0; i < 2000; ++i)
 			cf.compute(c, a, b);
 		delete HalfGateEva<T>::circ_exec;
 	} else {
-		AbandonIO * aio = new AbandonIO();
+		AbandonIO* aio = new AbandonIO();
 		HalfGateGen<AbandonIO>::circ_exec = new HalfGateGen<AbandonIO>(aio);
 
 		auto start = clock_start();
-		for(int i = 0; i < 2000; ++i) {
+		for (int i = 0; i < 2000; ++i) {
 			cf.compute(c, a, b);
 		}
 		double interval = time_from(start);
-		cout << "Pure AES garbling speed : "<< 2000*6800/interval<<" million gate per second\n";
+		cout << "Pure AES garbling speed : " << 2000 * 6800 / interval << " million gate per second\n";
 		delete aio;
 		delete HalfGateGen<AbandonIO>::circ_exec;
 
-		MemIO * mio = new MemIO();
+		MemIO* mio = new MemIO();
 		HalfGateGen<MemIO>::circ_exec = new HalfGateGen<MemIO>(mio);
 
 		start = clock_start();
-		for(int i = 0; i < 20; ++i) {
+		for (int i = 0; i < 20; ++i) {
 			mio->clear();
-			for(int j = 0; j < 100; ++j)
+			for (int j = 0; j < 100; ++j)
 				cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Writing to Memory : "<< 2000*6800/interval<<" million gate per second\n";
+		cout << "AES garbling + Writing to Memory : " << 2000 * 6800 / interval << " million gate per second\n";
 		delete mio;
 		delete HalfGateGen<MemIO>::circ_exec;
 
 		HalfGateGen<T>::circ_exec = new HalfGateGen<T>(netio);
 
 		start = clock_start();
-		for(int i = 0; i < 2000; ++i) {
+		for (int i = 0; i < 2000; ++i) {
 			cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Loopback Network : "<< 2000*6800/interval<<" million gate per second\n";
+		cout << "AES garbling + Loopback Network : " << 2000 * 6800 / interval << " million gate per second\n";
 
 		delete HalfGateGen<T>::circ_exec;
 	}
@@ -65,15 +66,16 @@ void test(T * netio) {
 	delete[] b;
 	delete[] c;
 }
+
 int main(int argc, char** argv) {
 	parse_party_and_port(argv, &party, &port);
-	cout <<"Using NetIO\n";
-	NetIO* netio = new NetIO(party == ALICE?nullptr:"127.0.0.1", port);
+	cout << "Using NetIO\n";
+	NetIO* netio = new NetIO(party == ALICE ? nullptr : "127.0.0.1", port);
 	test<NetIO>(netio);
 	delete netio;
 
-	cout <<"Using HighSpeedNetIO\n";
-	HighSpeedNetIO* hsnetio = new HighSpeedNetIO(party == ALICE?nullptr:"127.0.0.1", port);
+	cout << "Using HighSpeedNetIO\n";
+	HighSpeedNetIO* hsnetio = new HighSpeedNetIO(party == ALICE ? nullptr : "127.0.0.1", port, port+1);
 	test<HighSpeedNetIO>(hsnetio);
 	delete hsnetio;
 }
