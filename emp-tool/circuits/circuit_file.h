@@ -19,6 +19,7 @@ class BristolFormat { public:
 	int num_gate, num_wire, n1, n2, n3;
 	vector<int> gates;
 	vector<block> wires;
+	std::ofstream fout;
 
 	BristolFormat(int num_gate, int num_wire, int n1, int n2, int n3, int * gate_arr) {
 		this->num_gate = num_gate;
@@ -30,7 +31,16 @@ class BristolFormat { public:
 		wires.resize(num_wire);
 		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
 	}
-	std::ofstream fout;
+
+	BristolFormat(FILE * file) {
+		this->from_file(file);
+	}
+
+	BristolFormat(const char * file) {
+		this->from_file(file);
+	}
+
+
 	void to_file(const char * filename, const char * prefix) {
 		fout.open(filename);
 		fout << "int "<<string(prefix)+"_num_gate = "<<num_gate<<";\n";
@@ -47,9 +57,10 @@ class BristolFormat { public:
 		fout <<"};\n";
 		fout.close();
 	}
-	BristolFormat(const char * file) {
+
+
+	void from_file(FILE * f) {
 		int tmp;
-		FILE * f = fopen(file, "r");
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		(void)fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
 		(void)fscanf(f, "\n");
@@ -68,8 +79,14 @@ class BristolFormat { public:
 				gates[4*i+3] = NOT_GATE;
 			}
 		}
+	}
+
+	void from_file(const char * file) {
+		FILE * f = fopen(file, "r");
+		this->from_file(f);
 		fclose(f);
 	}
+
 	void compute(Bit * out, const Bit * in1, const Bit * in2) {
 		compute((block*)out, (block *)in1, (block*)in2);
 	}
@@ -96,9 +113,17 @@ class BristolFashion { public:
 		 num_input = 0, num_output = 0;
 	vector<int> gates;
 	vector<block> wires;
+
+	BristolFashion(FILE * file) {
+		this->from_file(file);
+	}
+
 	BristolFashion(const char * file) {
+		this->from_file(file);
+	}
+
+	void from_file(FILE * f) {
 		int tmp;
-		FILE * f = fopen(file, "r");
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		int niov = 0;
 		(void)fscanf(f, "%d", &niov);
@@ -127,6 +152,11 @@ class BristolFashion { public:
 				gates[4*i+3] = NOT_GATE;
 			}
 		}
+	}
+
+	void from_file(const char * file) {
+		FILE * f = fopen(file, "r");
+		this->from_file(f);
 		fclose(f);
 	}
 

@@ -137,7 +137,7 @@ inline void Integer::init(bool * b, int len, int party) {
 inline Integer::Integer(int len, int64_t input, int party) {
 	bool* b = new bool[len];
 	int_to_bool<int64_t>(b, input, len);
-  init(b, len, party);
+	init(b, len, party);
 	delete[] b;
 }
 
@@ -145,16 +145,16 @@ template<typename T>
 inline Integer::Integer(int len, T * input, int party) {
 	bool* b = new bool[len];
 	to_bool<T>(b, input, len);
-  init(b, len, party);
+	init(b, len, party);
 	delete[] b;
 }
 
 template<typename T>
 inline Integer::Integer(T * input, int party) {
-  size_t len = 8 * sizeof(T);
+	size_t len = 8 * sizeof(T);
 	bool* b = new bool[len];
 	to_bool<T>(b, input, len);
-  init(b, len, party);
+	init(b, len, party);
 	delete[] b;
 }
 
@@ -214,7 +214,7 @@ template<>
 inline string Integer::reveal<string>(int party) const {
 	bool * b = new bool[size()];
 	string res = "";
-  revealBools(b, party);
+	revealBools(b, party);
 	for(int i = 0; i < size(); ++i)
 		res+=(b[i]? "1" : "0");
 	delete[] b;
@@ -225,9 +225,9 @@ inline string Integer::reveal<string>(int party) const {
 template<typename T>
 inline void Integer::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
-  revealBools(b, party);
-  from_bool(b, output, size());
-  delete[] b;
+	revealBools(b, party);
+	from_bool(b, output, size());
+	delete[] b;
 }
 
 

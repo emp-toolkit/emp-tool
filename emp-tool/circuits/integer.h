@@ -18,26 +18,26 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	}
 	Integer(int length, int64_t input, int party = PUBLIC);
 
-  template<typename T>
-	Integer(int length, T * input, int party = PUBLIC);
+	template<typename T>
+		Integer(int length, T * input, int party = PUBLIC);
 
-  template<typename T>
-	Integer(T * input, int party = PUBLIC);
+	template<typename T>
+		Integer(T * input, int party = PUBLIC);
 
-//Comparable
+	//Comparable
 	Bit geq(const Integer & rhs) const;
 	Bit equal(const Integer & rhs) const;
 
-//Swappable
+	//Swappable
 	Integer select(const Bit & sel, const Integer & rhs) const;
 	Integer operator^(const Integer& rhs) const;
 	Integer operator^=(const Integer& rhs);
 
 	int size() const;
 	template<typename T>
-	T reveal(int party=PUBLIC) const;
+		T reveal(int party=PUBLIC) const;
 	template<typename T>
-	void reveal(T * output, const int party=PUBLIC) const;
+		void reveal(T * output, const int party=PUBLIC) const;
 
 	Integer abs() const;
 	Integer& resize(int length, bool signed_extend = true);
@@ -62,7 +62,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	Bit& operator[](int index);
 	const Bit & operator[](int index) const;	
 
-  void init(bool * b, int len, int party);
+	void init(bool * b, int len, int party);
 	void revealBools(bool *bools, int party=PUBLIC) const;
 };
 

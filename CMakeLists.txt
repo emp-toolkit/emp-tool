@@ -2,8 +2,16 @@ cmake_minimum_required (VERSION 2.8.12)
 project (emptool)
 set(NAME "emp-tool")
 
+
+
+ADD_CUSTOM_COMMAND(
+  OUTPUT emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
+  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
+  COMMENT "Compiling Keccak circuit file to binary")
+
 set(sources
 emp-tool/emp-tool.cpp
+emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
 )
 
 include(cmake/common.cmake)
@@ -19,6 +27,7 @@ add_library(${NAME} SHARED ${sources})
 install(DIRECTORY emp-tool DESTINATION include/)
 install(DIRECTORY cmake/ DESTINATION cmake/)
 install(TARGETS ${NAME} DESTINATION lib)
+
 
 # Test cases
 macro (add_test _name)
@@ -42,3 +51,4 @@ add_test(mitccrh)
 add_test(f2k)
 add_test(halfgate)
 add_test(to_bool)
+add_test(sha3_256)
