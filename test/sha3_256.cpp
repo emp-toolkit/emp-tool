@@ -5,35 +5,40 @@
 using namespace std;
 using namespace emp;
 
-int port, party;
 
-void hash_in_circuit(){
-	emp::Integer integers[200];
-	for (int64_t i = 0; i < 200; ++i) {
-		integers[i] = Integer(8, i % 100, emp::PUBLIC);
-	}
+// try hashing a fairly arbitrary byte string and see if we get the right value.
+int hash_in_circuit(){
 
-	emp::Integer output = Integer(10, 32, emp::PUBLIC);
+  uint8_t input[2000];
+  uint8_t output_bytes[32];
+  uint8_t output_bytes2[32];
+  for (size_t i = 0; i < 2000; ++i) {
+    input[i] = i % 200;
+  }
+  emp::sha3_256(output_bytes, input, 2000);
 
-	std::cout << "\ngenerating calculator\n" << std::flush;
-	SHA3_256_Calculator sha3_256_calculator = SHA3_256_Calculator();
-	std::cout << "generated.\ncalculating hash\n" << std::flush;
-	sha3_256_calculator.sha3_256(&output, integers, 200);
-	std::cout << "calculated.\n" << std::flush;
-	cout <<output.reveal<uint32_t>(PUBLIC)<<endl;
+  emp::Integer integers[2000];
+  for (int64_t i = 0; i < 2000; ++i) {
+    integers[i] = Integer(8, i % 200, emp::PUBLIC);
+  }
+
+  emp::Integer output = Integer(10, 32, emp::PUBLIC);
+
+  SHA3_256_Calculator sha3_256_calculator = SHA3_256_Calculator();
+  sha3_256_calculator.sha3_256(&output, integers, 2000);
+  output.reveal<uint8_t>(output_bytes2, PUBLIC);
+
+  for(uint8_t i=0; i<32; ++i) {
+    if (output_bytes[i] != output_bytes2[i]) {
+      std::cerr << "sha3 hash did not produce the correct hash value\n" << std::flush;
+      return -1;
+    }
+  }
+  return 0;
 }
-int main(int argc, char** argv) {
-	uint8_t input[200];
-	uint8_t output[32];
-	for (uint8_t i = 0; i < 200; ++i) {
-		input[i] = i % 100;
-	}
-	emp::sha3_256(output, input, 200);
-	for(uint8_t i=0; i<32; ++i) {
-		std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)output[i];
-	}
-	std::cout << "\n";
 
+int main(int argc, char** argv) {
+  int port, party;
 	parse_party_and_port(argv, &party, &port);
 	setup_plain_prot(false, "");
 	hash_in_circuit();
