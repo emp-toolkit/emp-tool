@@ -24,5 +24,6 @@ jobs:
         ./bin/int
         ./bin/ecc
         ./bin/f2k
+        ./bin/sha3_256
         ./run ./bin/garble
         ./run ./bin/netio

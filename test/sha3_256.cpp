@@ -1,10 +1,8 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
-#include <emp-tool/circuits/sha3_256.hpp>
 
 using namespace std;
 using namespace emp;
-
 
 // try hashing a fairly arbitrary byte string and see if we get the right value.
 int hash_in_circuit(){
@@ -38,8 +36,6 @@ int hash_in_circuit(){
 }
 
 int main(int argc, char** argv) {
-  int port, party;
-	parse_party_and_port(argv, &party, &port);
 	setup_plain_prot(false, "");
 	hash_in_circuit();
 	finalize_plain_prot();
