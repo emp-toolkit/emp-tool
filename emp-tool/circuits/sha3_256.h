@@ -5,7 +5,6 @@
 #include "emp-tool/execution/protocol_execution.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex"
 #include <stdio.h>
 #include <fstream>
 
@@ -17,6 +16,9 @@
 
 
 namespace emp {
+
+unsigned int emp_tool_circuits_files_bristol_fashion_Keccak_f_txt_len;
+unsigned char *emp_tool_circuits_files_bristol_fashion_Keccak_f_txt;
 
 // Calculate the sha3 hash of arbitrary bytes in memory using OpenSSL.
 // (length refers to the number of elements of type T in the array "input".
