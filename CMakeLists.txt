@@ -4,7 +4,7 @@ set(NAME "emp-tool")
 
 ADD_CUSTOM_COMMAND(
   OUTPUT emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
-  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
+  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
   COMMAND echo "#include \"emp-tool/circuits/sha3_256.h\"" > emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMAND cat emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex >> emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMENT "Compiling Keccak circuit file to binary")
