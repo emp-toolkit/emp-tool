@@ -5,7 +5,6 @@
 #include "emp-tool/execution/protocol_execution.h"
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex"
 #include <stdio.h>
 #include <fstream>
 
@@ -15,6 +14,9 @@
 #include <unistd.h>
 #include <errno.h>
 
+
+extern unsigned int emp_tool_circuits_files_bristol_fashion_aes_128_txt_len;
+extern unsigned char emp_tool_circuits_files_bristol_fashion_aes_128_txt[];
 
 namespace emp {
 
@@ -99,7 +101,7 @@ class AES_128_CTR_Calculator {
     emp::Integer counter;
     std::unique_ptr<BristolFashion> circuit; // ensures circuit is deleted when this is deleted.
 
-  // Sets up BristolFashion circuit for calculating Keccak_f, and allocates some space and constants.
+  // Sets up BristolFashion circuit for calculating aes, and allocates some space and constants.
   AES_128_CTR_Calculator() { 
     FILE * circuit_file = fmemopen(emp_tool_circuits_files_bristol_fashion_aes_128_txt,
                                    emp_tool_circuits_files_bristol_fashion_aes_128_txt_len,
