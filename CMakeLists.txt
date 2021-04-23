@@ -8,9 +8,12 @@ ADD_CUSTOM_COMMAND(
   COMMAND echo "#include \"emp-tool/circuits/sha3_256.h\"" > emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMAND cat emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex >> emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMENT "Compiling Keccak circuit file to binary")
+
 ADD_CUSTOM_COMMAND(
   OUTPUT emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
-  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/aes_128.txt emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
+  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/aes_128.txt emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
+  COMMAND echo "#include \"emp-tool/circuits/aes_128_ctr.h\"" > emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
+  COMMAND cat emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex >> emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
   COMMENT "Compiling aes_128 circuit file to binary")
 
 set(sources
