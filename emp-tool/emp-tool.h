@@ -4,7 +4,6 @@
 #include "emp-tool/io/mem_io_channel.h"
 #include "emp-tool/io/net_io_channel.h"
 #include "emp-tool/io/highspeed_net_io_channel.h"
-#include "emp-tool/io/abandon_io_channel.h"
 
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/circuit_file.h"

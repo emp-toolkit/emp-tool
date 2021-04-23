@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include "emp-tool/emp-tool.h"
+#include "test/shared/emp-tool-test.h"
 using namespace std;
 using namespace emp;
 
