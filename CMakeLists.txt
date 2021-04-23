@@ -8,10 +8,15 @@ ADD_CUSTOM_COMMAND(
   OUTPUT emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
   COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
   COMMENT "Compiling Keccak circuit file to binary")
+ADD_CUSTOM_COMMAND(
+  OUTPUT emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
+  COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/aes_128.txt emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
+  COMMENT "Compiling aes_128 circuit file to binary")
 
 set(sources
 emp-tool/emp-tool.cpp
 emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
+emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
 )
 
 include(cmake/common.cmake)
@@ -52,3 +57,4 @@ add_test(f2k)
 add_test(halfgate)
 add_test(to_bool)
 add_test(sha3_256)
+add_test(aes_128_ctr)
