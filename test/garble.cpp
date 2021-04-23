@@ -1,9 +1,16 @@
 #include <iostream>
 
 #include "emp-tool/emp-tool.h"
-#include "test/shared/emp-tool-test.h"
 using namespace std;
 using namespace emp;
+
+class AbandonIO: public IOChannel<AbandonIO> { public:
+	void send_data_internal(const void * data, int len) {
+	}
+
+	void recv_data_internal(void  * data, int len) {
+	}
+};
 
 int port, party;
 template <typename T>
