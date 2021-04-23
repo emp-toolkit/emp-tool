@@ -1,5 +1,5 @@
-#ifndef EMP_SHA3_256_HPP__
-#define EMP_SHA3_256_HPP__
+#ifndef EMP_AES_128_CTR_HPP__
+#define EMP_AES_128_CTR_HPP__
 
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"

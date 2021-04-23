@@ -2,11 +2,11 @@ cmake_minimum_required (VERSION 2.8.12)
 project (emptool)
 set(NAME "emp-tool")
 
-
-
 ADD_CUSTOM_COMMAND(
-  OUTPUT emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
+  OUTPUT emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
+  COMMAND echo "#include \"emp-tool/circuits/sha3_256.h\"" > emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
+  COMMAND cat emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex >> emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMENT "Compiling Keccak circuit file to binary")
 ADD_CUSTOM_COMMAND(
   OUTPUT emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
@@ -15,8 +15,8 @@ ADD_CUSTOM_COMMAND(
 
 set(sources
 emp-tool/emp-tool.cpp
-emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
 emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex
+emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
 )
 
 include(cmake/common.cmake)
