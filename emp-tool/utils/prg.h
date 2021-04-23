@@ -8,7 +8,7 @@
 
 #ifdef ENABLE_RDSEED
 #include <x86intrin.h>
-#else 
+#else
 #include <random>
 #endif
 
@@ -18,7 +18,7 @@ class PRG { public:
 	uint64_t counter = 0;
 	AES_KEY aes;
 	block key;
-	PRG(const void * seed = nullptr, int id = 0) {	
+	PRG(const void * seed = nullptr, int id = 0) {
 		if (seed != nullptr) {
 			reseed((const block *)seed, id);
 		} else {
@@ -41,7 +41,7 @@ class PRG { public:
 
 			v = makeBlock(r0, r1);
 #endif
-			reseed(&v);
+			reseed(&v, id);
 		}
 	}
 	void reseed(const block* seed, uint64_t id = 0) {
