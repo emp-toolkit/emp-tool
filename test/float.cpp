@@ -32,7 +32,7 @@ bool equal(Float a, float b) {
 	}
 	if(memcmp(pa, pb, sizeof(float)) == 0)
 		return true;
-	else return false; 
+	else return false;
 }
 
 bool accurate(double a, double b, double err) {
@@ -54,7 +54,7 @@ void test_float(double precision, int runs = 1000) {
 		Float a(da, PUBLIC);
 		Float b(db, PUBLIC);
 		Float res = Op2()(a,b);
-		
+
 		if(precision > 0.0) {
 			if (not accurate(res.reveal<double>(PUBLIC), Op()(da,db), precision)) {
 				cout << "Inaccuracy:\t"<<typeid(Op2).name()<<"\t"<< da <<"\t"<<db<<"\t"<<Op()(da,db)<<"\t"<<res.reveal<double>(PUBLIC)<<endl;
@@ -152,7 +152,7 @@ void fp_if(double a, double b) {
 	Float x(a, PUBLIC);
 	Float y(b, PUBLIC);
 	Bit one = Bit(true, PUBLIC);
-	Bit zero = Bit(false, PUBLIC); 
+	Bit zero = Bit(false, PUBLIC);
 
 	Float z = x.If(one, y);
 	cout << z.reveal<string>() << " ";
@@ -188,7 +188,7 @@ int main(int argc, char** argv) {
 	test_float(0, 0.0, 1e12);
 	test_float(1, 0.0, 1e12);
 	test_float(2, 1e-3, 1e15);
-	test_float(3, 1e-3, 1e15);	
+	test_float(3, 1e-3, 1e15);
 	test_float(4, 1e-3, 1e18);
 	test_float(5, 1e-3, 1e18);
 	test_float(6, 1e-3, 1e12);

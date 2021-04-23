@@ -19,8 +19,8 @@ void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 1000
 			ia %= range1;
 			ib %= range2;
 		}
-	
-		Integer a(32, ia, ALICE); 
+
+		Integer a(32, ia, ALICE);
 		Integer b(32, ib, BOB);
 
 		Integer res = Op2()(a,b);

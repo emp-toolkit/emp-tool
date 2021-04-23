@@ -39,7 +39,7 @@ void sort(int n) {
 }
 int main(int argc, char** argv) {
 	setup_plain_prot(true, "sort.txt");
-	sort(128);	
+	sort(128);
 //	mult(2048);
 //	ham(1<<10);
 	finalize_plain_prot ();
