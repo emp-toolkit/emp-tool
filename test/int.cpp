@@ -1,6 +1,5 @@
 #include <typeinfo>
 #include "emp-tool/emp-tool.h"
-#include "test/shared/emp-tool-test.h"
 #include <iostream>
 using namespace std;
 using namespace emp;

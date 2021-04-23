@@ -37,3 +37,5 @@
 
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"
+#include "emp-tool/execution/plain_circ.h"
+#include "emp-tool/execution/plain_prot.h"
