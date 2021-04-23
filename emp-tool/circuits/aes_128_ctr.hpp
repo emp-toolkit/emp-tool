@@ -19,7 +19,7 @@
 namespace emp {
 
 // Calculate the AES_128_CTR encryption of some bytes
-// (length refers to the number of elements of type T in the array "input".
+// (length refers to the number of elements of type T in the array "input").
 template<typename T>
 int aes_128_ctr(const __m128i key,
                 const __m128i iv,
