@@ -4,7 +4,7 @@
 #include <stdio.h>
 namespace emp {
 
-/* 
+/*
  * By default, CRH use zero_block as the AES key.
  * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
  */
@@ -40,7 +40,7 @@ class CCRH: public PRP { public:
 	#endif
 #endif
 
-	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
+	void Hn(block*out, block* in, int length, block * scratch = nullptr) {
 		bool del = false;
 		if(scratch == nullptr) {
 			del = true;
