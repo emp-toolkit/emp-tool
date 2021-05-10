@@ -175,7 +175,7 @@ int main() {
 	PRG prg;
 	block a, b;
 	block res[4];
-	int bench_size = 1024*1024*2;
+	int bench_size = 1024*1024;
 
 	cout << "Simplified GF2^128 multiplication ... ";
 
