@@ -50,7 +50,7 @@ int main(void) {
 
 	cout << "Efficiency: ";
 	auto start = clock_start();
-	for(int i = 0; i < 1024*1024*128; ++i) {
+	for(int i = 0; i < 1024*1024*2; ++i) {
 		prg.random_block(data, 2);
 		w0 = halfgates_garble(data[0], data[0]^delta, data[1], data[1]^delta, delta, table, &mi_gen);
 		w1 = w0 ^ delta;
