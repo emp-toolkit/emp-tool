@@ -75,10 +75,3 @@ ENDIF(THREADING)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
 set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
-
-
-#Testing macro
-macro (add_test_with_lib _name libs)
-	add_executable(${_name} "test/${_name}.cpp")
-	target_link_libraries(${_name} ${OPENSSL_LIBRARIES} ${libs})
-endmacro()

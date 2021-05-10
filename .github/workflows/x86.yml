@@ -16,15 +16,4 @@ jobs:
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DENABLE_FLOAT=On && make
     - name: Test
       shell: bash
-      run: |
-        ./bin/prp
-        ./bin/prg
-        ./bin/mitccrh
-        ./bin/bit
-        ./bin/int
-        ./bin/float
-        ./bin/ecc
-        ./bin/f2k
-        ./bin/sha3_256
-        ./run ./bin/garble
-        ./run ./bin/netio
+      run: ctest -V
