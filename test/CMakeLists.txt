@@ -7,13 +7,11 @@ endmacro()
 macro (add_test_case _name)
 	add_test_executable_with_lib(${_name} "${NAME}")
   	add_test(NAME ${_name} COMMAND test_${_name} WORKING_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-	set_tests_properties(${_name} PROPERTIES TIMEOUT 60)
 endmacro()
 
 macro (add_test_case_with_run _name)
 	add_test_executable_with_lib(${_name} "${NAME}")
 	add_test(NAME ${_name} COMMAND run "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test_${_name}")
-	set_tests_properties(${_name} PROPERTIES TIMEOUT 60)
 endmacro()
 
 # Test cases
