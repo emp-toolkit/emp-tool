@@ -122,8 +122,6 @@ int hash_in_circuit(){
 }
 
 int main(int argc, char** argv) {
-  int port, party;
-	parse_party_and_port(argv, &party, &port);
 	setup_plain_prot(false, "");
 	hash_in_circuit();
 	finalize_plain_prot();
