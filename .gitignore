@@ -1,3 +1,5 @@
+*.txt.cpp
+*CTestTestfile.cmake
 .exrc
 build/
 CMakeCache.txt
