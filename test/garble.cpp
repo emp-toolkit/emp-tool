@@ -23,7 +23,7 @@ void test(T* netio) {
 	prg.random_block(a, 128);
 	prg.random_block(b, 128);
 
-	string file = "../emp-tool/circuits/files/bristol_format/AES-non-expanded.txt";
+	string file = "./emp-tool/circuits/files/bristol_format/AES-non-expanded.txt";
 	BristolFormat cf(file.c_str());
 
 	if (party == BOB) {
