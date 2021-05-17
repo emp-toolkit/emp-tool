@@ -16,7 +16,7 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 	vector<Bit> bits;
 	Integer(){
 	}
-	Integer(const vector<Bit> bits): bits(bits) {
+	Integer(const vector<Bit>& bits): bits(bits) {
 	}
 	Integer(int length, int64_t input, int party = PUBLIC);
 
