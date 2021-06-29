@@ -65,7 +65,7 @@ class PrivacyFreeEva:public CircuitExecution{ public:
 	block not_gate(const block& a) {
 		return a ^ public_label(true);
 	}
-	size_t num_and() override {
+	uint64_t num_and() override {
 		return gid;
 	}
 };
