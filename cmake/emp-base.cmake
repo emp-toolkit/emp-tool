@@ -19,11 +19,12 @@ if(NOT WIN32)
 endif()
 
 set(CMAKE_MACOSX_RPATH 0)
-
-
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include_directories(${CMAKE_SOURCE_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
+set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	if(NOT DEFINED OPENSSL_ROOT_DIR)
@@ -41,7 +42,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif()
 
 #Compilation flags
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -funroll-loops")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pthread -Wall -funroll-loops -Wno-ignored-attributes -Wno-unused-result")
 message("${Blue}-- Platform: ${CMAKE_SYSTEM_PROCESSOR}${ColourReset}")
 IF(${CMAKE_SYSTEM_PROCESSOR} MATCHES "(aarch64)|(arm64)")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8-a+simd+crypto+crc")
@@ -66,12 +67,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
 endif()
 
-OPTION(THREADING "Option description" OFF)
-IF(THREADING)
-	ADD_DEFINITIONS(-DTHREADING)
-	message("Multi Threading: on")
-ENDIF(THREADING)
-
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
-set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${CMAKE_SOURCE_DIR}/cmake)
+include(${CMAKE_FOLDER}/cmake/enable_rdseed.cmake)
+include(${CMAKE_FOLDER}/cmake/enable_float.cmake)
+include(${CMAKE_FOLDER}/cmake/enable_threading.cmake)
