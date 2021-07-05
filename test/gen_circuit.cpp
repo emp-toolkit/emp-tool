@@ -25,7 +25,7 @@ void modexp(int n1, int n2) {
 void sort(int n) {
 	Integer *A = new Integer[n];
 	Integer *B = new Integer[n];
-	for(uint64_t i = 0; i < n; ++i) {
+	for(int i = 0; i < n; ++i) {
 		A[i] = Integer(32, n - i, ALICE);
   }
 	for(int i = 0; i < n; ++i) {

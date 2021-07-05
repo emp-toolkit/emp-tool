@@ -1,0 +1,6 @@
+OPTION(THREADING "Option description" OFF)
+IF(THREADING)
+	ADD_DEFINITIONS(-DTHREADING)
+	message("Multi Threading: on")
+ENDIF(THREADING)
+

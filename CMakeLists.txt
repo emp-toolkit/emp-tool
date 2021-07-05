@@ -24,9 +24,8 @@ emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
 emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
 )
 
-include(cmake/common.cmake)
-include(cmake/enable_float.cmake)
-include(cmake/enable_rdseed.cmake)
+set(CMAKE_FOLDER ./)
+include(${CMAKE_FOLDER}/cmake/emp-base.cmake)
 
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
