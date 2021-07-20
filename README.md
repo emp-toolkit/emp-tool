@@ -1,6 +1,8 @@
 # emp-tool
 ![arm](https://github.com/emp-toolkit/emp-tool/workflows/arm/badge.svg)
 ![x86](https://github.com/emp-toolkit/emp-tool/workflows/x86/badge.svg)
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/emp-toolkit/emp-tool.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/emp-toolkit/emp-tool/alerts/)
+[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/emp-toolkit/emp-tool.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/emp-toolkit/emp-tool/context:cpp)
 
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
