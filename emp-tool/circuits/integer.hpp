@@ -392,7 +392,7 @@ inline Integer Integer::operator-() const {
 //Others
 inline Integer Integer::leading_zeros() const {
 	Integer res = *this;
-	for(size_t i = size() - 2; i>=0; --i)
+	for(int i = size() - 2; i>=0; --i)
 		res[i] = res[i+1] | res[i];
 
 	for(size_t i = 0; i < res.size(); ++i)
