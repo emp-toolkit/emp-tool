@@ -5,6 +5,7 @@
 #include "emp-tool/circuits/integer.h"
 #include "emp-tool/circuits/swappable.h"
 #include "emp-tool/circuits/number.h"
+#include "emp-tool/circuits/circuit_file.h"
 #include <math.h>
 #include <array>
 

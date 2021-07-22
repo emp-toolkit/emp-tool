@@ -15,6 +15,26 @@ namespace emp {
 #define XOR_GATE 1
 #define NOT_GATE 2
 
+template<typename T>
+void execute_circuit(block * wires, const T * gates, size_t num_gate) {
+	for(int i = 0; i < num_gate; ++i) {
+		if(gates[4*i+3] == AND_GATE) {
+			wires[gates[4*i+2]] = CircuitExecution::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
+		}
+		else if (gates[4*i+3] == XOR_GATE) {
+			wires[gates[4*i+2]] = CircuitExecution::circ_exec->xor_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
+		}
+		else if (gates[4*i+3] == NOT_GATE) {
+			wires[gates[4*i+2]] = CircuitExecution::circ_exec->not_gate(wires[gates[4*i]]);
+		} else {
+			block tmp = CircuitExecution::circ_exec->xor_gate(wires[gates[4*i]],  wires[gates[4*i+1]]);
+			block tmp2 = CircuitExecution::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
+			wires[gates[4*i+2]] = CircuitExecution::circ_exec->xor_gate(tmp, tmp2);
+		}
+	}
+}
+
+
 class BristolFormat { public:
 	int num_gate, num_wire, n1, n2, n3;
 	vector<int> gates;

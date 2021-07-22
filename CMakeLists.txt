@@ -22,6 +22,21 @@ set(sources
 emp-tool/emp-tool.cpp
 emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
 emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
+emp-tool/circuits/float32_add.cpp
+emp-tool/circuits/float32_cos.cpp
+emp-tool/circuits/float32_div.cpp
+emp-tool/circuits/float32_eq.cpp
+emp-tool/circuits/float32_le.cpp
+emp-tool/circuits/float32_leq.cpp
+emp-tool/circuits/float32_mul.cpp
+emp-tool/circuits/float32_sin.cpp
+emp-tool/circuits/float32_sq.cpp
+emp-tool/circuits/float32_sqrt.cpp
+emp-tool/circuits/float32_sub.cpp
+emp-tool/circuits/float32_exp2.cpp
+emp-tool/circuits/float32_exp.cpp
+emp-tool/circuits/float32_ln.cpp
+emp-tool/circuits/float32_log2.cpp
 )
 
 set(CMAKE_FOLDER ./)
