@@ -17,7 +17,7 @@ namespace emp {
 
 template<typename T>
 void execute_circuit(block * wires, const T * gates, size_t num_gate) {
-	for(int i = 0; i < num_gate; ++i) {
+	for(size_t i = 0; i < num_gate; ++i) {
 		if(gates[4*i+3] == AND_GATE) {
 			wires[gates[4*i+2]] = CircuitExecution::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
 		}
