@@ -19,13 +19,12 @@ inline string Float::reveal<string>(int party) const {
 template<>
 inline double Float::reveal<double>(int party) const {
 	int out = 0;
-	for(int i = FLOAT_LEN-1; i >= 0; --i) {
-		out <<= 1;
-		out += value[i].reveal<bool>(party);
+	for(int i = 0; i < FLOAT_LEN; ++i) {	
+		int tmp = value[i].reveal<bool>(party);
+		out += (tmp << i);
 	}
 	float *fp = (float*)(&out);
 	return (double)*fp;
-
 }
 
 inline Float Float::abs() const {

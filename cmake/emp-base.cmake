@@ -68,5 +68,4 @@ message(STATUS "CXX Flags: ${CMAKE_CXX_FLAGS}")
 endif()
 
 include(${CMAKE_FOLDER}/cmake/enable_rdseed.cmake)
-include(${CMAKE_FOLDER}/cmake/enable_float.cmake)
 include(${CMAKE_FOLDER}/cmake/enable_threading.cmake)
