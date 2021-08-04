@@ -286,7 +286,7 @@ inline Integer Integer::operator<<(size_t shamt) const {
 			res.bits[i] = false;
 	}
 	else {
-		for(size_t i = size()-1; i >= shamt; --i)
+		for(int i = size()-1; i >= shamt; --i)
 			res.bits[i] = bits[i-shamt];
 		for(int i = shamt-1; i>=0; --i)
 			res.bits[i] = false;
