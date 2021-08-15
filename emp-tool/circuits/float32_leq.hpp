@@ -1,12 +1,9 @@
-#include "emp-tool/circuits/float32.h"
-using emp::Float;
-using emp::Bit;
-
-Bit Float::less_than(const Float & rhs) const {
-	Float res(*this);
-	Bit *B = new Bit[511];
-	memcpy(B, value.data(), sizeof(block)*32);
-	memcpy(B+32, rhs.value.data(), sizeof(block)*32);
+template<typename Wire>
+Bit_T<Wire> Float_T<Wire>::less_equal(const Float_T<Wire> & rhs) const {
+	Float_T<Wire> res(*this);
+	Bit_T<Wire> *B = new Bit_T<Wire>[514];
+	for(int i = 0; i < 32; ++i) B[i] = value[i];
+	for(int i = 0; i < 32; ++i) B[i+32] = rhs[i];
 	uint32_t gates[] = {
 12, 0, 64, 2, 
 44, 64, 65, 0, 
@@ -455,9 +452,14 @@ Bit Float::less_than(const Float & rhs) const {
 497, 506, 508, 0, 
 507, 508, 509, 1, 
 509, 0, 510, 2, 
+510, 506, 511, 1, 
+510, 506, 512, 0, 
+511, 512, 513, 1, 
+0, 0, 514, 1, 
+514, 513, 515, 1, 
 };
-	execute_circuit<uint32_t>((block*)B, gates, sizeof(gates)/sizeof(uint32_t)/4);
-	Bit ret = B[510];
+	execute_circuit<uint32_t>(B, gates, sizeof(gates)/sizeof(uint32_t)/4);
+	Bit_T<Wire> ret = B[513];
 	delete[] B;
-	return ret;	
+	return ret;
 }

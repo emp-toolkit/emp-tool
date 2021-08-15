@@ -3,9 +3,9 @@
 #include "emp-tool/circuits/bit.h"
 
 namespace emp {
-template<typename T, typename D>
-void cmp_swap(T*key, D*data, int i, int j, Bit acc) {
-	Bit to_swap = ((key[i] > key[j]) == acc);
+template<typename Wire, template<typename> class T, template<typename> class D>
+void cmp_swap(T<Wire>*key, D<Wire>*data, int i, int j, Bit_T<Wire> acc) {
+	Bit_T<Wire> to_swap = ((key[i] > key[j]) == acc);
 	swap(to_swap, key[i], key[j]);
 	if(data != nullptr)
 		swap(to_swap, data[i], data[j]);
@@ -18,8 +18,8 @@ inline int greatestPowerOfTwoLessThan(int n) {
 	return k >> 1;
 }
 
-template<typename T, typename D>
-void bitonic_merge(T* key, D* data, int lo, int n, Bit acc) {
+template<typename Wire, template<typename> class T, template<typename> class D>
+void bitonic_merge(T<Wire>* key, D<Wire>* data, int lo, int n, Bit_T<Wire> acc) {
 	if (n > 1) {
 		int m = greatestPowerOfTwoLessThan(n);
 		for (int i = lo; i < lo + n - m; i++)
@@ -29,8 +29,8 @@ void bitonic_merge(T* key, D* data, int lo, int n, Bit acc) {
 	}
 }
 
-template<typename T, typename D>
-void bitonic_sort(T * key, D * data, int lo, int n, Bit acc) {
+template<typename Wire, template<typename> class T, template<typename> class D>
+void bitonic_sort(T<Wire> * key, D<Wire> * data, int lo, int n, Bit_T<Wire> acc) {
 	if (n > 1) {
 		int m = n / 2;
 		bitonic_sort(key, data, lo, m, !acc);
@@ -39,8 +39,8 @@ void bitonic_sort(T * key, D * data, int lo, int n, Bit acc) {
 	}
 }
 
-template <typename T, typename D = Bit>
-void sort(T * key, int size, D* data = nullptr, Bit acc = true) {
+template<typename Wire, template<typename> class T, template<typename> class D = Bit_T>
+void sort(T<Wire> * key, int size, D<Wire>* data = nullptr, Bit_T<Wire> acc = true) {
 	bitonic_sort(key, data, 0, size, acc);
 }
 }

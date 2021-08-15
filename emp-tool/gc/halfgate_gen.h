@@ -41,8 +41,7 @@ inline block halfgates_garble(block LA0, block A1, block LB0, block B1, block de
 }
 
 template<typename T>
-class HalfGateGen:public CircuitExecution {
-public:
+class HalfGateGen: public Backend { public:
 	block delta;
 	T * io;
 	block constant[2];
@@ -60,14 +59,14 @@ public:
 		io->send_block(constant, 2);
 		constant[1] = constant[1] ^ delta;
 	}
-	block public_label(bool b) override {
-		return constant[b];
+	void public_label(void * res, bool b) override {
+		*((block*)res) = constant[b];
 	}
-	block and_gate(const block& a, const block& b) override {
+	void and_gate(void * out, const void * left, const void * right) override {
 		block table[2];
 		block res = halfgates_garble(a, a^delta, b, b^delta, delta, table, &mitccrh);
 		io->send_block(table, 2);
-		return res;
+		*((block*)out) = res;
 	}
 	block xor_gate(const block&a, const block& b) override {
 		return a ^ b;

@@ -3,6 +3,7 @@
 #include <iostream>
 using namespace std;
 using namespace emp;
+using Integer = Integer_T<ClearWire>;
 
 template<typename Op, typename Op2>
 void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 1000) {
@@ -44,7 +45,8 @@ void scratch_pad() {
 }
 int main(int argc, char** argv) {
 	int party = PUBLIC;
-	setup_plain_prot(false, "");
+	//setup_plain_prot(false, "");
+	emp::backend = new ClearPrinter();
 
 //	scratch_pad();return 0;
 	test_int<std::plus<int>, std::plus<Integer>>(party);
@@ -56,7 +58,7 @@ int main(int argc, char** argv) {
 	test_int<std::bit_and<int>, std::bit_and<Integer>>(party);
 	test_int<std::bit_or<int>, std::bit_or<Integer>>(party);
 	test_int<std::bit_xor<int>, std::bit_xor<Integer>>(party);
-	cout << CircuitExecution::circ_exec->num_and()<<endl;
+	cout << backend->num_and()<<endl;
 
-	finalize_plain_prot();
+	delete emp::backend;
 }

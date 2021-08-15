@@ -2,28 +2,28 @@
 #define EMP_COMPARABLE_H__
 
 namespace emp {
-template<typename T>
+template<typename Wire, template<typename> class T>
 class Comparable { public:
-	Bit operator>=(const T&rhs) const {
-		return static_cast<const T*>(this)->geq(rhs);
+	Bit_T<Wire> operator>=(const T<Wire>&rhs) const {
+		return static_cast<const T<Wire>*>(this)->geq(rhs);
 	}
-	Bit operator<(const T& rhs) const {
-		return !( (*static_cast<const T*>(this))>= rhs );
-	}
-
-	Bit operator<=(const T& rhs) const {
-		return rhs >= *static_cast<const T*>(this);
+	Bit_T<Wire> operator<(const T<Wire>& rhs) const {
+		return !( (*static_cast<const T<Wire>*>(this))>= rhs );
 	}
 
-	Bit operator>(const T& rhs) const {
-		return !(rhs >= *static_cast<const T*>(this));
+	Bit_T<Wire> operator<=(const T<Wire>& rhs) const {
+		return rhs >= *static_cast<const T<Wire>*>(this);
+	}
+
+	Bit_T<Wire> operator>(const T<Wire>& rhs) const {
+		return !(rhs >= *static_cast<const T<Wire>*>(this));
 	}
 	
-	Bit operator==(const T& rhs) const {
-		return static_cast<const T*>(this)->equal(rhs);
+	Bit_T<Wire> operator==(const T<Wire>& rhs) const {
+		return static_cast<const T<Wire>*>(this)->equal(rhs);
 	}
-	Bit operator!=(const T& rhs) const {
-		return !(*static_cast<const T*>(this) == rhs);
+	Bit_T<Wire> operator!=(const T<Wire>& rhs) const {
+		return !(*static_cast<const T<Wire>*>(this) == rhs);
 	}
 };
 }

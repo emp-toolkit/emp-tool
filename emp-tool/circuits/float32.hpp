@@ -1,77 +1,73 @@
-inline Float::Float(float input, int party) {
+template<typename Wire>
+inline Float_T<Wire>::Float_T(float input, int party) {
 	int *in = (int*)(&input);
-	Integer val = Integer(FLOAT_LEN, *in, party);
+	Integer_T<Wire> val = Integer_T<Wire>(FLOAT_LEN, *in, party);
 	for(int i = 0; i < FLOAT_LEN; ++i)
 		value[i] = val.bits[i];
 }
 
-template<>
-inline string Float::reveal<string>(int party) const {
-	int out = 0;
-	for(int i = FLOAT_LEN-1; i >= 0; --i) {
-		out <<= 1;
-		out += value[i].reveal<bool>(party);
-	}
-	float *fp = (float*)(&out);
-	return std::to_string(*fp);
-}
-
-template<>
-inline double Float::reveal<double>(int party) const {
+template<typename Wire>
+template<typename O>
+inline O Float_T<Wire>::reveal(int party) const {
 	int out = 0;
 	for(int i = 0; i < FLOAT_LEN; ++i) {	
-		int tmp = value[i].reveal<bool>(party);
+		int tmp = value[i].reveal(party);
 		out += (tmp << i);
 	}
 	float *fp = (float*)(&out);
-	return (double)*fp;
+	return (O)(*fp);
 }
 
-inline Float Float::abs() const {
-	Float res(*this);
-	res[FLOAT_LEN-1] = Bit(false, PUBLIC);
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::abs() const {
+	Float_T<Wire> res(*this);
+	res[FLOAT_LEN-1] = Bit_T<Wire>(false, PUBLIC);
 	return res;
 }
 
-inline Float Float::If(const Bit& select, const Float & d) {
-	Float res(*this);
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::If(const Bit_T<Wire>& select, const Float_T<Wire> & d) {
+	Float_T<Wire> res(*this);
 	for(int i = 0; i < 32; ++i)
 		res.value[i] = value[i].If(select, d.value[i]);
 	return res;
 }
 
-inline Bit& Float::operator[](int index) {
+template<typename Wire>
+inline Bit_T<Wire>& Float_T<Wire>::operator[](int index) {
 	return value[min(index, FLOAT_LEN-1)];
 }
 
-inline const Bit &Float::operator[](int index) const {
+template<typename Wire>
+inline const Bit_T<Wire> &Float_T<Wire>::operator[](int index) const {
 	return value[min(index, FLOAT_LEN-1)];
 }
 
-
-
-
-inline Float Float::operator-() const {
-	Float res(*this);
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::operator-() const {
+	Float_T<Wire> res(*this);
 	res[31] = !res[31];
 	return res;
 }
 
-inline Float Float::operator^(const Float& rhs) const {
-	Float res(*this);
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::operator^(const Float_T<Wire>& rhs) const {
+	Float_T<Wire> res(*this);
 	for(int i = 0; i < 32; ++i)
 		res[i] = res[i] ^ rhs[i];
 	return res;
 }
 
-inline Float Float::operator^=(const Float& rhs) {
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::operator^=(const Float_T<Wire>& rhs) {
 	for(int i = 0; i < 32; ++i)
 		value[i] ^= rhs[i];
 	return (*this);
 }
 
-inline Float Float::operator&(const Float& rhs) const {
-	Float res(*this);
+template<typename Wire>
+inline Float_T<Wire> Float_T<Wire>::operator&(const Float_T<Wire>& rhs) const {
+	Float_T<Wire> res(*this);
 	for(int i = 0; i < 32; ++i)
 		res[i] = res[i] & rhs[i];
 	return res;

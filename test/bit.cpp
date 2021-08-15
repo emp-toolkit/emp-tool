@@ -2,6 +2,7 @@
 #include <iostream>
 using namespace std;
 using namespace emp;
+using Bit = Bit_T<ClearWire>;
 
 void test_bit() {
 	bool b[] = {true, false};
@@ -50,7 +51,7 @@ void test_bit() {
 						res = (b1 ^ (!b1)).reveal(PUBLIC);
 						if (!res) {
 							cout<<"XOR" <<i<<" "<<j<<res<<endl;
-							error("test bit error!");
+							error("test bit error2!");
 						}
 
 					}
@@ -59,7 +60,7 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_prot(false, "");
+	emp::backend = new ClearPrinter("haha");
 	test_bit();
-	finalize_plain_prot();
+	delete emp::backend;
 }

@@ -5,16 +5,18 @@
 #include "emp-tool/io/net_io_channel.h"
 #include "emp-tool/io/highspeed_net_io_channel.h"
 
+
 #include "emp-tool/circuits/bit.h"
+#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/float32.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include "emp-tool/circuits/comparable.h"
-#include "emp-tool/circuits/float32.h"
-#include "emp-tool/circuits/integer.h"
+
 #include "emp-tool/circuits/number.h"
 #include "emp-tool/circuits/swappable.h"
-#include "emp-tool/circuits/sha3_256.h"
+/*#include "emp-tool/circuits/sha3_256.h"
 #include "emp-tool/circuits/aes_128_ctr.h"
-
+*/
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/constants.h"
 #include "emp-tool/utils/hash.h"
@@ -31,12 +33,10 @@
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/f2k.h"
 
-#include "emp-tool/gc/halfgate_eva.h"
+/*#include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"
 #include "emp-tool/gc/privacy_free_eva.h"
 #include "emp-tool/gc/privacy_free_gen.h"
-
-#include "emp-tool/execution/circuit_execution.h"
-#include "emp-tool/execution/protocol_execution.h"
-#include "emp-tool/execution/plain_circ.h"
-#include "emp-tool/execution/plain_prot.h"
+*/
+#include "emp-tool/execution/backend.h"
+#include "emp-tool/execution/clear_printer_backend.h"

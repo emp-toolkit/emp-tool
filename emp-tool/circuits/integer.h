@@ -12,57 +12,58 @@
 using std::vector;
 using std::min;
 namespace emp {
-class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
-	vector<Bit> bits;
-	Integer(){
+template<typename Wire>
+class Integer_T : public Swappable<Wire, Integer_T>, public Comparable<Wire, Integer_T> { public:
+	vector<Bit_T<Wire>> bits;
+	Integer_T(){
 	}
-	Integer(const vector<Bit>& bits): bits(bits) {
+	Integer_T(const vector<Bit_T<Wire>>& bits): bits(bits) {
 	}
-	Integer(int length, int64_t input, int party = PUBLIC);
+	Integer_T(int length, int64_t input, int party = PUBLIC);
 
 	template<typename T>
-		Integer(int length, T * input, int party = PUBLIC);
+	Integer_T(int length, T * input, int party = PUBLIC);
 
 	template<typename T>
-		Integer(T * input, int party = PUBLIC);
+	Integer_T(T * input, int party = PUBLIC);
 
 	//Comparable
-	Bit geq(const Integer & rhs) const;
-	Bit equal(const Integer & rhs) const;
+	Bit_T<Wire> geq(const Integer_T & rhs) const;
+	Bit_T<Wire> equal(const Integer_T & rhs) const;
 
 	//Swappable
-	Integer select(const Bit & sel, const Integer & rhs) const;
-	Integer operator^(const Integer& rhs) const;
-	Integer operator^=(const Integer& rhs);
+	Integer_T select(const Bit_T<Wire> & sel, const Integer_T & rhs) const;
+	Integer_T operator^(const Integer_T& rhs) const;
+	Integer_T operator^=(const Integer_T& rhs);
 
 	size_t size() const;
 	template<typename T>
-		T reveal(int party=PUBLIC) const;
+	T reveal(int party=PUBLIC) const;
 	template<typename T>
-		void reveal(T * output, const int party=PUBLIC) const;
+	void reveal(T * output, const int party=PUBLIC) const;
 
-	Integer abs() const;
-	Integer& resize(size_t length, bool signed_extend = true);
-	Integer modExp(Integer p, Integer q);
-	Integer leading_zeros() const;
-	Integer hamming_weight() const;
+	Integer_T abs() const;
+	Integer_T& resize(size_t length, bool signed_extend = true);
+	Integer_T modExp(Integer_T p, Integer_T q);
+	Integer_T leading_zeros() const;
+	Integer_T hamming_weight() const;
 
-	Integer operator<<(size_t shamt)const;
-	Integer operator>>(size_t shamt)const;
-	Integer operator<<(const Integer& shamt)const;
-	Integer operator>>(const Integer& shamt)const;
+	Integer_T operator<<(size_t shamt)const;
+	Integer_T operator>>(size_t shamt)const;
+	Integer_T operator<<(const Integer_T& shamt)const;
+	Integer_T operator>>(const Integer_T& shamt)const;
 
-	Integer operator+(const Integer& rhs)const;
-	Integer operator-(const Integer& rhs)const;
-	Integer operator-()const;
-	Integer operator*(const Integer& rhs)const;
-	Integer operator/(const Integer& rhs)const;
-	Integer operator%(const Integer& rhs)const;
-	Integer operator&(const Integer& rhs)const;
-	Integer operator|(const Integer& rhs)const;
+	Integer_T operator+(const Integer_T& rhs)const;
+	Integer_T operator-(const Integer_T& rhs)const;
+	Integer_T operator-()const;
+	Integer_T operator*(const Integer_T& rhs)const;
+	Integer_T operator/(const Integer_T& rhs)const;
+	Integer_T operator%(const Integer_T& rhs)const;
+	Integer_T operator&(const Integer_T& rhs)const;
+	Integer_T operator|(const Integer_T& rhs)const;
 
-	Bit& operator[](size_t index);
-	const Bit & operator[](size_t index) const;	
+	Bit_T<Wire>& operator[](size_t index);
+	const Bit_T<Wire> & operator[](size_t index) const;	
 
 	void init(bool * b, int len, int party);
 	void revealBools(bool *bools, int party=PUBLIC) const;

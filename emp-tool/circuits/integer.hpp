@@ -1,7 +1,8 @@
 //https://github.com/samee/obliv-c/blob/obliv-c/src/ext/oblivc/obliv_bits.c#L1487
-inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2,
-		const Bit * carryIn, int size) {
-	Bit carry, bxc, axc, t;
+template<typename Wire>
+inline void add_full(Bit_T<Wire>* dest, Bit_T<Wire> * carryOut, const Bit_T<Wire> * op1, 
+	const Bit_T<Wire> * op2, const Bit_T<Wire> * carryIn, int size) {
+	Bit_T<Wire> carry, bxc, axc, t;
 	int skipLast; 
 	int i = 0;
 	if(size==0) { 
@@ -14,7 +15,7 @@ inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2
 	else 
 		carry = false;
 	// skip AND on last bit if carryOut==NULL
-	skipLast = (carryOut == nullptr);
+	skipLast = (carryOut == static_cast<Bit_T<Wire>*>(nullptr));
 	while(size-->skipLast) { 
 		axc = op1[i] ^ carry;
 		bxc = op2[i] ^ carry;
@@ -23,14 +24,16 @@ inline void add_full(Bit* dest, Bit * carryOut, const Bit * op1, const Bit * op2
 		carry =carry^t;
 		++i;
 	}
-	if(carryOut != nullptr)
+	if(carryOut != static_cast<Bit_T<Wire>*>(nullptr))
 		*carryOut = carry;
 	else
 		dest[i] = carry ^ op2[i] ^ op1[i];
 }
-inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * op2,
-		const Bit * borrowIn, int size) {
-	Bit borrow,bxc,bxa,t;
+
+template<typename Wire>
+inline void sub_full(Bit_T<Wire> * dest, Bit_T<Wire> * borrowOut, const Bit_T<Wire> * op1, 
+	const Bit_T<Wire> * op2, const Bit_T<Wire> * borrowIn, int size) {
+	Bit_T<Wire> borrow,bxc,bxa,t;
 	int skipLast; int i = 0;
 	if(size==0) { 
 		if(borrowIn && borrowOut) 
@@ -42,7 +45,7 @@ inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * o
 	else 
 		borrow = false;
 	// skip AND on last bit if borrowOut==NULL
-	skipLast = (borrowOut == nullptr);
+	skipLast = (borrowOut == static_cast<Bit_T<Wire>*>(nullptr));
 	while(size-- > skipLast) {
 		bxa = op1[i] ^ op2[i];
 		bxc = borrow ^ op2[i];
@@ -51,29 +54,32 @@ inline void sub_full(Bit * dest, Bit * borrowOut, const Bit * op1, const Bit * o
 		borrow = borrow ^ t;
 		++i;
 	}
-	if(borrowOut != nullptr) {
+	if(borrowOut != static_cast<Bit_T<Wire>*>(nullptr)) {
 		*borrowOut = borrow;
 	}
 	else
 		dest[i] = op1[i] ^ op2[i] ^ borrow;
 }
-inline void mul_full(Bit * dest, const Bit * op1, const Bit * op2, int size) {
-	Bit * sum = new Bit[size];
-	Bit * temp = new Bit[size];
+
+template<typename Wire>
+inline void mul_full(Bit_T<Wire> * dest, const Bit_T<Wire> * op1, const Bit_T<Wire> * op2, int size) {
+	Bit_T<Wire> * sum = new Bit_T<Wire>[size];
+	Bit_T<Wire> * temp = new Bit_T<Wire>[size];
 	for(int i = 0; i < size; ++i)sum[i]=false;
 	for(int i=0;i<size;++i) {
 		for (int k = 0; k < size-i; ++k)
 			temp[k] = op1[k] & op2[i];
-		add_full(sum+i, nullptr, sum+i, temp, nullptr, size-i);
+		add_full(sum+i, static_cast<Bit_T<Wire>*>(nullptr), sum+i, temp, static_cast<Bit_T<Wire>*>(nullptr), size-i);
 	}
-	memcpy(dest, sum, sizeof(Bit)*size);
+	memcpy(dest, sum, sizeof(Bit_T<Wire>)*size);
 	delete[] sum;
 	delete[] temp;
 }
 
-inline void ifThenElse(Bit * dest, const Bit * tsrc, const Bit * fsrc, 
-		int size, Bit cond) {
-	Bit x, a;
+template<typename Wire>
+inline void ifThenElse(Bit_T<Wire> * dest, const Bit_T<Wire> * tsrc, const Bit_T<Wire> * fsrc, 
+		int size, Bit_T<Wire> cond) {
+	Bit_T<Wire> x, a;
 	int i = 0;
 	while(size-- > 0) {
 		x = tsrc[i] ^ fsrc[i];
@@ -82,38 +88,41 @@ inline void ifThenElse(Bit * dest, const Bit * tsrc, const Bit * fsrc,
 		++i;
 	}
 }
-inline void condNeg(Bit cond, Bit * dest, const Bit * src, int size) {
+
+template<typename Wire>
+inline void condNeg(Bit_T<Wire> cond, Bit_T<Wire> * dest, const Bit_T<Wire> * src, int size) {
 	int i;
-	Bit c = cond;
+	Bit_T<Wire> c = cond;
 	for(i=0; i < size-1; ++i) {
 		dest[i] = src[i] ^ cond;
-		Bit t  = dest[i] ^ c;
+		Bit_T<Wire> t  = dest[i] ^ c;
 		c = c & dest[i];
 		dest[i] = t;
 	}
 	dest[i] = cond ^ c ^ src[i];
 }
 
-inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2, 
+template<typename Wire>
+inline void div_full(Bit_T<Wire> * vquot, Bit_T<Wire> * vrem, const Bit_T<Wire> * op1, const Bit_T<Wire> * op2, 
 		int size) {
-	Bit * overflow = new Bit[size];
-	Bit * temp = new Bit[size];
-	Bit * rem = new Bit[size];
-	Bit * quot = new Bit[size];
-	Bit b;
-	memcpy(rem, op1, size*sizeof(Bit));
+	Bit_T<Wire> * overflow = new Bit_T<Wire>[size];
+	Bit_T<Wire> * temp = new Bit_T<Wire>[size];
+	Bit_T<Wire> * rem = new Bit_T<Wire>[size];
+	Bit_T<Wire> * quot = new Bit_T<Wire>[size];
+	Bit_T<Wire> b;
+	memcpy(rem, op1, size*sizeof(Bit_T<Wire>));
 	overflow[0] = false;
 	for(int i  = 1; i < size;++i)
 		overflow[i] = overflow[i-1] | op2[size-i];
 	// skip AND on last bit if borrowOut==NULL
 	for(int i = size-1; i >= 0; --i) {
-		sub_full(temp, &b, rem+i, op2, nullptr, size-i);
+		sub_full(temp, &b, rem+i, op2, static_cast<Bit_T<Wire>*>(nullptr), size-i);
 		b = b | overflow[i];
 		ifThenElse(rem+i,rem+i,temp,size-i,b);
 		quot[i] = !b;
 	}
-	if(vrem != nullptr) memcpy(vrem, rem, size*sizeof(Bit));
-	if(vquot != nullptr) memcpy(vquot, quot, size*sizeof(Bit));
+	if(vrem != static_cast<Bit_T<Wire>*>(nullptr)) memcpy(vrem, rem, size*sizeof(Bit_T<Wire>));
+	if(vquot != static_cast<Bit_T<Wire>*>(nullptr)) memcpy(vquot, quot, size*sizeof(Bit_T<Wire>));
 	delete[] overflow;
 	delete[] temp;
 	delete[] rem;
@@ -121,36 +130,39 @@ inline void div_full(Bit * vquot, Bit * vrem, const Bit * op1, const Bit * op2,
 }
 
 
-inline void Integer::init(bool * b, int len, int party) {
+template<typename Wire>
+inline void Integer_T<Wire>::init(bool * b, int len, int party) {
 	bits.resize(len);
 	if (party == PUBLIC) {
-		block one = CircuitExecution::circ_exec->public_label(true);
-		block zero = CircuitExecution::circ_exec->public_label(false);
-		for(int i = 0; i < len; ++i)
-			bits[i] = b[i] ? one : zero;
+		for(int i = 0; i < len; ++i) {
+			backend->public_label(&bits[i], b[i]);	
+		}
 	}
 	else {
-		ProtocolExecution::prot_exec->feed((block *)bits.data(), party, b, len); 
+		backend->feed(bits.data(), party, b, len); 
 	}
 }
 
-inline Integer::Integer(int len, int64_t input, int party) {
+template<typename Wire>
+inline Integer_T<Wire>::Integer_T(int len, int64_t input, int party) {
 	bool* b = new bool[len];
 	int_to_bool<int64_t>(b, input, len);
 	init(b, len, party);
 	delete[] b;
 }
 
+template<typename Wire>
 template<typename T>
-inline Integer::Integer(int len, T * input, int party) {
+inline Integer_T<Wire>::Integer_T(int len, T * input, int party) {
 	bool* b = new bool[len];
 	to_bool<T>(b, input, len);
 	init(b, len, party);
 	delete[] b;
 }
 
+template<typename Wire>
 template<typename T>
-inline Integer::Integer(T * input, int party) {
+inline Integer_T<Wire>::Integer_T(T * input, int party) {
 	size_t len = 8 * sizeof(T);
 	bool* b = new bool[len];
 	to_bool<T>(b, input, len);
@@ -158,93 +170,71 @@ inline Integer::Integer(T * input, int party) {
 	delete[] b;
 }
 
-
-inline Integer Integer::select(const Bit & select, const Integer & a) const{
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::select(const Bit_T<Wire> & select, const Integer_T<Wire> & a) const{
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res[i] = bits[i].select(select, a[i]);
 	return res;
 }
 
-inline Bit& Integer::operator[](size_t index) {
+template<typename Wire>
+inline Bit_T<Wire>& Integer_T<Wire>::operator[](size_t index) {
 	return bits[min(index, size()-1)];
 }
 
-inline const Bit &Integer::operator[](size_t index) const {
+template<typename Wire>
+inline const Bit_T<Wire> &Integer_T<Wire>::operator[](size_t index) const {
 	return bits[min(index, size()-1)];
 }
 
-inline void Integer::revealBools(bool *bools, int party) const {
-	ProtocolExecution::prot_exec->reveal(bools, party, (block *)bits.data(), size());
+template<typename Wire>
+inline void Integer_T<Wire>::revealBools(bool *bools, int party) const {
+	backend->reveal(bools, party, bits.data(), size());
 }
 
-template<>
-inline uint32_t Integer::reveal<uint32_t>(int party) const {
-	std::bitset<32> bs;
-	bs.reset();
-	bool b[size()];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
-	for (size_t i = 0; i < min(32UL, size()); ++i)
-		bs.set(i, b[i]);
-	return bs.to_ulong();
-}
-
-template<>
-inline uint64_t Integer::reveal<uint64_t>(int party) const {
-	std::bitset<64> bs;
-	bs.reset();
-	bool b[size()];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
-	for (size_t i = 0; i < min(64UL, size()); ++i)
-		bs.set(i, b[i]);
-	return bs.to_ullong();
-}
-template<>
-inline int32_t Integer::reveal<int32_t>(int party) const {
-	return reveal<uint32_t>(party);
-}
-
-template<>
-inline int64_t Integer::reveal<int64_t>(int party) const {
-	return reveal<uint64_t>(party);
-}
-
-
-template<>
-inline string Integer::reveal<string>(int party) const {
-	bool * b = new bool[size()];
-	string res = "";
-	revealBools(b, party);
-	for(size_t i = 0; i < size(); ++i)
-		res+=(b[i]? "1" : "0");
-	delete[] b;
+template<typename Wire>
+template<typename O>
+inline O Integer_T<Wire>::reveal(int party) const {
+	static_assert(std::numeric_limits<O>::is_integer, "Integer reveal only support numeric types");
+	O res = (O)0;	
+	bool b[128];	
+	backend->reveal(b, party, bits.data(), min(size(), 128UL));
+	__uint128_t one = 1;
+	for(size_t i = 0; i < min(sizeof(O)*8, size()); ++i) {
+		if(b[i])
+			res = res | (one<<i);
+	}
 	return res;
 }
 
 // write the bits of this integer directly into memory wherever output points. 
+template<typename Wire>
 template<typename T>
-inline void Integer::reveal(T * output, const int party) const {
+inline void Integer_T<Wire>::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
 	revealBools(b, party);
 	from_bool(b, output, size());
 	delete[] b;
 }
 
-
-inline size_t Integer::size() const {
+template<typename Wire>
+inline size_t Integer_T<Wire>::size() const {
 	return bits.size();
 }
 
 //circuits
-inline Integer Integer::abs() const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::abs() const {
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res[i] = bits[size()-1];
 	return ( (*this) + res) ^ res;
 }
 
-inline Integer& Integer::resize(size_t len, bool signed_extend) {
-	Bit MSB(false, PUBLIC); 
+template<typename Wire>
+inline Integer_T<Wire>& Integer_T<Wire>::resize(size_t len, bool signed_extend) {
+	Bit_T<Wire> MSB(false, PUBLIC); 
 	if(signed_extend)
 		MSB = bits[bits.size()-1];
 	bits.resize(len, MSB);
@@ -252,35 +242,40 @@ inline Integer& Integer::resize(size_t len, bool signed_extend) {
 }
 
 //Logical operations
-inline Integer Integer::operator^(const Integer& rhs) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator^(const Integer_T<Wire>& rhs) const {
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] ^ rhs.bits[i];
 	return res;
 }
 
-inline Integer Integer::operator^=(const Integer& rhs) {
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator^=(const Integer_T<Wire>& rhs) {
 	for(size_t i = 0; i < size(); ++i)
 		this->bits[i] ^= rhs.bits[i];
 	return (*this);
 }
 
-inline Integer Integer::operator|(const Integer& rhs) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator|(const Integer_T<Wire>& rhs) const {
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] | rhs.bits[i];
 	return res;
 }
 
-inline Integer Integer::operator&(const Integer& rhs) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator&(const Integer_T<Wire>& rhs) const {
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res.bits[i] = res.bits[i] & rhs.bits[i];
 	return res;
 }
 
-inline Integer Integer::operator<<(size_t shamt) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator<<(size_t shamt) const {
+	Integer_T<Wire> res(*this);
 	if(shamt > size()) {
 		for(size_t i = 0; i < size(); ++i)
 			res.bits[i] = false;
@@ -294,8 +289,9 @@ inline Integer Integer::operator<<(size_t shamt) const {
 	return res;
 }
 
-inline Integer Integer::operator>>(size_t shamt) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator>>(size_t shamt) const {
+	Integer_T<Wire> res(*this);
 	if(shamt >size()) {
 		for(size_t i = 0; i < size(); ++i)
 			res.bits[i] = false;
@@ -309,33 +305,37 @@ inline Integer Integer::operator>>(size_t shamt) const {
 	return res;
 }
 
-inline Integer Integer::operator<<(const Integer& shamt) const {
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator<<(const Integer_T<Wire>& shamt) const {
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < min(size_t(ceil(log2(size()))) , shamt.size()-1); ++i)
 		res = res.select(shamt[i], res<<(1<<i));
 	return res;
 }
 
-inline Integer Integer::operator>>(const Integer& shamt) const{
-	Integer res(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator>>(const Integer_T<Wire>& shamt) const{
+	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i <min(size_t(ceil(log2(size()))) , shamt.size()-1); ++i)
 		res = res.select(shamt[i], res>>(1<<i));
 	return res;
 }
 
 //Comparisons
-inline Bit Integer::geq (const Integer& rhs) const {
+template<typename Wire>
+inline Bit_T<Wire> Integer_T<Wire>::geq (const Integer_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
-	Integer thisExtend(*this), rhsExtend(rhs);
+	Integer_T<Wire> thisExtend(*this), rhsExtend(rhs);
 	thisExtend.resize(size()+1, true);
 	rhsExtend.resize(size()+1, true);
-	Integer tmp = thisExtend-rhsExtend;
+	Integer_T<Wire> tmp = thisExtend-rhsExtend;
 	return !tmp[tmp.size()-1];
 }
 
-inline Bit Integer::equal(const Integer& rhs) const {
+template<typename Wire>
+inline Bit_T<Wire> Integer_T<Wire>::equal(const Integer_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
-	Bit res(true);
+	Bit_T<Wire> res(true);
 	for(size_t i = 0; i < size(); ++i)
 		res = res & (bits[i] == rhs[i]);
 	return res;
@@ -343,55 +343,63 @@ inline Bit Integer::equal(const Integer& rhs) const {
 
 /* Arithmethics
  */
-inline Integer Integer::operator+(const Integer & rhs) const {
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator+(const Integer_T<Wire> & rhs) const {
 	assert(size() == rhs.size());
-	Integer res(*this);
-	add_full(res.bits.data(), nullptr, bits.data(), rhs.bits.data(), nullptr, size());
+	Integer_T<Wire> res(*this);
+	add_full(res.bits.data(), static_cast<Bit_T<Wire>*>(nullptr), bits.data(), rhs.bits.data(), static_cast<Bit_T<Wire>*>(nullptr), size());
 	return res;
 }
 
-inline Integer Integer::operator-(const Integer& rhs) const {
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator-(const Integer_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
-	Integer res(*this);
-	sub_full(res.bits.data(), nullptr, bits.data(), rhs.bits.data(), nullptr, size());
+	Integer_T<Wire> res(*this);
+	sub_full(res.bits.data(), static_cast<Bit_T<Wire>*>(nullptr), bits.data(), rhs.bits.data(), static_cast<Bit_T<Wire>*>(nullptr), size());
 	return res;
 }
 
-inline Integer Integer::operator*(const Integer& rhs) const {
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator*(const Integer_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
-	Integer res(*this);
+	Integer_T<Wire> res(*this);
 	mul_full(res.bits.data(), bits.data(), rhs.bits.data(), size());
 	return res;
 }
 
-inline Integer Integer::operator/(const Integer& rhs) const {
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator/(const Integer_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
-	Integer res(*this);
-	Integer i1 = abs();
-	Integer i2 = rhs.abs();
-	Bit sign = bits[size()-1] ^ rhs[size()-1];
-	div_full(res.bits.data(), nullptr, i1.bits.data(), i2.bits.data(), size());
-	condNeg(sign, res.bits.data(), res.bits.data(), size());
-	return res;
-}
-inline Integer Integer::operator%(const Integer& rhs) const {
-	assert(size() == rhs.size());
-	Integer res(*this);
-	Integer i1 = abs();
-	Integer i2 = rhs.abs();
-	Bit sign = bits[size()-1];
-	div_full(nullptr, res.bits.data(), i1.bits.data(), i2.bits.data(), size());
+	Integer_T<Wire> res(*this);
+	Integer_T<Wire> i1 = abs();
+	Integer_T<Wire> i2 = rhs.abs();
+	Bit_T<Wire> sign = bits[size()-1] ^ rhs[size()-1];
+	div_full(res.bits.data(), static_cast<Bit_T<Wire>*>(nullptr), i1.bits.data(), i2.bits.data(), size());
 	condNeg(sign, res.bits.data(), res.bits.data(), size());
 	return res;
 }
 
-inline Integer Integer::operator-() const {
-	return Integer(size(), 0, PUBLIC)-(*this);
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator%(const Integer_T<Wire>& rhs) const {
+	assert(size() == rhs.size());
+	Integer_T<Wire> res(*this);
+	Integer_T<Wire> i1 = abs();
+	Integer_T<Wire> i2 = rhs.abs();
+	Bit_T<Wire> sign = bits[size()-1];
+	div_full(static_cast<Bit_T<Wire>*>(nullptr), res.bits.data(), i1.bits.data(), i2.bits.data(), size());
+	condNeg(sign, res.bits.data(), res.bits.data(), size());
+	return res;
+}
+
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::operator-() const {
+	return Integer_T<Wire>(size(), 0, PUBLIC)-(*this);
 }
 
 //Others
-inline Integer Integer::leading_zeros() const {
-	Integer res = *this;
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::leading_zeros() const {
+	Integer_T<Wire> res = *this;
 	for(int i = size() - 2; i>=0; --i)
 		res[i] = res[i+1] | res[i];
 
@@ -400,10 +408,11 @@ inline Integer Integer::leading_zeros() const {
 	return res.hamming_weight();
 }
 
-inline Integer Integer::hamming_weight() const {
-	vector<Integer> vec;
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::hamming_weight() const {
+	vector<Integer_T<Wire>> vec;
 	for(size_t i = 0; i < size(); i++) {
-		Integer tmp(2, 0, PUBLIC);
+		Integer_T<Wire> tmp(2, 0, PUBLIC);
 		tmp[0] = bits[i];
 		vec.push_back(tmp);
 	}
@@ -424,12 +433,14 @@ inline Integer Integer::hamming_weight() const {
 	}
 	return vec[0];
 }
-inline Integer Integer::modExp(Integer p, Integer q) {
+
+template<typename Wire>
+inline Integer_T<Wire> Integer_T<Wire>::modExp(Integer_T<Wire> p, Integer_T<Wire> q) {
 	// the value of q should be less than half of the MAX_INT
-	Integer base = *this;
-	Integer res(size(),1);
+	Integer_T<Wire> base = *this;
+	Integer_T<Wire> res(size(),1);
 	for(size_t i = 0; i < p.size(); ++i) {
-		Integer tmp = (res * base) % q;
+		Integer_T<Wire> tmp = (res * base) % q;
 		res = res.select(p[i], tmp);
 		base = (base*base) % q; 
 	}
