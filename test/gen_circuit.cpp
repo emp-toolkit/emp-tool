@@ -1,6 +1,6 @@
 #include "emp-tool/emp-tool.h"
 using namespace emp;
-using Integer = Integer_T<ClearWire>;
+using Integer = Integer_T<ClearPrinter::wire_t>;
 void ham(int n) {
 	Integer a(n, 0, ALICE);
 	Integer b(n, 0, BOB);
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 //	mult(2048);
 //	ham(1<<10);
 	delete emp::backend;
-	BristolFormat<ClearWire> bf("sort.txt");
+	BristolFormat bf("sort.txt");
 	//BristolFormat bf(sort_num_gate, sort_num_wire, sort_n1, sort_n2, sort_n3, sort_gate_arr);
-	//bf.to_file("sort_file.h", "sort");
+	bf.to_file("sort_file.h", "sort");
 }

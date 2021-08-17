@@ -19,6 +19,7 @@ class ClearWire { public:
 };
 class ClearPrinter: public Backend {
 public:
+	typedef ClearWire wire_t;
 	std::vector<int64_t>output_vec;
 	int64_t gid = 0;
 	bool print = false;
@@ -26,7 +27,7 @@ public:
 	std::ofstream fout;
 	string filename;
 
-	ClearPrinter(string filename=""):filename(filename) {
+	ClearPrinter(string filename=""): filename(filename) {
 		print = filename.size()>0;
 
 		if (print) {
@@ -46,6 +47,7 @@ public:
 				fout<<2<<" "<<1<<" "<<z_index<<" "<<v<<" "<<gid++<<" XOR\n";
 			}
 			gates += (1+output_vec.size());
+			n3 = output_vec.size();
 			fout.clear();
 			fout.close();
 			fout.clear();
@@ -119,7 +121,10 @@ public:
 		if(party == ALICE) n1+=nel;
 		else if(party == BOB) n2+=nel;
 		for(int i = 0; i < nel; ++i) {
-			out[i] = ClearWire(b[i], party == PUBLIC);
+			if(party == PUBLIC)
+				out[i] = ClearWire(b[i], true);
+			else
+				out[i] = ClearWire(b[i], false, gid++);
 		}
 	}
 	void reveal(bool*out, int party, const void * lbls, size_t nel) override {

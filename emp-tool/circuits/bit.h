@@ -13,7 +13,8 @@ template<typename Wire>
 class Bit_T :public Swappable<Wire, Bit_T>{ public:
 	Wire bit;
 
-	Bit_T(bool _b = false, int party = PUBLIC);
+	Bit_T() {}
+	Bit_T(bool _b, int party = PUBLIC);
 	Bit_T(const Wire& a) {
 		bit = a;
 	}

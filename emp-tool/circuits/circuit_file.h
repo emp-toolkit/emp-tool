@@ -33,11 +33,9 @@ void execute_circuit(Bit_T<Wire> * wires, const T * gates, size_t num_gate) {
 	}
 }
 
-template<typename Wire>
 class BristolFormat { public:
 	int num_gate, num_wire, n1, n2, n3;
 	vector<int> gates;
-	vector<Bit_T<Wire>> wires;
 	std::ofstream fout;
 
 	BristolFormat(int num_gate, int num_wire, int n1, int n2, int n3, int * gate_arr) {
@@ -47,7 +45,6 @@ class BristolFormat { public:
 		this->n2 = n2;
 		this->n3 = n3;
 		gates.resize(num_gate*4);
-		wires.resize(num_wire);
 		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
 	}
 
@@ -83,9 +80,8 @@ class BristolFormat { public:
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
 		(void)fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
 		(void)fscanf(f, "\n");
-		char str[10];
+		char str[200];
 		gates.resize(num_gate*4);
-		wires.resize(num_wire);
 		for(int i = 0; i < num_gate; ++i) {
 			(void)fscanf(f, "%d", &tmp);
 			if (tmp == 2) {
@@ -106,23 +102,23 @@ class BristolFormat { public:
 		fclose(f);
 	}
 
+	template<typename Wire>
 	void compute(Bit_T<Wire> * out, const Bit_T<Wire>* in1, const Bit_T<Wire> * in2) {
+		vector<Bit_T<Wire>> wires(num_wire);
 		for(int i = 0; i < n1; ++i)
 			wires[i] = in1[i];
 		for(int i = 0; i < n2; ++i)
 			wires[i+n1] = in2[i];
-		execute_circuit(wires, gates, num_gate);
+		execute_circuit(wires.data(), gates.data(), num_gate);
 		for(int i = 0; i < n3; ++ i)
 			out[i] = wires[num_wire-n3+i];
 	}
 };
 
-template<typename Wire>
 class BristolFashion { public:
 	int num_gate = 0, num_wire = 0, 
 		 num_input = 0, num_output = 0;
 	vector<int> gates;
-	vector<Bit_T<Wire>> wires;
 
 	BristolFashion(FILE * file) {
 		this->from_file(file);
@@ -149,7 +145,6 @@ class BristolFashion { public:
 
 		char str[10];
 		gates.resize(num_gate*4);
-		wires.resize(num_wire);
 		for(int i = 0; i < num_gate; ++i) {
 			(void)fscanf(f, "%d", &tmp);
 			if (tmp == 2) {
@@ -170,10 +165,12 @@ class BristolFashion { public:
 		fclose(f);
 	}
 
+	template<typename Wire>
 	void compute(Bit_T<Wire> * out, const Bit_T<Wire> * in) {
+		vector<Bit_T<Wire>> wires(num_wire);
 		for(int i = 0; i < num_input; ++i)
 			wires[i] = in[i];
-		execute_circuit(wires, gates, num_gate);
+		execute_circuit(wires.data(), gates.data(), num_gate);
 
 		for(int i = 0; i < num_input; ++i)
 			out[i] = wires[num_wire - num_output + i];

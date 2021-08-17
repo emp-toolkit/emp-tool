@@ -5,9 +5,9 @@
 #include <vector>
 using namespace std;
 using namespace emp;
-using Float = Float_T<ClearWire>;
-using Bit = Bit_T<ClearWire>;
-using Integer = Integer_T<ClearWire>;
+using Float = Float_T<ClearPrinter::wire_t>;
+using Bit = Bit_T<ClearPrinter::wire_t>;
+using Integer = Integer_T<ClearPrinter::wire_t>;
 
 vector<std::string> test_str{"sqr", "sqrt", "sin", "cos", "exp2", "exp", "ln", "log2"};
 

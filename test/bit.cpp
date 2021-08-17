@@ -2,7 +2,7 @@
 #include <iostream>
 using namespace std;
 using namespace emp;
-using Bit = Bit_T<ClearWire>;
+using Bit = Bit_T<ClearPrinter::wire_t>;
 
 void test_bit() {
 	bool b[] = {true, false};
