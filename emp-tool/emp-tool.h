@@ -33,10 +33,10 @@
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/f2k.h"
 
-#include "emp-tool/execution/half_gate.h"
 /*
 #include "emp-tool/gc/privacy_free_eva.h"
 #include "emp-tool/gc/privacy_free_gen.h"
 */
 #include "emp-tool/execution/backend.h"
 #include "emp-tool/execution/clear_printer.h"
+#include "emp-tool/execution/half_gate.h"

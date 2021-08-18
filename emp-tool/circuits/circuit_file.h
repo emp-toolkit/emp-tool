@@ -9,9 +9,6 @@
 using std::vector;
 
 namespace emp {
-#define AND_GATE 0
-#define XOR_GATE 1
-#define NOT_GATE 2
 
 template<typename T, typename Wire>
 void execute_circuit(Bit_T<Wire> * wires, const T * gates, size_t num_gate) {
@@ -26,9 +23,6 @@ void execute_circuit(Bit_T<Wire> * wires, const T * gates, size_t num_gate) {
 			wires[gates[4*i+2]] = !wires[gates[4*i]];
 		} else {
 			assert(false);
-/*			block tmp = CircuitExecution::circ_exec->xor_gate(wires[gates[4*i]],  wires[gates[4*i+1]]);
-			block tmp2 = CircuitExecution::circ_exec->and_gate(wires[gates[4*i]], wires[gates[4*i+1]]);
-			wires[gates[4*i+2]] = CircuitExecution::circ_exec->xor_gate(tmp, tmp2);*/
 		}
 	}
 }
