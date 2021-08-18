@@ -120,7 +120,7 @@ public:
 		ClearWire* out = (ClearWire *)lbls;
 		if(party == ALICE) n1+=nel;
 		else if(party == BOB) n2+=nel;
-		for(int i = 0; i < nel; ++i) {
+		for(size_t i = 0; i < nel; ++i) {
 			if(party == PUBLIC)
 				out[i] = ClearWire(b[i], true);
 			else
@@ -129,7 +129,7 @@ public:
 	}
 	void reveal(bool*out, int party, const void * lbls, size_t nel) override {
 		ClearWire* in = (ClearWire *)lbls;
-		for(int i = 0; i < nel; ++i) {
+		for(size_t i = 0; i < nel; ++i) {
 			out[i] = in[i].value;
 			output_vec.push_back(in[i].index);
 		}
