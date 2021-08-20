@@ -27,14 +27,12 @@ PRG prg;//using a secure random seed
 
 int rand_int, rand_ints[100];
 block rand_block[3];
-mpz_t integ;mpz_init(integ);
 
 prg.random_data(&rand_int, sizeof(rand_int)); //fill rand_int with 32 random bits
 prg.random_block(rand_block, 3);	      //fill rand_block with 128*3 random bits
 
 prg.reseed(&rand_block[1]);                   //reset the seed and counter in prg
 prg.random_data_unaligned(rand_ints+2, sizeof(int)*98);  //when the array is not 128-bit-aligned
-prg.random_mpz(integ, 1024);                  //random number with 1024 bits.
 ```
 
 ### Pseudorandom permutation
