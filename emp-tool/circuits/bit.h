@@ -1,16 +1,13 @@
 #ifndef EMP_BIT_H__
 #define EMP_BIT_H__
 #include <type_traits>
-
 #include "emp-tool/execution/backend.h"
 #include "emp-tool/utils/utils.h"
-#include "emp-tool/circuits/swappable.h"
-
-
+#include "emp-tool/circuits/sortable.h"
 namespace emp {
 
 template<typename Wire>
-class Bit_T :public Swappable<Wire, Bit_T>{ public:
+class Bit_T: public Sortable<Wire, Bit_T> { public:
 	Wire bit;
 
 	Bit_T() {}
@@ -27,8 +24,8 @@ class Bit_T :public Swappable<Wire, Bit_T>{ public:
 	Bit_T operator |(const Bit_T& rhs) const;
 	Bit_T operator !() const;
 
-	//swappable
-	Bit_T select(const Bit_T & select, const Bit_T & new_v)const ;
+	Bit_T geq(const Bit_T& rhs) const;
+	Bit_T select(const Bit_T<Wire> & select, const Bit_T & new_v) const;
 	Bit_T operator ^(const Bit_T& rhs) const;
 	Bit_T operator ^=(const Bit_T& rhs);
 

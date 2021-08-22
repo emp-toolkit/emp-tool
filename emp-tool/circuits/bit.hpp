@@ -1,8 +1,6 @@
 template<typename Wire>
 inline Bit_T<Wire>::Bit_T(bool b, int party) {
-	if (party == PUBLIC)
-		backend->public_label(&bit, b);
-	else backend->feed(&bit, party, &b, 1); 
+	backend->feed(&bit, party, &b, 1); 
 }
 template<typename Wire>
 inline Bit_T<Wire> Bit_T<Wire>::select(const Bit_T<Wire> & select, const Bit_T<Wire> & new_v) const{
@@ -58,4 +56,9 @@ inline Bit_T<Wire> Bit_T<Wire>::operator!() const {
 	Bit_T<Wire> res;
 	backend->not_gate(&res.bit, &bit);
 	return res;
+}
+
+template<typename Wire>
+inline Bit_T<Wire> Bit_T<Wire>::geq(const Bit_T & rhs) const {
+	return ! ( (!this) & rhs);
 }

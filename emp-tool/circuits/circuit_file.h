@@ -1,13 +1,11 @@
 #ifndef EMP_BRISTOL_FORMAT_H__
 #define EMP_BRISTOL_FORMAT_H__
-
 #include "emp-tool/execution/backend.h"
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
 #include <fstream>
-
+#include <vector>
 using std::vector;
-
 namespace emp {
 
 template<typename T, typename Wire>
@@ -49,7 +47,6 @@ class BristolFormat { public:
 	BristolFormat(const char * file) {
 		this->from_file(file);
 	}
-
 
 	void to_file(const char * filename, const char * prefix) {
 		fout.open(filename);

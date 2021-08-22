@@ -26,10 +26,10 @@ inline Float_T<Wire> Float_T<Wire>::abs() const {
 }
 
 template<typename Wire>
-inline Float_T<Wire> Float_T<Wire>::If(const Bit_T<Wire>& select, const Float_T<Wire> & d) {
+inline Float_T<Wire> Float_T<Wire>::select(const Bit_T<Wire>& select, const Float_T<Wire> & d) const {
 	Float_T<Wire> res(*this);
 	for(int i = 0; i < 32; ++i)
-		res.value[i] = value[i].If(select, d.value[i]);
+		res.value[i] = value[i].select(select, d.value[i]);
 	return res;
 }
 

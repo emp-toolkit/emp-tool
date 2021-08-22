@@ -20,8 +20,8 @@ ADD_CUSTOM_COMMAND(
 
 set(sources
 emp-tool/emp-tool.cpp
+emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
 )
-#emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
 #emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
 
 set(CMAKE_FOLDER ./)

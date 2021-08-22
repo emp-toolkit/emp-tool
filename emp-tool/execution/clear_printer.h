@@ -1,7 +1,6 @@
 #ifndef EMP_PLAIN_CIRC_EXEC_H__
 #define EMP_PLAIN_CIRC_EXEC_H__
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/utils.h"
+//#include "emp-tool/utils/utils.h"
 #include "emp-tool/execution/backend.h"
 #include <iostream>
 #include <fstream>
@@ -17,23 +16,23 @@ class ClearWire { public:
 
 	}
 };
-class ClearPrinter: public Backend {
-public:
+
+class ClearPrinter: public Backend { public:
 	typedef ClearWire wire_t;
-	std::vector<int64_t>output_vec;
-	int64_t gid = 0;
+
+	uint64_t ands = 0;
+	//for printing circuit
 	bool print = false;
-	uint64_t gates = 0, ands = 0, n1 = 0, n2 = 0, n3 = 0;
 	std::ofstream fout;
 	string filename;
-
+	std::vector<int64_t>output_vec;
+	uint64_t gid = 0, gates = 0, n1 = 0, n2 = 0, n3 = 0;
 	ClearPrinter(string filename=""): filename(filename) {
 		print = filename.size()>0;
-
 		if (print) {
 			fout.open(filename);
 			//place holder for circuit information
-			for (int i = 0; i < 200; ++i)//good for 32-bit sized circuits
+			for (int i = 0; i < 200; ++i) //good for 32-bit sized circuits
 				fout << " ";
 			fout<<std::endl;
 		}
@@ -41,7 +40,7 @@ public:
 
 	~ClearPrinter() {
 		if(print) {
-			int64_t z_index = gid++;
+			uint64_t z_index = gid++;
 			fout<<2<<" "<<1<<" "<<0<<" "<<0<<" "<<z_index<<" XOR\n";
 			for (auto v : output_vec) {
 				fout<<2<<" "<<1<<" "<<z_index<<" "<<v<<" "<<gid++<<" XOR\n";
@@ -59,9 +58,10 @@ public:
 	}
 	
 	void and_gate(void * output, const void * left, const void * right) override {
-		const ClearWire * l = (const ClearWire*)(left);
-		const ClearWire * r = (const ClearWire*)(right);
-		ClearWire * o = (ClearWire *) output;
+		const ClearWire * l = static_cast<const ClearWire*>(left);
+		const ClearWire * r = static_cast<const ClearWire*>(right);
+		ClearWire * o = static_cast<ClearWire *>(output);
+
 		if (l->is_public and l->value) {
 			*o= *r;
 		} else if (r->is_public and r->value) {
@@ -79,9 +79,10 @@ public:
 		}
 	}
 	void xor_gate(void * output, const void * left, const void * right) override {
-		const ClearWire * l = (const ClearWire*)(left);
-		const ClearWire * r = (const ClearWire*)(right);
-		ClearWire * o = (ClearWire *) output;
+		const ClearWire * l = static_cast<const ClearWire*>(left);
+		const ClearWire * r = static_cast<const ClearWire*>(right);
+		ClearWire * o = static_cast<ClearWire *>(output);
+
 		if (l->is_public and l->value) {
 			not_gate(output, right);
 		} else if (r->is_public and r->value) {
@@ -98,8 +99,8 @@ public:
 		}
 	}
 	void not_gate(void * output, const void * input) override {
-		const ClearWire * i = (const ClearWire*)(input);
-		ClearWire * o = (ClearWire *) output;
+		const ClearWire * i = static_cast<const ClearWire*>(input);
+		ClearWire * o = static_cast<ClearWire *>(output);
 		if (i->is_public) {
 			*o = ClearWire(not i->value, true);
 		} else {
@@ -112,12 +113,8 @@ public:
 	uint64_t num_and() override {
 		return ands;
 	}
-	void public_label(void * output, bool b) override {
-		ClearWire* out = (ClearWire *)output;
-		*out = ClearWire(b, true);
-	}
 	void feed(void * lbls, int party, const bool* b, size_t nel) override {
-		ClearWire* out = (ClearWire *)lbls;
+		ClearWire* out = static_cast<ClearWire *>(lbls);
 		if(party == ALICE) n1+=nel;
 		else if(party == BOB) n2+=nel;
 		for(size_t i = 0; i < nel; ++i) {
@@ -127,11 +124,13 @@ public:
 				out[i] = ClearWire(b[i], false, gid++);
 		}
 	}
+
 	void reveal(bool*out, int party, const void * lbls, size_t nel) override {
-		ClearWire* in = (ClearWire *)lbls;
+		const ClearWire* in = static_cast<const ClearWire *>(lbls);
 		for(size_t i = 0; i < nel; ++i) {
 			out[i] = in[i].value;
-			output_vec.push_back(in[i].index);
+			if(print)
+				output_vec.push_back(in[i].index);
 		}
 	}
 };

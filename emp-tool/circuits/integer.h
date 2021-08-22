@@ -2,9 +2,7 @@
 #define EMP_INTEGER_H__
 
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/number.h"
-#include "emp-tool/circuits/comparable.h"
-#include "emp-tool/circuits/swappable.h"
+#include "emp-tool/circuits/sortable.h"
 #include <vector>
 #include <bitset>
 #include <algorithm>
@@ -13,7 +11,7 @@ using std::vector;
 using std::min;
 namespace emp {
 template<typename Wire>
-class Integer_T : public Swappable<Wire, Integer_T>, public Comparable<Wire, Integer_T> { public:
+class Integer_T : public Sortable<Wire, Integer_T> { public:
 	vector<Bit_T<Wire>> bits;
 	Integer_T(){
 	}

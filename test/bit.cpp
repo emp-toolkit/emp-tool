@@ -60,7 +60,8 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	emp::backend = new ClearPrinter("haha");
+	emp::backend = new ClearPrinter();
 	test_bit();
 	delete emp::backend;
+	return 0;
 }

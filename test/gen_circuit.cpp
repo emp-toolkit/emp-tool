@@ -21,7 +21,7 @@ void modexp(int n1, int n2) {
 	Integer c(n1, 5, ALICE);
 	Integer d = a.modExp(b, c);
 }
-void sort(int n) {
+void sort_test(int n) {
 	Integer *A = new Integer[n];
 	Integer *B = new Integer[n];
 	for(int i = 0; i < n; ++i) {
@@ -38,7 +38,7 @@ void sort(int n) {
 }
 int main(int argc, char** argv) {
 	emp::backend = new ClearPrinter("sort.txt");
-	sort(128);
+	sort_test(128);
 //	mult(2048);
 //	ham(1<<10);
 	delete emp::backend;

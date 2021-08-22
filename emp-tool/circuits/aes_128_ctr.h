@@ -2,7 +2,6 @@
 #define EMP_AES_128_CTR_HPP__
 
 #include "emp-tool/execution/backend.h"
-#include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/integer.h"
 #include "emp-tool/circuits/circuit_file.h"
@@ -14,7 +13,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-
 
 extern unsigned int emp_tool_circuits_files_bristol_fashion_aes_128_txt_len;
 extern unsigned char emp_tool_circuits_files_bristol_fashion_aes_128_txt[];
@@ -95,10 +93,11 @@ int aes_128_ctr(const __m128i key,
 // Make one of these for calculating AES_128_CTR in circuit.
 // Note that it does some setup at constructor time, so we can avoid doing that every time we encrypt.
 // There is some internal state used during encryption, so don't try to use the same object in 2 threads simultaneously: just make multiple objects.
+template<typename Wire>
 class AES_128_CTR_Calculator { public:
-	block keyiv[256]; // internal state used during encryption. Probably easier to only allocate once.
-	block blind[128]; // internal state used during encryption. Probably easier to only allocate once.
-	emp::Integer counter;
+	Bit_T<Wire> keyiv[256]; // internal state used during encryption. Probably easier to only allocate once.
+	Bit_T<Wire> blind[128]; // internal state used during encryption. Probably easier to only allocate once.
+	emp::Integer_T<Wire> counter;
 	std::unique_ptr<BristolFashion> circuit; // ensures circuit is deleted when this is deleted.
 
 	// Sets up BristolFashion circuit for calculating aes, and allocates some space and constants.
@@ -115,11 +114,11 @@ class AES_128_CTR_Calculator { public:
 		return((8 * (15 - (i / 8))) + (i % 8));
 	}
 
-	int aes_128_ctr(const block key[],
-			const block iv[],
-			block input[], // if this is null, we'll just do a blind of length length
-			block * output = nullptr, // if this is null, we'll encrypt in place
-			const size_t length = 128, // in blocks (so, basically bits)
+	int aes_128_ctr(const Bit_T<Wire> key[],
+			const Bit_T<Wire> iv[],
+			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
+			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+			const size_t length = 128, // in Bit_Ts (so, basically bits)
 			const int party = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
 		if (input == nullptr && output == nullptr) {
@@ -141,14 +140,14 @@ class AES_128_CTR_Calculator { public:
 				}
 			} else {
 				for(size_t i = 0; i < 128; ++i) {
-					this->counter.bits[i].bit = iv[reverse_bytes(i)];
+					this->counter.bits[i] = iv[reverse_bytes(i)];
 				}
 				uint64_t start_chunks[2];
 				start_chunks[1] = 0;
 				start_chunks[0] = start_chunk;
-				this->counter = this->counter + emp::Integer(128, start_chunks, party);
+				this->counter = this->counter + emp::Integer_T<Wire>(128, start_chunks, party);
 				for(size_t i = 0; i < 128; ++i) {
-					this->keyiv[i + 128] = this->counter.bits[i].bit;
+					this->keyiv[i + 128] = this->counter.bits[i];
 				}
 			}
 
@@ -161,9 +160,9 @@ class AES_128_CTR_Calculator { public:
 				this->circuit->compute(this->blind, this->keyiv);
 				for(size_t i = 0; i < length; ++i) {
 					if (output == nullptr) {
-						input[i] = CircuitExecution::circ_exec->xor_gate(input[i], this->blind[reverse_bytes(i)]);
+						input[i] = input[i] ^ this->blind[reverse_bytes(i)];
 					} else {
-						output[i] = CircuitExecution::circ_exec->xor_gate(input[i], this->blind[reverse_bytes(i)]);
+						output[i] = input[i] ^ this->blind[reverse_bytes(i)];
 					}
 				}
 			}
@@ -186,11 +185,11 @@ class AES_128_CTR_Calculator { public:
 		return 0;
 	}
 
-	int aes_128_ctr(const block key[],
+	int aes_128_ctr(const Bit_T<Wire> key[],
 			const __m128i iv, // IV here is out-of-circuit information
-			block input[], // if this is null, we'll just do a blind of length length
-			block * output = nullptr, // if this is null, we'll encrypt in place
-			const size_t length = 128, // in blocks (so, basically bits)
+			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
+			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+			const size_t length = 128, // in Bit_Ts (so, basically bits)
 			const int party = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
 		if (input == nullptr && output == nullptr) {
@@ -216,8 +215,9 @@ class AES_128_CTR_Calculator { public:
 			for(size_t j = 0; j < 8; ++j) {
 				((uint8_t *)(&counter))[15 - j] = ((uint8_t *)(&count))[j];
 			}
+			Integer_T<Wire> IntCounter = Integer_T<Wire>(128, &counter, party);
 			answer = this->aes_128_ctr(nullptr,
-					&(emp::Integer(128, &counter, party).bits[0].bit),
+					IntCounter.bits.data(),
 					(input == nullptr ) ? nullptr : &(input[ 128 * i]),
 					(output == nullptr) ? nullptr : &(output[128 * i]),
 					((128 * (i + 1)) > length) ? (length - (128 * i)) : 128,
@@ -234,9 +234,9 @@ class AES_128_CTR_Calculator { public:
 
 	int aes_128_ctr(const __m128i key,// key here is out-of-circuit information
 			const __m128i iv, // IV here is out-of-circuit information
-			block input[], // if this is null, we'll just do a blind of length length
-			block * output = nullptr, // if this is null, we'll encrypt in place
-			const size_t length = 128, // in blocks (so, basically bits)
+			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
+			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+			const size_t length = 128, // in Bit_Ts (so, basically bits)
 			const int party = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
 		if (input == nullptr && output == nullptr) {
@@ -249,7 +249,7 @@ class AES_128_CTR_Calculator { public:
 		if (success != 0) {
 			return success;
 		}
-		emp::Integer blind = emp::Integer(length, bytes, party);
+		emp::Integer_T<Wire> blind = emp::Integer_T<Wire>(length, bytes, party);
 
 		if (input == nullptr) {
 			for(size_t i = 0; i < length; ++i) {
@@ -258,11 +258,11 @@ class AES_128_CTR_Calculator { public:
 		} else {
 			if (output == nullptr) {
 				for(size_t i = 0; i < length; ++i) {
-					input[i] = CircuitExecution::circ_exec->xor_gate(input[i], blind[i].bit);
+					input[i] = input[i] ^ blind[i];
 				}
 			} else {
 				for(size_t i = 0; i < length; ++i) {
-					output[i] = CircuitExecution::circ_exec->xor_gate(input[i], blind[i].bit);
+					output[i] = input[i] ^ blind[i];
 				}
 			}
 		}

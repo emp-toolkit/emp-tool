@@ -19,8 +19,8 @@ class HalfGate: public Backend { public:
 	MITCCRH<8> mitccrh;
 	uint64_t ands = 0;
 	HalfGate(int party, T* io): Backend(party), io(io) { }
-	void public_label(void * res, bool b) override {
-		*((block*)res) = constant[b];
+	block public_label(bool b) {
+		return constant[b];
 	}
 	void xor_gate(void * out, const void * left, const void * right) override {
 		*((block*)out) = *((block*)left) ^ *((block *) right);

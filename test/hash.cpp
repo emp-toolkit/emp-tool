@@ -13,8 +13,8 @@ int main() {
 	delete[] data;	
 
 	PRG prg;
-	for (long long length = 2; length <= 8192; length*=2) {
-		long long times = 1024*1024*32/length;
+	for (long long length = 2; length <= 4096; length*=2) {
+		long long times = 1024*1024*4/length;
 		block * data = new block[length];
 		prg.random_block(data, length);
 		auto start = clock_start();

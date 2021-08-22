@@ -12,17 +12,20 @@ namespace emp {
 class Backend { public:
 	int party;
 	Backend(int party = PUBLIC) : party (party) {}
+
+	virtual void feed(void * lbls, int party, const bool* b, size_t nel) = 0;
+	virtual void reveal(bool*out, int party, const void * lbls, size_t nel) = 0;
+
 	virtual void and_gate(void * output, const void * left, const void * right) = 0;
 	virtual void xor_gate(void * output, const void * left, const void * right) = 0;
 	virtual void not_gate(void * output, const void * input) = 0;
-	virtual void public_label(void * output, bool b) = 0;
+
 	virtual uint64_t num_and() {
 		return -1;
 	}
-	virtual void feed(void * lbls, int party, const bool* b, size_t nel) = 0;
-	virtual void reveal(bool*out, int party, const void * lbls, size_t nel) = 0;
-	virtual void finalize() {}
-	virtual ~Backend() {}
+
+	virtual ~Backend() {
+	}
 };
 
 extern Backend * backend;

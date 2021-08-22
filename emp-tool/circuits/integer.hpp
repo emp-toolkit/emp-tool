@@ -133,14 +133,7 @@ inline void div_full(Bit_T<Wire> * vquot, Bit_T<Wire> * vrem, const Bit_T<Wire> 
 template<typename Wire>
 inline void Integer_T<Wire>::init(bool * b, int len, int party) {
 	bits.resize(len);
-	if (party == PUBLIC) {
-		for(int i = 0; i < len; ++i) {
-			backend->public_label(&bits[i], b[i]);	
-		}
-	}
-	else {
-		backend->feed(bits.data(), party, b, len); 
-	}
+	backend->feed(bits.data(), party, b, len); 
 }
 
 template<typename Wire>
