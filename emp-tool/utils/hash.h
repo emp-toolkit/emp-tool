@@ -55,7 +55,6 @@ class Hash { public:
 		Hash hash;
 		hash.put(data, nbyte);
 		hash.digest(dgst);
-//		(void )SHA256((const unsigned char *)data, nbyte, (unsigned char *)digest);
 	}
 	#ifdef __x86_64__
 	__attribute__((target("sse2")))
