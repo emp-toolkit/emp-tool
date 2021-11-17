@@ -14,12 +14,10 @@ class Hash { public:
 	int size = 0;
 	static const int DIGEST_SIZE = 32;
 	Hash() {
-		if((mdctx = EVP_MD_CTX_create()) == NULL) {
+		if((mdctx = EVP_MD_CTX_create()) == NULL)
 			error("Hash function setup error!");
-		}
-		if(1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL)) {
+		if(1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL))
 			error("Hash function setup error!");
-		}
 	}
 	~Hash() {
 		EVP_MD_CTX_destroy(mdctx);
