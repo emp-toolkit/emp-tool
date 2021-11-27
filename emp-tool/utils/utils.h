@@ -22,7 +22,7 @@ inline void error(const char * s, int line = 0, const char * file = nullptr);
 template<class... Ts>
 void run_function(void *function, const Ts&... args);
 
-inline void parse_party_and_port(char ** arg, int * party, int * port);
+inline void parse_party_and_port(const char * const * arg, int * party, int * port);
 
 // Timing related
 inline time_point<high_resolution_clock> clock_start();

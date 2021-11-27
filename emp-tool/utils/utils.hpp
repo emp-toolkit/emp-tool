@@ -27,7 +27,7 @@ inline void error(const char * s, int line, const char * file) {
 	exit(1);
 }
 
-inline void parse_party_and_port(char ** arg, int * party, int * port) {
+inline void parse_party_and_port(const char *const * arg, int * party, int * port) {
 	*party = atoi (arg[1]);
 	*port = atoi (arg[2]);
 }
