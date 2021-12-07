@@ -160,6 +160,7 @@ inline Integer::Integer(T * input, int party) {
 
 
 inline Integer Integer::select(const Bit & select, const Integer & a) const{
+	assert(size() == a.size());
 	Integer res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res[i] = bits[i].select(select, a[i]);
