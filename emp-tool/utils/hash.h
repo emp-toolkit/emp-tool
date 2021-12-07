@@ -44,6 +44,7 @@ class Hash { public:
 		}
 		uint32_t len = 0;
 		EVP_DigestFinal_ex(mdctx, (unsigned char *)a, &len);
+		reset();
 	}
 	void reset() {
 		EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
