@@ -458,8 +458,6 @@ Bit Float::less_equal(const Float & rhs) const {
 510, 506, 511, 1, 
 510, 506, 512, 0, 
 511, 512, 513, 1, 
-0, 0, 514, 1, 
-514, 513, 515, 1, 
 };
 	execute_circuit<uint32_t>((block*)B, gates, sizeof(gates)/sizeof(uint32_t)/4);
 	Bit ret = B[513];
