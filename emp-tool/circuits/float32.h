@@ -32,7 +32,7 @@ class Float: Swappable<Float> { public:
 		return *this;
 	}
 
-	Float(float input, int party = PUBLIC);
+	Float(float input = 0.0, int party = PUBLIC);
 
 	template<typename O> 
 	O reveal(int party = PUBLIC) const;
