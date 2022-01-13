@@ -1542,7 +1542,7 @@ FORCE_INLINE __m128i _mm_shuffle_epi_2301(__m128i a)
     return vreinterpretq_m128i_s32(vcombine_s32(a01, a23));
 }
 
-// rotates the least significant 32 bits into the most signficant 32 bits, and
+// rotates the least significant 32 bits into the most significant 32 bits, and
 // shifts the rest down
 FORCE_INLINE __m128i _mm_shuffle_epi_0321(__m128i a)
 {
@@ -1550,7 +1550,7 @@ FORCE_INLINE __m128i _mm_shuffle_epi_0321(__m128i a)
         vextq_s32(vreinterpretq_s32_m128i(a), vreinterpretq_s32_m128i(a), 1));
 }
 
-// rotates the most significant 32 bits into the least signficant 32 bits, and
+// rotates the most significant 32 bits into the least significant 32 bits, and
 // shifts the rest up
 FORCE_INLINE __m128i _mm_shuffle_epi_2103(__m128i a)
 {
@@ -2522,7 +2522,7 @@ FORCE_INLINE __m128i _mm_sign_epi8(__m128i _a, __m128i _b)
     int8x16_t zeroMask = vreinterpretq_s8_u8(vceqq_s8(b, vdupq_n_s8(0)));
 #endif
 
-    // bitwise select either a or nagative 'a' (vnegq_s8(a) return nagative 'a')
+    // bitwise select either a or negative 'a' (vnegq_s8(a) return negative 'a')
     // based on ltMask
     int8x16_t masked = vbslq_s8(ltMask, vnegq_s8(a), a);
     // res = masked & (~zeroMask)
@@ -2638,7 +2638,7 @@ FORCE_INLINE __m64 _mm_sign_pi16(__m64 _a, __m64 _b)
     int16x4_t zeroMask = vreinterpret_s16_u16(vceq_s16(b, vdup_n_s16(0)));
 #endif
 
-    // bitwise select either a or nagative 'a' (vneg_s16(a) return nagative 'a')
+    // bitwise select either a or negative 'a' (vneg_s16(a) return negative 'a')
     // based on ltMask
     int16x4_t masked = vbsl_s16(ltMask, vneg_s16(a), a);
     // res = masked & (~zeroMask)
@@ -2679,7 +2679,7 @@ FORCE_INLINE __m64 _mm_sign_pi32(__m64 _a, __m64 _b)
     int32x2_t zeroMask = vreinterpret_s32_u32(vceq_s32(b, vdup_n_s32(0)));
 #endif
 
-    // bitwise select either a or nagative 'a' (vneg_s32(a) return nagative 'a')
+    // bitwise select either a or negative 'a' (vneg_s32(a) return negative 'a')
     // based on ltMask
     int32x2_t masked = vbsl_s32(ltMask, vneg_s32(a), a);
     // res = masked & (~zeroMask)
@@ -2720,7 +2720,7 @@ FORCE_INLINE __m64 _mm_sign_pi8(__m64 _a, __m64 _b)
     int8x8_t zeroMask = vreinterpret_s8_u8(vceq_s8(b, vdup_n_s8(0)));
 #endif
 
-    // bitwise select either a or nagative 'a' (vneg_s8(a) return nagative 'a')
+    // bitwise select either a or negative 'a' (vneg_s8(a) return negative 'a')
     // based on ltMask
     int8x8_t masked = vbsl_s8(ltMask, vneg_s8(a), a);
     // res = masked & (~zeroMask)
@@ -3635,7 +3635,7 @@ FORCE_INLINE __m128i _mm_hadd_epi16(__m128i _a, __m128i _b)
 #endif
 }
 
-// Horizontally substract adjacent pairs of single-precision (32-bit)
+// Horizontally subtract adjacent pairs of single-precision (32-bit)
 // floating-point elements in a and b, and pack the results in dst.
 // https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_hsub_ps
 FORCE_INLINE __m128 _mm_hsub_ps(__m128 _a, __m128 _b)
