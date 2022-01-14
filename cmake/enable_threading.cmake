@@ -1,4 +1,4 @@
-OPTION(THREADING "Option description" OFF)
+OPTION(THREADING "Enable multi-threaded backend" OFF)
 IF(THREADING)
 	ADD_DEFINITIONS(-DTHREADING)
 	message("Multi Threading: on")
