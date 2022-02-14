@@ -130,14 +130,21 @@ class HighSpeedNetIO : public IOChannel<HighSpeedNetIO> { public:
 	RecverSubChannel *rchannel;
 
 	HighSpeedNetIO(const char *address, int send_port, int recv_port, bool quiet = true) : quiet(quiet) {
+		if (send_port <0 || send_port > 65535) {
+			throw std::runtime_error("Invalid send port number!");
+		}
+		if (recv_port <0 || recv_port > 65535) {
+			throw std::runtime_error("Invalid receive port number!");
+		}
+
 		is_server = (address == nullptr);
 		if (is_server) {
 			recv_sock = server_listen(send_port);
 			usleep(2000);
-			send_sock = server_listen(recv_port & 0xFFFF);
+			send_sock = server_listen(recv_port);
 		} else {
 			send_sock = client_connect(address, send_port);
-			recv_sock = client_connect(address, recv_port & 0xFFFF);
+			recv_sock = client_connect(address, recv_port);
 		}
 		FSM = 0;
 		set_delay_opt(send_sock, true);
