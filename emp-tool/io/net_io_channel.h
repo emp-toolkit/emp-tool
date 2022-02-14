@@ -29,7 +29,11 @@ class NetIO: public IOChannel<NetIO> { public:
 	string addr;
 	int port;
 	NetIO(const char * address, int port, bool quiet = false) {
-		this->port = port & 0xFFFF;
+		if (port <0 || port > 65535)} {
+			throw std::runtime_error("Invalid port number!");
+		}
+
+		this->port = port;
 		is_server = (address == nullptr);
 		if (address == nullptr) {
 			struct sockaddr_in dest;
@@ -38,7 +42,7 @@ class NetIO: public IOChannel<NetIO> { public:
 			memset(&serv, 0, sizeof(serv));
 			serv.sin_family = AF_INET;
 			serv.sin_addr.s_addr = htonl(INADDR_ANY); /* set our address to any interface */
-			serv.sin_port = htons(port);           /* set the server port number */    
+			serv.sin_port = htons(port);           /* set the server port number */
 			mysocket = socket(AF_INET, SOCK_STREAM, 0);
 			int reuse = 1;
 			setsockopt(mysocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse));
@@ -55,7 +59,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		}
 		else {
 			addr = string(address);
-			
+
 			struct sockaddr_in dest;
 			memset(&dest, 0, sizeof(dest));
 			dest.sin_family = AF_INET;
@@ -68,7 +72,7 @@ class NetIO: public IOChannel<NetIO> { public:
 				if (connect(consocket, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0) {
 					break;
 				}
-				
+
 				close(consocket);
 				usleep(1000);
 			}
@@ -135,7 +139,7 @@ class NetIO: public IOChannel<NetIO> { public:
 			int res = fread(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
 				sent += res;
-			else 
+			else
 				fprintf(stderr,"error: net_send_data %d\n", res);
 		}
 	}
