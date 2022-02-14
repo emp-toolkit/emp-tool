@@ -4,6 +4,7 @@
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/constants.h"
+#include <climits>
 #include <memory>
 
 #ifdef ENABLE_RDSEED
@@ -32,11 +33,11 @@ class PRG { public:
 			unsigned long long r0, r1;
 			int i = 0;
 			for(; i < 10; ++i)
-				if(_rdseed64_step(&r0) == 1) break;
+				if((_rdseed64_step(&r0) == 1) && (r0 != ULLONG_MAX) && (r0 != 0)) break;
 			if(i == 10)error("RDSEED FAILURE");
 
 			for(i = 0; i < 10; ++i)
-				if(_rdseed64_step(&r1) == 1) break;
+				if((_rdseed64_step(&r1) == 1) && (r1 != ULLONG_MAX) && (r1 != 0)) break;
 			if(i == 10)error("RDSEED FAILURE");
 
 			v = makeBlock(r0, r1);
