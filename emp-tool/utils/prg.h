@@ -32,6 +32,7 @@ class PRG { public:
 #else
 			unsigned long long r0, r1;
 			int i = 0;
+			// To prevent an AMD CPU bug. (PR #156)
 			for(; i < 10; ++i)
 				if((_rdseed64_step(&r0) == 1) && (r0 != ULLONG_MAX) && (r0 != 0)) break;
 			if(i == 10)error("RDSEED FAILURE");
