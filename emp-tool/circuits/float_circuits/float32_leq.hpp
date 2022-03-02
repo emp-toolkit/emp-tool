@@ -455,8 +455,6 @@ Bit_T<Wire> Float_T<Wire>::less_equal(const Float_T<Wire> & rhs) const {
 510, 506, 511, 1, 
 510, 506, 512, 0, 
 511, 512, 513, 1, 
-0, 0, 514, 1, 
-514, 513, 515, 1, 
 };
 	execute_circuit<uint32_t>(B, gates, sizeof(gates)/sizeof(uint32_t)/4);
 	Bit_T<Wire> ret = B[515];

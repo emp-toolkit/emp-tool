@@ -1,4 +1,4 @@
-OPTION(USE_RANDOM_DEVICE "Option description" OFF)
+OPTION(USE_RANDOM_DEVICE "Enable RDSEED instruction" OFF)
 
 include(CheckCSourceRuns)
 

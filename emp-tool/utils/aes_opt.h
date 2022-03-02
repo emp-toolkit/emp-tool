@@ -50,7 +50,6 @@ static inline void AES_opt_key_schedule(block* user_key, AES_KEY *keys) {
 	ks_rounds<NumKeys>(keys, con, con3, mask, 7);
 	con=_mm_slli_epi32(con, 1);
 	ks_rounds<NumKeys>(keys, con, con3, mask, 8);
-	con=_mm_slli_epi32(con, 1);
 	ks_rounds<NumKeys>(keys, con2, con3, mask, 9);
 	con2=_mm_slli_epi32(con2, 1);
 	ks_rounds<NumKeys>(keys, con2, con3, mask, 10);

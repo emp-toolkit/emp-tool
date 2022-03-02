@@ -1,7 +1,11 @@
-cmake_minimum_required (VERSION 2.8.12)
+cmake_minimum_required (VERSION 3.0)
 project (emptool)
 set(NAME "emp-tool")
 
+set(CMAKE_FOLDER ./)
+include(${CMAKE_FOLDER}/cmake/emp-base.cmake)
+
+IF(${CRYPTO_IN_CIRCUIT})
 ADD_CUSTOM_COMMAND(
   OUTPUT ${CMAKE_SOURCE_DIR}/emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
   COMMAND xxd -i emp-tool/circuits/files/bristol_fashion/Keccak_f.txt emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.hex
@@ -17,15 +21,21 @@ ADD_CUSTOM_COMMAND(
   COMMAND cat emp-tool/circuits/files/bristol_fashion/aes_128.txt.hex >> emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   COMMENT "Compiling aes_128 circuit file to binary")
+ENDIF(${CRYPTO_IN_CIRCUIT})
 
 set(sources
 emp-tool/emp-tool.cpp
-emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
 )
-#emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
 
-set(CMAKE_FOLDER ./)
-include(${CMAKE_FOLDER}/cmake/emp-base.cmake)
+IF(${CRYPTO_IN_CIRCUIT})
+set(sources
+${sources}
+emp-tool/circuits/files/bristol_fashion/aes_128.txt.cpp
+emp-tool/circuits/files/bristol_fashion/Keccak_f.txt.cpp
+)
+ENDIF(${CRYPTO_IN_CIRCUIT})
+
+
 
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})

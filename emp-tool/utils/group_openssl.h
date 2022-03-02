@@ -136,7 +136,6 @@ inline bool Point::operator==(Point & rhs) {
 inline Group::Group() {
 	ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);//NIST P-256
 	bn_ctx = BN_CTX_new();
-	EC_GROUP_precompute_mult(ec_group, bn_ctx);
 	EC_GROUP_get_order(ec_group, order.n, bn_ctx);
 	scratch = new unsigned char[scratch_size];
 }

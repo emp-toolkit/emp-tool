@@ -4,28 +4,32 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/group.h"
 #include "emp-tool/utils/constants.h"
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <stdio.h>
 
 namespace emp {
 class Hash { public:
-	SHA256_CTX hash;
+	EVP_MD_CTX *mdctx;
 	char buffer[HASH_BUFFER_SIZE];
 	int size = 0;
 	static const int DIGEST_SIZE = 32;
 	Hash() {
-		SHA256_Init(&hash);
+		if((mdctx = EVP_MD_CTX_create()) == NULL)
+			error("Hash function setup error!");
+		if(1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL))
+			error("Hash function setup error!");
 	}
 	~Hash() {
+		EVP_MD_CTX_destroy(mdctx);
 	}
 	void put(const void * data, int nbyte) {
 		if (nbyte > HASH_BUFFER_SIZE)
-			SHA256_Update(&hash, data, nbyte);
+			EVP_DigestUpdate(mdctx, data, nbyte);
 		else if(size + nbyte < HASH_BUFFER_SIZE) {
 			memcpy(buffer+size, data, nbyte);
 			size+=nbyte;
 		} else {
-			SHA256_Update(&hash, (char*)buffer, size);
+			EVP_DigestUpdate(mdctx, data, nbyte);
 			memcpy(buffer, data, nbyte);
 			size = nbyte;
 		}
@@ -33,19 +37,23 @@ class Hash { public:
 	void put_block(const block* block, int nblock=1){
 		put(block, sizeof(block)*nblock);
 	}
-	void digest(char * a) {
+	void digest(void * a) {
 		if(size > 0) {
-			SHA256_Update(&hash, (char*)buffer, size);
+			EVP_DigestUpdate(mdctx, buffer, size);
 			size=0;
 		}
-		SHA256_Final((unsigned char *)a, &hash);
+		uint32_t len = 0;
+		EVP_DigestFinal_ex(mdctx, (unsigned char *)a, &len);
+		reset();
 	}
 	void reset() {
-		SHA256_Init(&hash);
+		EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
 		size=0;
 	}
-	static void hash_once(void * digest, const void * data, int nbyte) {
-		(void )SHA256((const unsigned char *)data, nbyte, (unsigned char *)digest);
+	static void hash_once(void * dgst, const void * data, int nbyte) {
+		Hash hash;
+		hash.put(data, nbyte);
+		hash.digest(dgst);
 	}
 	#ifdef __x86_64__
 	__attribute__((target("sse2")))

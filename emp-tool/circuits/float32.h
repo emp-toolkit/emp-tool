@@ -30,7 +30,7 @@ class Float_T: public Sortable<Wire, Float_T> { public:
 		return *this;
 	}
 
-	Float_T(float input, int party = PUBLIC);
+	Float_T(float input = 0.0, int party = PUBLIC);
 
 	template<typename O> 
 	O reveal(int party = PUBLIC) const;

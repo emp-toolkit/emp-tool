@@ -164,7 +164,8 @@ inline Integer_T<Wire>::Integer_T(T * input, int party) {
 }
 
 template<typename Wire>
-inline Integer_T<Wire> Integer_T<Wire>::select(const Bit_T<Wire> & select, const Integer_T<Wire> & a) const{
+inline Integer_T<Wire> Integer_T<Wire>::select(const Bit_T<Wire> & select, const Integer_T<Wire> & a) const {
+	assert(size() == a.size());
 	Integer_T<Wire> res(*this);
 	for(size_t i = 0; i < size(); ++i)
 		res[i] = bits[i].select(select, a[i]);
@@ -274,7 +275,7 @@ inline Integer_T<Wire> Integer_T<Wire>::operator<<(size_t shamt) const {
 			res.bits[i] = false;
 	}
 	else {
-		for(int i = size()-1; i >= shamt; --i)
+		for(int i = size()-1; i >= (int)shamt; --i)
 			res.bits[i] = bits[i-shamt];
 		for(int i = shamt-1; i>=0; --i)
 			res.bits[i] = false;

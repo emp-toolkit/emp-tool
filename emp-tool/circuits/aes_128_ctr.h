@@ -47,7 +47,7 @@ int aes_128_ctr(const __m128i key,
 		output = (uint8_t *) input;
 	}
 	if (input == nullptr) { // then we're just doing a blind
-		input = output;
+		input = (T*) output;
 		for (size_t i = 0; i < num_bytes; ++i) {
 			output[i] = 0;
 		}

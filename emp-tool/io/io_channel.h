@@ -4,6 +4,7 @@
 #include "emp-tool/utils/prg.h"
 #include "emp-tool/utils/group.h"
 #include <memory>
+#include <cassert>  
 
 namespace emp {
 template<typename T> 
@@ -41,6 +42,7 @@ class IOChannel { public:
 		size_t len = 0;
 		for(int i = 0; i < num_pts; ++i) {
 			recv_data(&len, 4);
+			assert(len <= 2048);
 			g->resize_scratch(len);
 			unsigned char * tmp = g->scratch;
 			recv_data(tmp, len);
