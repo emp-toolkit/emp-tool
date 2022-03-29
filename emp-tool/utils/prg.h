@@ -100,6 +100,24 @@ class PRG { public:
 		AES_ecb_encrypt_blks(tmp, remain, &aes);
 		memcpy(data + (nblocks/AES_BATCH_SIZE)*AES_BATCH_SIZE, tmp, remain*sizeof(block));
 	}
+
+	typedef uint64_t result_type;
+	result_type buffer[32];
+	size_t ptr = 32;
+	static constexpr result_type min() {
+		return 0;
+	}
+	static constexpr result_type max() {
+		return 0xFFFFFFFFFFFFFFFFULL;
+	}
+	result_type operator()() {
+		if(ptr == 32) {		
+			random_block((block*)buffer, 16);
+			ptr = 0;
+		}
+		return buffer[ptr++];
+	}
 };
+
 }
 #endif// PRP_H__
