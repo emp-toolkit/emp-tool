@@ -4,6 +4,7 @@
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/utils.h"
 #include "emp-tool/utils/constants.h"
+#include <climits>
 #include <memory>
 
 #ifdef ENABLE_RDSEED
@@ -31,12 +32,13 @@ class PRG { public:
 #else
 			unsigned long long r0, r1;
 			int i = 0;
+			// To prevent an AMD CPU bug. (PR #156)
 			for(; i < 10; ++i)
-				if(_rdseed64_step(&r0) == 1) break;
+				if((_rdseed64_step(&r0) == 1) && (r0 != ULLONG_MAX) && (r0 != 0)) break;
 			if(i == 10)error("RDSEED FAILURE");
 
 			for(i = 0; i < 10; ++i)
-				if(_rdseed64_step(&r1) == 1) break;
+				if((_rdseed64_step(&r1) == 1) && (r1 != ULLONG_MAX) && (r1 != 0)) break;
 			if(i == 10)error("RDSEED FAILURE");
 
 			v = makeBlock(r0, r1);
@@ -98,6 +100,24 @@ class PRG { public:
 		AES_ecb_encrypt_blks(tmp, remain, &aes);
 		memcpy(data + (nblocks/AES_BATCH_SIZE)*AES_BATCH_SIZE, tmp, remain*sizeof(block));
 	}
+
+	typedef uint64_t result_type;
+	result_type buffer[32];
+	size_t ptr = 32;
+	static constexpr result_type min() {
+		return 0;
+	}
+	static constexpr result_type max() {
+		return 0xFFFFFFFFFFFFFFFFULL;
+	}
+	result_type operator()() {
+		if(ptr == 32) {		
+			random_block((block*)buffer, 16);
+			ptr = 0;
+		}
+		return buffer[ptr++];
+	}
 };
+
 }
 #endif// PRP_H__
