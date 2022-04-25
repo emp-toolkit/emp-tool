@@ -121,7 +121,7 @@ class NetIO: public IOChannel<NetIO> { public:
 	void send_data_internal(const void * data, size_t len) {
 		size_t sent = 0;
 		while(sent < len) {
-			int res = fwrite(sent + (char*)data, 1, len - sent, stream);
+			size_t res = fwrite(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
 				sent+=res;
 			else
@@ -134,9 +134,9 @@ class NetIO: public IOChannel<NetIO> { public:
 		if(has_sent)
 			fflush(stream);
 		has_sent = false;
-		int sent = 0;
+		size_t sent = 0;
 		while(sent < len) {
-			int res = fread(sent + (char*)data, 1, len - sent, stream);
+			size_t res = fread(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
 				sent += res;
 			else
