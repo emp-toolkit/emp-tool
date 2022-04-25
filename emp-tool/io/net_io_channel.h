@@ -134,7 +134,7 @@ class NetIO: public IOChannel<NetIO> { public:
 		if(has_sent)
 			fflush(stream);
 		has_sent = false;
-		int sent = 0;
+		size_t sent = 0;
 		while(sent < len) {
 			int res = fread(sent + (char*)data, 1, len - sent, stream);
 			if (res >= 0)
