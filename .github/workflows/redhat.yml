@@ -1,0 +1,19 @@
+name: arm
+on: [push, pull_request]
+
+jobs:
+  build_arm:
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
+    runs-on: [redhat]
+    timeout-minutes: 60
+    env:
+      BUILD_TYPE: ${{matrix.build_type}}
+    steps:
+    - uses: actions/checkout@v2
+    - name: Create Build Environment
+      run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE && make
+    - name: Test
+      shell: bash
+      run: ctest -V
