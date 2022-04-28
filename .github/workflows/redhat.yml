@@ -1,8 +1,8 @@
-name: arm
+name: redhat
 on: [push, pull_request]
 
 jobs:
-  build_arm:
+  build_redhat:
     strategy:
       matrix:
         build_type: [Debug, Release]
