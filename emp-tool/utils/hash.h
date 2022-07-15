@@ -23,13 +23,13 @@ class Hash { public:
 		EVP_MD_CTX_destroy(mdctx);
 	}
 	void put(const void * data, int nbyte) {
-		if (nbyte > HASH_BUFFER_SIZE)
+		if (nbyte >= HASH_BUFFER_SIZE)
 			EVP_DigestUpdate(mdctx, data, nbyte);
 		else if(size + nbyte < HASH_BUFFER_SIZE) {
 			memcpy(buffer+size, data, nbyte);
 			size+=nbyte;
 		} else {
-			EVP_DigestUpdate(mdctx, data, nbyte);
+			EVP_DigestUpdate(mdctx, buffer, size);
 			memcpy(buffer, data, nbyte);
 			size = nbyte;
 		}
