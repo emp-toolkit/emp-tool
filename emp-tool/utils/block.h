@@ -5,14 +5,17 @@
 #include <immintrin.h>
 #elif __aarch64__
 #include "sse2neon.h"
-inline __m128i _mm_aesdec_si128 (__m128i a, __m128i RoundKey) {
-    return vaesimcq_u8(vaesdq_u8(a, (__m128i){})) ^ RoundKey;
+inline __m128i _mm_aesimc_si128(__m128i a) {
+	return vreinterpretq_m128i_u8(vaesimcq_u8(vreinterpretq_u8_m128i(a)));
 }
-inline __m128i _mm_aesdeclast_si128 (__m128i a, __m128i RoundKey) {
-    return vaesdq_u8(a, (__m128i){}) ^ RoundKey;
+inline __m128i _mm_aesdec_si128 (__m128i a, __m128i RoundKey)
+{
+    return vreinterpretq_m128i_u8(vaesimcq_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0)) ^ vreinterpretq_u8_m128i(RoundKey)));
 }
-inline __m128i _mm_aesimc_si128 (__m128i a) {
-    return vaesimcq_u8(a);
+
+inline __m128i _mm_aesdeclast_si128 (__m128i a, __m128i RoundKey)
+{
+    return vreinterpretq_m128i_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0)) ^ vreinterpretq_u8_m128i(RoundKey));
 }
 #endif
 
