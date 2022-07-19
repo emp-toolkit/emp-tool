@@ -100,22 +100,17 @@ static inline void ParaEnc(block *_blks, AES_KEY *keys) {
 		for(size_t i = 0; i < numKeys; ++i) {
 			uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[r]);
 			for(size_t j = 0; j < numEncs; ++j, ++blks)
-			   *blks = vaeseq_u8(*blks, K);
-		}
-		blks = first;
-		for(size_t i = 0; i < numKeys; ++i) {
-			for(size_t j = 0; j < numEncs; ++j, ++blks)
-			   *blks = vaesmcq_u8(*blks);
+			   *blks = vaesmcq_u8(vaeseq_u8(*blks, K));
 		}
 	}
 	
 	auto blks = first;
 	for(size_t i = 0; i < numKeys; ++i) {
 		uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[9]);
+		uint8x16_t K2 = vreinterpretq_u8_m128i(keys[i].rd_key[10]);
 		for(size_t j = 0; j < numEncs; ++j, ++blks)
-			*blks = vaeseq_u8(*blks, K) ^ K;
+			*blks = vaeseq_u8(*blks, K) ^ K2;
 	}
-
 }
 #endif
 
