@@ -9,6 +9,7 @@
 #include "emp-tool/circuits/circuit_file.h"
 #include <stdio.h>
 #include <fstream>
+#include <memory>
 
 #include <openssl/evp.h>
 #include <stdlib.h>
