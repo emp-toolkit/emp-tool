@@ -4,7 +4,6 @@ set(NAME "emp-tool")
 
 set(CMAKE_FOLDER ./)
 include(${CMAKE_FOLDER}/cmake/emp-base.cmake)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS} --std=c++11")
 
 IF(${CRYPTO_IN_CIRCUIT})
 ADD_CUSTOM_COMMAND(
