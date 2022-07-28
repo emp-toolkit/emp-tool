@@ -78,7 +78,7 @@ class IOChannel { public:
 
 
 	void send_bool_aligned(const bool * data, size_t length) {
-		unsigned long long * data64 = (unsigned long long * )data;
+		const unsigned long long * data64 = (const unsigned long long * )data;
 		size_t i = 0;
 		for(; i < length/8; ++i) {
 			unsigned long long mask = 0x0101010101010101ULL;
