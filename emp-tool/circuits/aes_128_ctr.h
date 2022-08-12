@@ -46,7 +46,8 @@ int aes_128_ctr(const __m128i key,
 	}
 	if (input == nullptr && output == nullptr) {
 		std::cerr << "input and output of aes_128_ctr can't both be null pointers\n"<<std::flush;
-	}
+                return -1;
+        }
 	if (output == nullptr) { // then we're encrypting in place
 		output = (uint8_t *) input;
 	}
