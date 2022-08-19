@@ -10,7 +10,7 @@ inline __m128i _mm_aesimc_si128(__m128i a) {
 }
 inline __m128i _mm_aesdec_si128 (__m128i a, __m128i RoundKey)
 {
-    return vreinterpretq_m128i_u8(vaesimcq_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0)) ^ vreinterpretq_u8_m128i(RoundKey)));
+    return vreinterpretq_m128i_u8(vaesimcq_u8(vaesdq_u8(vreinterpretq_u8_m128i(a), vdupq_n_u8(0))) ^ vreinterpretq_u8_m128i(RoundKey));
 }
 
 inline __m128i _mm_aesdeclast_si128 (__m128i a, __m128i RoundKey)
@@ -70,7 +70,7 @@ inline std::ostream& operator<<(std::ostream& out, const block& blk) {
 	out << std::hex;
 	uint64_t* data = (uint64_t*)&blk;
 
-	out << std::setw(16) << std::setfill('0') << data[1]
+	out << std::setw(16) << std::setfill('0') << data[1] <<" "
 		<< std::setw(16) << std::setfill('0') << data[0];
 
 	out << std::dec << std::setw(0);
