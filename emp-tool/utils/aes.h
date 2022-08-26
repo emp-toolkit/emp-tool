@@ -121,14 +121,11 @@ inline void AES_ecb_encrypt_blks(block *_blks, unsigned int nblks, const AES_KEY
 		uint8x16_t key_j = (uint8x16_t)keys[j];
       blks = first;
       for (unsigned int i = 0; i < nblks; ++i, ++blks)
-	       *blks = vaeseq_u8(*blks, key_j);
-      blks = first;
-      for (unsigned int i = 0; i < nblks; ++i, ++blks)
-	       *blks = vaesmcq_u8(*blks);
+	       *blks = vaesmcq_u8(vaeseq_u8(*blks, key_j));
    }
 	uint8x16_t last_key = (uint8x16_t)keys[key->rounds-1];
 	for (unsigned int i = 0; i < nblks; ++i, ++first)
-		 *first = vaeseq_u8(*first, last_key) ^ last_key;
+		 *first = vaeseq_u8(*first, last_key) ^ (uint8x16_t)keys[key->rounds];
 }
 #endif
 

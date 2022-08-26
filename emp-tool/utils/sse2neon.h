@@ -146,6 +146,15 @@
 #include <math.h>
 #endif
 
+/* On ARMv7, some registers, such as PMUSERENR and PMCCNTR, are read-only
+ * or even not accessible in user mode.
+ * To write or access to these registers in user mode,
+ * we have to perform syscall instead.
+ */
+#if !defined(__aarch64__)
+#include <sys/time.h>
+#endif
+
 /* "__has_builtin" can be used to query support for built-in functions
  * provided by gcc/clang and other compilers that support it.
  */
@@ -420,7 +429,7 @@ FORCE_INLINE uint32_t _mm_crc32_u8(uint32_t, uint8_t);
 
 // Older gcc does not define vld1q_u8_x4 type
 #if defined(__GNUC__) && !defined(__clang__) &&                        \
-    ((__GNUC__ <= 10 && defined(__arm__)) ||                           \
+    ((__GNUC__ <= 11 && defined(__arm__)) ||                           \
      (__GNUC__ == 10 && __GNUC_MINOR__ < 3 && defined(__aarch64__)) || \
      (__GNUC__ <= 9 && defined(__aarch64__)))
 FORCE_INLINE uint8x16x4_t _sse2neon_vld1q_u8_x4(const uint8_t *p)
@@ -5688,19 +5697,19 @@ FORCE_INLINE __m128i _mm_srai_epi16(__m128i a, int imm)
 //
 // https://software.intel.com/sites/landingpage/IntrinsicsGuide/#text=_mm_srai_epi32
 // FORCE_INLINE __m128i _mm_srai_epi32(__m128i a, __constrange(0,255) int imm)
-#define _mm_srai_epi32(a, imm)                                             \
-    __extension__({                                                        \
-        __m128i ret;                                                       \
-        if (_sse2neon_unlikely((imm) == 0)) {                              \
-            ret = a;                                                       \
-        } else if (_sse2neon_likely(0 < (imm) && (imm) < 32)) {            \
-            ret = vreinterpretq_m128i_s32(                                 \
-                vshlq_s32(vreinterpretq_s32_m128i(a), vdupq_n_s32(-imm))); \
-        } else {                                                           \
-            ret = vreinterpretq_m128i_s32(                                 \
-                vshrq_n_s32(vreinterpretq_s32_m128i(a), 31));              \
-        }                                                                  \
-        ret;                                                               \
+#define _mm_srai_epi32(a, imm)                                               \
+    __extension__({                                                          \
+        __m128i ret;                                                         \
+        if (_sse2neon_unlikely((imm) == 0)) {                                \
+            ret = a;                                                         \
+        } else if (_sse2neon_likely(0 < (imm) && (imm) < 32)) {              \
+            ret = vreinterpretq_m128i_s32(                                   \
+                vshlq_s32(vreinterpretq_s32_m128i(a), vdupq_n_s32(-(imm)))); \
+        } else {                                                             \
+            ret = vreinterpretq_m128i_s32(                                   \
+                vshrq_n_s32(vreinterpretq_s32_m128i(a), 31));                \
+        }                                                                    \
+        ret;                                                                 \
     })
 
 // Shift packed 16-bit integers in a right by count while shifting in zeros, and
@@ -8786,6 +8795,44 @@ FORCE_INLINE void _sse2neon_mm_set_denormals_zero_mode(unsigned int flag)
     __asm__ __volatile__("msr FPCR, %0" ::"r"(r)); /* write */
 #else
     __asm__ __volatile__("vmsr FPSCR, %0" ::"r"(r));        /* write */
+#endif
+}
+
+// Return the current 64-bit value of the processor's time-stamp counter.
+// https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=rdtsc
+
+FORCE_INLINE uint64_t _rdtsc(void)
+{
+#if defined(__aarch64__)
+    uint64_t val;
+
+    /* According to ARM DDI 0487F.c, from Armv8.0 to Armv8.5 inclusive, the
+     * system counter is at least 56 bits wide; from Armv8.6, the counter
+     * must be 64 bits wide.  So the system counter could be less than 64
+     * bits wide and it is attributed with the flag 'cap_user_time_short'
+     * is true.
+     */
+    asm volatile("mrs %0, cntvct_el0" : "=r"(val));
+
+    return val;
+#else
+    uint32_t pmccntr, pmuseren, pmcntenset;
+    // Read the user mode Performance Monitoring Unit (PMU)
+    // User Enable Register (PMUSERENR) access permissions.
+    asm volatile("mrc p15, 0, %0, c9, c14, 0" : "=r"(pmuseren));
+    if (pmuseren & 1) {  // Allows reading PMUSERENR for user mode code.
+        asm volatile("mrc p15, 0, %0, c9, c12, 1" : "=r"(pmcntenset));
+        if (pmcntenset & 0x80000000UL) {  // Is it counting?
+            asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(pmccntr));
+            // The counter is set up to count every 64th cycle
+            return (uint64_t) (pmccntr) << 6;
+        }
+    }
+
+    // Fallback to syscall as we can't enable PMUSERENR in user mode.
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (uint64_t) (tv.tv_sec) * 1000000 + tv.tv_usec;
 #endif
 }
 
