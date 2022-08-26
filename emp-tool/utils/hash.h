@@ -34,8 +34,8 @@ class Hash { public:
 			size = nbyte;
 		}
 	}
-	void put_block(const block* block, int nblock=1){
-		put(block, sizeof(block)*nblock);
+	void put_block(const block* blk, int nblock=1){
+		put(blk, sizeof(block)*nblock);
 	}
 	void digest(void * a) {
 		if(size > 0) {
