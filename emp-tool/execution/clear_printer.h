@@ -13,7 +13,6 @@ class ClearWire { public:
 	bool is_public;
 	ClearWire(bool value = false, bool is_public = true, uint64_t index = 0):
 		index(index), value(value), is_public(is_public) {
-
 	}
 };
 
@@ -25,7 +24,7 @@ class ClearPrinter: public Backend { public:
 	bool print = false;
 	std::ofstream fout;
 	string filename;
-	std::vector<int64_t>output_vec;
+	std::vector<ClearWire>output_vec;
 	uint64_t gid = 0, gates = 0, n1 = 0, n2 = 0, n3 = 0;
 	ClearPrinter(string filename=""): filename(filename) {
 		print = filename.size()>0;
@@ -42,8 +41,17 @@ class ClearPrinter: public Backend { public:
 		if(print) {
 			uint64_t z_index = gid++;
 			fout<<2<<" "<<1<<" "<<0<<" "<<0<<" "<<z_index<<" XOR\n";
+			uint64_t o_index = gid++;
+			fout<<1<<" "<<1<<" "<<z_index<<" "<<o_index<<" NOT\n";
 			for (auto v : output_vec) {
-				fout<<2<<" "<<1<<" "<<z_index<<" "<<v<<" "<<gid++<<" XOR\n";
+				std::cout <<v.is_public<<"\n";
+				if(!v.is_public)
+					fout<<2<<" "<<1<<" "<<z_index<<" "<<v.index<<" "<<gid++<<" XOR\n";
+				else if (v.value) {
+					fout<<2<<" "<<1<<" "<<z_index<<" "<<o_index<<" "<<gid++<<" XOR\n";
+				} else {
+					fout<<2<<" "<<1<<" "<<z_index<<" "<<z_index<<" "<<gid++<<" XOR\n";
+				}
 			}
 			gates += (1+output_vec.size());
 			n3 = output_vec.size();
@@ -130,7 +138,7 @@ class ClearPrinter: public Backend { public:
 		for(size_t i = 0; i < nel; ++i) {
 			out[i] = in[i].value;
 			if(print)
-				output_vec.push_back(in[i].index);
+				output_vec.push_back(in[i]);
 		}
 	}
 };
