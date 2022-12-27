@@ -12,7 +12,7 @@ jobs:
     env:
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
-    - uses: actions/checkout@v2.30
+    - uses: actions/checkout@v2.3.0
     - name: Create Build Environment
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE && make
     - name: Test
