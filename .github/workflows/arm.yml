@@ -12,7 +12,13 @@ jobs:
     env:
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
-    - uses: actions/checkout@v2
+    - name: 'Cleanup build folder'
+      run: |
+        ls -la ./
+        rm -rf ./* || true
+        rm -rf ./.??* || true
+        ls -la ./
+    - uses: actions/checkout@v2.3.0
     - name: Create Build Environment
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE && make
     - name: Test
