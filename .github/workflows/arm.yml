@@ -12,9 +12,11 @@ jobs:
     env:
       BUILD_TYPE: ${{matrix.build_type}}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v2.30
     - name: Create Build Environment
       run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE && make
     - name: Test
       shell: bash
       run: ctest -V
+    - uses: colpal/actions-clean@v1
+      if: ${{ always() }}
