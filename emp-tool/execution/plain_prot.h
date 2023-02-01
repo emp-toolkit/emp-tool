@@ -30,7 +30,13 @@ public:
 	}
 
 	void feed(block * label, int party, const bool* b, int length) override {
-		for(int i = 0; i < length; ++i)
+                if (party == PUBLIC) {
+                  for(int i = 0; i < length; ++i)
+                    label[i] = cast_circ_exec->public_label(b[i]);
+                  return;
+                }
+                
+                for(int i = 0; i < length; ++i)
 			label[i] = cast_circ_exec->private_label(b[i]);
 
 		if (party == ALICE) n1+=length;
