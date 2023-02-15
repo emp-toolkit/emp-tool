@@ -78,17 +78,20 @@ class IOChannel { public:
 
 
 	void send_bool_aligned(const bool * data, size_t length) {
-		const unsigned long long * data64 = (const unsigned long long * )data;
+		const bool * data64 = data;
 		size_t i = 0;
+                unsigned long long unpack;
 		for(; i < length/8; ++i) {
 			unsigned long long mask = 0x0101010101010101ULL;
 			unsigned long long tmp = 0;
+                        memcpy(&unpack, data64, sizeof(unpack));
+                        data64 += sizeof(unpack);
 #if defined(__BMI2__)
-			tmp = _pext_u64(data64[i], mask);
+			tmp = _pext_u64(unpack, mask);
 #else
 			// https://github.com/Forceflow/libmorton/issues/6
 			for (unsigned long long bb = 1; mask != 0; bb += bb) {
-				if (data64[i] & mask & -mask) { tmp |= bb; }
+				if (unpack & mask & -mask) { tmp |= bb; }
 				mask &= (mask - 1);
 			}
 #endif
@@ -98,21 +101,25 @@ class IOChannel { public:
 			send_data(data + 8*i, length - 8*i);
 	}
 	void recv_bool_aligned(bool * data, size_t length) {
-		unsigned long long * data64 = (unsigned long long *) data;
+		bool * data64 = data;
 		size_t i = 0;
+                unsigned long long unpack;
 		for(; i < length/8; ++i) {
 			unsigned long long mask = 0x0101010101010101ULL;
 			unsigned long long tmp = 0;
 			recv_data(&tmp, 1);
 #if defined(__BMI2__)
-			data64[i] = _pdep_u64(tmp, mask);
+			unpack = _pdep_u64(tmp, mask);
 #else
-			data64[i] = 0;
+			unpack = 0;
 			for (unsigned long long bb = 1; mask != 0; bb += bb) {
-				if (tmp & bb) {data64[i] |= mask & (-mask); }
+				if (tmp & bb) {unpack |= mask & (-mask); }
 				mask &= (mask - 1);
 			}
 #endif
+                        memcpy(data64, &unpack, sizeof(unpack));
+                        data64 += sizeof(unpack);
+                        
 		}
 		if (8*i != length)
 			recv_data(data + 8*i, length - 8*i);
