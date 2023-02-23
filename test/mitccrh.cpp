@@ -4,7 +4,7 @@
 using namespace std;
 using namespace emp;
 
-void print_keys(AES_KEY key) {
+void print_keys(AES_KEY& key) {
 	cout << "round keys\n";
 	for(int i = 0; i < 11; i++) {
 		cout << key.rd_key[i]<<endl;
