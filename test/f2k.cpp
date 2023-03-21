@@ -37,6 +37,22 @@ void mul128_1(__m128i a, __m128i b, __m128i *res1, __m128i *res2) {
 	*res2 = _mm_xor_si128(tmp6, tmp4);
 }
 
+__m128i reflect_xmm(__m128i X) {
+	__m128i tmp1,tmp2;
+	__m128i AND_MASK =
+		_mm_set_epi32(0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f, 0x0f0f0f0f);
+	__m128i LOWER_MASK =
+		_mm_set_epi32(0x0f070b03, 0x0d050901, 0x0e060a02, 0x0c040800);
+	__m128i HIGHER_MASK =
+		_mm_set_epi32(0xf070b030, 0xd0509010, 0xe060a020, 0xc0408000);
+	__m128i BSWAP_MASK = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+	tmp2 = _mm_srli_epi16(X, 4);
+	tmp1 = _mm_and_si128(X, AND_MASK);
+	tmp2 = _mm_and_si128(tmp2, AND_MASK);
+	tmp1 = _mm_shuffle_epi8(HIGHER_MASK ,tmp1); tmp2 = _mm_shuffle_epi8(LOWER_MASK ,tmp2); tmp1 = _mm_xor_si128(tmp1, tmp2);
+	return _mm_shuffle_epi8(tmp1, BSWAP_MASK);
+}
+
 void gfmul_0(__m128i a, __m128i b, __m128i *res){
 	__m128i tmp3, tmp4, tmp5, tmp6,
 			  tmp7, tmp8, tmp9, tmp10, tmp11, tmp12;
@@ -212,8 +228,9 @@ int main() {
 	for(int i = 0; i < 65536; ++i) {
 		prg.random_block(&a, 1);
 		prg.random_block(&b, 1);
-		gfmul_0(a, b, res);
-		gfmul_1(a, b, res+1);
+		gfmul(a, b, res);
+		gfmul_reflect(reflect_xmm(a), reflect_xmm(b), res+1);
+		res[1] = reflect_xmm(res[1]);
 		if(cmpBlock(res, res+1, 1) == false) {
 			cout << "incorrect multiplication" << endl;
 			abort();
