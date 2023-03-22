@@ -163,7 +163,7 @@ class BristolFashion { public:
 			wires[i] = in[i];
 		execute_circuit(wires.data(), gates.data(), num_gate);
 
-		for(int i = 0; i < num_input; ++i)
+		for(int i = 0; i < num_output; ++i)
 			out[i] = wires[num_wire - num_output + i];
 	}
 };
