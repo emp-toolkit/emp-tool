@@ -19,6 +19,7 @@ inline __m128i _mm_aesdeclast_si128 (__m128i a, __m128i RoundKey)
 #include <cstring>
 #include <iostream>
 #include <iomanip>
+#include <cstdint>
 
 namespace emp {
 
