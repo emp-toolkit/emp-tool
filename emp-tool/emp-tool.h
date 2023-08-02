@@ -30,6 +30,9 @@
 #include "emp-tool/utils/aes_opt.h"
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/f2k.h"
+#include "emp-tool/utils/fields/fp59.h"
+#include "emp-tool/utils/fields/fp61.h"
+#include "emp-tool/utils/fields/efp2r128.h"
 
 #include "emp-tool/gc/halfgate_eva.h"
 #include "emp-tool/gc/halfgate_gen.h"

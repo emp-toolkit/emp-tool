@@ -33,6 +33,7 @@ add_test_case(f2k)
 add_test_case(halfgate)
 add_test_case(to_bool)
 add_test_case(aes_opt)
+add_test_case(fields)
 
 IF(${CRYPTO_IN_CIRCUIT})
 add_test_case(sha3_256)
