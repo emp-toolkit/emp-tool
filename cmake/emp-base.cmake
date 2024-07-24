@@ -18,7 +18,6 @@ if(NOT WIN32)
   set(BoldWhite   "${Esc}[1;37m")
 endif()
 
-set(CMAKE_MACOSX_RPATH 0)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 include_directories(${CMAKE_SOURCE_DIR})
