@@ -22,7 +22,7 @@ inline block halfgates_garble(block LA0, block A1, block LB0, block B1, block de
 	H[1] = A1;
 	H[2] = LB0;
 	H[3] = B1;
-	mitccrh->hash<2,2>(H);
+	mitccrh->hash_cir<2,2>(H);
 	HLA0 = H[0];
 	HA1 = H[1];
 	HLB0 = H[2];
