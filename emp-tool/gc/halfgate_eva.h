@@ -16,7 +16,7 @@ inline block halfgates_eval(block A, block B, const block *table, MITCCRH<8> *mi
 	block H[2];
 	H[0] = A;
 	H[1] = B;
-	mitccrh->hash<2,1>(H);
+	mitccrh->hash_cir<2,1>(H);
 	HA = H[0];
 	HB = H[1];
 
