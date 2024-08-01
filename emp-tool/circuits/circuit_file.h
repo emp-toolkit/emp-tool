@@ -134,12 +134,39 @@ class BristolFashion { public:
 	vector<int> gates;
 	vector<block> wires;
 
+	BristolFashion(int num_gate, int num_wire, int num_input, int num_output, int * gate_arr) {
+		this->num_gate = num_gate;
+		this->num_wire = num_wire;
+		this->num_input = num_input;
+		this->num_output = num_output;
+		gates.resize(num_gate*4);
+		wires.resize(num_wire);
+		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
+	}
+
 	BristolFashion(FILE * file) {
 		this->from_file(file);
 	}
 
 	BristolFashion(const char * file) {
 		this->from_file(file);
+	}
+
+	void to_file(const char * filename, const char * prefix) {
+		std::ofstream fout;
+		fout.open(filename);
+		fout << "int "<<string(prefix)+"_num_gate = "<<num_gate<<";\n";
+		fout << "int "<<string(prefix)+"_num_wire = "<<num_wire<<";\n";
+		fout << "int "<<string(prefix)+"_num_input = "<<num_input<<";\n";
+		fout << "int "<<string(prefix)+"_num_output = "<<num_output<<";\n";
+		fout << "int "<<string(prefix)+"_gate_arr ["<< num_gate*4 <<"] = {\n";
+		for(int i = 0; i < num_gate; ++i) {
+			for(int j = 0; j < 4; ++j)
+				fout<<gates[4*i+j]<<", ";
+			fout<<"\n";
+		}
+		fout <<"};\n";
+		fout.close();
 	}
 
 	void from_file(FILE * f) {
