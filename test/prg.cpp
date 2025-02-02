@@ -52,7 +52,7 @@ int main() {
 }
 
 void test_unaligned() {
-    block seed(123, 456);
+    block seed = makeBlock(123, 456);
 
     block ref_data[4];
     uint8_t* ref_bytes = (uint8_t*)ref_data;
