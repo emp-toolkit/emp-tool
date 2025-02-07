@@ -9,6 +9,9 @@ using namespace emp;
 #include <map>
 #include <random>
 #include <cmath>
+
+void test_unaligned();
+
 int main() {
 	PRG gen;
 	std::normal_distribution<> d{5,2};
@@ -22,8 +25,6 @@ int main() {
 			<< p.first << ' ' << std::string(p.second/200, '*') << '\n';
 	}
 
-
-
 	PRG prg;//using a random seed
 
 	block rand_block[3];
@@ -31,10 +32,7 @@ int main() {
 
 	prg.reseed(&rand_block[1]);//reset the PRG with another seed
 
-	int rand_ints[100];
-	int a = 0;
-	prg.random_data_unaligned(rand_ints+1, sizeof(int)*99);//when the array is not 128-bit-aligned
-	cout << a<<"\n";
+    test_unaligned();
 
 	prg.reseed(&zero_block);
 	for (long long length = 2; length <= 8192; length*=2) {
@@ -51,4 +49,33 @@ int main() {
 		cout << "PRG speed with block size "<<length<<" :\t"<<(length*times*128)/(interval+0.0)*1e6*1e-9<<" Gbps\n";
 	}
 	return 0;
+}
+
+void test_unaligned() {
+    block seed = makeBlock(123, 456);
+
+    block ref_data[4];
+    uint8_t* ref_bytes = (uint8_t*)ref_data;
+    {
+        PRG prg(&seed);
+        prg.random_data_unaligned(ref_data, 4 * sizeof(block));
+    }
+
+    uint8_t buf[64];
+
+    for (int offset = 1; offset < 16; offset++) {
+        for (int len = 1; len < 64 - offset; len++) {
+            uint8_t* unaligned_buf = buf + offset;
+            PRG prg(&seed);
+            prg.random_data_unaligned(unaligned_buf, len);
+
+            for (int i = 0; i < len; i++) {
+                if (unaligned_buf[i] != ref_bytes[i]) {
+                    cout << "ERROR: Mismatch at offset " << offset << ", ";
+                    cout << "len " << len << ", i " << i << endl;
+                    return;
+                }
+            }
+        }
+    }
 }
