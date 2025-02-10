@@ -18,8 +18,11 @@
 #include <errno.h>
 
 
-extern unsigned int emp_tool_circuits_files_bristol_fashion_aes_128_txt_len;
-extern unsigned char emp_tool_circuits_files_bristol_fashion_aes_128_txt[];
+extern int emp_tool_circuits_files_bristol_fashion_aes_128_num_gate;
+extern int emp_tool_circuits_files_bristol_fashion_aes_128_num_wire;
+extern int emp_tool_circuits_files_bristol_fashion_aes_128_num_input;
+extern int emp_tool_circuits_files_bristol_fashion_aes_128_num_output;
+extern int emp_tool_circuits_files_bristol_fashion_aes_128_gate_arr[];
 
 namespace emp {
 
@@ -106,11 +109,13 @@ class AES_128_CTR_Calculator { public:
 
 	// Sets up BristolFashion circuit for calculating aes, and allocates some space and constants.
 	AES_128_CTR_Calculator() { 
-		FILE * circuit_file = fmemopen(emp_tool_circuits_files_bristol_fashion_aes_128_txt,
-				emp_tool_circuits_files_bristol_fashion_aes_128_txt_len,
-				"r");
-		this->circuit = std::unique_ptr<BristolFashion>(new BristolFashion(circuit_file));
-		fclose(circuit_file);
+		this->circuit = std::unique_ptr<BristolFashion>(new BristolFashion(
+			emp_tool_circuits_files_bristol_fashion_aes_128_num_gate,
+			emp_tool_circuits_files_bristol_fashion_aes_128_num_wire,
+			emp_tool_circuits_files_bristol_fashion_aes_128_num_input,
+			emp_tool_circuits_files_bristol_fashion_aes_128_num_output,
+			emp_tool_circuits_files_bristol_fashion_aes_128_gate_arr
+		));
 		this->counter.bits.resize(128);
 	}
 
