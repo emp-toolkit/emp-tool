@@ -57,6 +57,7 @@ include_directories(${OPENSSL_INCLUDE_DIR})
 
 
 add_library(${NAME} SHARED ${sources})
+#target_compile_definitions(${NAME} PRIVATE ENABLE_COMM_STATS)
 
 install(DIRECTORY emp-tool DESTINATION include/)
 install(DIRECTORY cmake/ DESTINATION cmake/)
