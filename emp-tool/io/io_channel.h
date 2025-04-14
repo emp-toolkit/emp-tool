@@ -8,7 +8,7 @@
 
 namespace emp {
 template<typename T>
-class IOChannel { public:
+class IOChannel {
 #ifdef ENABLE_COMM_STATS
 	enum CommOpType { NONE, SEND, RECV };
 #endif // ENABLE_COMM_STATS
