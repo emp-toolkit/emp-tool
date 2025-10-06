@@ -238,10 +238,13 @@ inline size_t Integer::size() const {
 
 //circuits
 inline Integer Integer::abs() const {
-	Integer res(*this);
-	for(size_t i = 0; i < size(); ++i)
+	Integer res(*this), sign(*this);
+	for(size_t i = 0; i < size(); ++i){
 		res[i] = bits[size()-1];
-	return ( (*this) + res) ^ res;
+		sign[i] = 0;
+	}
+	sign[0] = bits[size() - 1];
+	return ( (*this) ^ res) + sign;
 }
 
 inline Integer& Integer::resize(size_t len, bool signed_extend) {
