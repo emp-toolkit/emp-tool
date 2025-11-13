@@ -179,35 +179,40 @@ inline void Integer::revealBools(bool *bools, int party) const {
 	ProtocolExecution::prot_exec->reveal(bools, party, (block *)bits.data(), size());
 }
 
+inline uint64_t Integer::reveal_helper(int party, bool sign) const {
+	std::bitset<64> bs;
+	bs.reset();
+	bool b[64];
+	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
+	for (size_t i = 0; i < size(); ++i)
+		bs.set(i, b[i]);
+	for (size_t i = size(); i < 64; ++i)
+		bs.set(i, sign and (b[size()-1]));
+	return bs.to_ullong();
+}
+
+
 template<>
 inline uint32_t Integer::reveal<uint32_t>(int party) const {
-	std::bitset<32> bs;
-	bs.reset();
-	bool b[size()];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
-	for (size_t i = 0; i < min(32UL, size()); ++i)
-		bs.set(i, b[i]);
-	return bs.to_ulong();
+	assert(size()<=32);
+	return reveal_helper(party, false);
 }
 
 template<>
 inline uint64_t Integer::reveal<uint64_t>(int party) const {
-	std::bitset<64> bs;
-	bs.reset();
-	bool b[size()];
-	ProtocolExecution::prot_exec->reveal(b, party, (block *)bits.data(), size());
-	for (size_t i = 0; i < min(64UL, size()); ++i)
-		bs.set(i, b[i]);
-	return bs.to_ullong();
+	assert(size()<=64);
+	return reveal_helper(party, false);
 }
 template<>
 inline int32_t Integer::reveal<int32_t>(int party) const {
-	return reveal<uint32_t>(party);
+	assert(size()<=32);
+	return reveal_helper(party, true);
 }
 
 template<>
 inline int64_t Integer::reveal<int64_t>(int party) const {
-	return reveal<uint64_t>(party);
+	assert(size()<=64);
+	return reveal_helper(party, true);
 }
 
 

@@ -42,10 +42,26 @@ void scratch_pad() {
 	cout <<(a+b).reveal<int32_t>(PUBLIC)<<endl;
 //	cout << "LZ "<<a.leading_zeros().reveal<int64_t>(PUBLIC)<<endl;
 }
+
+void corner_cases() {
+	for (int L = 2; L <=32; ++L) {
+		Integer y = Integer(L, -1, ALICE);
+		assert(y.reveal<int32_t>(PUBLIC) == -1);
+	}
+
+	for (int L = 33; L <= 64; ++L) {
+		Integer y = Integer(L, -2147483649LL, ALICE);
+		assert(y.reveal<int64_t>(PUBLIC) == -2147483649LL);
+	}
+
+	cout << "Corner cases\t\t\tDONE"<<endl;
+}
+
 int main(int argc, char** argv) {
 	int party = PUBLIC;
 	setup_plain_prot(false, "");
 
+	corner_cases();
 //	scratch_pad();return 0;
 	test_int<std::plus<int>, std::plus<Integer>>(party);
 	test_int<std::minus<int>, std::minus<Integer>>(party);

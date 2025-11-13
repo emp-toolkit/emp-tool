@@ -13,7 +13,7 @@ struct testMe {
 
 // Just testing to see if we can move some arbitrary arrays of structs to bool and back again. 
 int main() {
-  uint8_t len = 100;
+  const uint8_t len = 100;
   struct testMe structs[len];
   struct testMe output[len];
   bool b[len * 8 * sizeof(struct testMe)];
