@@ -247,9 +247,10 @@ class AES_128_CTR_Calculator { public:
 			return -1;
 		}
 
-		uint8_t bytes[(length + 7) / 8];
+		uint8_t * bytes = new uint8_t[(length + 7) / 8];
 		int success = emp::aes_128_ctr(key, iv, (uint8_t *) nullptr, bytes, (length + 7) / 8, start_chunk);
 		if (success != 0) {
+			delete[] bytes;
 			return success;
 		}
 		emp::Integer blind = emp::Integer(length, bytes, party);
@@ -269,6 +270,7 @@ class AES_128_CTR_Calculator { public:
 				}
 			}
 		}
+		delete[] bytes;
 		return 0;
 	}
 };

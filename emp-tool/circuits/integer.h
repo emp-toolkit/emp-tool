@@ -66,6 +66,8 @@ class Integer : public Swappable<Integer>, public Comparable<Integer> { public:
 
 	void init(bool * b, int len, int party);
 	void revealBools(bool *bools, int party=PUBLIC) const;
+private:
+   uint64_t reveal_helper(int party, bool sign) const;
 };
 
 #include "emp-tool/circuits/integer.hpp"
