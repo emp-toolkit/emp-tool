@@ -82,3 +82,11 @@ assert(c.open(decom, com, data, 1024*1024)); // open, return if the decommitment
 
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
 
+## License
+
+This project is dual-licensed under either of the following licenses:
+
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
+- Apache License 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+You may choose either license when using this software.
