@@ -4,18 +4,36 @@
 #include "emp-tool/utils/prg.h"
 #include "emp-tool/utils/group.h"
 #include <memory>
-#include <cassert>  
+#include <cassert>
 
 namespace emp {
-template<typename T> 
-class IOChannel { public:
+template<typename T>
+class IOChannel {
+#ifdef ENABLE_COMM_STATS
+	enum CommOpType { NONE, SEND, RECV };
+#endif // ENABLE_COMM_STATS
+public:
 	uint64_t counter = 0;
+#ifdef ENABLE_COMM_STATS
+	uint64_t comm_rounds = 0;
+	CommOpType previous_op = NONE;
+#endif // ENABLE_COMM_STATS
 	void send_data(const void * data, size_t nbyte) {
 		counter +=nbyte;
+#ifdef ENABLE_COMM_STATS
+		if (previous_op == RECV)
+			comm_rounds++;
+		previous_op = SEND
+#endif // ENABLE_COMM_STATS
 		derived().send_data_internal(data, nbyte);
 	}
 
 	void recv_data(void * data, size_t nbyte) {
+#ifdef ENABLE_COMM_STATS
+		if (previous_op == SEND)
+			comm_rounds++;
+		previous_op = RECV
+#endif // ENABLE_COMM_STATS
 		derived().recv_data_internal(data, nbyte);
 	}
 
@@ -48,7 +66,7 @@ class IOChannel { public:
 			recv_data(tmp, len);
 			A[i].from_bin(g, tmp, len);
 		}
-	}	
+	}
 
 	void send_bool(bool * data, size_t length) {
 		void * ptr = (void *)data;
@@ -119,7 +137,7 @@ class IOChannel { public:
 #endif
                         memcpy(data64, &unpack, sizeof(unpack));
                         data64 += sizeof(unpack);
-                        
+
 		}
 		if (8*i != length)
 			recv_data(data + 8*i, length - 8*i);
