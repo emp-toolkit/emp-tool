@@ -21,7 +21,12 @@ class PRG { public:
 	block key;
 	PRG(const void * seed = nullptr, int id = 0) {
 		if (seed != nullptr) {
-			reseed((const block *)seed, id);
+			// Unaligned-safe load: caller passed a void*, so the address
+			// may not meet block's 16-byte alignment. movdqu via the loadu
+			// intrinsic is correct regardless; reseed then sees a true,
+			// stack-aligned block*.
+			block v = _mm_loadu_si128((const __m128i *)seed);
+			reseed(&v, id);
 		} else {
 			block v;
 #ifndef ENABLE_RDSEED
@@ -47,14 +52,17 @@ class PRG { public:
 		}
 	}
 	void reseed(const block* seed, uint64_t id = 0) {
-		block v = _mm_loadu_si128(seed);
+		block v = *seed;
 		v ^= makeBlock(0LL, id);
 		key = v;
 		AES_set_encrypt_key(v, &aes);
 		counter = 0;
 	}
 
+	// `data` must be block-aligned (16-byte). Use random_data_unaligned otherwise.
 	void random_data(void *data, int nbytes) {
+		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
+		       "random_data requires 16-byte aligned data; use random_data_unaligned");
 		random_block((block *)data, nbytes/16);
 		if (nbytes % 16 != 0) {
 			block extra;
@@ -63,11 +71,37 @@ class PRG { public:
 		}
 	}
 
+	// Unpacks 8 bools per random byte (= 128 bools per AES block) instead of
+	// consuming a full byte for one bit, an 8x cut in AES work. Inner unpack
+	// uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
 	void random_bool(bool * data, int length) {
-		uint8_t * uint_data = (uint8_t*)data;
-		random_data_unaligned(uint_data, length);
-		for(int i = 0; i < length; ++i)
-			data[i] = uint_data[i] & 1;
+		if (length <= 0) return;
+		constexpr int CHUNK_B = 16;  // 16 blocks = 2048 bits per pass
+		block buf[CHUNK_B];
+		int produced = 0;
+		while (produced < length) {
+			int remaining = length - produced;
+			int bits_pass = remaining < CHUNK_B * 128 ? remaining : CHUNK_B * 128;
+			int blocks_pass = (bits_pass + 127) / 128;
+			random_block(buf, blocks_pass);
+			const uint8_t *bytes = reinterpret_cast<const uint8_t *>(buf);
+			int full32 = bits_pass / 32;
+			for (int i = 0; i < full32; ++i) {
+				uint32_t b32;
+				memcpy(&b32, bytes + i * 4, 4);
+				bits32_to_bytes(b32, data + produced + i * 32);
+			}
+			produced += full32 * 32;
+			int tail_bits = bits_pass - full32 * 32;
+			if (tail_bits > 0) {
+				uint32_t b32 = 0;
+				memcpy(&b32, bytes + full32 * 4, (tail_bits + 7) / 8);
+				bool tmp[32];
+				bits32_to_bytes(b32, tmp);
+				memcpy(data + produced, tmp, tail_bits);
+				produced += tail_bits;
+			}
+		}
 	}
 
     void random_data_unaligned(void *data, int nbytes) {
@@ -103,28 +137,45 @@ class PRG { public:
             }
         } else {
             block tmp[2];
+            assert(nbytes <= (int)sizeof(tmp));
             random_block(tmp, 2);
             memcpy(data, tmp, nbytes);
         }
     }
 
 	void random_block(block * data, int nblocks=1) {
-		block tmp[AES_BATCH_SIZE];
-		for(int i = 0; i < nblocks/AES_BATCH_SIZE; ++i) {
-			for (int j = 0; j < AES_BATCH_SIZE; ++j)
-				tmp[j] = makeBlock(0LL, counter++);
-			AES_ecb_encrypt_blks<AES_BATCH_SIZE>(tmp, &aes);
-			memcpy(data + i*AES_BATCH_SIZE, tmp, AES_BATCH_SIZE*sizeof(block));
+		// Caller must pass block-aligned `data` (16 bytes). random_data and
+		// random_data_unaligned wrap unaligned inputs.
+		//
+		// CHUNK keeps the counter-write phase and the AES-encrypt phase
+		// touching the same cache lines while still hot in L1 (CHUNK=64
+		// blocks = 1 KiB = 16 lines, well under L1d). It also lets the
+		// runtime ParaEnc dispatcher amortize its per-call setup (round-key
+		// broadcasts on the VAES path) over more blocks per invocation.
+		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
+		       "random_block requires 16-byte aligned data");
+		constexpr int CHUNK = 64;
+		const block one = makeBlock(0, 1);
+		while (nblocks > 0) {
+			int n = nblocks < CHUNK ? nblocks : CHUNK;
+			block ctr = makeBlock(0, counter);
+			for (int j = 0; j < n; ++j) {
+				data[j] = ctr;
+				ctr = _mm_add_epi64(ctr, one);
+			}
+			counter += n;
+			ParaEnc(data, &aes, 1, n);
+			data += n;
+			nblocks -= n;
 		}
-		int remain = nblocks % AES_BATCH_SIZE;
-		for (int j = 0; j < remain; ++j)
-			tmp[j] = makeBlock(0LL, counter++);
-		AES_ecb_encrypt_blks(tmp, remain, &aes);
-		memcpy(data + (nblocks/AES_BATCH_SIZE)*AES_BATCH_SIZE, tmp, remain*sizeof(block));
 	}
 
 	typedef uint64_t result_type;
-	result_type buffer[32];
+	// alignas(block): operator() reinterprets buffer as block* and feeds
+	// random_block, which requires 16-byte alignment. Without alignas the
+	// buffer's offset within PRG happens to be 16-aligned today, but a
+	// future reorder of PRG members could silently break that.
+	alignas(block) result_type buffer[32];
 	size_t ptr = 32;
 	static constexpr result_type min() {
 		return 0;

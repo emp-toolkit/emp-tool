@@ -61,6 +61,9 @@ class Group { public:
 	size_t scratch_size = 256;
 	Group();
 	~Group();
+	// Owns raw OpenSSL handles + scratch[]; copying would multi-free.
+	Group(const Group&) = delete;
+	Group& operator=(const Group&) = delete;
 	void resize_scratch(size_t size);
 	void get_rand_bn(BigInt & n);
 	Point get_generator();

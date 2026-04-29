@@ -5,7 +5,7 @@
 namespace emp {
 
 /*
- * By default, CRH use zero_block as the AES key.
+ * By default, CCRH uses zero_block as the AES key.
  * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
  */
 class CCRH: public PRP { public:
@@ -19,26 +19,19 @@ class CCRH: public PRP { public:
 		return t ^ in;
 	}
 
-#ifdef __GNUC__
-	#ifndef __clang__
-		#pragma GCC push_options
-		#pragma GCC optimize ("unroll-loops")
-	#endif
-#endif
-
+	// NOTE: the body is fully unrolled by the compiler for small n. For
+	// n ≳ 64 the unrolled body spills its per-block scratch (each block
+	// needs a SIMD register; the architectural file holds 16–32 of them
+	// depending on the target). Callers wanting large batches should use
+	// Hn() below, or stay at n ≤ 16 where throughput peaks.
 	template<int n>
 	void H(block out[n], block in[n]) {
 		block tmp[n];
 		for (int i = 0; i < n; ++i)
 			tmp[i] = out[i] = sigma(in[i]);
 		permute_block(tmp, n);
-		xorBlocks_arr(out, tmp, out, n);
+		xorBlocksTo_arr(out, tmp, n);
 	}
-#ifdef __GNUC__
-	#ifndef __clang__
-		#pragma GCC pop_options
-	#endif
-#endif
 
 	void Hn(block*out, block* in, int length, block * scratch = nullptr) {
 		bool del = false;
@@ -51,7 +44,7 @@ class CCRH: public PRP { public:
 			scratch[i] = out[i] = sigma(in[i]);
 
 		permute_block(scratch, length);
-		xorBlocks_arr(out, scratch, out, length);
+		xorBlocksTo_arr(out, scratch, length);
 
 		if(del) {
 			delete[] scratch;

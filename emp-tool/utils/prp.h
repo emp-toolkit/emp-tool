@@ -15,9 +15,13 @@ namespace emp {
 class PRP { public:
 	AES_KEY aes;
 
+	// `key`, if non-null, must point to at least sizeof(block) (16) bytes.
 	PRP(const char * key = nullptr) {
-		if(key == nullptr)
+		if(key == nullptr) {
 			aes_set_key(zero_block);
+		} else {
+			aes_set_key(_mm_loadu_si128((const __m128i *)key));
+		}
 	}
 
 	PRP(const block& key) {

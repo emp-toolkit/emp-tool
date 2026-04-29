@@ -1,189 +1,242 @@
-/* crypto/aes/aes.h -*- mode:C; c-file-style: "eay" -*- */
-/* ====================================================================
- * Copyright (c) 1998-2002 The OpenSSL Project.  All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- *
- * 3. All advertising materials mentioning features or use of this
- *    software must display the following acknowledgment:
- *    "This product includes software developed by the OpenSSL Project
- *    for use in the OpenSSL Toolkit. (http://www.openssl.org/)"
- *
- * 4. The names "OpenSSL Toolkit" and "OpenSSL Project" must not be used to
- *    endorse or promote products derived from this software without
- *    prior written permission. For written permission, please contact
- *    openssl-core@openssl.org.
- *
- * 5. Products derived from this software may not be called "OpenSSL"
- *    nor may "OpenSSL" appear in their names without prior written
- *    permission of the OpenSSL Project.
- *
- * 6. Redistributions of any form whatsoever must retain the following
- *    acknowledgment:
- *    "This product includes software developed by the OpenSSL Project
- *    for use in the OpenSSL Toolkit (http://www.openssl.org/)"
- *
- * THIS SOFTWARE IS PROVIDED BY THE OpenSSL PROJECT ``AS IS'' AND ANY
- * EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE OpenSSL PROJECT OR
- * ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
- * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
- * ====================================================================
- *
- */
-
 #ifndef EMP_AES_H
 #define EMP_AES_H
 
 #include "emp-tool/utils/block.h"
+#include <cassert>
+#include <cstdint>
 
 namespace emp {
 
-typedef struct { block rd_key[11]; unsigned int rounds; } AES_KEY;
+typedef struct { block rd_key[11]; } AES_KEY;
 
-#define EXPAND_ASSIST(v1,v2,v3,v4,shuff_const,aes_const)                    \
-    v2 = _mm_aeskeygenassist_si128(v4,aes_const);                           \
-    v3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(v3),              \
-                                         _mm_castsi128_ps(v1), 16));        \
-    v1 = _mm_xor_si128(v1,v3);                                              \
-    v3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(v3),              \
-                                         _mm_castsi128_ps(v1), 140));       \
-    v1 = _mm_xor_si128(v1,v3);                                              \
-    v2 = _mm_shuffle_epi32(v2,shuff_const);                                 \
-    v1 = _mm_xor_si128(v1,v2)
+#define EMP_AES_ASSERT_ALIGNED(p) \
+	assert((reinterpret_cast<uintptr_t>(p) & (alignof(block) - 1)) == 0 \
+	       && "pointer must be 16-byte (block) aligned")
 
-inline void
-#ifdef __x86_64__
-__attribute__((target("aes,sse2")))
+// On x86_64, ParaEnc gets a VAES+AVX-512 path that runs 4 AES blocks per
+// vaesenc when the build target supports it. The function-level target
+// attribute widens the kernel's allowed ISA so the compiler can emit
+// zmm/ymm AES forms even when the rest of the TU was compiled with
+// "aes,sse2" only. A user building with -march=native on a VAES-capable
+// host will have __VAES__ and __AVX512F__ defined globally and pick this
+// path automatically.
+#if defined(__x86_64__) && defined(__VAES__) && defined(__AVX512F__)
+	#define EMP_AES_TARGET_ATTR __attribute__((target("vaes,avx512f,aes,sse2")))
+	#define EMP_AES_HAS_VAES512 1
+#elif defined(__x86_64__)
+	#define EMP_AES_TARGET_ATTR __attribute__((target("aes,sse2")))
+	#define EMP_AES_HAS_VAES512 0
+#else
+	#define EMP_AES_TARGET_ATTR
+	#define EMP_AES_HAS_VAES512 0
 #endif
-AES_set_encrypt_key(const block userkey, AES_KEY *key) {
-    block x0, x1, x2;
-    block *kp = key->rd_key;
-    kp[0] = x0 = userkey;
-    x2 = _mm_setzero_si128();
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 1);
-    kp[1] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 2);
-    kp[2] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 4);
-    kp[3] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 8);
-    kp[4] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 16);
-    kp[5] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 32);
-    kp[6] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 64);
-    kp[7] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 128);
-    kp[8] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 27);
-    kp[9] = x0;
-    EXPAND_ASSIST(x0, x1, x2, x0, 255, 54);
-    kp[10] = x0;
-    key->rounds = 10;
+
+template<int NumKeys>
+static inline void ks_rounds(AES_KEY * keys, block con, block con3, block mask, int r) {
+	for (int i = 0; i < NumKeys; ++i) {
+		block key = keys[i].rd_key[r-1];
+		block x2 =_mm_shuffle_epi8(key, mask);
+		block aux = _mm_aesenclast_si128 (x2, con);
+
+		block globAux=_mm_slli_epi64(key, 32);
+		key=_mm_xor_si128(globAux, key);
+		globAux=_mm_shuffle_epi8(key, con3);
+		key=_mm_xor_si128(globAux, key);
+		keys[i].rd_key[r] = _mm_xor_si128(aux, key);
+	}
 }
 
+/*
+ * AES key scheduling for NumKeys keys.
+ * [REF] "Fast Garbling of Circuits Under Standard Assumptions"
+ * https://eprint.iacr.org/2015/751.pdf
+ */
+template<int NumKeys>
+static inline void AES_opt_key_schedule(const block* user_key, AES_KEY *keys) {
+	EMP_AES_ASSERT_ALIGNED(user_key);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	block con = _mm_set_epi32(1,1,1,1);
+	block con2 = _mm_set_epi32(0x1b,0x1b,0x1b,0x1b);
+	block con3 = _mm_set_epi32(0x07060504,0x07060504,0x0ffffffff,0x0ffffffff);
+	block mask = _mm_set_epi32(0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d,0x0c0f0e0d);
+
+	for(int i = 0; i < NumKeys; ++i)
+		keys[i].rd_key[0] = user_key[i];
+
+	for (int r = 1; r <= 8; ++r) {
+		ks_rounds<NumKeys>(keys, con, con3, mask, r);
+		con = _mm_slli_epi32(con, 1);
+	}
+	ks_rounds<NumKeys>(keys, con2, con3, mask, 9);
+	con2 = _mm_slli_epi32(con2, 1);
+	ks_rounds<NumKeys>(keys, con2, con3, mask, 10);
+}
+
+/*
+ * With numKeys keys, use each key to encrypt numEncs blocks.
+ *
+ * Performance: the kernel is fully unrolled, so all K*N blocks and all K*11
+ * round keys are expected to live in SIMD registers simultaneously. Targets
+ * with 32 SIMD registers (modern ARMv8, AVX-512 x86) tolerate K*N up to
+ * about 16 before the round keys plus working state exceed the register
+ * file and the kernel starts spilling; throughput then drops 2–3×. Sweet
+ * spot is K*N ≤ 16 — for larger work, dispatch through the runtime
+ * ParaEnc(...) below, which tiles into {<1,8>,<1,4>,<1,2>,<1,1>}.
+ *
+ * On x86_64 with VAES+AVX-512 we use 4-block zmm tiles via
+ * _mm512_aesenc_epi128 for ~2× over scalar AES-NI.
+ */
 #ifdef __x86_64__
-__attribute__((target("aes,sse2")))
-inline void AES_ecb_encrypt_blks(block *blks, unsigned int nblks, const AES_KEY *key) {
-   for (unsigned int i = 0; i < nblks; ++i)
-      blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
-   for (unsigned int j = 1; j < key->rounds; ++j)
-      for (unsigned int i = 0; i < nblks; ++i)
-         blks[i] = _mm_aesenc_si128(blks[i], key->rd_key[j]);
-   for (unsigned int i = 0; i < nblks; ++i)
-      blks[i] = _mm_aesenclast_si128(blks[i], key->rd_key[key->rounds]);
+template<int numKeys, int numEncs>
+EMP_AES_TARGET_ATTR
+static inline void ParaEnc(block *blks, const AES_KEY *keys) {
+	EMP_AES_ASSERT_ALIGNED(blks);
+	EMP_AES_ASSERT_ALIGNED(keys);
+#if EMP_AES_HAS_VAES512
+	// Per-key serial: each key's numEncs blocks form an independent stream.
+	// Within a stream, partition into 4-block zmm tiles + an optional
+	// 2-block ymm + 1-block scalar tail.
+	constexpr int FULL = numEncs / 4;
+	constexpr int REM  = numEncs % 4;
+	for (size_t k = 0; k < numKeys; ++k) {
+		block * const p = blks + k * (size_t)numEncs;
+		const AES_KEY * const kk = keys + k;
+
+		// Broadcast each 128-bit round key to all 4 lanes of a zmm.
+		__m512i rk[11];
+		for (int r = 0; r < 11; ++r)
+			rk[r] = _mm512_broadcast_i32x4(kk->rd_key[r]);
+
+		// Full 4-block zmm tiles.
+		for (int t = 0; t < FULL; ++t) {
+			__m512i x = _mm512_loadu_si512((const __m512i *)(p + t * 4));
+			x = _mm512_xor_si512(x, rk[0]);
+			for (int r = 1; r < 10; ++r)
+				x = _mm512_aesenc_epi128(x, rk[r]);
+			x = _mm512_aesenclast_epi128(x, rk[10]);
+			_mm512_storeu_si512((__m512i *)(p + t * 4), x);
+		}
+
+		// Tail. REM is a compile-time constant; only one branch survives.
+		block * tail = p + FULL * 4;
+		if (REM >= 2) {
+			__m256i rk2[11];
+			for (int r = 0; r < 11; ++r)
+				rk2[r] = _mm256_broadcastsi128_si256(kk->rd_key[r]);
+			__m256i x = _mm256_loadu_si256((const __m256i *)tail);
+			x = _mm256_xor_si256(x, rk2[0]);
+			for (int r = 1; r < 10; ++r)
+				x = _mm256_aesenc_epi128(x, rk2[r]);
+			x = _mm256_aesenclast_epi128(x, rk2[10]);
+			_mm256_storeu_si256((__m256i *)tail, x);
+			tail += 2;
+		}
+		if (REM == 1 || REM == 3) {
+			block x = *tail;
+			x = x ^ kk->rd_key[0];
+			for (int r = 1; r < 10; ++r)
+				x = _mm_aesenc_si128(x, kk->rd_key[r]);
+			x = _mm_aesenclast_si128(x, kk->rd_key[10]);
+			*tail = x;
+		}
+	}
+#else
+	// AES-NI fallback. Round-major outer loop interleaves all blocks at the
+	// same round depth, exposing ILP across the AESENC pipeline.
+	block * first = blks;
+	for(size_t i = 0; i < numKeys; ++i) {
+		block K = keys[i].rd_key[0];
+		for(size_t j = 0; j < numEncs; ++j) {
+			*blks = *blks ^ K;
+			++blks;
+		}
+	}
+
+	for (unsigned int r = 1; r < 10; ++r) {
+		blks = first;
+		for(size_t i = 0; i < numKeys; ++i) {
+			block K = keys[i].rd_key[r];
+			for(size_t j = 0; j < numEncs; ++j) {
+				*blks = _mm_aesenc_si128(*blks, K);
+				++blks;
+			}
+		}
+	}
+
+	blks = first;
+	for(size_t i = 0; i < numKeys; ++i) {
+		block K = keys[i].rd_key[10];
+		for(size_t j = 0; j < numEncs; ++j) {
+			*blks = _mm_aesenclast_si128(*blks, K);
+			++blks;
+		}
+	}
+#endif
 }
 #elif __aarch64__
-inline void AES_ecb_encrypt_blks(block *_blks, unsigned int nblks, const AES_KEY *key) {
-   uint8x16_t * blks = (uint8x16_t*)(_blks);
-   uint8x16_t * keys = (uint8x16_t*)(key->rd_key);
-   auto * first = blks;
-   for (unsigned int j = 0; j < key->rounds-1; ++j) {
-		uint8x16_t key_j = (uint8x16_t)keys[j];
-      blks = first;
-      for (unsigned int i = 0; i < nblks; ++i, ++blks)
-	       *blks = vaesmcq_u8(vaeseq_u8(*blks, key_j));
-   }
-	uint8x16_t last_key = (uint8x16_t)keys[key->rounds-1];
-	for (unsigned int i = 0; i < nblks; ++i, ++first)
-		 *first = vaeseq_u8(*first, last_key) ^ (uint8x16_t)keys[key->rounds];
+template<int numKeys, int numEncs>
+static inline void ParaEnc(block *blks, const AES_KEY *keys) {
+	EMP_AES_ASSERT_ALIGNED(blks);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	uint8x16_t * first = (uint8x16_t*)(blks);
+
+	for (unsigned int r = 0; r < 9; ++r) {
+		auto cur = first;
+		for(size_t i = 0; i < numKeys; ++i) {
+			uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[r]);
+			for(size_t j = 0; j < numEncs; ++j, ++cur)
+			   *cur = vaesmcq_u8(vaeseq_u8(*cur, K));
+		}
+	}
+
+	auto cur = first;
+	for(size_t i = 0; i < numKeys; ++i) {
+		uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[9]);
+		uint8x16_t K2 = vreinterpretq_u8_m128i(keys[i].rd_key[10]);
+		for(size_t j = 0; j < numEncs; ++j, ++cur)
+			*cur = vaeseq_u8(*cur, K) ^ K2;
+	}
 }
 #endif
 
-#ifdef __GNUC__
-	#ifndef __clang__
-		#pragma GCC push_options
-		#pragma GCC optimize ("unroll-loops")
-	#endif
-#endif
+/*
+ * Runtime-sized companion to ParaEnc<K, N>: encrypts N blocks under each
+ * of K keys with the same K-major layout (blks[k*N..k*N+N) under keys[k]).
+ * Dispatches per key into compile-time tiles {8, 4, 2, 1} so each tile
+ * still goes through the unrolled, register-resident templated kernel.
+ *
+ * Cross-key ILP is not exploited here — preserving K-major layout while
+ * tiling on N would require interleaved layouts. Hot callers that know
+ * (K, N) at compile time should use ParaEnc<K, N> directly.
+ */
+EMP_AES_TARGET_ATTR
+inline void ParaEnc(block *blks, const AES_KEY *keys, int K, int N) {
+	EMP_AES_ASSERT_ALIGNED(blks);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	for (int k = 0; k < K; ++k) {
+		block *p = blks + (size_t)k * N;
+		int n = N;
+		while (n >= 8) { ParaEnc<1, 8>(p, keys + k); p += 8; n -= 8; }
+		if (n >= 4)    { ParaEnc<1, 4>(p, keys + k); p += 4; n -= 4; }
+		if (n >= 2)    { ParaEnc<1, 2>(p, keys + k); p += 2; n -= 2; }
+		if (n >= 1)      ParaEnc<1, 1>(p, keys + k);
+	}
+}
+
+// --- Single-key encrypt/decrypt wrappers ---
+
+inline void AES_set_encrypt_key(const block& userkey, AES_KEY *key) {
+	AES_opt_key_schedule<1>(&userkey, key);
+}
+
 template<int N>
 inline void AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
-	AES_ecb_encrypt_blks(blks, N, key);
-}
-#ifdef __GNUC_
-	#ifndef __clang___
-		#pragma GCC pop_options
-	#endif
-#endif
-
-inline void
-#ifdef __x86_64__
-__attribute__((target("aes,sse2")))
-#endif
-AES_set_decrypt_key_fast(AES_KEY *dkey, const AES_KEY *ekey) {
-    int j = 0;
-    int i = ekey->rounds;
-#if (OCB_KEY_LEN == 0)
-    dkey->rounds = i;
-#endif
-    dkey->rd_key[i--] = ekey->rd_key[j++];
-    while (i)
-        dkey->rd_key[i--] = _mm_aesimc_si128(ekey->rd_key[j++]);
-    dkey->rd_key[i] = ekey->rd_key[j];
+	ParaEnc<1, N>(blks, key);
 }
 
-inline void
-#ifdef __x86_64__
-__attribute__((target("aes,sse2")))
-#endif
-AES_set_decrypt_key(block userkey, AES_KEY *key) {
-    AES_KEY temp_key;
-    AES_set_encrypt_key(userkey, &temp_key);
-    AES_set_decrypt_key_fast(key, &temp_key);
+inline void AES_ecb_encrypt_blks(block *blks, unsigned nblks, const AES_KEY *key) {
+	ParaEnc(blks, key, 1, (int)nblks);
 }
 
-inline void
-#ifdef __x86_64__
-__attribute__((target("aes,sse2")))
-#endif
-AES_ecb_decrypt_blks(block *blks, unsigned nblks, const AES_KEY *key) {
-    unsigned i, j, rnds = key->rounds;
-    for (i = 0; i < nblks; ++i)
-        blks[i] = _mm_xor_si128(blks[i], key->rd_key[0]);
-    for (j = 1; j < rnds; ++j)
-        for (i = 0; i < nblks; ++i)
-            blks[i] = _mm_aesdec_si128(blks[i], key->rd_key[j]);
-    for (i = 0; i < nblks; ++i)
-        blks[i] = _mm_aesdeclast_si128(blks[i], key->rd_key[j]);
-}
-}
+}  // namespace emp
 #endif

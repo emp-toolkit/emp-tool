@@ -14,14 +14,14 @@ int main(int argc, char** argv) {
 	PRG prg(&zero_block);
 	for(int i = 0; i < 1000; ++i)
 	if(party == ALICE) {
-		prg.random_data(data, length);
+		prg.random_data_unaligned(data, length);
 		io->send_data(data, length);
 		io->send_data(data, length);
 //		io->flush();
 		io->recv_data(data2, length);
 		assert(memcmp(data, data2, length) == 0);
 	} else {//party == BOB
-		prg.random_data(data2, length);
+		prg.random_data_unaligned(data2, length);
 		io->recv_data(data, length);
 		io->recv_data(data, length);
 //		io->flush();

@@ -136,7 +136,12 @@ inline void Integer::init(bool * b, int len, int party) {
 
 inline Integer::Integer(int len, int64_t input, int party) {
 	bool* b = new bool[len];
-	int_to_bool<int64_t>(b, input, len);
+	int n_native = len < 64 ? len : 64;
+	bits_to_bools(b, &input, n_native);
+	if (len > 64) {
+		bool sign = input < 0;
+		for (int i = 64; i < len; ++i) b[i] = sign;
+	}
 	init(b, len, party);
 	delete[] b;
 }
@@ -144,7 +149,7 @@ inline Integer::Integer(int len, int64_t input, int party) {
 template<typename T>
 inline Integer::Integer(int len, T * input, int party) {
 	bool* b = new bool[len];
-	to_bool<T>(b, input, len);
+	bits_to_bools(b, input, len);
 	init(b, len, party);
 	delete[] b;
 }
@@ -153,7 +158,7 @@ template<typename T>
 inline Integer::Integer(T * input, int party) {
 	size_t len = 8 * sizeof(T);
 	bool* b = new bool[len];
-	to_bool<T>(b, input, len);
+	bits_to_bools(b, input, len);
 	init(b, len, party);
 	delete[] b;
 }
@@ -232,7 +237,7 @@ template<typename T>
 inline void Integer::reveal(T * output, const int party) const {
 	bool * b = new bool[size()];
 	revealBools(b, party);
-	from_bool(b, output, size());
+	bools_to_bits(output, b, size());
 	delete[] b;
 }
 

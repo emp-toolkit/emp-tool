@@ -16,23 +16,34 @@ macro (add_test_case_with_run _name)
 endmacro()
 
 
-# Test cases
-add_test_case(prg)
+# Test cases — one file per emp-tool/utils/*.h header (see CLAUDE.md).
+# Each test file is a tutorial: example() / run_correctness() / bench(sec).
+
+# utils/* tests
+add_test_case(aes)
+add_test_case(block)
+add_test_case(ccrh)
+add_test_case(crh)
+add_test_case(f2k)
 add_test_case(hash)
+add_test_case(mitccrh)
+add_test_case(prg)
 add_test_case(prp)
+add_test_case(tccrh)
+add_test_case(utils)
+
+# group/EC
+add_test_case(ecc)
+
+# circuits / IO / higher-level — not utils/* but kept here for convenience
 add_test_case_with_run(netio)
 add_test_case_with_run(netio2)
 add_test_case(bit)
-add_test_case(ecc)
 add_test_case(int)
 add_test_case(float)
 add_test_case_with_run(garble)
 add_test_case(gen_circuit)
-add_test_case(mitccrh)
-add_test_case(f2k)
 add_test_case(halfgate)
-add_test_case(to_bool)
-add_test_case(aes_opt)
 
 IF(${CRYPTO_IN_CIRCUIT})
 add_test_case(sha3_256)

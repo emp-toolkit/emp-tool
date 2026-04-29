@@ -4,8 +4,8 @@
 #include <stdio.h>
 
 namespace emp {
-/* 
- * By default, TCCRH use zero_block as the AES key.
+/*
+ * By default, TCCRH uses zero_block as the AES key.
  * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
  */
 
@@ -19,13 +19,8 @@ class TCCRH: public PRP { public:
 		return t ^ in;
 	}
 
-#ifdef __GNUC__
-	#ifndef __clang__
-		#pragma GCC push_options
-		#pragma GCC optimize ("unroll-loops")
-	#endif
-#endif
-
+	// NOTE: see ccrh.h. Same spilling caveat at large n; prefer Hn() or
+	// keep n ≤ 16.
 	template<int n>
 	void H(block out[n], block in[n], uint64_t id) {
 		block tmp[n];
@@ -37,14 +32,8 @@ class TCCRH: public PRP { public:
 			++id;
 		}
 		permute_block(out, n);
-		xorBlocks_arr(out, tmp, out, n);
+		xorBlocksTo_arr(out, tmp, n);
 	}
-
-#ifdef __GNUC__
-	#ifndef __clang__
-		#pragma GCC pop_options
-	#endif
-#endif
 
 
 	void Hn(block*out, block* in, uint64_t id, int length, block * scratch = nullptr) {
@@ -61,7 +50,7 @@ class TCCRH: public PRP { public:
 			++id;
 		}
 		permute_block(out, length);
-		xorBlocks_arr(out, scratch, out, length);
+		xorBlocksTo_arr(out, scratch, length);
 
 		if(del) {
 			delete[] scratch;

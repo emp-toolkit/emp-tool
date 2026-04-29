@@ -1,148 +1,239 @@
+// utils/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Yang 2019).
+// A batched key schedule + AES-encrypt-then-XOR-input construction used by
+// half-gates garbling. Read example() first; the rest is verification + throughput.
+//
+// What's in mitccrh.h:
+//   MITCCRH<BatchSize>                       AES_KEY scheduled_key[B], gid, start_point
+//   setS(s)                                  reset start_point + gid
+//   renew_ks() / renew_ks(gid)               schedule B keys from gid sequence
+//   renew_ks(const block * tweaks)           schedule B keys from explicit tweaks
+//   hash<K, H>(blks)                         consume K scheduled keys, hash K*H blocks
+//   hash_cir<K, H>(blks)                     sigma() each block first, then hash<K,H>
+
 #include "emp-tool/emp-tool.h"
-#include "emp-tool/utils/mitccrh.h"
+
+#include <chrono>
+#include <cstdint>
+#include <cstring>
+#include <iomanip>
 #include <iostream>
-using namespace std;
+#include <sstream>
+#include <string>
+#include <vector>
+
 using namespace emp;
+using namespace std;
+using clk = chrono::high_resolution_clock;
 
-void print_keys(AES_KEY& key) {
-	cout << "round keys\n";
-	for(int i = 0; i < 11; i++) {
-		cout << key.rd_key[i]<<endl;
+// ---------- example ----------
+
+static void example() {
+	cout << "=== example ===\n";
+
+	// (1) setS + hash<K, H>: feed K*H blocks, the construction XORs input back
+	// over the encrypted output (TMMO).
+	const block S = makeBlock(0xdeadbeefULL, 0xcafebabeULL);
+	MITCCRH<8> mit;
+	mit.setS(S);
+
+	alignas(16) block buf[8] = {
+		makeBlock(0, 1), makeBlock(0, 2), makeBlock(0, 3), makeBlock(0, 4),
+		makeBlock(0, 5), makeBlock(0, 6), makeBlock(0, 7), makeBlock(0, 8),
+	};
+	mit.hash<8, 1>(buf);
+	cout << "  hash<8,1>(buf)[0]   = " << buf[0] << "\n";
+	cout << "  hash<8,1>(buf)[7]   = " << buf[7] << "\n";
+
+	// (2) hash_cir<K, H> applies sigma() first, then hash. Used in half-gates.
+	mit.setS(S);  // reset for a fresh transcript
+	alignas(16) block buf2[2] = {makeBlock(0, 0xAA), makeBlock(0, 0xBB)};
+	mit.hash_cir<2, 1>(buf2);
+	cout << "  hash_cir<2,1>[0]    = " << buf2[0] << "\n";
+
+	// (3) renew_ks(tweaks): schedule from explicit tweaks instead of gid.
+	mit.setS(S);
+	alignas(16) block tweaks[8];
+	for (int i = 0; i < 8; ++i) tweaks[i] = makeBlock(i + 100, 0);
+	mit.renew_ks(tweaks);
+	alignas(16) block buf3[8];
+	for (int i = 0; i < 8; ++i) buf3[i] = makeBlock(i, i);
+	mit.hash<8, 1>(buf3);
+	cout << "  hash<8,1> w/ tweaks[0] = " << buf3[0] << "\n";
+}
+
+// ---------- correctness ----------
+//
+// Reference: keys[i] = S ^ makeBlock(gid0+i, 0); schedule all B with
+// AES_opt_key_schedule<B>; ParaEnc<K, H> consumes scheduled_key[0..K), then
+// MITCCRH XORs the ciphertext with the original input.
+
+template <int K, int H, int B = 8>
+static bool check_mitccrh_against_paraenc() {
+	static_assert(K <= B && B % K == 0, "MITCCRH<B> requires K | B");
+	const block S = makeBlock(0xdeadbeefULL, 0xcafebabeULL);
+	const uint64_t gid0 = 7;
+
+	MITCCRH<B> mit;
+	mit.setS(S);
+	mit.gid = gid0;
+	mit.key_used = B;  // force a fresh schedule on first hash()
+
+	alignas(16) block in[K * H];
+	PRG().random_block(in, K * H);
+
+	alignas(16) block emp_out[K * H];
+	memcpy(emp_out, in, sizeof(in));
+	mit.template hash<K, H>(emp_out);
+
+	alignas(16) block ref_keys[B];
+	for (int i = 0; i < B; ++i) ref_keys[i] = S ^ makeBlock(gid0 + (uint64_t)i, 0);
+	alignas(16) AES_KEY skeys[B];
+	AES_opt_key_schedule<B>(ref_keys, skeys);
+
+	alignas(16) block ref_out[K * H];
+	memcpy(ref_out, in, sizeof(in));
+	ParaEnc<K, H>(ref_out, skeys);
+	for (int i = 0; i < K * H; ++i) ref_out[i] = ref_out[i] ^ in[i];
+
+	bool ok = memcmp(emp_out, ref_out, sizeof(in)) == 0;
+	ostringstream os;
+	os << "  [MITCCRH<" << B << ">::hash<" << K << "," << H << "> = ParaEnc^in]";
+	cout << left << setw(46) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+template <int K, int H>
+static bool check_hash_cir() {
+	const block S = makeBlock(0x1234ULL, 0x5678ULL);
+	MITCCRH<8> a, b;
+	a.setS(S); b.setS(S);
+	a.gid = b.gid = 0;
+	a.key_used = b.key_used = 8;
+
+	alignas(16) block in[K * H];
+	PRG().random_block(in, K * H);
+
+	alignas(16) block via_cir[K * H], via_manual[K * H];
+	memcpy(via_cir, in, sizeof(in));
+	a.template hash_cir<K, H>(via_cir);
+
+	for (int i = 0; i < K * H; ++i) via_manual[i] = sigma(in[i]);
+	b.template hash<K, H>(via_manual);
+
+	bool ok = memcmp(via_cir, via_manual, sizeof(in)) == 0;
+	ostringstream os;
+	os << "  [hash_cir<" << K << "," << H << "> = hash(sigma(.))]";
+	cout << left << setw(46) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_setS_resets_gid() {
+	MITCCRH<8> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.gid = 99;
+	mit.setS(makeBlock(3, 4));
+	bool ok = (mit.gid == 0);
+	cout << "  [setS resets gid]                              " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool run_correctness() {
+	cout << "=== correctness ===\n";
+	bool ok = true;
+	ok &= check_setS_resets_gid();
+	ok &= check_mitccrh_against_paraenc<1, 1>();
+	ok &= check_mitccrh_against_paraenc<1, 4>();
+	ok &= check_mitccrh_against_paraenc<2, 1>();
+	ok &= check_mitccrh_against_paraenc<4, 1>();
+	ok &= check_mitccrh_against_paraenc<8, 1>();
+	ok &= check_mitccrh_against_paraenc<8, 4>();
+	ok &= check_hash_cir<2, 1>();
+	ok &= check_hash_cir<2, 2>();
+	ok &= check_hash_cir<8, 1>();
+	return ok;
+}
+
+// ---------- throughput bench ----------
+
+template <typename Fn>
+static double run_for(double seconds, Fn &&fn, void *clob) {
+	for (int i = 0; i < 32; ++i) {
+		fn();
+		asm volatile("" : "+m"(*(char *)clob) : : "memory");
 	}
-}
-
-void aes_k2_h2_ori(block *H, block random, uint64_t idx) {
-	block user_key[2];
-	user_key[0] = _mm_xor_si128(makeBlock(idx, (uint64_t)0), random);
-	user_key[1] = _mm_xor_si128(makeBlock(idx + 1, (uint64_t)0), random);
-
-	AES_KEY keys[2];
-	AES_set_encrypt_key(user_key[0], &keys[0]);
-	AES_set_encrypt_key(user_key[1], &keys[1]);
-
-	block keys1[2], masks[2];
-	keys1[0] = sigma(H[0]);
-	keys1[1] = sigma(H[1]);
-	masks[0] = keys1[0];
-	masks[1] = keys1[1];
-
-	AES_ecb_encrypt_blks(&keys1[0], 1, &keys[0]);
-	AES_ecb_encrypt_blks(&keys1[1], 1, &keys[1]);
-
-	H[0] = _mm_xor_si128(keys1[0], masks[0]);
-	H[1] = _mm_xor_si128(keys1[1], masks[1]);
-}
-
-void aes_k2_h4_ori(block *H, block random, uint64_t idx) {
-	block user_key[2];
-	user_key[0] = _mm_xor_si128(makeBlock(idx, (uint64_t)0), random);
-	user_key[1] = _mm_xor_si128(makeBlock(idx + 1, (uint64_t)0), random);
-
-	AES_KEY keys[2];
-	AES_set_encrypt_key(user_key[0], &keys[0]);
-	AES_set_encrypt_key(user_key[1], &keys[1]);
-
-	block keys1[4], masks[4];
-	keys1[0] = sigma(H[0]);
-	keys1[1] = sigma(H[1]);
-	keys1[2] = sigma(H[2]);
-	keys1[3] = sigma(H[3]);
-	memcpy(masks, keys1, sizeof keys1);
-
-	AES_ecb_encrypt_blks(&keys1[0], 1, &keys[0]);
-	AES_ecb_encrypt_blks(&keys1[1], 1, &keys[0]);
-	AES_ecb_encrypt_blks(&keys1[2], 1, &keys[1]);
-	AES_ecb_encrypt_blks(&keys1[3], 1, &keys[1]);
-
-	H[0] = _mm_xor_si128(keys1[0], masks[0]);
-	H[1] = _mm_xor_si128(keys1[1], masks[1]);
-	H[2] = _mm_xor_si128(keys1[2], masks[2]);
-	H[3] = _mm_xor_si128(keys1[3], masks[3]);
-}
-
-int main() {
-	PRG prg;//using a random seed
-	MITCCRH<8> mitccrh;
-	block start_point;
-	prg.random_block(&start_point, 1);
-	mitccrh.setS(start_point);
-
-	// 2 key schedules for 2 hashes
-	cout << "Correctness of 2 key scheduling and 2 blocks hasing ... ";
-	uint64_t gid = 0;
-	while(gid < 1024) {
-		block hash[2];
-		prg.random_block(hash, 2);
-		block out[2];
-		out[0] = hash[0];
-		out[1] = hash[1];
-		mitccrh.hash_cir<2,1>(out);
-		aes_k2_h2_ori(hash, start_point, gid);
-
-		if(cmpBlock(hash, out, 2) == false) {
-			cout << "incorrect encryption for k2 h2" << endl;
-			exit(1);
+	int64_t iters = 64;
+	while (true) {
+		auto a = clk::now();
+		for (int64_t i = 0; i < iters; ++i) {
+			fn();
+			asm volatile("" : "+m"(*(char *)clob) : : "memory");
 		}
-		gid+=2;
+		double el = chrono::duration<double>(clk::now() - a).count();
+		if (el >= seconds) return double(iters) / el;
+		iters *= 2;
 	}
-	cout << "correct" << endl;
+}
 
-	cout << "Benchmark: ";
-	gid = 0;
-	mitccrh.renew_ks(gid);
-	block hash[8];
-	prg.random_block(hash, 2);
-	auto start = clock_start();
-	while(gid < 1024*1024*10) {
-		mitccrh.hash_cir<2,1>(hash);
-		gid++;
+static void print_vec(const string &lbl, double calls, int blocks_per_call) {
+	double GiBps = calls * (double)blocks_per_call * 16.0 / (1024.0 * 1024.0 * 1024.0);
+	double cy_per_blk = 3e9 / (calls * blocks_per_call);
+	cout << "  " << left << setw(36) << lbl
+	     << fixed << setprecision(2)
+	     << right << setw(8) << GiBps << " GiB/s "
+	     << setw(7) << cy_per_blk << " cy/blk @3GHz\n";
+}
+
+template <int K, int H>
+static double bench_hash(double sec) {
+	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
+	MITCCRH<8> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.renew_ks(uint64_t{0});
+	alignas(16) block buf[K * H];
+	PRG().random_block(buf, K * H);
+	return run_for(sec, [&]() { mit.template hash<K, H>(buf); }, &buf[0]);
+}
+
+template <int K, int H>
+static double bench_hash_cir(double sec) {
+	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
+	MITCCRH<8> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.renew_ks(uint64_t{0});
+	alignas(16) block buf[K * H];
+	PRG().random_block(buf, K * H);
+	return run_for(sec, [&]() { mit.template hash_cir<K, H>(buf); }, &buf[0]);
+}
+
+static void bench(double sec) {
+	cout << "=== MITCCRH<8>::hash<K, H>  (renew_ks amortized over B/K = 8/K calls) ===\n";
+	print_vec("hash<1,1>", bench_hash<1, 1>(sec), 1);
+	print_vec("hash<1,4>", bench_hash<1, 4>(sec), 4);
+	print_vec("hash<1,8>", bench_hash<1, 8>(sec), 8);
+	print_vec("hash<2,1>", bench_hash<2, 1>(sec), 2);
+	print_vec("hash<2,4>", bench_hash<2, 4>(sec), 8);
+	print_vec("hash<4,1>", bench_hash<4, 1>(sec), 4);
+	print_vec("hash<4,4>", bench_hash<4, 4>(sec), 16);
+	print_vec("hash<8,1>", bench_hash<8, 1>(sec), 8);
+	print_vec("hash<8,4>", bench_hash<8, 4>(sec), 32);
+	print_vec("hash<8,8>", bench_hash<8, 8>(sec), 64);
+
+	cout << "\n=== MITCCRH<8>::hash_cir<K, H>  (sigma + hash) ===\n";
+	print_vec("hash_cir<1,1>", bench_hash_cir<1, 1>(sec), 1);
+	print_vec("hash_cir<2,1>", bench_hash_cir<2, 1>(sec), 2);
+	print_vec("hash_cir<2,2>", bench_hash_cir<2, 2>(sec), 4);
+	print_vec("hash_cir<8,1>", bench_hash_cir<8, 1>(sec), 8);
+}
+
+int main(int argc, char **argv) {
+	double sec = (argc >= 2) ? atof(argv[1]) : 0.2;
+	example();
+	cout << "\n";
+	if (!run_correctness()) {
+		cerr << "CORRECTNESS FAILURE\n";
+		return 1;
 	}
-	cout << 1024*1024*10*2/(time_from(start))*1e6 << " blocks/second" << endl;
-
-	// 2 key schedules for 4 hashes
-	cout << "Correctness of 2 key scheduling and 4 blocks hasing ... ";
-	gid = 0;
-	MITCCRH<8> mitccrh1;
-	mitccrh1.setS(start_point);
-	while(gid < 1024) {
-		block hash[4];
-		prg.random_block(hash, 4);
-		block out[4];
-		out[0] = hash[0];
-		out[1] = hash[1];
-		out[2] = hash[2];
-		out[3] = hash[3];
-		mitccrh1.hash_cir<2,2>(out);
-		aes_k2_h4_ori(hash, start_point, gid);
-
-		if(cmpBlock(hash, out, 4) == false) {
-			cout << "incorrect encryption for k2 h4" << endl;
-			exit(1);
-		}
-		gid+=2;
-	}
-	cout << "correct" << endl;
-
-	cout << "Benchmark: ";
-	mitccrh1.renew_ks(0);
-	prg.random_block(hash, 4);
-	start = clock_start();
-	while(mitccrh1.gid < 1024*1024*10) {
-		mitccrh1.hash_cir<2,2>(hash);
-	}
-	cout << 1024*1024*10*4/(time_from(start))*1e6 << " blocks/second" << endl;
-
-	
-	cout << "Benchmark K8E8: ";
-	gid = 0;
-	prg.random_block(hash, 8);
-	start = clock_start();
-	mitccrh1.renew_ks(0);
-	while(mitccrh1.gid < 1024*1024*10) {
-		mitccrh1.hash_cir<8,1>(hash);
-	}
-
-	cout << 1024*1024*10*8/(time_from(start))*1e6 << " blocks/second" << endl;
-
+	cout << "\n";
+	bench(sec);
 	return 0;
 }

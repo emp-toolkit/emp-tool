@@ -1,3 +1,11 @@
+// emp-tool's wire formats and most internal byte/bit packings assume
+// little-endian. KDF (hash.h), block packing (block.h), and any IO that
+// memcpy's an integer over the wire would silently produce mismatched
+// output on a big-endian peer. Refuse to build there rather than ship a
+// binary that subtly disagrees with little-endian counterparties.
+static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
+              "emp-tool requires a little-endian target");
+
 #include <thread>
 #include "emp-tool/io/file_io_channel.h"
 #include "emp-tool/io/io_channel.h"
@@ -27,7 +35,6 @@
 #include "emp-tool/utils/ThreadPool.h"
 #include "emp-tool/utils/group.h"
 #include "emp-tool/utils/mitccrh.h"
-#include "emp-tool/utils/aes_opt.h"
 #include "emp-tool/utils/aes.h"
 #include "emp-tool/utils/f2k.h"
 

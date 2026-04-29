@@ -47,7 +47,7 @@ public:
         -> std::future<typename std::result_of<F(Args...)>::type>;
 #endif	
     ~ThreadPool();
-	int size() const;
+	size_t size() const;
 private:
     // need to keep track of threads so we can join them
     std::vector< std::thread > workers;
@@ -60,7 +60,7 @@ private:
     bool stop;
 };
  
-int inline ThreadPool::size() const {
+size_t inline ThreadPool::size() const {
 	return workers.size();
 }
 // the constructor just launches some amount of workers

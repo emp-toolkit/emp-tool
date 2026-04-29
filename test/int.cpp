@@ -9,13 +9,13 @@ void test_int(int party, int range1 = 1<<25, int range2 = 1<<25, int runs = 1000
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		long long ia, ib;
-		prg.random_data(&ia, 8);
-		prg.random_data(&ib, 8);
+		prg.random_data_unaligned(&ia, 8);
+		prg.random_data_unaligned(&ib, 8);
 		ia %= range1;
 		ib %= range2;
 		while( Op()(int(ia), int(ib)) != Op()(ia, ib) ) {
-			prg.random_data(&ia, 8);
-			prg.random_data(&ib, 8);
+			prg.random_data_unaligned(&ia, 8);
+			prg.random_data_unaligned(&ib, 8);
 			ia %= range1;
 			ib %= range2;
 		}

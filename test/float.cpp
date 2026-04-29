@@ -46,8 +46,8 @@ void test_float(double precision, int runs = 1000) {
 	PRG prg;
 	for(int i = 0; i < runs; ++i) {
 		int ia = 0, ib = 0;
-		prg.random_data(&ia, 4);
-		prg.random_data(&ib, 4);
+		prg.random_data_unaligned(&ia, 4);
+		prg.random_data_unaligned(&ib, 4);
 		float da = (float)(ia) / 10000000.0;
 		float db = (float)(ib) / 10000000.0;
 
@@ -74,7 +74,7 @@ void test_float(int func_id, double precision, double minimize, int runs = 1000)
 	const double pi = std::acos(-1);
 	for(int i = 0; i < runs; ++i) {
 		long ia;
-		prg.random_data(&ia, sizeof(long));
+		prg.random_data_unaligned(&ia, sizeof(long));
 		float da = ia / minimize;
 		Float a(da, PUBLIC);
 		Float res = Float(0.0, PUBLIC);
