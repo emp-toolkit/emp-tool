@@ -1,0 +1,111 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+
+    "configurePresets": [
+        {
+            "name":   "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+
+        {
+            "name":   "release",
+            "displayName": "Release",
+            "inherits": "base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name":   "debug",
+            "displayName": "Debug",
+            "inherits": "base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name":   "relwithdebinfo",
+            "displayName": "RelWithDebInfo",
+            "inherits": "base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+        },
+
+        {
+            "name":   "native",
+            "displayName": "Release + -march=native (benchmarks only)",
+            "inherits": "release",
+            "cacheVariables": { "EMP_TOOL_NATIVE_ARCH": "ON" }
+        },
+
+        {
+            "name":   "asan",
+            "displayName": "AddressSanitizer + UBSan",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_FLAGS":   "-fsanitize=address,undefined -fno-omit-frame-pointer",
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+                "CMAKE_EXE_LINKER_FLAGS":    "-fsanitize=address,undefined",
+                "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
+            "name":   "tsan",
+            "displayName": "ThreadSanitizer",
+            "inherits": "base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_FLAGS":   "-fsanitize=thread -fno-omit-frame-pointer",
+                "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer",
+                "CMAKE_EXE_LINKER_FLAGS":    "-fsanitize=thread",
+                "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread",
+                "EMP_TOOL_THREADING": "ON"
+            }
+        }
+    ],
+
+    "buildPresets": [
+        { "name": "release",         "configurePreset": "release"        },
+        { "name": "debug",           "configurePreset": "debug"          },
+        { "name": "relwithdebinfo",  "configurePreset": "relwithdebinfo" },
+        { "name": "native",          "configurePreset": "native"         },
+        { "name": "asan",            "configurePreset": "asan"           },
+        { "name": "tsan",            "configurePreset": "tsan"           }
+    ],
+
+    "testPresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "output": { "outputOnFailure": true, "verbosity": "default" },
+            "execution": { "noTestsAction": "error", "stopOnFailure": false },
+            "filter": { "exclude": { "name": "^(netio|netio2|garble|ot|ferret)$" } }
+        },
+        { "name": "release",        "configurePreset": "release",        "inherits": "base" },
+        { "name": "debug",          "configurePreset": "debug",          "inherits": "base" },
+        { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo", "inherits": "base" },
+        { "name": "native",         "configurePreset": "native",         "inherits": "base" },
+        { "name": "asan",           "configurePreset": "asan",           "inherits": "base" },
+        { "name": "tsan",           "configurePreset": "tsan",           "inherits": "base" }
+    ],
+
+    "workflowPresets": [
+        {
+            "name": "release",
+            "steps": [
+                { "type": "configure", "name": "release" },
+                { "type": "build",     "name": "release" },
+                { "type": "test",      "name": "release" }
+            ]
+        },
+        {
+            "name": "asan",
+            "steps": [
+                { "type": "configure", "name": "asan" },
+                { "type": "build",     "name": "asan" },
+                { "type": "test",      "name": "asan" }
+            ]
+        }
+    ]
+}

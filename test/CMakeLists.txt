@@ -1,23 +1,21 @@
-#Testing macro
-macro (add_test_executable_with_lib _name libs)
-	add_executable(test_${_name} "${_name}.cpp")
-	target_link_libraries(test_${_name} ${OPENSSL_LIBRARIES} ${libs})
-endmacro()
-
-macro (add_test_case _name)
-	add_test_executable_with_lib(${_name} "emp-tool")
-  	add_test(NAME ${_name} COMMAND "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test_${_name}" WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/")
-endmacro()
-
-macro (add_test_case_with_run _name)
-	add_test_executable_with_lib(${_name} "emp-tool")
-	add_test(NAME ${_name} COMMAND "${PROJECT_SOURCE_DIR}/run" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/test_${_name}" WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/")
-
-endmacro()
-
-
 # Test cases — one file per emp-tool/utils/*.h header (see CLAUDE.md).
 # Each test file is a tutorial: example() / run_correctness() / bench(sec).
+
+function(add_test_case name)
+    add_executable(test_${name} ${name}.cpp)
+    target_link_libraries(test_${name} PRIVATE emp-tool::emp-tool)
+    add_test(NAME ${name}
+             COMMAND test_${name}
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endfunction()
+
+function(add_test_case_with_run name)
+    add_executable(test_${name} ${name}.cpp)
+    target_link_libraries(test_${name} PRIVATE emp-tool::emp-tool)
+    add_test(NAME ${name}
+             COMMAND ${PROJECT_SOURCE_DIR}/run $<TARGET_FILE:test_${name}>
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endfunction()
 
 # utils/* tests
 add_test_case(aes)
@@ -45,7 +43,7 @@ add_test_case_with_run(garble)
 add_test_case(gen_circuit)
 add_test_case(halfgate)
 
-IF(${CRYPTO_IN_CIRCUIT})
-add_test_case(sha3_256)
-add_test_case(aes_128_ctr)
-ENDIF(${CRYPTO_IN_CIRCUIT})
+if(EMP_TOOL_CRYPTO_IN_CIRCUIT)
+    add_test_case(sha3_256)
+    add_test_case(aes_128_ctr)
+endif()
