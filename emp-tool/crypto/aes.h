@@ -13,22 +13,29 @@ typedef struct { block rd_key[11]; } AES_KEY;
 	assert((reinterpret_cast<uintptr_t>(p) & (alignof(block) - 1)) == 0 \
 	       && "pointer must be 16-byte (block) aligned")
 
-// On x86_64, ParaEnc gets a VAES+AVX-512 path that runs 4 AES blocks per
-// vaesenc when the build target supports it. The function-level target
-// attribute widens the kernel's allowed ISA so the compiler can emit
-// zmm/ymm AES forms even when the rest of the TU was compiled with
-// "aes,sse2" only. A user building with -march=native on a VAES-capable
-// host will have __VAES__ and __AVX512F__ defined globally and pick this
-// path automatically.
+// Tiered VAES support on x86_64. The widest tier the build can emit drives
+// EMP_AES_TARGET_ATTR (which widens the function-level ISA permission for
+// ParaEnc and friends). HAS_VAES256/HAS_VAES512 macros gate which Lane
+// traits are visible and which constexpr tile counts kick in.
+//
+// VAES-512 hosts are a strict superset of VAES-256, so when 512 is available
+// we keep the 256 tier active for tail blocks.
 #if defined(__x86_64__) && defined(__VAES__) && defined(__AVX512F__)
-	#define EMP_AES_TARGET_ATTR __attribute__((target("vaes,avx512f,aes,sse2")))
+	#define EMP_AES_TARGET_ATTR __attribute__((target("vaes,avx512f,avx2,aes,sse2")))
 	#define EMP_AES_HAS_VAES512 1
+	#define EMP_AES_HAS_VAES256 1
+#elif defined(__x86_64__) && defined(__VAES__) && defined(__AVX2__)
+	#define EMP_AES_TARGET_ATTR __attribute__((target("vaes,avx2,aes,sse2")))
+	#define EMP_AES_HAS_VAES512 0
+	#define EMP_AES_HAS_VAES256 1
 #elif defined(__x86_64__)
 	#define EMP_AES_TARGET_ATTR __attribute__((target("aes,sse2")))
 	#define EMP_AES_HAS_VAES512 0
+	#define EMP_AES_HAS_VAES256 0
 #else
 	#define EMP_AES_TARGET_ATTR
 	#define EMP_AES_HAS_VAES512 0
+	#define EMP_AES_HAS_VAES256 0
 #endif
 
 template<int NumKeys>
@@ -72,6 +79,73 @@ static inline void AES_opt_key_schedule(const block* user_key, AES_KEY *keys) {
 	ks_rounds<NumKeys>(keys, con2, con3, mask, 10);
 }
 
+#ifdef __x86_64__
+namespace detail {
+
+// Lane traits unify scalar AES-NI (1 block / xmm), VAES+AVX-256 (2 blocks /
+// ymm), and VAES+AVX-512 (4 blocks / zmm) under one template. Each tier
+// supplies the same six primitives; the tile kernel below uses them
+// uniformly. To add a new width (e.g. AVX-1024 if it ever ships), drop in
+// another struct with the appropriate intrinsics.
+struct Lane128 {
+	static constexpr int N = 1;
+	using vec_t = block;
+	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return k; }
+	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm_loadu_si128((const __m128i *)p); }
+	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm_storeu_si128((__m128i *)p, v); }
+	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm_xor_si128(a, b); }
+	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm_aesenc_si128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm_aesenclast_si128(s, k); }
+};
+
+#if EMP_AES_HAS_VAES256
+struct Lane256 {
+	static constexpr int N = 2;
+	using vec_t = __m256i;
+	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return _mm256_broadcastsi128_si256(k); }
+	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm256_loadu_si256((const __m256i *)p); }
+	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm256_storeu_si256((__m256i *)p, v); }
+	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm256_xor_si256(a, b); }
+	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm256_aesenc_epi128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm256_aesenclast_epi128(s, k); }
+};
+#endif
+
+#if EMP_AES_HAS_VAES512
+struct Lane512 {
+	static constexpr int N = 4;
+	using vec_t = __m512i;
+	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return _mm512_broadcast_i32x4(k); }
+	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm512_loadu_si512((const __m512i *)p); }
+	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm512_storeu_si512((__m512i *)p, v); }
+	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
+	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm512_aesenclast_epi128(s, k); }
+};
+#endif
+
+// Encrypt n_tiles tiles of L::N blocks each, in place, under a single key.
+// Round keys are broadcast to all lanes once per call.
+template <class L, int n_tiles>
+EMP_AES_TARGET_ATTR
+static inline void aes_tiles(block *p, const AES_KEY *kk) {
+	if constexpr (n_tiles == 0) return;
+	typename L::vec_t rk[11];
+	for (int r = 0; r < 11; ++r)
+		rk[r] = L::broadcast(kk->rd_key[r]);
+	for (int t = 0; t < n_tiles; ++t) {
+		auto x = L::load(p + (size_t)t * L::N);
+		x = L::xorv(x, rk[0]);
+		for (int r = 1; r < 10; ++r)
+			x = L::aesenc(x, rk[r]);
+		x = L::aesenclast(x, rk[10]);
+		L::store(p + (size_t)t * L::N, x);
+	}
+}
+
+}  // namespace detail
+#endif  // __x86_64__
+
 /*
  * With numKeys keys, use each key to encrypt numEncs blocks.
  *
@@ -79,12 +153,15 @@ static inline void AES_opt_key_schedule(const block* user_key, AES_KEY *keys) {
  * round keys are expected to live in SIMD registers simultaneously. Targets
  * with 32 SIMD registers (modern ARMv8, AVX-512 x86) tolerate K*N up to
  * about 16 before the round keys plus working state exceed the register
- * file and the kernel starts spilling; throughput then drops 2–3×. Sweet
- * spot is K*N ≤ 16 — for larger work, dispatch through the runtime
+ * file and the kernel starts spilling; throughput then drops 2-3x. Sweet
+ * spot is K*N <= 16 - for larger work, dispatch through the runtime
  * ParaEnc(...) below, which tiles into {<1,8>,<1,4>,<1,2>,<1,1>}.
  *
- * On x86_64 with VAES+AVX-512 we use 4-block zmm tiles via
- * _mm512_aesenc_epi128 for ~2× over scalar AES-NI.
+ * On x86_64 the per-key stream is partitioned at compile time into:
+ *   - 4-block zmm tiles (VAES + AVX-512), then
+ *   - 2-block ymm tiles (VAES + AVX2),     then
+ *   - 1-block scalar tail (AES-NI).
+ * Tiers absent at build time fall through to the next available width.
  */
 #ifdef __x86_64__
 template<int numKeys, int numEncs>
@@ -92,86 +169,30 @@ EMP_AES_TARGET_ATTR
 static inline void ParaEnc(block *blks, const AES_KEY *keys) {
 	EMP_AES_ASSERT_ALIGNED(blks);
 	EMP_AES_ASSERT_ALIGNED(keys);
+
 #if EMP_AES_HAS_VAES512
-	// Per-key serial: each key's numEncs blocks form an independent stream.
-	// Within a stream, partition into 4-block zmm tiles + an optional
-	// 2-block ymm + 1-block scalar tail.
-	constexpr int FULL = numEncs / 4;
-	constexpr int REM  = numEncs % 4;
+	constexpr int W4 = 4, N4 = numEncs / 4;
+#else
+	constexpr int W4 = 0, N4 = 0;
+#endif
+#if EMP_AES_HAS_VAES256
+	constexpr int W2 = 2, N2 = (numEncs - N4 * W4) / 2;
+#else
+	constexpr int W2 = 0, N2 = 0;
+#endif
+	constexpr int N1 = numEncs - N4 * W4 - N2 * W2;
+
 	for (size_t k = 0; k < numKeys; ++k) {
 		block * const p = blks + k * (size_t)numEncs;
 		const AES_KEY * const kk = keys + k;
-
-		// Broadcast each 128-bit round key to all 4 lanes of a zmm.
-		__m512i rk[11];
-		for (int r = 0; r < 11; ++r)
-			rk[r] = _mm512_broadcast_i32x4(kk->rd_key[r]);
-
-		// Full 4-block zmm tiles.
-		for (int t = 0; t < FULL; ++t) {
-			__m512i x = _mm512_loadu_si512((const __m512i *)(p + t * 4));
-			x = _mm512_xor_si512(x, rk[0]);
-			for (int r = 1; r < 10; ++r)
-				x = _mm512_aesenc_epi128(x, rk[r]);
-			x = _mm512_aesenclast_epi128(x, rk[10]);
-			_mm512_storeu_si512((__m512i *)(p + t * 4), x);
-		}
-
-		// Tail. REM is a compile-time constant; only one branch survives.
-		block * tail = p + FULL * 4;
-		if (REM >= 2) {
-			__m256i rk2[11];
-			for (int r = 0; r < 11; ++r)
-				rk2[r] = _mm256_broadcastsi128_si256(kk->rd_key[r]);
-			__m256i x = _mm256_loadu_si256((const __m256i *)tail);
-			x = _mm256_xor_si256(x, rk2[0]);
-			for (int r = 1; r < 10; ++r)
-				x = _mm256_aesenc_epi128(x, rk2[r]);
-			x = _mm256_aesenclast_epi128(x, rk2[10]);
-			_mm256_storeu_si256((__m256i *)tail, x);
-			tail += 2;
-		}
-		if (REM == 1 || REM == 3) {
-			block x = *tail;
-			x = x ^ kk->rd_key[0];
-			for (int r = 1; r < 10; ++r)
-				x = _mm_aesenc_si128(x, kk->rd_key[r]);
-			x = _mm_aesenclast_si128(x, kk->rd_key[10]);
-			*tail = x;
-		}
-	}
-#else
-	// AES-NI fallback. Round-major outer loop interleaves all blocks at the
-	// same round depth, exposing ILP across the AESENC pipeline.
-	block * first = blks;
-	for(size_t i = 0; i < numKeys; ++i) {
-		block K = keys[i].rd_key[0];
-		for(size_t j = 0; j < numEncs; ++j) {
-			*blks = *blks ^ K;
-			++blks;
-		}
-	}
-
-	for (unsigned int r = 1; r < 10; ++r) {
-		blks = first;
-		for(size_t i = 0; i < numKeys; ++i) {
-			block K = keys[i].rd_key[r];
-			for(size_t j = 0; j < numEncs; ++j) {
-				*blks = _mm_aesenc_si128(*blks, K);
-				++blks;
-			}
-		}
-	}
-
-	blks = first;
-	for(size_t i = 0; i < numKeys; ++i) {
-		block K = keys[i].rd_key[10];
-		for(size_t j = 0; j < numEncs; ++j) {
-			*blks = _mm_aesenclast_si128(*blks, K);
-			++blks;
-		}
-	}
+#if EMP_AES_HAS_VAES512
+		if constexpr (N4 > 0) detail::aes_tiles<detail::Lane512, N4>(p, kk);
 #endif
+#if EMP_AES_HAS_VAES256
+		if constexpr (N2 > 0) detail::aes_tiles<detail::Lane256, N2>(p + N4 * W4, kk);
+#endif
+		if constexpr (N1 > 0) detail::aes_tiles<detail::Lane128, N1>(p + N4 * W4 + N2 * W2, kk);
+	}
 }
 #elif __aarch64__
 template<int numKeys, int numEncs>

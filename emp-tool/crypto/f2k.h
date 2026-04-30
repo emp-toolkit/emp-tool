@@ -4,18 +4,26 @@
 
 namespace emp {
 
-// On x86_64 with VPCLMULQDQ+AVX-512, run carry-less multiply 4-wide on zmm.
-// Current AVX-512 implementations deliver ~2× the lanes-per-cycle of
-// scalar PCLMULQDQ, so inner-product hot paths see roughly a 2× speedup.
+// Tiered VPCLMULQDQ on x86_64. Widest tier the build can emit drives
+// EMP_F2K_TARGET_ATTR; HAS_VPCLMUL{256,512} gate which Lane traits and
+// constexpr loop branches kick in. VPCLMUL-512 hosts are a strict superset
+// of VPCLMUL-256, so when 512 is available we keep 256 active for tail.
 #if defined(__x86_64__) && defined(__VPCLMULQDQ__) && defined(__AVX512F__)
-	#define EMP_F2K_TARGET_ATTR __attribute__((target("vpclmulqdq,avx512f,sse2,pclmul")))
+	#define EMP_F2K_TARGET_ATTR __attribute__((target("vpclmulqdq,avx512f,avx2,sse2,pclmul")))
 	#define EMP_F2K_HAS_VPCLMUL512 1
+	#define EMP_F2K_HAS_VPCLMUL256 1
+#elif defined(__x86_64__) && defined(__VPCLMULQDQ__) && defined(__AVX2__)
+	#define EMP_F2K_TARGET_ATTR __attribute__((target("vpclmulqdq,avx2,sse2,pclmul")))
+	#define EMP_F2K_HAS_VPCLMUL512 0
+	#define EMP_F2K_HAS_VPCLMUL256 1
 #elif defined(__x86_64__)
 	#define EMP_F2K_TARGET_ATTR __attribute__((target("sse2,pclmul")))
 	#define EMP_F2K_HAS_VPCLMUL512 0
+	#define EMP_F2K_HAS_VPCLMUL256 0
 #else
 	#define EMP_F2K_TARGET_ATTR
 	#define EMP_F2K_HAS_VPCLMUL512 0
+	#define EMP_F2K_HAS_VPCLMUL256 0
 #endif
 /* multiplication in galois field without reduction */
 #ifdef __x86_64__
@@ -148,70 +156,125 @@ inline void gfmul_reflect (__m128i a, __m128i b, __m128i *res) {
 }
 
 
+#ifdef __x86_64__
+namespace f2k_detail {
+
+// Lane traits for VPCLMULQDQ-{256, 512}. Each tier defines the same minimal
+// surface so the inner-product accumulator below is one template body. To
+// add a hypothetical 8-lane width, drop in another struct.
+//
+// The four named clmul_*_* methods avoid passing the imm8 selector through
+// a non-constant argument (the intrinsic requires a compile-time constant).
+#if EMP_F2K_HAS_VPCLMUL256
+struct ClmulLane2 {
+	static constexpr int N = 2;
+	using vec_t = __m256i;
+	EMP_F2K_TARGET_ATTR static vec_t zero()                            { return _mm256_setzero_si256(); }
+	EMP_F2K_TARGET_ATTR static vec_t loadu(const block *p)             { return _mm256_loadu_si256((const __m256i *)p); }
+	EMP_F2K_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)            { return _mm256_xor_si256(a, b); }
+	// Three-way XOR. AVX-512VL would let us use _mm256_ternarylogic_epi64
+	// here, but VPCLMULQDQ + AVX2 hosts (Zen 3, Tiger Lake-P) typically
+	// lack AVX-512VL, so we keep the two-instruction sequence.
+	EMP_F2K_TARGET_ATTR static vec_t xor3(vec_t a, vec_t b, vec_t c)   { return _mm256_xor_si256(a, _mm256_xor_si256(b, c)); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_lo_lo(vec_t a, vec_t b)     { return _mm256_clmulepi64_epi128(a, b, 0x00); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_hi_hi(vec_t a, vec_t b)     { return _mm256_clmulepi64_epi128(a, b, 0x11); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_hi_lo(vec_t a, vec_t b)     { return _mm256_clmulepi64_epi128(a, b, 0x10); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_lo_hi(vec_t a, vec_t b)     { return _mm256_clmulepi64_epi128(a, b, 0x01); }
+	EMP_F2K_TARGET_ATTR static vec_t bslli_8(vec_t v)                  { return _mm256_bslli_epi128(v, 8); }
+	EMP_F2K_TARGET_ATTR static vec_t bsrli_8(vec_t v)                  { return _mm256_bsrli_epi128(v, 8); }
+	EMP_F2K_TARGET_ATTR static block fold_to_xmm(vec_t v) {
+		return _mm_xor_si128(_mm256_castsi256_si128(v),
+		                     _mm256_extracti128_si256(v, 1));
+	}
+};
+#endif
+
+#if EMP_F2K_HAS_VPCLMUL512
+struct ClmulLane4 {
+	static constexpr int N = 4;
+	using vec_t = __m512i;
+	EMP_F2K_TARGET_ATTR static vec_t zero()                            { return _mm512_setzero_si512(); }
+	EMP_F2K_TARGET_ATTR static vec_t loadu(const block *p)             { return _mm512_loadu_si512((const __m512i *)p); }
+	EMP_F2K_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)            { return _mm512_xor_si512(a, b); }
+	// Three-way XOR via vpternlogq with truth table 0x96 (a^b^c). Fuses
+	// the per-iteration mid accumulator update (mid ^= p10 ^ p01) into a
+	// single instruction.
+	EMP_F2K_TARGET_ATTR static vec_t xor3(vec_t a, vec_t b, vec_t c)   { return _mm512_ternarylogic_epi64(a, b, c, 0x96); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_lo_lo(vec_t a, vec_t b)     { return _mm512_clmulepi64_epi128(a, b, 0x00); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_hi_hi(vec_t a, vec_t b)     { return _mm512_clmulepi64_epi128(a, b, 0x11); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_hi_lo(vec_t a, vec_t b)     { return _mm512_clmulepi64_epi128(a, b, 0x10); }
+	EMP_F2K_TARGET_ATTR static vec_t clmul_lo_hi(vec_t a, vec_t b)     { return _mm512_clmulepi64_epi128(a, b, 0x01); }
+	EMP_F2K_TARGET_ATTR static vec_t bslli_8(vec_t v)                  { return _mm512_bslli_epi128(v, 8); }
+	EMP_F2K_TARGET_ATTR static vec_t bsrli_8(vec_t v)                  { return _mm512_bsrli_epi128(v, 8); }
+	EMP_F2K_TARGET_ATTR static block fold_to_xmm(vec_t v) {
+		__m256i y = _mm256_xor_si256(_mm512_castsi512_si256(v),
+		                              _mm512_extracti64x4_epi64(v, 1));
+		return _mm_xor_si128(_mm256_castsi256_si128(y),
+		                     _mm256_extracti128_si256(y, 1));
+	}
+};
+#endif
+
+// Drain L::N-block chunks from [i, sz), accumulating the unreduced 256-bit
+// product into lo/hi. mid = a_hi*b_lo XOR a_lo*b_hi is folded into lo/hi
+// via a 64-bit shift inside each 128-bit lane, then the lane-wide accumulator
+// is folded down to a scalar xmm via halving XOR-reductions.
+template <class L>
+EMP_F2K_TARGET_ATTR
+static inline void inn_prdt_drain_lanes(block &lo, block &hi,
+                                          const block *a, const block *b,
+                                          int &i, int sz) {
+	using V = typename L::vec_t;
+	V lo_v = L::zero(), hi_v = L::zero(), mid_v = L::zero();
+	for (; i + L::N <= sz; i += L::N) {
+		V av  = L::loadu(a + i);
+		V bv  = L::loadu(b + i);
+		V p00 = L::clmul_lo_lo(av, bv);
+		V p11 = L::clmul_hi_hi(av, bv);
+		V p10 = L::clmul_hi_lo(av, bv);
+		V p01 = L::clmul_lo_hi(av, bv);
+		lo_v  = L::xorv(lo_v,  p00);
+		hi_v  = L::xorv(hi_v,  p11);
+		mid_v = L::xor3(mid_v, p10, p01);
+	}
+	lo_v = L::xorv(lo_v, L::bslli_8(mid_v));
+	hi_v = L::xorv(hi_v, L::bsrli_8(mid_v));
+	lo = lo ^ L::fold_to_xmm(lo_v);
+	hi = hi ^ L::fold_to_xmm(hi_v);
+}
+
+}  // namespace f2k_detail
+#endif  // __x86_64__
+
 /* inner product of two galois field vectors without reduction */
 EMP_F2K_TARGET_ATTR
 inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *b, int sz) {
-#if EMP_F2K_HAS_VPCLMUL512
-	// VPCLMULQDQ-512: 4-lane carry-less multiply per zmm. We accumulate
-	// the unreduced 256-bit product into per-lane (lo, mid, hi) zmms and
-	// fold lanes at the end. mid = a_hi*b_lo XOR a_lo*b_hi, applied into
-	// lo/hi as a 64-bit shift inside each 128-bit lane.
+	block lo = zero_block, hi = zero_block;
 	int i = 0;
-	__m512i lo_z  = _mm512_setzero_si512();
-	__m512i hi_z  = _mm512_setzero_si512();
-	__m512i mid_z = _mm512_setzero_si512();
-	for (; i + 4 <= sz; i += 4) {
-		__m512i av = _mm512_loadu_si512((const __m512i *)(a + i));
-		__m512i bv = _mm512_loadu_si512((const __m512i *)(b + i));
-		__m512i p00 = _mm512_clmulepi64_epi128(av, bv, 0x00);
-		__m512i p11 = _mm512_clmulepi64_epi128(av, bv, 0x11);
-		__m512i p10 = _mm512_clmulepi64_epi128(av, bv, 0x10);
-		__m512i p01 = _mm512_clmulepi64_epi128(av, bv, 0x01);
-		lo_z  = _mm512_xor_si512(lo_z,  p00);
-		hi_z  = _mm512_xor_si512(hi_z,  p11);
-		mid_z = _mm512_xor_si512(mid_z, _mm512_xor_si512(p10, p01));
-	}
-	// Apply mid into lo/hi (per 128-bit lane: shift by 64 bits = 8 bytes).
-	lo_z = _mm512_xor_si512(lo_z, _mm512_bslli_epi128(mid_z, 8));
-	hi_z = _mm512_xor_si512(hi_z, _mm512_bsrli_epi128(mid_z, 8));
-	// Fold 4 lanes: zmm -> ymm -> xmm via halving XOR-reductions.
-	__m256i lo_y = _mm256_xor_si256(_mm512_castsi512_si256(lo_z),
-	                                _mm512_extracti64x4_epi64(lo_z, 1));
-	__m256i hi_y = _mm256_xor_si256(_mm512_castsi512_si256(hi_z),
-	                                _mm512_extracti64x4_epi64(hi_z, 1));
-	block lo = _mm_xor_si128(_mm256_castsi256_si128(lo_y),
-	                         _mm256_extracti128_si256(lo_y, 1));
-	block hi = _mm_xor_si128(_mm256_castsi256_si128(hi_y),
-	                         _mm256_extracti128_si256(hi_y, 1));
-	// Tail (sz % 4 leftover, < 4 elements).
-	block lo_t, hi_t;
-	for (; i < sz; ++i) {
-		mul128(a[i], b[i], &lo_t, &hi_t);
-		lo = lo ^ lo_t;
-		hi = hi ^ hi_t;
-	}
-	res[0] = lo;
-	res[1] = hi;
-#else
-	// 4-way accumulator unroll: lo halves into a0..a3, hi halves into b0..b3.
+#if EMP_F2K_HAS_VPCLMUL512
+	f2k_detail::inn_prdt_drain_lanes<f2k_detail::ClmulLane4>(lo, hi, a, b, i, sz);
+#endif
+#if EMP_F2K_HAS_VPCLMUL256
+	f2k_detail::inn_prdt_drain_lanes<f2k_detail::ClmulLane2>(lo, hi, a, b, i, sz);
+#endif
+	// Scalar tail. With VPCLMULQDQ active this drains < L::N elements; on
+	// hosts without it, this loop processes the full stream — keep the
+	// 4-way unroll so the no-VPCLMULQDQ case still runs at scalar peak.
 	block a0 = zero_block, a1 = zero_block, a2 = zero_block, a3 = zero_block;
 	block b0 = zero_block, b1 = zero_block, b2 = zero_block, b3 = zero_block;
-	block lo, hi;
-	int i = 0;
+	block lo_t, hi_t;
 	for (; i + 4 <= sz; i += 4) {
-		mul128(a[i],   b[i],   &lo, &hi); a0 = a0 ^ lo; b0 = b0 ^ hi;
-		mul128(a[i+1], b[i+1], &lo, &hi); a1 = a1 ^ lo; b1 = b1 ^ hi;
-		mul128(a[i+2], b[i+2], &lo, &hi); a2 = a2 ^ lo; b2 = b2 ^ hi;
-		mul128(a[i+3], b[i+3], &lo, &hi); a3 = a3 ^ lo; b3 = b3 ^ hi;
+		mul128(a[i],   b[i],   &lo_t, &hi_t); a0 = a0 ^ lo_t; b0 = b0 ^ hi_t;
+		mul128(a[i+1], b[i+1], &lo_t, &hi_t); a1 = a1 ^ lo_t; b1 = b1 ^ hi_t;
+		mul128(a[i+2], b[i+2], &lo_t, &hi_t); a2 = a2 ^ lo_t; b2 = b2 ^ hi_t;
+		mul128(a[i+3], b[i+3], &lo_t, &hi_t); a3 = a3 ^ lo_t; b3 = b3 ^ hi_t;
 	}
 	for (; i < sz; ++i) {
-		mul128(a[i], b[i], &lo, &hi);
-		a0 = a0 ^ lo;
-		b0 = b0 ^ hi;
+		mul128(a[i], b[i], &lo_t, &hi_t);
+		a0 = a0 ^ lo_t; b0 = b0 ^ hi_t;
 	}
-	res[0] = (a0 ^ a1) ^ (a2 ^ a3);
-	res[1] = (b0 ^ b1) ^ (b2 ^ b3);
-#endif
+	res[0] = lo ^ ((a0 ^ a1) ^ (a2 ^ a3));
+	res[1] = hi ^ ((b0 ^ b1) ^ (b2 ^ b3));
 }
 
 /* inner product of two galois field vectors without reduction */
