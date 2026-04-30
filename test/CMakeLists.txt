@@ -21,13 +21,11 @@ endfunction()
 add_test_case(aes)
 add_test_case(block)
 add_test_case(ccrh)
-add_test_case(crh)
 add_test_case(f2k)
 add_test_case(hash)
 add_test_case(mitccrh)
 add_test_case(prg)
 add_test_case(prp)
-add_test_case(tccrh)
 add_test_case(utils)
 
 # group/EC

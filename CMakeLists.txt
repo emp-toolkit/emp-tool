@@ -22,7 +22,7 @@ include(CheckCSourceRuns)
 # ---------------------------------------------------------------------
 option(EMP_TOOL_BUILD_TESTS       "Build emp-tool tests"               ${PROJECT_IS_TOP_LEVEL})
 option(EMP_TOOL_INSTALL           "Generate install / export rules"    ${PROJECT_IS_TOP_LEVEL})
-option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU only (-march=native). Useful for benchmarks; do not ship binaries with this on." OFF)
+option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so VAES, VPCLMULQDQ, AVX-512 etc. are used when available. Default ON for performance; turn OFF to produce a portable binary that runs on any AES-NI + PCLMUL + SSSE3 CPU." ON)
 option(EMP_TOOL_THREADING         "Use thread-local protocol/circuit execution pointers" OFF)
 option(EMP_TOOL_CRYPTO_IN_CIRCUIT "Embed AES-128 / Keccak Bristol circuits as static blobs" OFF)
 
@@ -53,22 +53,7 @@ endif()
 # Source list
 # ---------------------------------------------------------------------
 set(emp_tool_sources
-    emp-tool/emp-tool.cpp
-    emp-tool/circuits/float32_add.cpp
-    emp-tool/circuits/float32_cos.cpp
-    emp-tool/circuits/float32_div.cpp
-    emp-tool/circuits/float32_eq.cpp
-    emp-tool/circuits/float32_le.cpp
-    emp-tool/circuits/float32_leq.cpp
-    emp-tool/circuits/float32_mul.cpp
-    emp-tool/circuits/float32_sin.cpp
-    emp-tool/circuits/float32_sq.cpp
-    emp-tool/circuits/float32_sqrt.cpp
-    emp-tool/circuits/float32_sub.cpp
-    emp-tool/circuits/float32_exp2.cpp
-    emp-tool/circuits/float32_exp.cpp
-    emp-tool/circuits/float32_ln.cpp
-    emp-tool/circuits/float32_log2.cpp)
+    emp-tool/emp-tool.cpp)
 
 # Generated circuit blobs land in the build tree, not the source tree.
 if(EMP_TOOL_CRYPTO_IN_CIRCUIT)

@@ -33,11 +33,14 @@ class PRP { public:
 	}
 
 	void permute_block(block *data, int nblocks) {
-		for(int i = 0; i < nblocks/AES_BATCH_SIZE; ++i) {
-			AES_ecb_encrypt_blks<AES_BATCH_SIZE>(data + i*AES_BATCH_SIZE, &aes);
+		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
+		       "random_block requires 16-byte aligned data");
+		constexpr int CHUNK = 64;
+		while (nblocks > 0) {
+			int n = nblocks < CHUNK ? nblocks : CHUNK;
+			ParaEnc(data, &aes, 1, n);
+			nblocks -= n;
 		}
-		int remain = nblocks % AES_BATCH_SIZE;
-		AES_ecb_encrypt_blks(data + nblocks - remain, remain, &aes);
 	}
 };
 }

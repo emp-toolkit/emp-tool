@@ -12,6 +12,11 @@ const static int PUBLIC = 0;
 const static int ALICE = 1;
 const static int BOB = 2;
 
+// Bristol-format gate-type tags (the 4th int per gate record).
+const static int AND_GATE = 0;
+const static int XOR_GATE = 1;
+const static int NOT_GATE = 2;
+
 extern const char fix_key[17];
 }
 #endif// CONFIG_H__

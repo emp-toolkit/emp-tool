@@ -59,7 +59,7 @@ void test_bit() {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_prot(false, "");
+	setup_clear_backend();
 	test_bit();
-	finalize_plain_prot();
+	finalize_clear_backend();
 }

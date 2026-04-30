@@ -1,5 +1,6 @@
 #include "emp-tool/emp-tool.h"
 #include <iostream>
+#include <iomanip>
 
 using namespace std;
 using namespace emp;
@@ -47,10 +48,10 @@ int hash_in_circuit(){
   emp::Integer iv_integer = emp::Integer(128, &iv, emp::PUBLIC);
   emp::Integer key_integer = emp::Integer(128, &key, emp::PUBLIC);
 
-  aes_128_ctr_calculator.aes_128_ctr(&(key_integer[0].bit),
-                                     &(iv_integer[0].bit),
-                                     &(input_integer[0].bit),
-                                     &(output_integer[0].bit),
+  aes_128_ctr_calculator.aes_128_ctr(key_integer.bits.data(),
+                                     iv_integer.bits.data(),
+                                     input_integer.bits.data(),
+                                     output_integer.bits.data(),
                                      2000 * 8,
                                      emp::PUBLIC,
                                      77777);
@@ -70,10 +71,10 @@ int hash_in_circuit(){
   }
 
   // now with the out-of-circuit IV.
-  aes_128_ctr_calculator.aes_128_ctr(&(key_integer[0].bit),
+  aes_128_ctr_calculator.aes_128_ctr(key_integer.bits.data(),
                                      iv,
-                                     &(input_integer[0].bit),
-                                     &(output_integer[0].bit),
+                                     input_integer.bits.data(),
+                                     output_integer.bits.data(),
                                      2000 * 8,
                                      emp::PUBLIC,
                                      77777);
@@ -95,8 +96,8 @@ int hash_in_circuit(){
   // now with the out-of-circuit key and IV.
   aes_128_ctr_calculator.aes_128_ctr(key,
                                      iv,
-                                     &(input_integer[0].bit),
-                                     &(output_integer[0].bit),
+                                     input_integer.bits.data(),
+                                     output_integer.bits.data(),
                                      2000 * 8,
                                      emp::PUBLIC,
                                      77777);
@@ -122,8 +123,8 @@ int hash_in_circuit(){
 }
 
 int main(int argc, char** argv) {
-	setup_plain_prot(false, "");
+	setup_clear_backend();
 	hash_in_circuit();
-	finalize_plain_prot();
+	finalize_clear_backend();
 	return 0;
 }

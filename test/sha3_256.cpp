@@ -36,8 +36,8 @@ int hash_in_circuit(){
 }
 
 int main(int argc, char** argv) {
-	setup_plain_prot(false, "");
+	setup_clear_backend();
 	hash_in_circuit();
-	finalize_plain_prot();
+	finalize_clear_backend();
 	return 0;
 }

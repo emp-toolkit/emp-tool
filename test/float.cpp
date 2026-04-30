@@ -171,7 +171,7 @@ void fp_abs(double a) {
 }
 
 int main(int argc, char** argv) {
-	setup_plain_prot(false, "");
+	setup_clear_backend();
 
 	cout << "Test function:" << endl;
 	fp_cmp(52.21875, 52.21875);
@@ -194,6 +194,6 @@ int main(int argc, char** argv) {
 	test_float(6, 1e-3, 1e12);
 	test_float(7, 1e-3, 1e12);
 
-	finalize_plain_prot();
+	finalize_clear_backend();
 	return 0;
 }

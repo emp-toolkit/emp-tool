@@ -1,11 +1,8 @@
-#include "emp-tool/circuits/float32.h"
-using emp::Float;
-using emp::Bit;
-
-Float Float::cos() const {
-	Float res(*this);
-	Bit *B = new Bit[9454];
-	memcpy(B, value.data(), sizeof(block)*32);
+template<typename Wire>
+Float_T<Wire> Float_T<Wire>::cos() const {
+	Float_T<Wire> res(*this);
+	Bit_T<Wire> *B = new Bit_T<Wire>[9454];
+	for(int i = 0; i < 32; ++i) B[i] = value[i];
 	uint32_t gates[] = {
 24, 23, 32, 0, 
 30, 29, 33, 0, 
@@ -9430,8 +9427,8 @@ Float Float::cos() const {
 9421, 140, 9452, 1, 
 9421, 8708, 9453, 1, 
 };
-	execute_circuit<uint32_t>((block*)B, gates, sizeof(gates)/sizeof(uint32_t)/4);
-	memcpy(res.value.data(), B+9454-32, sizeof(block)*32);
+	execute_circuit<uint32_t>(B, gates, sizeof(gates)/sizeof(uint32_t)/4);
+	for(int i = 0; i < 32; ++i) res[i] = B[9454-32+i];
 	delete[] B;
 	return res;
 }

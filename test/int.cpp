@@ -59,7 +59,7 @@ void corner_cases() {
 
 int main(int argc, char** argv) {
 	int party = PUBLIC;
-	setup_plain_prot(false, "");
+	setup_clear_backend();
 
 	corner_cases();
 //	scratch_pad();return 0;
@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 	test_int<std::bit_and<int>, std::bit_and<Integer>>(party);
 	test_int<std::bit_or<int>, std::bit_or<Integer>>(party);
 	test_int<std::bit_xor<int>, std::bit_xor<Integer>>(party);
-	cout << CircuitExecution::circ_exec->num_and()<<endl;
+	cout << backend->num_and()<<endl;
 
-	finalize_plain_prot();
+	finalize_clear_backend();
 }
