@@ -3,7 +3,7 @@
 
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"
-#include "emp-tool/utils/block.h"
+#include "emp-tool/core/block.h"
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
 #include <fstream>

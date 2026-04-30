@@ -1,6 +1,6 @@
 #ifndef EMP_F2K_H__
 #define EMP_F2K_H__
-#include "emp-tool/utils/block.h"
+#include "emp-tool/core/block.h"
 
 namespace emp {
 

@@ -1,6 +1,6 @@
 #include "emp-tool/execution/circuit_execution.h"
 #include "emp-tool/execution/protocol_execution.h"
-#include "emp-tool/utils/constants.h"
+#include "emp-tool/core/constants.h"
 
 #ifndef THREADING
 emp::ProtocolExecution* emp::ProtocolExecution::prot_exec = nullptr;

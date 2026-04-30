@@ -1,7 +1,7 @@
 #ifndef EMP_CIRCUIT_EXECUTION_H__
 #define EMP_CIRCUIT_EXECUTION_H__
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/constants.h"
+#include "emp-tool/core/block.h"
+#include "emp-tool/core/constants.h"
 
 namespace emp {
 

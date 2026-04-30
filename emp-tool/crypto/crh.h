@@ -1,6 +1,6 @@
 #ifndef EMP_CRH_H__
 #define EMP_CRH_H__
-#include "emp-tool/utils/prp.h"
+#include "emp-tool/crypto/prp.h"
 #include <stdio.h>
 
 namespace emp {

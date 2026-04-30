@@ -1,10 +1,10 @@
 #ifndef EMP_UTILS_H__
 #define EMP_UTILS_H__
 #include <string>
-#include "emp-tool/utils/block.h"
+#include "emp-tool/core/block.h"
 #include <sstream>
 #include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
-#include "emp-tool/utils/constants.h"
+#include "emp-tool/core/constants.h"
 #include <chrono>
 #include <type_traits>
 #define macro_xstr(a) macro_str(a)
@@ -40,6 +40,6 @@ block bool_to_block(const bool * data);
 
 bool file_exists(const std::string &name);
 
-#include "emp-tool/utils/utils.hpp"
+#include "emp-tool/core/utils.hpp"
 }
 #endif// UTILS_H__

@@ -1,7 +1,7 @@
 #ifndef EMP_HALFGATE_EVA_H__
 #define EMP_HALFGATE_EVA_H__
-#include "emp-tool/utils/utils.h"
-#include "emp-tool/utils/mitccrh.h"
+#include "emp-tool/core/utils.h"
+#include "emp-tool/crypto/mitccrh.h"
 #include "emp-tool/execution/circuit_execution.h"
 #include <iostream>
 namespace emp {

@@ -1,4 +1,4 @@
-# Test cases — one file per emp-tool/utils/*.h header (see CLAUDE.md).
+# Test cases — one file per crypto/core/io/group header (see CLAUDE.md).
 # Each test file is a tutorial: example() / run_correctness() / bench(sec).
 
 function(add_test_case name)

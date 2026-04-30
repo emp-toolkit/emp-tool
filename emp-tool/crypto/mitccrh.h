@@ -1,6 +1,6 @@
 #ifndef EMP_MITCCRH_H__
 #define EMP_MITCCRH_H__
-#include "emp-tool/utils/aes.h"
+#include "emp-tool/crypto/aes.h"
 #include <stdio.h>
 
 namespace emp {

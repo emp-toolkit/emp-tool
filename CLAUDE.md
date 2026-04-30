@@ -1,13 +1,14 @@
 # Project conventions for Claude
 
-## Test files for `emp-tool/utils/*.h`
+## Test files for emp-tool primitive headers
 
 ### One file per component
 
-Each header in `emp-tool/utils/` has exactly one corresponding file in
-`test/`, named after the header (e.g. `utils/f2k.h` → `test/f2k.cpp`). No
-separate `_bench.cpp` companions — example, correctness, and benchmarks all
-live in the same file. CMake registers it as a single `add_test_case`.
+Each primitive header (under `emp-tool/core/`, `emp-tool/crypto/`,
+`emp-tool/group/`, `emp-tool/io/`) has exactly one corresponding file in
+`test/`, named after the header (e.g. `crypto/f2k.h` → `test/f2k.cpp`).
+No separate `_bench.cpp` companions — example, correctness, and benchmarks
+all live in the same file. CMake registers it as a single `add_test_case`.
 
 ### Required structure
 

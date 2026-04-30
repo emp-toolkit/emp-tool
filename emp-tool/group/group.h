@@ -6,7 +6,7 @@
 #include <openssl/obj_mac.h>
 #include <string>
 #include <cstring>
-#include "emp-tool/utils/utils.h"
+#include "emp-tool/core/utils.h"
 
 //#ifdef ECC_USE_OPENSSL
 //#else

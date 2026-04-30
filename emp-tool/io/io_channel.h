@@ -1,8 +1,8 @@
 #ifndef EMP_IO_CHANNEL_H__
 #define EMP_IO_CHANNEL_H__
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/prg.h"
-#include "emp-tool/utils/group.h"
+#include "emp-tool/core/block.h"
+#include "emp-tool/crypto/prg.h"
+#include "emp-tool/group/group.h"
 #include <cassert>
 #include <cstdint>
 #include <memory>

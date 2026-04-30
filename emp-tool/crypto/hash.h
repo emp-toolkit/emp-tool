@@ -1,8 +1,8 @@
 #ifndef EMP_HASH_H__
 #define EMP_HASH_H__
 
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/group.h"
+#include "emp-tool/core/block.h"
+#include "emp-tool/group/group.h"
 #include <openssl/evp.h>
 #include <stdio.h>
 

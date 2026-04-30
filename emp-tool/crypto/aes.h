@@ -1,7 +1,7 @@
 #ifndef EMP_AES_H
 #define EMP_AES_H
 
-#include "emp-tool/utils/block.h"
+#include "emp-tool/core/block.h"
 #include <cassert>
 #include <cstdint>
 

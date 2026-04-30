@@ -1,8 +1,8 @@
 #ifndef EMP_PRIVACY_FREE_EVA_H__
 #define EMP_PRIVACY_FREE_EVA_H__
 #include "emp-tool/io/io_channel.h"
-#include "emp-tool/utils/block.h"
-#include "emp-tool/utils/prp.h"
+#include "emp-tool/core/block.h"
+#include "emp-tool/crypto/prp.h"
 #include "emp-tool/execution/circuit_execution.h"
 #include <iostream>
 namespace emp {
