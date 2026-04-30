@@ -4,7 +4,8 @@
 #include "emp-tool/execution/backend.h"
 #include "emp-tool/core/block.h"
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/bitvec.h"
+#include "emp-tool/circuits/unsigned_int.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include <stdio.h>
 #include <fstream>
@@ -103,7 +104,7 @@ template<typename Wire>
 class AES_128_CTR_Calculator_T { public:
 	Bit_T<Wire> keyiv[256]; // internal state used during encryption.
 	Bit_T<Wire> blind[128]; // internal state used during encryption.
-	Integer_T<Wire> counter;
+	UnsignedInt_T<Wire> counter;
 	std::unique_ptr<BristolFashion> circuit;
 
 	// Sets up BristolFashion circuit for calculating aes, and allocates some space and constants.
@@ -151,7 +152,7 @@ class AES_128_CTR_Calculator_T { public:
 				uint64_t start_chunks[2];
 				start_chunks[1] = 0;
 				start_chunks[0] = start_chunk;
-				this->counter = this->counter + Integer_T<Wire>(128, start_chunks, party);
+				this->counter = this->counter + UnsignedInt_T<Wire>(128, start_chunks, party);
 				for(size_t i = 0; i < 128; ++i) {
 					this->keyiv[i + 128] = this->counter.bits[i];
 				}
@@ -218,7 +219,7 @@ class AES_128_CTR_Calculator_T { public:
 			for(size_t j = 0; j < 8; ++j) {
 				((uint8_t *)(&counter_iv))[15 - j] = ((uint8_t *)(&count))[j];
 			}
-			Integer_T<Wire> tmp_iv(128, &counter_iv, party);
+			BitVec_T<Wire> tmp_iv(128, &counter_iv, party);
 			answer = this->aes_128_ctr(nullptr,
 					tmp_iv.bits.data(),
 					(input == nullptr ) ? nullptr : &(input[ 128 * i]),
@@ -253,7 +254,7 @@ class AES_128_CTR_Calculator_T { public:
 			delete[] bytes;
 			return success;
 		}
-		Integer_T<Wire> blind_int = Integer_T<Wire>(length, bytes, party);
+		BitVec_T<Wire> blind_int(length, bytes, party);
 
 		if (input == nullptr) {
 			for(size_t i = 0; i < length; ++i) {

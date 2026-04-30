@@ -4,7 +4,7 @@
 #include "emp-tool/execution/backend.h"
 #include "emp-tool/core/block.h"
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/bitvec.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include <stdio.h>
 #include <fstream>
@@ -130,7 +130,7 @@ class SHA3_256_Calculator_T {
 
 		// Calculate the sha3_256 of a bunch of Integers (essentially concatenates the Integers "inputs")
 		void sha3_256(Bit_T<Wire> output[], // we'll write 256 bits to here as the output hash.
-				const Integer_T<Wire> inputs[], // we'll concatenate these, and hash the result.
+				const BitVec_T<Wire> inputs[], // we'll concatenate these, and hash the result.
 				const size_t input_count = 1) { // the number of Integers in "inputs"
 			size_t index, i, j;
 			for (i = 0; i < 1600; ++i) {
@@ -174,7 +174,7 @@ class SHA3_256_Calculator_T {
 		}
 
 		// Calculate the sha3_256 of a bunch of wire arrays (essentially concatenates the arrays "inputs")
-		void sha3_256(Integer_T<Wire> * output,// we'll write 256 bits to here as the output hash.
+		void sha3_256(BitVec_T<Wire> * output,// we'll write 256 bits to here as the output hash.
 				const Bit_T<Wire> ** inputs,// concatenate these to get the bitstring we're hashing.
 				const size_t * input_sizes,// the size of each input array, please
 				const size_t input_count = 1) {// the number of arrays in "inputs".
@@ -183,7 +183,7 @@ class SHA3_256_Calculator_T {
 		}
 
 		// sha3_256 in circuit for an array of input wires
-		void sha3_256(Integer_T<Wire> * output,// we'll write 256 bits to here as the output hash.
+		void sha3_256(BitVec_T<Wire> * output,// we'll write 256 bits to here as the output hash.
 				const Bit_T<Wire> input[],// the array of bits to hash
 				const size_t len) {// the length of "input"
 			output->bits.resize(256);
@@ -191,8 +191,8 @@ class SHA3_256_Calculator_T {
 		}
 
 		// Calculate the sha3_256 of a bunch of Integers (essentially concatenates the Integers "inputs")
-		void sha3_256(Integer_T<Wire> * output,// we'll write 256 bits to here as the output hash.
-				const Integer_T<Wire> inputs[],// we'll concatenate these, and hash the result.
+		void sha3_256(BitVec_T<Wire> * output,// we'll write 256 bits to here as the output hash.
+				const BitVec_T<Wire> inputs[],// we'll concatenate these, and hash the result.
 				const size_t input_count = 1) {// the number of Integers in "inputs"
 			output->bits.resize(256);
 			this->sha3_256(output->bits.data(), inputs, input_count);

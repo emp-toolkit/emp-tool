@@ -31,7 +31,9 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 
 #include "emp-tool/circuits/sortable.h"
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/bitvec.h"
+#include "emp-tool/circuits/unsigned_int.h"
+#include "emp-tool/circuits/signed_int.h"
 #include "emp-tool/circuits/float32.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include "emp-tool/circuits/sha3_256.h"
@@ -42,11 +44,14 @@ namespace emp {
 // circuits/* are agnostic to wire type; this is the spot where emp-tool
 // commits to `block` as the default wire (matching the wire type used by
 // every backend emp-tool ships: ClearBackend, HalfGate*, PrivacyFree*).
-// Code that wants a different wire type instantiates Bit_T<W> / Integer_T<W>
-// / Float_T<W> directly and skips these aliases.
-using Bit     = Bit_T<block>;
-using Integer = Integer_T<block>;
-using Float   = Float_T<block>;
+// Code that wants a different wire type instantiates Bit_T<W> /
+// BitVec_T<W> / UnsignedInt_T<W> / SignedInt_T<W> / Float_T<W> directly
+// and skips these aliases.
+using Bit         = Bit_T<block>;
+using BitVec      = BitVec_T<block>;
+using UnsignedInt = UnsignedInt_T<block>;
+using SignedInt   = SignedInt_T<block>;
+using Float       = Float_T<block>;
 using AES_128_CTR_Calculator = AES_128_CTR_Calculator_T<block>;
 using SHA3_256_Calculator    = SHA3_256_Calculator_T<block>;
 }

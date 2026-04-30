@@ -1,12 +1,13 @@
 #ifndef EMP_FLOAT32_H__
 #define EMP_FLOAT32_H__
 #include "emp-tool/circuits/bit.h"
-#include "emp-tool/circuits/integer.h"
+#include "emp-tool/circuits/bitvec.h"
 #include "emp-tool/circuits/sortable.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include <math.h>
 #include <array>
 #include <string>
+#include <algorithm>
 namespace emp {
 
 template<typename Wire>

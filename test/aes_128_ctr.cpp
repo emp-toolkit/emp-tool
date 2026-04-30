@@ -43,10 +43,10 @@ int hash_in_circuit(){
 
   // now to do the same thing in circuit
   emp::AES_128_CTR_Calculator aes_128_ctr_calculator = emp::AES_128_CTR_Calculator();
-  emp::Integer input_integer = emp::Integer(2000 * 8, input, emp::PUBLIC);
-  emp::Integer output_integer = emp::Integer(2000 * 8, input, emp::PUBLIC);
-  emp::Integer iv_integer = emp::Integer(128, &iv, emp::PUBLIC);
-  emp::Integer key_integer = emp::Integer(128, &key, emp::PUBLIC);
+  emp::BitVec input_integer = emp::BitVec(2000 * 8, input, emp::PUBLIC);
+  emp::BitVec output_integer = emp::BitVec(2000 * 8, input, emp::PUBLIC);
+  emp::BitVec iv_integer = emp::BitVec(128, &iv, emp::PUBLIC);
+  emp::BitVec key_integer = emp::BitVec(128, &key, emp::PUBLIC);
 
   aes_128_ctr_calculator.aes_128_ctr(key_integer.bits.data(),
                                      iv_integer.bits.data(),
@@ -56,7 +56,7 @@ int hash_in_circuit(){
                                      emp::PUBLIC,
                                      77777);
 
-  output_integer.reveal<uint8_t>(output_bytes2, PUBLIC);
+  output_integer.reveal(output_bytes2, PUBLIC);
   std::cout << "\nin circuit: ";
   for (size_t i = 0; i < 32; ++i) {
     std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)(output_bytes2[1000 + i]) << " ";
@@ -79,7 +79,7 @@ int hash_in_circuit(){
                                      emp::PUBLIC,
                                      77777);
 
-  output_integer.reveal<uint8_t>(output_bytes2, PUBLIC);
+  output_integer.reveal(output_bytes2, PUBLIC);
   std::cout << "\nin circuit2:";
   for (size_t i = 0; i < 32; ++i) {
     std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)(output_bytes2[1000 + i]) << " ";
@@ -102,7 +102,7 @@ int hash_in_circuit(){
                                      emp::PUBLIC,
                                      77777);
 
-  output_integer.reveal<uint8_t>(output_bytes2, PUBLIC);
+  output_integer.reveal(output_bytes2, PUBLIC);
   std::cout << "\nin circuit3:";
   for (size_t i = 0; i < 32; ++i) {
     std::cout << std::setw(2) << std::setfill('0') << std::hex << (int)(output_bytes2[1000 + i]) << " ";

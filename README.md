@@ -9,9 +9,9 @@
 Foundational primitives for the emp-toolkit family: SIMD `block` types,
 fast AES / PRG / PRP / hash / GF(2^128) kernels, OpenSSL-backed elliptic
 curve ops, IO channels, a templated boolean-circuit frontend
-(`Bit_T<Wire>` / `Integer_T<Wire>` / `Float_T<Wire>`), and pluggable
-execution backends (plaintext circuit printer, half-gate garbling,
-privacy-free garbling).
+(`Bit_T<Wire>` / `BitVec_T<Wire>` / `UnsignedInt_T<Wire>` /
+`SignedInt_T<Wire>` / `Float_T<Wire>`), and pluggable execution backends
+(plaintext circuit printer, half-gate garbling, privacy-free garbling).
 
 ## Requirements
 
@@ -87,13 +87,22 @@ emp-tool/
 ├── group/        BigInt + elliptic-curve Group/Point (OpenSSL-backed)
 ├── io/           IOChannel, NetIO, MemIO
 ├── execution/    Backend interface, ClearBackend, HalfGate*, PrivacyFree*
-├── circuits/     Bit_T<Wire>, Integer_T<Wire>, Float_T<Wire>, BristolFormat/Fashion
+├── circuits/     Bit, BitVec, UnsignedInt, SignedInt, Float (all templated on Wire), BristolFormat/Fashion
 └── third_party/  ThreadPool, sse2neon
 ```
 
 `circuits/` is templated on the wire type; `emp-tool.h` provides the
-default aliases `Bit = Bit_T<block>`, `Integer = Integer_T<block>`,
-`Float = Float_T<block>` so most consumers never have to think about it.
+default aliases (`Bit`, `BitVec`, `UnsignedInt`, `SignedInt`, `Float`)
+all over `block`, so most consumers never have to think about it.
+
+The numeric layer makes signedness explicit: `UnsignedInt` wraps mod
+2^N matching `uint{N}_t`, `SignedInt` is two's-complement matching
+`int{N}_t` on hardware (C signed-overflow UB is sidestepped — emp-tool
+wraps deterministically), and `BitVec` carries no arithmetic at all
+(just bitwise / shifts / slice / concat). `UnsignedInt` and `SignedInt`
+inherit from `BitVec` so they pick up the structural ops; conversion
+between signed and unsigned is an explicit `.as_signed()` /
+`.as_unsigned()` bit-cast (no gates).
 
 ## Usage
 
@@ -183,16 +192,21 @@ tests that don't need a socket.
 
 ### Plaintext circuit evaluation
 
-The simplest backend evaluates Bit/Integer/Float in cleartext (and can
-optionally dump a Bristol-style file of the circuit it executed):
+The simplest backend evaluates `Bit` / `BitVec` / `UnsignedInt` /
+`SignedInt` / `Float` in cleartext (and can optionally dump a
+Bristol-style file of the circuit it executed):
 
 ```cpp
 setup_clear_backend();                           // installs ClearBackend
 
-Integer a(32, 7,  PUBLIC);
-Integer b(32, 35, PUBLIC);
-Integer c = a * b + Integer(32, 1, PUBLIC);
+SignedInt a(32, 7,  PUBLIC);
+SignedInt b(32, 35, PUBLIC);
+SignedInt c = a * b + SignedInt(32, 1, PUBLIC);
 std::cout << c.reveal<int32_t>() << "\n";        // 246
+
+// Wrap on overflow is well-defined and matches int32_t / uint32_t hardware:
+UnsignedInt big(32, UINT32_MAX, PUBLIC);
+std::cout << (big + UnsignedInt(32, 1u, PUBLIC)).reveal<uint32_t>() << "\n"; // 0
 
 finalize_clear_backend();
 ```
@@ -212,7 +226,7 @@ NetIO io(party == ALICE ? nullptr : "127.0.0.1", 12345);
 backend = (party == ALICE) ? new HalfGateGen<NetIO>(&io)
                            : new HalfGateEva<NetIO>(&io);
 
-// ... circuit using Bit / Integer / Float ...
+// ... circuit using Bit / BitVec / UnsignedInt / SignedInt / Float ...
 
 delete backend;
 backend = nullptr;
@@ -246,15 +260,19 @@ default `block` aliases) and include only what you need:
 ```cpp
 #include <emp-tool/execution/backend.h>
 #include <emp-tool/circuits/bit.h>
-#include <emp-tool/circuits/integer.h>
+#include <emp-tool/circuits/bitvec.h>
+#include <emp-tool/circuits/unsigned_int.h>
+#include <emp-tool/circuits/signed_int.h>
 
 struct MyWire { /* ... */ };
 class MyBackend : public Backend { /* override wire_bytes/and_gate/... */ };
 
 backend = new MyBackend(/* args */);
 
-using MyBit     = Bit_T<MyWire>;
-using MyInteger = Integer_T<MyWire>;
+using MyBit         = Bit_T<MyWire>;
+using MyBitVec      = BitVec_T<MyWire>;
+using MyUnsignedInt = UnsignedInt_T<MyWire>;
+using MySignedInt   = SignedInt_T<MyWire>;
 ```
 
 The class definitions in `circuits/` carry no `block` of their own; the

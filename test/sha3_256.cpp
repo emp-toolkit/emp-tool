@@ -15,16 +15,16 @@ int hash_in_circuit(){
   }
   emp::sha3_256(output_bytes, input, 2000);
 
-  emp::Integer integers[2000];
+  emp::BitVec integers[2000];
   for (int64_t i = 0; i < 2000; ++i) {
-    integers[i] = Integer(8, i % 200, emp::PUBLIC);
+    integers[i] = BitVec(8, (uint64_t)(i % 200), emp::PUBLIC);
   }
 
-  emp::Integer output = Integer(10, 32, emp::PUBLIC);
+  emp::BitVec output(10, (uint32_t)32, emp::PUBLIC);
 
-  SHA3_256_Calculator sha3_256_calculator = SHA3_256_Calculator();
+  SHA3_256_Calculator sha3_256_calculator;
   sha3_256_calculator.sha3_256(&output, integers, 2000);
-  output.reveal<uint8_t>(output_bytes2, PUBLIC);
+  output.reveal(output_bytes2, PUBLIC);
 
   for(uint8_t i=0; i<32; ++i) {
     if (output_bytes[i] != output_bytes2[i]) {

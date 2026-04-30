@@ -1,7 +1,7 @@
 template<typename Wire>
 inline Float_T<Wire>::Float_T(float input, int party) {
 	int *in = (int*)(&input);
-	Integer_T<Wire> val = Integer_T<Wire>(FLOAT_LEN, *in, party);
+	BitVec_T<Wire> val(FLOAT_LEN, *in, party);
 	for(int i = 0; i < FLOAT_LEN; ++i)
 		value[i] = val.bits[i];
 }
@@ -38,12 +38,12 @@ inline Float_T<Wire> Float_T<Wire>::select(const Bit_T<Wire>& select, const Floa
 
 template<typename Wire>
 inline Bit_T<Wire>& Float_T<Wire>::operator[](int index) {
-	return value[min(index, FLOAT_LEN-1)];
+	return value[std::min(index, FLOAT_LEN-1)];
 }
 
 template<typename Wire>
 inline const Bit_T<Wire> &Float_T<Wire>::operator[](int index) const {
-	return value[min(index, FLOAT_LEN-1)];
+	return value[std::min(index, FLOAT_LEN-1)];
 }
 
 template<typename Wire>

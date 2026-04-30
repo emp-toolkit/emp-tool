@@ -3,47 +3,48 @@ using namespace emp;
 
 
 void ham(int n) {
-	Integer a(n, 0, ALICE);
-	Integer b(n, 0, BOB);
-	Integer c = a^b;
-	Integer d = c.hamming_weight();
-	d.reveal<string>();
+	UnsignedInt a(n, 0u, ALICE);
+	UnsignedInt b(n, 0u, BOB);
+	UnsignedInt c = a ^ b;
+	UnsignedInt d = c.hamming_weight();
+	d.reveal<std::string>();
 }
 
 void mult(int n) {
-	Integer a(n, 0, ALICE);
-	Integer b(n, 0, BOB);
-	Integer c = a*b;
-	c.reveal<string>();
+	UnsignedInt a(n, 0u, ALICE);
+	UnsignedInt b(n, 0u, BOB);
+	UnsignedInt c = a * b;
+	c.reveal<std::string>();
 }
+
 void modexp(int n1, int n2) {
-	Integer a(n1, 0,  ALICE);
-	Integer b(n2, 0,  BOB);
-	Integer c(n1, 5, ALICE);
-	Integer d = a.modExp(b, c);
+	UnsignedInt a(n1, 0u, ALICE);
+	UnsignedInt b(n2, 0u, BOB);
+	UnsignedInt c(n1, 5u, ALICE);
+	UnsignedInt d = a.mod_exp(b, c);
+	(void)d;
 }
-void sort(int n) {
-	Integer *A = new Integer[n];
-	Integer *B = new Integer[n];
-	for(int i = 0; i < n; ++i) {
-		A[i] = Integer(32, n - i, ALICE);
-  }
-	for(int i = 0; i < n; ++i) {
-		B[i] = Integer(32, i, BOB);
-  }
-	for(int i = 0; i < n; ++i)
+
+void sort_demo(int n) {
+	UnsignedInt *A = new UnsignedInt[n];
+	UnsignedInt *B = new UnsignedInt[n];
+	for (int i = 0; i < n; ++i)
+		A[i] = UnsignedInt(32, (uint32_t)(n - i), ALICE);
+	for (int i = 0; i < n; ++i)
+		B[i] = UnsignedInt(32, (uint32_t)i, BOB);
+	for (int i = 0; i < n; ++i)
 		A[i] = A[i] ^ B[i];
 	sort(A, n);
-	for(int i = 0; i < n; ++i)
-		A[i].reveal<string>();
+	for (int i = 0; i < n; ++i)
+		A[i].reveal<std::string>();
+	delete[] A;
+	delete[] B;
 }
-int main(int argc, char** argv) {
+
+int main(int /*argc*/, char ** /*argv*/) {
 	setup_clear_backend("sort.txt");
-	sort(128);
-//	mult(2048);
-//	ham(1<<10);
+	sort_demo(128);
 	finalize_clear_backend();
 	BristolFormat bf("sort.txt");
-	//BristolFormat bf(sort_num_gate, sort_num_wire, sort_n1, sort_n2, sort_n3, sort_gate_arr);
 	bf.to_file("sort_file.h", "sort");
 }
