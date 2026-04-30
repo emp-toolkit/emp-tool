@@ -1,7 +1,6 @@
 # emp-tool
 
-![arm](https://github.com/emp-toolkit/emp-tool/workflows/arm/badge.svg)
-![x86](https://github.com/emp-toolkit/emp-tool/workflows/x86/badge.svg)
+![build](https://github.com/emp-toolkit/emp-tool/workflows/build/badge.svg)
 [![CodeQL](https://github.com/emp-toolkit/emp-tool/actions/workflows/codeql.yml/badge.svg)](https://github.com/emp-toolkit/emp-tool/actions/workflows/codeql.yml)
 
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
