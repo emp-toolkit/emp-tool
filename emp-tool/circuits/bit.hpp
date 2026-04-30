@@ -1,6 +1,13 @@
 template<typename Wire>
 inline Bit_T<Wire>::Bit_T(bool b, int party) {
-	backend->feed(&bit, party, &b, 1); 
+	// Catch backend/wire-type mismatch the first time a Bit is constructed
+	// with a value (the common path: every BitVec/UnsignedInt/SignedInt
+	// ctor flows through here). Compiles out under NDEBUG.
+	assert(backend != nullptr && "no backend installed (call setup_*_backend first)");
+	assert(backend->wire_bytes() == sizeof(Wire) &&
+	       "Bit_T<Wire>: backend's wire_bytes() does not match sizeof(Wire) "
+	       "— wrong backend installed for this Wire type");
+	backend->feed(&bit, party, &b, 1);
 }
 template<typename Wire>
 inline Bit_T<Wire> Bit_T<Wire>::select(const Bit_T<Wire> & select, const Bit_T<Wire> & new_v) const{

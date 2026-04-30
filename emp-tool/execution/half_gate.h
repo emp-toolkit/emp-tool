@@ -70,6 +70,25 @@ public:
 		    *static_cast<const block*>(in) ^ constant[1];
 	}
 
+	// Bulk variants override the base loop-fallback to skip per-gate
+	// virtual dispatch. Big enough that the compiler can vectorize over
+	// the contiguous block buffers; the only crypto-relevant gate (AND)
+	// stays in the scalar path because its batched form needs to interleave
+	// MITCCRH key scheduling and table IO — that's a separate optimization.
+	void xor_gate_n(void* out, const void* l, const void* r, size_t n) override {
+		auto* o = static_cast<block*>(out);
+		auto* a = static_cast<const block*>(l);
+		auto* b = static_cast<const block*>(r);
+		for (size_t i = 0; i < n; ++i) o[i] = a[i] ^ b[i];
+	}
+
+	void not_gate_n(void* out, const void* in, size_t n) override {
+		auto* o = static_cast<block*>(out);
+		auto* a = static_cast<const block*>(in);
+		const block c1 = constant[1];
+		for (size_t i = 0; i < n; ++i) o[i] = a[i] ^ c1;
+	}
+
 	uint64_t num_and() override { return mitccrh.gid / 2; }
 };
 

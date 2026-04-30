@@ -19,21 +19,30 @@ inline BitVec_T<Wire>::BitVec_T(size_t width, const void* data, int party) {
 	delete[] tmp;
 }
 
+// Bitwise ops dispatch through Backend's bulk gate API: one virtual
+// call instead of N. Backends that override the bulk variants (e.g.
+// HalfGate) get the tight inner loop; others fall back to N scalar
+// dispatches via the Backend default.
+
 template<typename Wire>
 inline BitVec_T<Wire> BitVec_T<Wire>::operator&(const BitVec_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
 	BitVec_T res(size());
-	for (size_t i = 0; i < size(); ++i)
-		res.bits[i] = bits[i] & rhs.bits[i];
+	if (size() > 0)
+		backend->and_gate_n(&res.bits[0].bit, &bits[0].bit, &rhs.bits[0].bit, size());
 	return res;
 }
 
 template<typename Wire>
 inline BitVec_T<Wire> BitVec_T<Wire>::operator|(const BitVec_T<Wire>& rhs) const {
+	// (a | b) = (a ^ b) ^ (a & b) — two passes through the bulk API.
 	assert(size() == rhs.size());
-	BitVec_T res(size());
-	for (size_t i = 0; i < size(); ++i)
-		res.bits[i] = bits[i] | rhs.bits[i];
+	BitVec_T axb(size()), aab(size()), res(size());
+	if (size() > 0) {
+		backend->xor_gate_n(&axb.bits[0].bit, &bits[0].bit, &rhs.bits[0].bit, size());
+		backend->and_gate_n(&aab.bits[0].bit, &bits[0].bit, &rhs.bits[0].bit, size());
+		backend->xor_gate_n(&res.bits[0].bit, &axb.bits[0].bit, &aab.bits[0].bit, size());
+	}
 	return res;
 }
 
@@ -41,24 +50,24 @@ template<typename Wire>
 inline BitVec_T<Wire> BitVec_T<Wire>::operator^(const BitVec_T<Wire>& rhs) const {
 	assert(size() == rhs.size());
 	BitVec_T res(size());
-	for (size_t i = 0; i < size(); ++i)
-		res.bits[i] = bits[i] ^ rhs.bits[i];
+	if (size() > 0)
+		backend->xor_gate_n(&res.bits[0].bit, &bits[0].bit, &rhs.bits[0].bit, size());
 	return res;
 }
 
 template<typename Wire>
 inline BitVec_T<Wire>& BitVec_T<Wire>::operator^=(const BitVec_T<Wire>& rhs) {
 	assert(size() == rhs.size());
-	for (size_t i = 0; i < size(); ++i)
-		bits[i] ^= rhs.bits[i];
+	if (size() > 0)
+		backend->xor_gate_n(&bits[0].bit, &bits[0].bit, &rhs.bits[0].bit, size());
 	return *this;
 }
 
 template<typename Wire>
 inline BitVec_T<Wire> BitVec_T<Wire>::operator~() const {
 	BitVec_T res(size());
-	for (size_t i = 0; i < size(); ++i)
-		res.bits[i] = !bits[i];
+	if (size() > 0)
+		backend->not_gate_n(&res.bits[0].bit, &bits[0].bit, size());
 	return res;
 }
 
