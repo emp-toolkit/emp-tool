@@ -118,7 +118,7 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i.86)")
     if(EMP_TOOL_NATIVE_ARCH)
         target_compile_options(emp-tool PUBLIC -march=native)
     else()
-        target_compile_options(emp-tool PUBLIC -maes -mpclmul -mssse3)
+        target_compile_options(emp-tool PUBLIC -maes -mpclmul -mssse3 -msse4.1)
     endif()
 endif()
 

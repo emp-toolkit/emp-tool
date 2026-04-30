@@ -18,7 +18,7 @@ curve ops, IO channels, a templated boolean-circuit frontend
 - A C++17 compiler (Clang ≥ 12, GCC ≥ 9, AppleClang 14+)
 - OpenSSL (≥ 1.1; tested against 3.x)
 - pthreads
-- x86_64 with AES-NI + PCLMULQDQ + SSSE3, **or** arm64 with `armv8-a+crypto+crc`. The default build uses `-march=native` and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
+- x86_64 with AES-NI + PCLMULQDQ + SSE4.1, **or** arm64 with `armv8-a+crypto+crc`. The default build uses `-march=native` and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
 
 ## Build and install
 
@@ -33,7 +33,7 @@ The default build is tuned for performance: `Release`, `-O3
 are used wherever the host CPU supports them. **Binaries built this way
 are tied to the build machine's CPU** — they will SIGILL on a CPU
 missing any instruction the build host had. To produce a portable
-binary that runs on any AES-NI + PCLMUL + SSSE3 (x86_64) or
+binary that runs on any AES-NI + PCLMUL + SSE4.1 (x86_64) or
 `armv8-a+crypto+crc` (arm64) machine, pass
 `-DEMP_TOOL_NATIVE_ARCH=OFF`.
 

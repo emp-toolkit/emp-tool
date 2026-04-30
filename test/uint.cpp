@@ -147,8 +147,12 @@ static bool check_resize() {
 			return false;
 		}
 	}
-	// Truncate down.
-	for (uint64_t v : {0ull, 1ull, UINT64_MAX, 0xDEADBEEFCAFEBABEull}) {
+	// Truncate down. Explicit array (not a braced-init-list) because
+	// UINT64_MAX is `unsigned long` under glibc and `unsigned long long`
+	// on macOS — both 64 bits but distinct types, which trips
+	// initializer_list deduction when mixed with `ull` literals.
+	uint64_t down_cases[] = {0ull, 1ull, UINT64_MAX, 0xDEADBEEFCAFEBABEull};
+	for (uint64_t v : down_cases) {
 		UnsignedInt a(64, v, ALICE);
 		uint32_t got = a.resize(32).reveal<uint32_t>(PUBLIC);
 		uint32_t want = (uint32_t)v;
