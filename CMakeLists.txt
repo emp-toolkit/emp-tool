@@ -145,9 +145,24 @@ endif()
 # ---------------------------------------------------------------------
 # Install + export
 # ---------------------------------------------------------------------
-if(EMP_TOOL_INSTALL)
-    set(_cmake_install_dir ${CMAKE_INSTALL_LIBDIR}/cmake/emp-tool)
+set(_cmake_install_dir ${CMAKE_INSTALL_LIBDIR}/cmake/emp-tool)
 
+# Always generate the build-tree config files, even when install rules
+# are off, so build-tree consumers (find_package via -Demp-tool_DIR=<build>)
+# get a working *-config.cmake. The template uses a path relative to the
+# config file itself, so the same generated file works for both
+# build-tree and install-tree layouts.
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/emp-tool-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config.cmake
+    INSTALL_DESTINATION ${_cmake_install_dir})
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config-version.cmake
+    VERSION       ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+if(EMP_TOOL_INSTALL)
     install(TARGETS emp-tool
         EXPORT  emp-toolTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -166,24 +181,16 @@ if(EMP_TOOL_INSTALL)
         DESTINATION ${_cmake_install_dir}
         FILE        emp-toolTargets.cmake)
 
-    configure_package_config_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/emp-tool-config.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config.cmake
-        INSTALL_DESTINATION ${_cmake_install_dir})
-
-    write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config-version.cmake
-        VERSION       ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion)
-
     install(FILES
         ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config.cmake
         ${CMAKE_CURRENT_BINARY_DIR}/emp-tool-config-version.cmake
         DESTINATION ${_cmake_install_dir})
 endif()
 
-# Build-tree export so siblings can consume without `make install`.
-export(EXPORT emp-toolTargets
+# Build-tree export so siblings can consume without `make install`. Use
+# the export(TARGETS ...) form (not export(EXPORT ...)) so it works
+# regardless of whether install rules registered an export set.
+export(TARGETS emp-tool
        NAMESPACE emp-tool::
        FILE      ${CMAKE_CURRENT_BINARY_DIR}/emp-toolTargets.cmake)
 
