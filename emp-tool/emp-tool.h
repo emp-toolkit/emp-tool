@@ -7,11 +7,9 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
               "emp-tool requires a little-endian target");
 
 #include <thread>
-#include "emp-tool/io/file_io_channel.h"
 #include "emp-tool/io/io_channel.h"
 #include "emp-tool/io/mem_io_channel.h"
 #include "emp-tool/io/net_io_channel.h"
-#include "emp-tool/io/highspeed_net_io_channel.h"
 
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/circuit_file.h"

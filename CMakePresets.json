@@ -80,7 +80,7 @@
             "hidden": true,
             "output": { "outputOnFailure": true, "verbosity": "default" },
             "execution": { "noTestsAction": "error", "stopOnFailure": false },
-            "filter": { "exclude": { "name": "^(netio|netio2|garble|ot|ferret)$" } }
+            "filter": { "exclude": { "name": "^(netio|garble|ot|ferret)$" } }
         },
         { "name": "release",        "configurePreset": "release",        "inherits": "base" },
         { "name": "debug",          "configurePreset": "debug",          "inherits": "base" },

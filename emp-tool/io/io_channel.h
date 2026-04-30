@@ -3,133 +3,104 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/utils/prg.h"
 #include "emp-tool/utils/group.h"
+#include <cassert>
+#include <cstdint>
 #include <memory>
-#include <cassert>  
 
 namespace emp {
-template<typename T> 
-class IOChannel { public:
+
+// Polymorphic transport interface. Implementations override send_data_internal
+// / recv_data_internal; everything else (block / point / packed-bool helpers,
+// byte counter) is inherited.
+//
+// The previous CRTP base (IOChannel<T>) made every consumer of IO a template
+// (HalfGateGen<T>, BristolFashion::compute<T>, etc.) to dodge a virtual call
+// per send_data. Per-call cost in practice is dominated by stdio locks +
+// syscalls, not function-call indirection, so the template tax was paying
+// for nothing measurable. Switching to a virtual base costs ~1 indirect call
+// per send_data and frees the rest of the toolkit to be non-templated.
+
+class IOChannel {
+public:
 	uint64_t counter = 0;
-	void send_data(const void * data, size_t nbyte) {
-		counter +=nbyte;
-		derived().send_data_internal(data, nbyte);
+
+	virtual ~IOChannel() = default;
+
+	virtual void send_data_internal(const void *data, size_t nbyte) = 0;
+	virtual void recv_data_internal(void *data, size_t nbyte) = 0;
+
+	void send_data(const void *data, size_t nbyte) {
+		counter += nbyte;
+		send_data_internal(data, nbyte);
 	}
 
-	void recv_data(void * data, size_t nbyte) {
-		derived().recv_data_internal(data, nbyte);
+	void recv_data(void *data, size_t nbyte) {
+		recv_data_internal(data, nbyte);
 	}
 
-	void send_block(const block* data, size_t nblock) {
-		send_data(data, nblock*sizeof(block));
+	void send_block(const block *data, size_t nblock) {
+		send_data(data, nblock * sizeof(block));
 	}
 
-	void recv_block(block* data, size_t nblock) {
-		recv_data(data, nblock*sizeof(block));
+	void recv_block(block *data, size_t nblock) {
+		recv_data(data, nblock * sizeof(block));
 	}
 
 	void send_pt(Point *A, size_t num_pts = 1) {
-		for(size_t i = 0; i < num_pts; ++i) {
+		for (size_t i = 0; i < num_pts; ++i) {
 			size_t len = A[i].size();
 			A[i].group->resize_scratch(len);
-			unsigned char * tmp = A[i].group->scratch;
+			unsigned char *tmp = A[i].group->scratch;
 			send_data(&len, 4);
 			A[i].to_bin(tmp, len);
 			send_data(tmp, len);
 		}
 	}
 
-	void recv_pt(Group * g, Point *A, size_t num_pts = 1) {
+	void recv_pt(Group *g, Point *A, size_t num_pts = 1) {
 		size_t len = 0;
-		for(size_t i = 0; i < num_pts; ++i) {
+		for (size_t i = 0; i < num_pts; ++i) {
 			recv_data(&len, 4);
 			assert(len <= 2048);
 			g->resize_scratch(len);
-			unsigned char * tmp = g->scratch;
+			unsigned char *tmp = g->scratch;
 			recv_data(tmp, len);
 			A[i].from_bin(g, tmp, len);
 		}
-	}	
+	}
 
-	void send_bool(bool * data, size_t length) {
-		void * ptr = (void *)data;
-		size_t space = length;
-		const void * aligned = std::align(alignof(uint64_t), sizeof(uint64_t), ptr, space);
-		if(aligned == nullptr)
-			send_data(data, length);
-		else{
-			size_t diff = length - space;
-			send_data(data, diff);
-			send_bool_aligned((const bool*)aligned, length - diff);
+	// Pack 8 bools per wire byte via bools_to_bits / bits_to_bools (LSB-first
+	// within each byte, see utils/block.h). Streamed in 8 KiB-of-bools chunks
+	// so the staging buffer fits comfortably on the stack regardless of the
+	// caller's buffer size.
+	void send_bool(const bool *data, size_t length) {
+		if (length == 0) return;
+		constexpr size_t CHUNK_BOOLS = 8 * 1024;
+		uint8_t buf[CHUNK_BOOLS / 8];
+		while (length > 0) {
+			size_t batch = length < CHUNK_BOOLS ? length : CHUNK_BOOLS;
+			size_t bytes = (batch + 7) / 8;
+			bools_to_bits(buf, data, batch);
+			send_data(buf, bytes);
+			data += batch;
+			length -= batch;
 		}
 	}
 
-	void recv_bool(bool * data, size_t length) {
-		void * ptr = (void *)data;
-		size_t space = length;
-		void * aligned = std::align(alignof(uint64_t), sizeof(uint64_t), ptr, space);
-		if(aligned == nullptr)
-			recv_data(data, length);
-		else{
-			size_t diff = length - space;
-			recv_data(data, diff);
-			recv_bool_aligned((bool*)aligned, length - diff);
+	void recv_bool(bool *data, size_t length) {
+		if (length == 0) return;
+		constexpr size_t CHUNK_BOOLS = 8 * 1024;
+		uint8_t buf[CHUNK_BOOLS / 8];
+		while (length > 0) {
+			size_t batch = length < CHUNK_BOOLS ? length : CHUNK_BOOLS;
+			size_t bytes = (batch + 7) / 8;
+			recv_data(buf, bytes);
+			bits_to_bools(data, buf, batch);
+			data += batch;
+			length -= batch;
 		}
-	}
-
-
-	void send_bool_aligned(const bool * data, size_t length) {
-		const bool * data64 = data;
-		size_t i = 0;
-                unsigned long long unpack;
-		for(; i < length/8; ++i) {
-			unsigned long long mask = 0x0101010101010101ULL;
-			unsigned long long tmp = 0;
-                        memcpy(&unpack, data64, sizeof(unpack));
-                        data64 += sizeof(unpack);
-#if defined(__BMI2__)
-			tmp = _pext_u64(unpack, mask);
-#else
-			// https://github.com/Forceflow/libmorton/issues/6
-			for (unsigned long long bb = 1; mask != 0; bb += bb) {
-				if (unpack & mask & -mask) { tmp |= bb; }
-				mask &= (mask - 1);
-			}
-#endif
-			send_data(&tmp, 1);
-		}
-		if (8*i != length)
-			send_data(data + 8*i, length - 8*i);
-	}
-	void recv_bool_aligned(bool * data, size_t length) {
-		bool * data64 = data;
-		size_t i = 0;
-                unsigned long long unpack;
-		for(; i < length/8; ++i) {
-			unsigned long long mask = 0x0101010101010101ULL;
-			unsigned long long tmp = 0;
-			recv_data(&tmp, 1);
-#if defined(__BMI2__)
-			unpack = _pdep_u64(tmp, mask);
-#else
-			unpack = 0;
-			for (unsigned long long bb = 1; mask != 0; bb += bb) {
-				if (tmp & bb) {unpack |= mask & (-mask); }
-				mask &= (mask - 1);
-			}
-#endif
-                        memcpy(data64, &unpack, sizeof(unpack));
-                        data64 += sizeof(unpack);
-                        
-		}
-		if (8*i != length)
-			recv_data(data + 8*i, length - 8*i);
-	}
-
-
-	private:
-	T& derived() {
-		return *static_cast<T*>(this);
 	}
 };
-}
+
+}  // namespace emp
 #endif
