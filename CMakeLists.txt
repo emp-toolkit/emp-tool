@@ -104,9 +104,17 @@ target_link_libraries(emp-tool PUBLIC
     Threads::Threads)
 
 target_compile_options(emp-tool PRIVATE
-    -Wall -Wno-ignored-attributes -Wno-unused-result
+    -Wall -Wno-unused-result
     $<$<CONFIG:Release>:-O3 -funroll-loops>
     $<$<CONFIG:Debug>:-O0 -g>)
+
+# Suppress -Wignored-attributes globally (lib + consumers). Triggered
+# by every template instantiated on `block` (== __m128i carries vector
+# / alignment / may_alias attributes that template type identity drops).
+# Benign here — we never rely on those attributes flowing through the
+# template argument — but spammy for downstream test / consumer builds
+# unless made PUBLIC.
+target_compile_options(emp-tool PUBLIC -Wno-ignored-attributes)
 
 # Architecture floor. Per-function CPU dispatch (VAES / VPCLMULQDQ etc.) is
 # handled in source via __attribute__((target(...))). Set EMP_TOOL_NATIVE_ARCH

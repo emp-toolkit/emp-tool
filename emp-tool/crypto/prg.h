@@ -105,41 +105,49 @@ class PRG { public:
 	}
 
     void random_data_unaligned(void *data, int nbytes) {
-        size_t size = nbytes;
-        void *aligned_data = data;
-        if(std::align(sizeof(block), sizeof(block), aligned_data, size)) {
-            // round down to a whole number of blocks
-            size = sizeof(block) * (size / sizeof(block));
-            int chopped = nbytes - size;
-
-            // temporarily fill the bulk of the buffer with random data
-            random_data(aligned_data, nbytes - chopped);
-
-            // move the random data to the start of the buffer
-            // (using memmove, not memcpy, because of memory overlap)
-            memmove(data, aligned_data, nbytes - chopped);
-
-            int remaining_bytes = chopped;
-            char* end = (char*)data + nbytes;
-
-            // there can be 0-2 blocks leftover
-            // eg: <- 8 bytes -> <- N blocks -> <- 15 bytes ->
-            //     in the above case, the N blocks are filled by random_data,
-            //     leaving 23 bytes leftover, which requires 2 blocks to fill,
-            //     of which we must ignore 9 bytes to avoid writing past the
-            //     end of the buffer (`void *data`).
-            while (remaining_bytes > 0) {
-                block tmp;
-                random_block(&tmp, 1);
-                int bytes_to_copy = std::min(remaining_bytes, (int)sizeof(block));
-                memcpy(end - remaining_bytes, &tmp, bytes_to_copy);
-                remaining_bytes -= bytes_to_copy;
-            }
-        } else {
+        // Small-buffer fast path. Anything that fits in two blocks is
+        // filled with one random_block draw and copied — no alignment
+        // dance. This also covers every case where std::align below
+        // could fail (failure requires nbytes <= 30, since the worst
+        // alignment skew is 15 bytes and the aligned region needs 16).
+        if (nbytes <= (int)(2 * sizeof(block))) {
             block tmp[2];
-            assert(nbytes <= (int)sizeof(tmp));
             random_block(tmp, 2);
             memcpy(data, tmp, nbytes);
+            return;
+        }
+
+        // Aligned bulk path. nbytes > 32 here, so std::align is
+        // guaranteed to succeed.
+        size_t size = nbytes;
+        void *aligned_data = data;
+        std::align(sizeof(block), sizeof(block), aligned_data, size);
+        // round down to a whole number of blocks
+        size = sizeof(block) * (size / sizeof(block));
+        int chopped = nbytes - size;
+
+        // temporarily fill the bulk of the buffer with random data
+        random_data(aligned_data, nbytes - chopped);
+
+        // move the random data to the start of the buffer
+        // (using memmove, not memcpy, because of memory overlap)
+        memmove(data, aligned_data, nbytes - chopped);
+
+        int remaining_bytes = chopped;
+        char* end = (char*)data + nbytes;
+
+        // there can be 0-2 blocks leftover
+        // eg: <- 8 bytes -> <- N blocks -> <- 15 bytes ->
+        //     in the above case, the N blocks are filled by random_data,
+        //     leaving 23 bytes leftover, which requires 2 blocks to fill,
+        //     of which we must ignore 9 bytes to avoid writing past the
+        //     end of the buffer (`void *data`).
+        while (remaining_bytes > 0) {
+            block tmp;
+            random_block(&tmp, 1);
+            int bytes_to_copy = std::min(remaining_bytes, (int)sizeof(block));
+            memcpy(end - remaining_bytes, &tmp, bytes_to_copy);
+            remaining_bytes -= bytes_to_copy;
         }
     }
 

@@ -67,6 +67,12 @@ class BristolFormat { public:
 	}
 
 
+	// `(void)fscanf(...)` does not suppress glibc's _FORTIFY_SOURCE
+	// warn_unused_result decoration under GCC, so we localize the
+	// suppression here instead of pushing -Wno-unused-result PUBLIC
+	// onto every consumer of emp-tool.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
 	void from_file(FILE * f) {
 		int tmp;
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
@@ -87,6 +93,7 @@ class BristolFormat { public:
 			}
 		}
 	}
+#pragma GCC diagnostic pop
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
@@ -120,6 +127,8 @@ class BristolFashion { public:
 		this->from_file(file);
 	}
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
 	void from_file(FILE * f) {
 		int tmp;
 		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
@@ -150,6 +159,7 @@ class BristolFashion { public:
 			}
 		}
 	}
+#pragma GCC diagnostic pop
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
