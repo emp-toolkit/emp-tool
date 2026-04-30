@@ -21,12 +21,15 @@ class SignedInt_T : public BitVec_T<Wire>,
 
 	SignedInt_T() = default;
 
-	template<typename T>
+	// SFINAE-restricted to integral T so pointer arguments resolve to the
+	// (size_t, const void*, int) overload below instead of being captured
+	// by this template.
+	template<typename T,
+	         typename = std::enable_if_t<std::is_integral_v<T>
+	                                  || std::is_same_v<T, __uint128_t>
+	                                  || std::is_same_v<T, __int128>>>
 	SignedInt_T(size_t width, T value, int party = PUBLIC)
-	    : BitVec_T<Wire>(width, value, party) {
-		static_assert(std::is_integral_v<T> || std::is_same_v<T, __int128>,
-		              "SignedInt_T(width, value, party): value must be integer-shaped");
-	}
+	    : BitVec_T<Wire>(width, value, party) {}
 
 	SignedInt_T(size_t width, const void* data, int party)
 	    : BitVec_T<Wire>(width, data, party) {}
