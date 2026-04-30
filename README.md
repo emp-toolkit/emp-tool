@@ -296,9 +296,4 @@ Add `-DEMP_TOOL_CRYPTO_IN_CIRCUIT=ON` to also build the
 
 ## License
 
-Dual-licensed under either of:
-
-- MIT License ([LICENSE-MIT](LICENSE-MIT))
-- Apache License 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-
-You may choose either license when using this software.
+Licensed under the Apache License, Version 2.0 — see [LICENSE](LICENSE).
