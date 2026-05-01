@@ -23,47 +23,48 @@ void test(T* netio) {
 	string file = "./emp-tool/circuits/files/bristol_format/AES-non-expanded.txt";
 	BristolFormat cf(file.c_str());
 
+	const int N = 1000;
 	if (party == BOB) {
-		backend = new HalfGateEva<T>(netio);
-		for (int i = 0; i < 100; ++i)
+		backend = new HalfGateEva(netio);
+		for (int i = 0; i < N; ++i)
 			cf.compute(c, a, b);
 		delete backend;
 		backend = nullptr;
 	} else {
 		AbandonIO* aio = new AbandonIO();
-		backend = new HalfGateGen<AbandonIO>(aio);
+		backend = new HalfGateGen(aio);
 
 		auto start = clock_start();
-		for (int i = 0; i < 100; ++i) {
+		for (int i = 0; i < N; ++i) {
 			cf.compute(c, a, b);
 		}
 		double interval = time_from(start);
-		cout << "Pure AES garbling speed : " << 100 * 6800 / interval << " million gate per second\n";
+		cout << "Pure AES garbling speed : " << N * 6800 / interval << " million gate per second\n";
 		delete aio;
 		delete backend; backend = nullptr;
 
 		MemIO* mio = new MemIO();
-		backend = new HalfGateGen<MemIO>(mio);
+		backend = new HalfGateGen(mio);
 
 		start = clock_start();
-		for (int i = 0; i < 20; ++i) {
+		for (int i = 0; i < N/5; ++i) {
 			mio->clear();
 			for (int j = 0; j < 5; ++j)
 				cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Writing to Memory : " << 100 * 6800 / interval << " million gate per second\n";
+		cout << "AES garbling + Writing to Memory : " << N * 6800 / interval << " million gate per second\n";
 		delete mio;
 		delete backend; backend = nullptr;
 
-		backend = new HalfGateGen<T>(netio);
+		backend = new HalfGateGen(netio);
 
 		start = clock_start();
-		for (int i = 0; i < 100; ++i) {
+		for (int i = 0; i < N; ++i) {
 			cf.compute(c, a, b);
 		}
 		interval = time_from(start);
-		cout << "AES garbling + Loopback Network : " << 100 * 6800 / interval << " million gate per second\n";
+		cout << "AES garbling + Loopback Network : " << N * 6800 / interval << " million gate per second\n";
 
 		delete backend; backend = nullptr;
 	}

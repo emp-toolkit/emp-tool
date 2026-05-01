@@ -4,14 +4,15 @@
 #include "emp-tool/core/utils.h"
 #include "emp-tool/crypto/mitccrh.h"
 #include "emp-tool/execution/backend.h"
+#include "emp-tool/io/io_channel.h"
 
 namespace emp {
 
 // Half-gate garbling [Zahur-Rosulek-Evans 2014, eprint 2014/756].
-// The base HalfGate<T> implements the protocol-agnostic gate-evaluation
+// The base HalfGate implements the protocol-agnostic gate-evaluation
 // surface (xor / not / public_label) that's identical between gen and eva,
-// plus a shared MITCCRH for the H-call. Concrete HalfGateGen<T> and
-// HalfGateEva<T> override `and_gate` with the garbling / evaluation
+// plus a shared MITCCRH for the H-call. Concrete HalfGateGen and
+// HalfGateEva override `and_gate` with the garbling / evaluation
 // asymmetry. `feed` and `reveal` are stubbed at this layer because they
 // require OT, which lives in emp-ot — the OT-aware subclass there
 // overrides them.
@@ -45,14 +46,13 @@ inline block halfgates_eval(block A, block B, const block* table,
 	return W;
 }
 
-template <class T>
 class HalfGate : public Backend {
 public:
-	T* io;
+	IOChannel* io;
 	block constant[2];
 	MITCCRH<8> mitccrh;
 
-	HalfGate(int party_, T* io_) : Backend(party_), io(io_) {}
+	HalfGate(int party_, IOChannel* io_) : Backend(party_), io(io_) {}
 
 	size_t wire_bytes() const override { return sizeof(block); }
 
@@ -70,11 +70,6 @@ public:
 		    *static_cast<const block*>(in) ^ constant[1];
 	}
 
-	// Bulk variants override the base loop-fallback to skip per-gate
-	// virtual dispatch. Big enough that the compiler can vectorize over
-	// the contiguous block buffers; the only crypto-relevant gate (AND)
-	// stays in the scalar path because its batched form needs to interleave
-	// MITCCRH key scheduling and table IO — that's a separate optimization.
 	void xor_gate_n(void* out, const void* l, const void* r, size_t n) override {
 		auto* o = static_cast<block*>(out);
 		auto* a = static_cast<const block*>(l);
@@ -92,16 +87,11 @@ public:
 	uint64_t num_and() override { return mitccrh.gid / 2; }
 };
 
-template <class T>
-class HalfGateGen : public HalfGate<T> {
+class HalfGateGen : public HalfGate {
 public:
-	using HalfGate<T>::io;
-	using HalfGate<T>::constant;
-	using HalfGate<T>::mitccrh;
-
 	block delta;
 
-	explicit HalfGateGen(T* io_) : HalfGate<T>(ALICE, io_) {
+	explicit HalfGateGen(IOChannel* io_) : HalfGate(ALICE, io_) {
 		block tmp[2];
 		PRG().random_block(tmp, 2);
 		delta = set_bit(tmp[0], 0);
@@ -123,14 +113,9 @@ public:
 	}
 };
 
-template <class T>
-class HalfGateEva : public HalfGate<T> {
+class HalfGateEva : public HalfGate {
 public:
-	using HalfGate<T>::io;
-	using HalfGate<T>::constant;
-	using HalfGate<T>::mitccrh;
-
-	explicit HalfGateEva(T* io_) : HalfGate<T>(BOB, io_) {
+	explicit HalfGateEva(IOChannel* io_) : HalfGate(BOB, io_) {
 		io->recv_block(constant, 2);
 		block tmp;
 		io->recv_block(&tmp, 1);

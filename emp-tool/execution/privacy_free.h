@@ -9,9 +9,9 @@
 
 namespace emp {
 
-// Privacy-free garbling. Same shape as half_gate.h: a base PrivacyFree<T>
+// Privacy-free garbling. Same shape as half_gate.h: a base PrivacyFree
 // holding the io / constants / PRP and providing the asymmetry-free gate
-// ops, with PrivacyFreeGen<T> / PrivacyFreeEva<T> overriding `and_gate`.
+// ops, with PrivacyFreeGen / PrivacyFreeEva overriding `and_gate`.
 // feed / reveal stay as no-op stubs in emp-tool — OT-aware variants live
 // downstream.
 
@@ -48,15 +48,14 @@ inline block privacy_free_eval(block A, block B, const block& table,
 	return HA;
 }
 
-template <class T>
 class PrivacyFree : public Backend {
 public:
-	T* io;
+	IOChannel* io;
 	PRP prp;
 	block constant[2];
 	int64_t gid = 0;
 
-	PrivacyFree(int party_, T* io_) : Backend(party_), io(io_) {}
+	PrivacyFree(int party_, IOChannel* io_) : Backend(party_), io(io_) {}
 
 	size_t wire_bytes() const override { return sizeof(block); }
 
@@ -77,17 +76,11 @@ public:
 	uint64_t num_and() override { return gid; }
 };
 
-template <class T>
-class PrivacyFreeGen : public PrivacyFree<T> {
+class PrivacyFreeGen : public PrivacyFree {
 public:
-	using PrivacyFree<T>::io;
-	using PrivacyFree<T>::constant;
-	using PrivacyFree<T>::gid;
-	using PrivacyFree<T>::prp;
-
 	block delta;
 
-	explicit PrivacyFreeGen(T* io_) : PrivacyFree<T>(ALICE, io_) {
+	explicit PrivacyFreeGen(IOChannel* io_) : PrivacyFree(ALICE, io_) {
 		block a;
 		PRG().random_block(&a, 1);
 		delta = set_bit(a, 0);
@@ -109,15 +102,9 @@ public:
 	}
 };
 
-template <class T>
-class PrivacyFreeEva : public PrivacyFree<T> {
+class PrivacyFreeEva : public PrivacyFree {
 public:
-	using PrivacyFree<T>::io;
-	using PrivacyFree<T>::constant;
-	using PrivacyFree<T>::gid;
-	using PrivacyFree<T>::prp;
-
-	explicit PrivacyFreeEva(T* io_) : PrivacyFree<T>(BOB, io_) {
+	explicit PrivacyFreeEva(IOChannel* io_) : PrivacyFree(BOB, io_) {
 		io->recv_block(constant, 2);
 	}
 
