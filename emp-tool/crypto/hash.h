@@ -79,8 +79,8 @@ class Hash { public:
 
 	static block KDF(Point &in, uint64_t id = 1) {
 		size_t len = in.size();
-		in.group->resize_scratch(len+8);
-		unsigned char * tmp = in.group->scratch;
+		in.group()->resize_scratch(len+8);
+		unsigned char * tmp = in.group()->scratch();
 		in.to_bin(tmp, len);
 		memcpy(tmp+len, &id, 8);
 		block ret = hash_for_block(tmp, len+8);

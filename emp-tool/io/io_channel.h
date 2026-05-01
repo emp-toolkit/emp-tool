@@ -59,8 +59,8 @@ public:
 	void send_pt(Point *A, size_t num_pts = 1) {
 		for (size_t i = 0; i < num_pts; ++i) {
 			size_t len = A[i].size();
-			A[i].group->resize_scratch(len);
-			unsigned char *tmp = A[i].group->scratch;
+			A[i].group()->resize_scratch(len);
+			unsigned char *tmp = A[i].group()->scratch();
 			send_data(&len, 4);
 			A[i].to_bin(tmp, len);
 			send_data(tmp, len);
@@ -73,7 +73,7 @@ public:
 			recv_data(&len, 4);
 			assert(len <= 2048);
 			g->resize_scratch(len);
-			unsigned char *tmp = g->scratch;
+			unsigned char *tmp = g->scratch();
 			recv_data(tmp, len);
 			A[i].from_bin(g, tmp, len);
 		}
