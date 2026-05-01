@@ -86,7 +86,7 @@ class NetIO : public IOChannel { public:
 		delete[] recv_buf;
 	}
 
-	void flush() {
+	void flush() override {
 		if (!send_dirty) return;
 		++flushes_count;
 		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
@@ -104,7 +104,7 @@ class NetIO : public IOChannel { public:
 	}
 
 	// 1-byte ping/pong handshake to verify both directions are alive.
-	void sync() {
+	void sync() override {
 		int tmp = 0;
 		if (is_server) {
 			send_data_internal(&tmp, 1);

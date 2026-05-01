@@ -29,6 +29,16 @@ public:
 	virtual void send_data_internal(const void *data, size_t nbyte) = 0;
 	virtual void recv_data_internal(void *data, size_t nbyte) = 0;
 
+	// Drain any outbound buffer to the underlying transport. NetIO needs
+	// this to push staged TCP writes; MemIO and other in-memory transports
+	// have nothing to flush, so the default is a no-op.
+	virtual void flush() {}
+
+	// Optional barrier — implementations that need a wire-level handshake
+	// (NetIO does a 1-byte ping/pong) override; in-memory transports
+	// default to no-op.
+	virtual void sync() {}
+
 	void send_data(const void *data, size_t nbyte) {
 		counter += nbyte;
 		send_data_internal(data, nbyte);
