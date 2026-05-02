@@ -18,38 +18,37 @@
 
 namespace emp {
 
-// Single-socket full-duplex NetIO. One TCP fd carries both directions; the
-// kernel handles bidirectional traffic transparently.
+// Single-socket full-duplex NetIO using bidirectional stdio.
 //
-// The userspace half-duplex stall in the original NetIO came from sharing one
-// stdio FILE* (fdopen mode "wb+") between reads and writes — its bidir buffer
-// requires fflush before each direction reversal. We sidestep that by giving
-// the write side a "wb"-mode stdio FILE* (with a 1 MiB stdio buffer plus a
-// 32 KiB application-level coalescing buffer) and the read side a raw read()
-// path with its own 32 KiB staging. The two paths share the same fd but no
-// libc-level state, so neither blocks the other.
+// One TCP fd, one stdio FILE* opened in "wb+" mode. C's stdio rules require
+// fflush between writes and reads on a bidirectional stream; we exploit that
+// by setting `has_sent` on every send and calling fflush at the top of every
+// recv when set. This guarantees that any party blocking on a recv has first
+// drained its own pending writes — including writes from earlier in the same
+// session AND writes from prior protocol steps that ended in send-only
+// sequences — without protocol code having to remember to flush.
 //
-// flush() drains *outbound* data only. It never affects what the peer reads,
-// so calling flush() on one party has no effect on the other party — in
-// contrast to the prior split-personality design where "flush" was both an
-// outgoing drain and a stale-buffer discard, requiring symmetric calls to
-// avoid wire desync.
+// The previous design (split "wb" stdio + raw read()) lost this guarantee:
+// the auto-flush only fired when the same NetIO did a recv, so any NetIO
+// used in send-only patterns (e.g. an IKNP-receiver-role channel that only
+// sends u-matrices, check_x, check_t) would strand its tail bytes in
+// userspace forever. See docs/netio-flush-deadlock-investigation.md.
 
 class NetIO : public IOChannel { public:
 	int sock = -1;
 	bool is_server, quiet;
 
-	// Send-side state (stdio "wb" stream + app-level coalescing buffer).
 	FILE *stream = nullptr;
 	char *stream_buf = nullptr;     // backing store for setvbuf, lifetime tied to stream
-	char *send_buf = nullptr;       // 32 KiB coalescing staging
+	// Userspace coalescing buffer in front of stdio. Lots of protocol code
+	// streams small writes (256-byte u-rows in IKNP, 32-byte check_x/check_t,
+	// per-element packing) at high rate; coalescing them via memcpy + ptr-bump
+	// is materially faster than going through fwrite's per-call overhead
+	// (per-FILE* lock, error path, dispatch). We drain send_buf to fwrite when
+	// it fills, when a recv triggers flush(), or when ~NetIO runs.
+	char *send_buf = nullptr;
 	size_t send_ptr = 0;
-	bool send_dirty = false;
-
-	// Recv-side state (raw read() into a 32 KiB staging buffer).
-	char *recv_buf = nullptr;
-	size_t recv_ptr = 0;            // next byte to deliver to the caller
-	size_t recv_fill = 0;           // bytes available in recv_buf
+	bool has_sent = false;          // any pending writes since last fflush?
 
 	// Telemetry.
 	uint64_t bytes_sent = 0;
@@ -61,16 +60,17 @@ class NetIO : public IOChannel { public:
 			throw std::runtime_error("Invalid port number!");
 
 		is_server = (address == nullptr);
-		sock = is_server ? server_listen(port) : client_connect(address, port);
-		set_nodelay();
-
-		stream_buf = new char[NETWORK_BUFFER_SIZE];
-		send_buf   = new char[NETWORK_BUFFER_SIZE2];
-		recv_buf   = new char[NETWORK_BUFFER_SIZE2];
-		stream = fdopen(sock, "wb");
-		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
-
+		init_from_sock(is_server ? server_listen(port) : client_connect(address, port));
 		if (!quiet) std::cout << "connected\n";
+	}
+
+	// Wrap an already-connected socket fd. Useful for callers that run their
+	// own listener / accept loop (e.g. a multi-party mesh that dispatches
+	// inbound connections by peer id) and want to hand each accepted fd to a
+	// NetIO without going back through bind/listen/accept.
+	NetIO(int existing_sock, bool quiet = true) : quiet(quiet) {
+		is_server = false;
+		init_from_sock(existing_sock);
 	}
 
 	~NetIO() {
@@ -83,15 +83,23 @@ class NetIO : public IOChannel { public:
 		if (stream) fclose(stream);   // closes the underlying fd
 		delete[] stream_buf;
 		delete[] send_buf;
-		delete[] recv_buf;
 	}
 
 	void flush() override {
-		if (!send_dirty) return;
+		if (!has_sent) return;
 		++flushes_count;
 		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
 		fflush(stream);
-		send_dirty = false;
+		has_sent = false;
+	}
+
+	void init_from_sock(int new_sock) {
+		sock = new_sock;
+		set_nodelay();
+		stream_buf = new char[NETWORK_BUFFER_SIZE];
+		send_buf   = new char[NETWORK_BUFFER_SIZE2];
+		stream = fdopen(sock, "wb+");
+		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
 	}
 
 	void set_nodelay() {
@@ -116,6 +124,9 @@ class NetIO : public IOChannel { public:
 	}
 
 	void send_data_internal(const void *data, size_t len) override {
+		// Fast path: small writes accumulate in send_buf via memcpy. Drains
+		// to fwrite only when the buffer would overflow, when a recv calls
+		// flush(), or at NetIO destruction.
 		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
@@ -123,32 +134,24 @@ class NetIO : public IOChannel { public:
 			if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
 			send_raw(data, len);
 		}
-		send_dirty = true;
+		has_sent = true;
 	}
 
 	void recv_data_internal(void *data, size_t len) override {
-		// Drain my outgoing before blocking on the peer's reply, otherwise
-		// any request/response pattern would deadlock with our request still
-		// staged.
+		// Drain pending sends so the peer's matching read can make progress.
+		// The C standard requires fflush between writes and reads on a "wb+"
+		// stream anyway; this also handles any tail bytes from prior
+		// send-only protocol steps on this NetIO. fread (not raw read())
+		// because raw read() bypasses stdio's direction-state machine and
+		// breaks correctness in some protocol patterns even when we fflush
+		// explicitly.
 		flush();
 		bytes_recv += len;
 		size_t got = 0;
 		while (got < len) {
-			if (recv_ptr == recv_fill) {
-				// Raw read() (not fread) so the refill accepts whatever the
-				// kernel has available — fread would block waiting for a
-				// full staging buffer's worth of bytes and force the sender
-				// to pad the wire to keep us alive.
-				ssize_t n = ::read(sock, recv_buf, NETWORK_BUFFER_SIZE2);
-				if (n <= 0) { fprintf(stderr, "error: net_recv_data\n"); exit(1); }
-				recv_ptr = 0;
-				recv_fill = (size_t)n;
-			}
-			size_t take = recv_fill - recv_ptr;
-			if (take > len - got) take = len - got;
-			memcpy((char *)data + got, recv_buf + recv_ptr, take);
-			recv_ptr += take;
-			got += take;
+			size_t res = fread((char *)data + got, 1, len - got, stream);
+			if (res > 0) got += res;
+			else { fprintf(stderr, "error: net_recv_data\n"); exit(1); }
 		}
 	}
 
