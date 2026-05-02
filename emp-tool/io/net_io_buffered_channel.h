@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <atomic>
 #include <iostream>
 
 #include "emp-tool/io/io_channel.h"
@@ -49,6 +50,29 @@ class NetIOBuffered : public IOChannel { public:
 	uint64_t bytes_recv = 0;
 	uint64_t flushes_count = 0;
 
+#ifndef NDEBUG
+	// Debug-only concurrency assertion. NetIOBuffered is not thread-safe;
+	// a debug build aborts if two threads enter send_data / recv_data /
+	// flush on the same instance at once. See touch_guard below; release
+	// builds drop both members.
+	std::atomic<int> _in_use{0};
+	struct touch_guard {
+		std::atomic<int> &f;
+		const char *op;
+		touch_guard(std::atomic<int> &x, const char *o) : f(x), op(o) {
+			if (f.fetch_add(1, std::memory_order_acq_rel) != 0) {
+				fprintf(stderr,
+				        "NetIOBuffered race: concurrent %s on the same "
+				        "NetIOBuffered. Not thread-safe — only one thread "
+				        "may touch a given NetIOBuffered at a time.\n",
+				        op);
+				std::abort();
+			}
+		}
+		~touch_guard() { f.fetch_sub(1, std::memory_order_release); }
+	};
+#endif
+
 	NetIOBuffered(const char *address, int port, bool quiet = false) : quiet(quiet) {
 		if (port < 0 || port > 65535)
 			throw std::runtime_error("Invalid port number!");
@@ -80,11 +104,10 @@ class NetIOBuffered : public IOChannel { public:
 	}
 
 	void flush() override {
-		if (!has_sent) return;
-		++flushes_count;
-		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
-		fflush(stream);
-		has_sent = false;
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "flush");
+#endif
+		flush_unlocked();
 	}
 
 	void init_from_sock(int new_sock) {
@@ -118,6 +141,9 @@ class NetIOBuffered : public IOChannel { public:
 	}
 
 	void send_data_internal(const void *data, size_t len) override {
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "send_data");
+#endif
 		// Small writes accumulate in send_buf; oversized writes flush
 		// the staging buffer first then go straight to fwrite.
 		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
@@ -131,10 +157,13 @@ class NetIOBuffered : public IOChannel { public:
 	}
 
 	void recv_data_internal(void *data, size_t len) override {
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "recv_data");
+#endif
 		// Drain pending sends before blocking on the peer's reply. fread
 		// on a "wb+" stream with pending writes also implicitly fflushes,
 		// so this is belt+suspenders.
-		flush();
+		flush_unlocked();
 		bytes_recv += len;
 		size_t got = 0;
 		while (got < len) {
@@ -145,6 +174,14 @@ class NetIOBuffered : public IOChannel { public:
 	}
 
 private:
+	void flush_unlocked() {
+		if (!has_sent) return;
+		++flushes_count;
+		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
+		fflush(stream);
+		has_sent = false;
+	}
+
 	void send_raw(const void *data, size_t len) {
 		bytes_sent += len;
 		size_t sent = 0;

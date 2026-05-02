@@ -89,6 +89,24 @@
   back-to-back; `docs/netio-flush-deadlock-investigation.md` has the
   investigation that turned this from stdio trivia into a hard rule.
 
+- Thread-safety: NetIO and NetIOBuffered are NOT thread-safe. The
+  user-space `send_buf` coalescing has no per-call lock; concurrent
+  `send_data` / `recv_data` / `flush` from two threads on the same
+  instance corrupts the buffer. Each instance must be owned by one
+  thread at a time — `flush()` counts as a "touch" and is unsafe to
+  call from a thread other than the one currently sending. (The
+  pre-rewrite NetIO didn't have this hazard because every send went
+  through `fwrite`, which serializes via stdio's `flockfile`. The
+  user-space buffer is faster but loses that implicit serialization.)
+
+- Debug build assertion: under `!NDEBUG`, NetIO and NetIOBuffered carry
+  an `_in_use` atomic counter and `touch_guard` that wraps
+  `send_data_internal` / `recv_data_internal` / `flush`. If two threads
+  enter any of those on the same instance simultaneously, the build
+  aborts with `NetIO race: concurrent <op> on the same NetIO`. Zero
+  cost under `-DNDEBUG`. Use this when a multi-party protocol behaves
+  flakily — race or no race, the answer falls out of a Debug build.
+
 ### Numeric semantics
 
 These are normative — match exactly what the corresponding C++ native

@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <atomic>
 #include <iostream>
 
 #include "emp-tool/io/io_channel.h"
@@ -71,6 +72,29 @@ class NetIO : public IOChannel { public:
 	uint64_t bytes_recv = 0;
 	uint64_t flushes_count = 0;
 
+#ifndef NDEBUG
+	// Debug-only concurrency assertion. NetIO is not thread-safe (the
+	// send_buf coalescing is unlocked); a debug build aborts if two
+	// threads enter send_data / recv_data / flush on the same instance
+	// at once. See touch_guard below; release builds drop both members.
+	std::atomic<int> _in_use{0};
+	struct touch_guard {
+		std::atomic<int> &f;
+		const char *op;
+		touch_guard(std::atomic<int> &x, const char *o) : f(x), op(o) {
+			if (f.fetch_add(1, std::memory_order_acq_rel) != 0) {
+				fprintf(stderr,
+				        "NetIO race: concurrent %s on the same NetIO. "
+				        "NetIO is not thread-safe — only one thread may "
+				        "touch a given NetIO at a time.\n",
+				        op);
+				std::abort();
+			}
+		}
+		~touch_guard() { f.fetch_sub(1, std::memory_order_release); }
+	};
+#endif
+
 	NetIO(const char *address, int port, bool quiet = false) : quiet(quiet) {
 		if (port < 0 || port > 65535)
 			throw std::runtime_error("Invalid port number!");
@@ -103,11 +127,10 @@ class NetIO : public IOChannel { public:
 	}
 
 	void flush() override {
-		if (!send_dirty) return;
-		++flushes_count;
-		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
-		fflush(stream);
-		send_dirty = false;
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "flush");
+#endif
+		flush_unlocked();
 	}
 
 	void init_from_sock(int new_sock) {
@@ -142,6 +165,9 @@ class NetIO : public IOChannel { public:
 	}
 
 	void send_data_internal(const void *data, size_t len) override {
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "send_data");
+#endif
 		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
@@ -153,10 +179,13 @@ class NetIO : public IOChannel { public:
 	}
 
 	void recv_data_internal(void *data, size_t len) override {
+#ifndef NDEBUG
+		touch_guard _g(_in_use, "recv_data");
+#endif
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.
-		flush();
+		flush_unlocked();
 		bytes_recv += len;
 		size_t got = 0;
 		while (got < len) {
@@ -180,6 +209,14 @@ class NetIO : public IOChannel { public:
 	}
 
 private:
+	void flush_unlocked() {
+		if (!send_dirty) return;
+		++flushes_count;
+		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
+		fflush(stream);
+		send_dirty = false;
+	}
+
 	void send_raw(const void *data, size_t len) {
 		bytes_sent += len;
 		size_t sent = 0;
