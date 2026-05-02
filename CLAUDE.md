@@ -56,6 +56,39 @@
   leave the base no-op overrides in place. The OT-aware subclass lives
   downstream in emp-ot.
 
+### IO channel layer (`emp-tool/io/`)
+
+- Two NetIO implementations, same `IOChannel` contract: `NetIO` (default,
+  `"wb"` stdio + raw `::read` on recv — faster on small-message protocol
+  workloads) and `NetIOBuffered` (`"wb+"` stdio + `fread` on both paths
+  — faster on multi-MiB bulk transfers). Pick `NetIO` unless you're
+  specifically pushing bulk data; the rest of this section applies to
+  both.
+
+- Flush contract: callers MUST call `flush()` at the end of any protocol
+  step that ends in sends, before returning to the caller or blocking on
+  anything other than a recv on the same NetIO. The auto-flush only fires
+  when the same NetIO does a recv (`flush()` at the top of
+  `recv_data_internal`); a NetIO whose step is purely sends — e.g. the
+  IKNP receiver-role channel during `setup_recv` — strands its tail bytes
+  in the user-space `send_buf` until something else moves them.
+
+- `~NetIO` flushes, so pure send-then-destruct works. Long-lived NetIOs
+  with a mid-life send-only step do not: the destructor only runs at
+  end-of-life, which doesn't happen until the protocol completes, which
+  can't complete because the peer is blocked on bytes stuck in send_buf.
+  This is a circular-wait deadlock, not "data eventually arrives slowly".
+
+- Rule of thumb: if the next thing you do on this NetIO isn't a recv,
+  flush first. Applies to function boundaries, phase boundaries within
+  a function, and any blocking wait (thread join, barrier, recv on a
+  *different* NetIO).
+
+- `test/netio.cpp` is templated on the IO type and runs the full
+  correctness + send-only-regression + bench suite against both classes
+  back-to-back; `docs/netio-flush-deadlock-investigation.md` has the
+  investigation that turned this from stdio trivia into a hard rule.
+
 ### Numeric semantics
 
 These are normative — match exactly what the corresponding C++ native
