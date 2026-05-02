@@ -30,26 +30,31 @@ class PRG { public:
 		} else {
 			block v;
 #ifndef ENABLE_RDSEED
-			uint32_t * data = (uint32_t *)(&v);
-			std::random_device rand_div("/dev/urandom");
-			for (size_t i = 0; i < sizeof(block) / sizeof(uint32_t); ++i)
-				data[i] = rand_div();
+			v = from_urand();
 #else
 			unsigned long long r0, r1;
-			int i = 0;
+			int i = 0, j = 0;
 			// To prevent an AMD CPU bug. (PR #156)
 			for(; i < 10; ++i)
 				if((_rdseed64_step(&r0) == 1) && (r0 != ULLONG_MAX) && (r0 != 0)) break;
-			if(i == 10)error("RDSEED FAILURE");
 
-			for(i = 0; i < 10; ++i)
+			for(; j < 10; ++j)
 				if((_rdseed64_step(&r1) == 1) && (r1 != ULLONG_MAX) && (r1 != 0)) break;
-			if(i == 10)error("RDSEED FAILURE");
-
-			v = makeBlock(r0, r1);
+			if (i == 10 or j == 10)
+				v = from_urand();
+			else 
+				v = makeBlock(r0, r1);
 #endif
 			reseed(&v, id);
 		}
+	}
+	block from_urand () {
+		block v;
+		uint32_t * data = (uint32_t *)(&v);
+		std::random_device rand_div("/dev/urandom");
+		for (size_t i = 0; i < sizeof(block) / sizeof(uint32_t); ++i)
+			data[i] = rand_div();
+		return v;
 	}
 	void reseed(const block* seed, uint64_t id = 0) {
 		block v = *seed;

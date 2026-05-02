@@ -36,13 +36,6 @@ self-contained and assumes you've read this index.
 These are short enough to live here so you don't have to load them
 from a subdoc.
 
-- API breakage is acceptable when modernizing — downstream emp-* repos
-  can be updated as needed. Don't keep dead wrappers just for legacy
-  callers if no in-tree code uses them.
-- Don't pad tests with edge cases that no caller hits; cover what the
-  API actually has to handle. The exception is the numeric classes
-  (see [docs/numeric_semantics.md](docs/numeric_semantics.md)), where
-  boundary coverage *is* the contract.
 - When a benchmark looks too good to be true (e.g. < 1 cy/op for a
   multi-instruction primitive), suspect the compiler hoisted the call.
   Chain output to input.
