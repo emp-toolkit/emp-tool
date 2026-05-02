@@ -6,11 +6,11 @@
 #include "emp-tool/core/constants.h"
 #include <climits>
 #include <memory>
+#include <random>
 
 #ifdef ENABLE_RDSEED
 #include <x86intrin.h>
 #else
-#include <random>
 #endif
 
 namespace emp {
