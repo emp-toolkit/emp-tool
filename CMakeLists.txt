@@ -24,7 +24,6 @@ option(EMP_TOOL_BUILD_TESTS       "Build emp-tool tests"               ${PROJECT
 option(EMP_TOOL_INSTALL           "Generate install / export rules"    ${PROJECT_IS_TOP_LEVEL})
 option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so VAES, VPCLMULQDQ, AVX-512 etc. are used when available. Default ON for performance; turn OFF to produce a portable binary that runs on any AES-NI + PCLMUL + SSSE3 CPU." ON)
 option(EMP_TOOL_THREADING         "Use thread-local protocol/circuit execution pointers" OFF)
-option(EMP_TOOL_CRYPTO_IN_CIRCUIT "Embed AES-128 / Keccak Bristol circuits as static blobs" OFF)
 
 # ---------------------------------------------------------------------
 # Dependencies
@@ -55,32 +54,6 @@ endif()
 set(emp_tool_sources
     emp-tool/emp-tool.cpp
     emp-tool/circuits/circuit.cpp)
-
-# Generated circuit blobs land in the build tree, not the source tree.
-if(EMP_TOOL_CRYPTO_IN_CIRCUIT)
-    find_program(XXD_EXECUTABLE xxd REQUIRED)
-    set(_gen_dir ${CMAKE_CURRENT_BINARY_DIR}/generated/emp-tool/circuits/files/bristol_fashion)
-    file(MAKE_DIRECTORY ${_gen_dir})
-
-    function(_emp_embed_circuit blob_path header)
-        get_filename_component(_stem "${blob_path}" NAME_WE)
-        set(_out "${_gen_dir}/${_stem}.txt.cpp")
-        # xxd derives the symbol name from the file path it sees; running it
-        # from the source root preserves emp_tool_circuits_files_... symbols
-        # already declared in the headers.
-        add_custom_command(
-            OUTPUT  "${_out}"
-            COMMAND ${CMAKE_COMMAND} -E echo "#include \"emp-tool/circuits/${header}\"" > "${_out}"
-            COMMAND ${XXD_EXECUTABLE} -i "${blob_path}" >> "${_out}"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${blob_path}"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-            COMMENT "Embedding ${blob_path}"
-            VERBATIM)
-        set(emp_tool_sources ${emp_tool_sources} "${_out}" PARENT_SCOPE)
-    endfunction()
-
-    _emp_embed_circuit(emp-tool/circuits/files/bristol_fashion/Keccak_f.txt  sha3_256.h)
-endif()
 
 # ---------------------------------------------------------------------
 # Library target
@@ -137,9 +110,6 @@ if(EMP_TOOL_HAS_RDSEED)
 endif()
 if(EMP_TOOL_THREADING)
     target_compile_definitions(emp-tool PUBLIC THREADING)
-endif()
-if(EMP_TOOL_CRYPTO_IN_CIRCUIT)
-    target_compile_definitions(emp-tool PUBLIC CRYPTO_IN_CIRCUIT)
 endif()
 
 # ---------------------------------------------------------------------

@@ -5,20 +5,14 @@
 #include "emp-tool/core/block.h"
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/bitvec.h"
-#include "emp-tool/circuits/circuit_file.h"
-#include <stdio.h>
-#include <fstream>
-#include <memory>
+#include "emp-tool/circuits/sha3_circuit.h"
 
 #include <openssl/evp.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <errno.h>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
 
-
-extern unsigned int emp_tool_circuits_files_bristol_fashion_Keccak_f_txt_len;
-extern unsigned char emp_tool_circuits_files_bristol_fashion_Keccak_f_txt[];
 namespace emp {
 
 // Calculate the sha3 hash of arbitrary bytes in memory using OpenSSL.
@@ -34,13 +28,11 @@ int sha3_256(uint8_t * output, const T * input, const size_t length = 1) {
 		std::cerr << "Error in EVP_MD_CTX_create()\n" << std::flush;
 		return -1;
 	}
-	// initialize digest engine
-	if (EVP_DigestInit_ex(mdctx, algo, NULL) != 1) { // returns 1 if successful
+	if (EVP_DigestInit_ex(mdctx, algo, NULL) != 1) {
 		std::cerr << "Error in EVP_DigestInit_ex(mdctx, algo, NULL)\n" << std::flush;
 		EVP_MD_CTX_destroy(mdctx);
 		return -2;
 	}
-	// provide data to digest engine
 	if (EVP_DigestUpdate(mdctx, (const uint8_t *) input, length * sizeof(T)) != 1) {
 		std::cerr << "Error in EVP_DigestUpdate(mdctx, (const uint8_t *) input, length * sizeof(T))\n" << std::flush;
 		EVP_MD_CTX_destroy(mdctx);
@@ -49,8 +41,7 @@ int sha3_256(uint8_t * output, const T * input, const size_t length = 1) {
 
 	unsigned int digest_len = EVP_MD_size(algo);
 
-	// produce digest
-	if (EVP_DigestFinal_ex(mdctx, output, &digest_len) != 1) { // returns 1 if successful
+	if (EVP_DigestFinal_ex(mdctx, output, &digest_len) != 1) {
 		std::cerr << "Error in EVP_DigestFinal_ex(mdctx, output, &digest_len)\n" << std::flush;
 		EVP_MD_CTX_destroy(mdctx);
 		return -4;
@@ -62,31 +53,39 @@ int sha3_256(uint8_t * output, const T * input, const size_t length = 1) {
 
 
 // In-circuit SHA3-256. Wires are typed Bit_T<Wire>; the wire type is
-// defined by the active backend.
+// defined by the active backend. Bit / byte ordering is LSB-first within
+// each byte, byte-sequential — matches BitVec_T and the rest of emp-tool
+// (see docs/circuits.md).
+//
+// Internally calls Keccak_F_Calculator_T<Wire>::permute on a 1600-bit state
+// laid out per FIPS-202 §B.1: input byte j, bit k (k=0=LSB) ends up at
+//   state_index = 64*(j/8) + 8*(j%8) + k.
+// (lane_idx = j/8 unpacks to (x, y) = (lane_idx%5, lane_idx/5).)
 //
 // There is some internal state used during each hash, so don't try to use
 // the same object in 2 threads simultaneously: just make multiple objects.
 template<typename Wire>
 class SHA3_256_Calculator_T {
 	public:
-		Bit_T<Wire> blocks[1600]; // internal state used during hash.
+		Bit_T<Wire> blocks[1600]; // internal sponge state
 		Bit_T<Wire> zero, one;    // useful constants set at constructor time
-		std::unique_ptr<BristolFashion> keccak_f;
+		Keccak_F_Calculator_T<Wire> kf;
 
-		// Sets up BristolFashion circuit for calculating Keccak_f, and allocates some space and constants.
 		SHA3_256_Calculator_T() {
 			zero = Bit_T<Wire>(false, PUBLIC);
 			one  = Bit_T<Wire>(true,  PUBLIC);
-			FILE * keccak_f_txt = fmemopen(emp_tool_circuits_files_bristol_fashion_Keccak_f_txt,
-					emp_tool_circuits_files_bristol_fashion_Keccak_f_txt_len,
-					"r");
-			keccak_f = std::unique_ptr<BristolFashion>(new BristolFashion(keccak_f_txt));
-			fclose(keccak_f_txt);
 		}
 
-		// The Keccak circuit uses different endianness, so this calculates "equivalent" addresses (in bits).
-		size_t keccak_address_translator(size_t i) {
-			return ((8 * (199 - (i/8))) + (i % 8));
+		// Map an input bit index (LSB-first within byte, byte-sequential)
+		// to the corresponding bit position in the FIPS-202 1600-bit state.
+		static inline size_t fips202_bit_index(size_t input_bit_idx) {
+			const size_t byte_j   = input_bit_idx / 8;
+			const size_t bit_k    = input_bit_idx % 8;
+			const size_t lane_idx = byte_j / 8;
+			const size_t x        = lane_idx % 5;
+			const size_t y        = lane_idx / 5;
+			const size_t z        = 8 * (byte_j % 8) + bit_k;
+			return 64 * (5 * y + x) + z;
 		}
 
 		// Calculate the sha3_256 of a bunch of wire arrays (essentially concatenates the arrays "inputs")
@@ -94,37 +93,22 @@ class SHA3_256_Calculator_T {
 				const Bit_T<Wire> ** inputs, // concatenate these to get the bitstring we're hashing.
 				const size_t * input_sizes, // the size of each input array, please
 				const size_t input_count = 1) { // the number of arrays in "inputs".
-			size_t index, i, j;
-			for (i = 0; i < 1600; ++i) {
-				blocks[i] = zero;
-			}
-			index = 0;
-			for (i = 0; i < input_count; ++i) {
-				for (j = 0; j < input_sizes[i]; ++j) {
-					blocks[keccak_address_translator(index)] =
-						blocks[keccak_address_translator(index)] ^ inputs[i][j];
+			for (size_t i = 0; i < 1600; ++i) blocks[i] = zero;
+
+			size_t index = 0;
+			for (size_t i = 0; i < input_count; ++i) {
+				for (size_t j = 0; j < input_sizes[i]; ++j) {
+					const size_t s = fips202_bit_index(index);
+					blocks[s] = blocks[s] ^ inputs[i][j];
 					++index;
 					if (index == 1088) {
-						keccak_f->compute(blocks, blocks);
+						kf.permute(blocks);
 						index = 0;
 					}
 				}
 			}
 
-			// I do not know why sha3 does this, but it needs to XOR the next byte with 0x06.
-			index = 8 * ((index + 7)/8); // round index up to next multiple of 8
-			blocks[keccak_address_translator(index + 1)] =
-				blocks[keccak_address_translator(index + 1)] ^ one;
-			blocks[keccak_address_translator(index + 2)] =
-				blocks[keccak_address_translator(index + 2)] ^ one;
-
-			// I do not know why SHA3 does this, but it does.
-			blocks[519] = blocks[519] ^ one;
-
-			keccak_f->compute(blocks, blocks);
-			for (i = 0; i < 256; ++i) {
-				output[i] = blocks[keccak_address_translator(i)];
-			}
+			finalize_and_squeeze(index, output);
 		}
 
 
@@ -132,37 +116,22 @@ class SHA3_256_Calculator_T {
 		void sha3_256(Bit_T<Wire> output[], // we'll write 256 bits to here as the output hash.
 				const BitVec_T<Wire> inputs[], // we'll concatenate these, and hash the result.
 				const size_t input_count = 1) { // the number of Integers in "inputs"
-			size_t index, i, j;
-			for (i = 0; i < 1600; ++i) {
-				blocks[i] = zero;
-			}
-			index = 0;
-			for (i = 0; i < input_count; ++i) {
-				for (j = 0; j < inputs[i].bits.size(); ++j) {
-					blocks[keccak_address_translator(index)] =
-						blocks[keccak_address_translator(index)] ^ inputs[i].bits[j];
+			for (size_t i = 0; i < 1600; ++i) blocks[i] = zero;
+
+			size_t index = 0;
+			for (size_t i = 0; i < input_count; ++i) {
+				for (size_t j = 0; j < inputs[i].bits.size(); ++j) {
+					const size_t s = fips202_bit_index(index);
+					blocks[s] = blocks[s] ^ inputs[i].bits[j];
 					++index;
 					if (index == 1088) {
-						keccak_f->compute(blocks, blocks);
+						kf.permute(blocks);
 						index = 0;
 					}
 				}
 			}
 
-			// I do not know why sha3 does this, but it needs to XOR the next byte with 0x06.
-			index = 8 * ((index + 7)/8); // round index up to next multiple of 8
-			blocks[keccak_address_translator(index + 1)] =
-				blocks[keccak_address_translator(index + 1)] ^ one;
-			blocks[keccak_address_translator(index + 2)] =
-				blocks[keccak_address_translator(index + 2)] ^ one;
-
-			// I do not know why SHA3 does this, but it does.
-			blocks[519] = blocks[519] ^ one;
-
-			keccak_f->compute(blocks, blocks);
-			for (i = 0; i < 256; ++i) {
-				output[i] = blocks[keccak_address_translator(i)];
-			}
+			finalize_and_squeeze(index, output);
 		}
 
 		// sha3_256 in circuit for an array of input wires
@@ -197,6 +166,32 @@ class SHA3_256_Calculator_T {
 			output->bits.resize(256);
 			this->sha3_256(output->bits.data(), inputs, input_count);
 		}
+
+	private:
+		// Apply SHA3 padding (domain separator 0x06 + pad10*1 trailing 0x80)
+		// for a partial-block index in [0, 1088), then permute and squeeze
+		// the first 256 bits of state into `output`.
+		void finalize_and_squeeze(size_t index, Bit_T<Wire> output[]) {
+			// Round index up to next byte boundary, then XOR 0x06 at that
+			// byte (bits 1 and 2 set, LSB-first = 0b00000110 = 0x06).
+			index = 8 * ((index + 7) / 8);
+			{
+				const size_t s1 = fips202_bit_index(index + 1);
+				const size_t s2 = fips202_bit_index(index + 2);
+				blocks[s1] = !blocks[s1];
+				blocks[s2] = !blocks[s2];
+			}
+
+			// Final 1 of pad10*1 at byte 135 (last rate byte), bit 7 = 0x80.
+			// fips202_bit_index(1087) = 1087.
+			blocks[1087] = !blocks[1087];
+
+			kf.permute(blocks);
+
+			for (size_t i = 0; i < 256; ++i)
+				output[i] = blocks[fips202_bit_index(i)];
+		}
 };
-}
+
+}  // namespace emp
 #endif

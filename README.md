@@ -45,7 +45,6 @@ binary that runs on any AES-NI + PCLMUL + SSE4.1 (x86_64) or
 | `EMP_TOOL_BUILD_TESTS` | `ON` when top-level | Build the test suite under `test/`. |
 | `EMP_TOOL_INSTALL` | `ON` when top-level | Generate install + export rules. |
 | `EMP_TOOL_THREADING` | `OFF` | Make the global `Backend* backend` pointer thread-local. Required if multiple threads run circuits concurrently against different backends. |
-| `EMP_TOOL_CRYPTO_IN_CIRCUIT` | `OFF` | Embed the AES-128 and Keccak-f Bristol circuits as static blobs (needed by `AES_128_CTR_Calculator` / `SHA3_256_Calculator` and their tests). Requires `xxd`. |
 
 ## Consuming from another CMake project
 
@@ -286,11 +285,9 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Add `-DEMP_TOOL_CRYPTO_IN_CIRCUIT=ON` to also build the
-`aes_128_ctr` and `sha3_256` in-circuit tests. Each test file under
-`test/` doubles as a tutorial for the corresponding header — see
-`CLAUDE.md` for the file conventions (`example()` / `run_correctness()`
-/ `bench(double sec)` per file).
+Each test file under `test/` doubles as a tutorial for the
+corresponding header — see `CLAUDE.md` for the file conventions
+(`example()` / `run_correctness()` / `bench(double sec)` per file).
 
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
 
