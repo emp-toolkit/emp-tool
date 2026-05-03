@@ -78,7 +78,6 @@ if(EMP_TOOL_CRYPTO_IN_CIRCUIT)
         set(emp_tool_sources ${emp_tool_sources} "${_out}" PARENT_SCOPE)
     endfunction()
 
-    _emp_embed_circuit(emp-tool/circuits/files/bristol_fashion/aes_128.txt   aes_128_ctr.h)
     _emp_embed_circuit(emp-tool/circuits/files/bristol_fashion/Keccak_f.txt  sha3_256.h)
 endif()
 

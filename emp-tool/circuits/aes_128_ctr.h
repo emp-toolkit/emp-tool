@@ -6,20 +6,15 @@
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/bitvec.h"
 #include "emp-tool/circuits/unsigned_int.h"
-#include "emp-tool/circuits/circuit_file.h"
-#include <stdio.h>
-#include <fstream>
-#include <memory>
+#include "emp-tool/circuits/aes_circuit.h"
 
 #include <openssl/evp.h>
-#include <stdlib.h>
-#include <string.h>
+#include <algorithm>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
 #include <unistd.h>
-#include <errno.h>
-
-
-extern unsigned int emp_tool_circuits_files_bristol_fashion_aes_128_txt_len;
-extern unsigned char emp_tool_circuits_files_bristol_fashion_aes_128_txt[];
 
 namespace emp {
 
@@ -59,29 +54,22 @@ int aes_128_ctr(const __m128i key,
 	}
 	EVP_CIPHER_CTX *ctx;
 	int len;
-	// Create and initialise the context
 	if(!(ctx = EVP_CIPHER_CTX_new())) {
 		std::cerr<< "EVP_CIPHER_CTX_new gave me a null pointer\n"<<std::flush;
 		return -1;
 	}
-	// Initialise the encryption operation. IMPORTANT - ensure you use a key
-	// and IV size appropriate for your cipher
 	if(1 != EVP_EncryptInit_ex(ctx, EVP_aes_128_ctr(), NULL,
 				(const unsigned char *) (&key), (const unsigned char *) (&counter))) {
 		std::cerr<< "EVP_EncryptInit_ex gave something besides 1\n"<<std::flush;
 		EVP_CIPHER_CTX_free(ctx);
 		return -2;
 	}
-	// Provide the message to be encrypted, and obtain the encrypted output.
-	// EVP_EncryptUpdate can be called multiple times if necessary
 	if(1 != EVP_EncryptUpdate(ctx, (unsigned char *) output, &len, (unsigned char *) input, num_bytes)) {
 		std::cerr<< "EVP_EncryptUpdate gave something besides 1\n"<<std::flush;
 		EVP_CIPHER_CTX_free(ctx);
 		return -3;
 	}
 	size_t ciphertext_len = len;
-	// Finalise the encryption. Further ciphertext bytes may be written at
-	// this stage.
 	if(1 != EVP_EncryptFinal_ex(ctx, ((unsigned char *) output) + len, &len)) {
 		std::cerr<< "EVP_EncryptFinal gave something besides 1\n"<<std::flush;
 		EVP_CIPHER_CTX_free(ctx);
@@ -95,151 +83,94 @@ int aes_128_ctr(const __m128i key,
 	return 0;
 }
 
-// In-circuit AES-128-CTR. Wires are typed Bit_T<Wire>; the wire type is
-// defined by the active backend.
+// Add `delta` to bytes 8..15 of `iv` interpreted as a big-endian uint64
+// (NIST SP 800-38A counter convention: the high 8 bytes of the IV are the
+// nonce, the low 8 bytes are the counter, and incrementing the counter
+// increments byte 15 first). Carry beyond byte 8 is dropped — matches
+// `count += start_chunk` in the CPU free function above.
+template <typename Wire>
+inline void ctr_inc_be64_inplace(Bit_T<Wire> iv[128], uint64_t delta) {
+	if (delta == 0) return;
+	// Pack iv bytes 15, 14, ..., 8 into a 64-bit LSB-first UnsignedInt
+	// so adding `delta` increments byte 15 first.
+	UnsignedInt_T<Wire> ctr;
+	ctr.bits.resize(64);
+	for (int byte = 0; byte < 8; ++byte) {
+		int src_byte = 15 - byte;
+		for (int k = 0; k < 8; ++k)
+			ctr.bits[byte * 8 + k] = iv[src_byte * 8 + k];
+	}
+	ctr = ctr + UnsignedInt_T<Wire>(64, delta, PUBLIC);
+	for (int byte = 0; byte < 8; ++byte) {
+		int dst_byte = 15 - byte;
+		for (int k = 0; k < 8; ++k)
+			iv[dst_byte * 8 + k] = ctr.bits[byte * 8 + k];
+	}
+}
+
+// In-circuit AES-128-CTR. Wires are typed Bit_T<Wire>. Bit / byte ordering
+// is LSB-first within each byte, byte-sequential in memory — matches
+// BitVec_T and the rest of emp-tool (see docs/circuits.md).
 //
-// There is some internal state used during encryption, so don't try to use
-// the same object in 2 threads simultaneously: just make multiple objects.
+// CTR semantics match NIST SP 800-38A and the CPU free function above:
+// the IV is treated as a 128-bit counter block where bytes 8..15 are the
+// 64-bit big-endian counter that gets incremented per block.
+//
+// The expanded key is cached across calls — pass `key == nullptr` to
+// reuse the most recently scheduled key. The first call must pass a
+// non-null key.
+//
+// There is some internal state used during encryption, so don't try to
+// use the same object in 2 threads simultaneously: just make multiple
+// objects.
 template<typename Wire>
 class AES_128_CTR_Calculator_T { public:
-	Bit_T<Wire> keyiv[256]; // internal state used during encryption.
-	Bit_T<Wire> blind[128]; // internal state used during encryption.
-	UnsignedInt_T<Wire> counter;
-	std::unique_ptr<BristolFashion> circuit;
+	AES_128_CTR_Calculator_T() = default;
 
-	// Sets up BristolFashion circuit for calculating aes, and allocates some space and constants.
-	AES_128_CTR_Calculator_T() {
-		FILE * circuit_file = fmemopen(emp_tool_circuits_files_bristol_fashion_aes_128_txt,
-				emp_tool_circuits_files_bristol_fashion_aes_128_txt_len,
-				"r");
-		this->circuit = std::unique_ptr<BristolFashion>(new BristolFashion(circuit_file));
-		fclose(circuit_file);
-		this->counter.bits.resize(128);
-	}
-
-	size_t reverse_bytes(const size_t i) {
-		return((8 * (15 - (i / 8))) + (i % 8));
-	}
-
+	// In-circuit key, in-circuit IV.
 	int aes_128_ctr(const Bit_T<Wire> key[],
 			const Bit_T<Wire> iv[],
-			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
-			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+			Bit_T<Wire> input[],
+			Bit_T<Wire> * output = nullptr,
 			const size_t length = 128, // in bits
-			const int party = emp::PUBLIC,
+			const int /*party*/ = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
-		if (input == nullptr && output == nullptr) {
-			std::cerr << "input and output cannot both be nullptr\n" << std::flush;
-			return -1;
-		}
-
-		if (key != nullptr) {
-			for (size_t i = 0; i < 128; ++i) {
-				this->keyiv[i] = key[reverse_bytes(i)];
-			}
-		}
-
-		if (length < 129) {
-
-			if (start_chunk == 0) {
-				for(size_t i = 0; i < 128; ++i) {
-					this->keyiv[i + 128] = iv[reverse_bytes(i)];
-				}
-			} else {
-				for(size_t i = 0; i < 128; ++i) {
-					this->counter.bits[i] = iv[reverse_bytes(i)];
-				}
-				uint64_t start_chunks[2];
-				start_chunks[1] = 0;
-				start_chunks[0] = start_chunk;
-				this->counter = this->counter + UnsignedInt_T<Wire>(128, start_chunks, party);
-				for(size_t i = 0; i < 128; ++i) {
-					this->keyiv[i + 128] = this->counter.bits[i];
-				}
-			}
-
-			if (input == nullptr) {
-				this->circuit->compute(this->blind, this->keyiv);
-				for(size_t i = 0; i < length; ++i) {
-					output[i] = this->blind[reverse_bytes(i)];
-				}
-			} else {
-				this->circuit->compute(this->blind, this->keyiv);
-				for(size_t i = 0; i < length; ++i) {
-					Bit_T<Wire>* dst = (output == nullptr) ? &input[i] : &output[i];
-					*dst = input[i] ^ this->blind[reverse_bytes(i)];
-				}
-			}
-
-		} else {
-			int answer;
-			for (uint64_t i = 0; (128 * i) < length; ++i) {
-				answer = this->aes_128_ctr(nullptr,
-						iv,
-						(input == nullptr ) ? nullptr : &(input[ 128 * i]),
-						(output == nullptr) ? nullptr : &(output[128 * i]),
-						((128 * (i + 1)) > length) ? (length - (128 * i)) : 128,
-						party,
-						i + start_chunk);
-				if (answer != 0) {
-					return answer;
-				}
-			}
-		}
-		return 0;
+		Bit_T<Wire> counter_block[128];
+		for (int i = 0; i < 128; ++i) counter_block[i] = iv[i];
+		ctr_inc_be64_inplace<Wire>(counter_block, start_chunk);
+		return run(key, counter_block, input, output, length);
 	}
 
+	// In-circuit key, out-of-circuit IV (CPU __m128i).
 	int aes_128_ctr(const Bit_T<Wire> key[],
-			const __m128i iv, // IV here is out-of-circuit information
-			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
-			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+			const __m128i iv,
+			Bit_T<Wire> input[],
+			Bit_T<Wire> * output = nullptr,
 			const size_t length = 128, // in bits
 			const int party = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
-		if (input == nullptr && output == nullptr) {
-			std::cerr << "input and output cannot both be nullptr\n" << std::flush;
-			return -1;
-		}
-
-		if (key != nullptr) {
-			for (size_t i = 0; i < 128; ++i) {
-				this->keyiv[i] = key[reverse_bytes(i)];
-			}
-		}
-
-		int answer;
+		// Apply start_chunk on the CPU side (gates-free), then hand off.
 		__m128i counter_iv = iv;
-		uint64_t count;
-		for(size_t j = 0; j < 8; ++j) {
-			((uint8_t *)(&count))[j] = ((uint8_t *)(&counter_iv))[15 - j];
-		}
-		count += start_chunk;
-
-		for (uint64_t i = 0; (128 * i) < length; ++i) {
-			for(size_t j = 0; j < 8; ++j) {
+		if (start_chunk != 0) {
+			uint64_t count;
+			for (size_t j = 0; j < 8; ++j)
+				((uint8_t *)(&count))[j] = ((uint8_t *)(&counter_iv))[15 - j];
+			count += start_chunk;
+			for (size_t j = 0; j < 8; ++j)
 				((uint8_t *)(&counter_iv))[15 - j] = ((uint8_t *)(&count))[j];
-			}
-			BitVec_T<Wire> tmp_iv(128, &counter_iv, party);
-			answer = this->aes_128_ctr(nullptr,
-					tmp_iv.bits.data(),
-					(input == nullptr ) ? nullptr : &(input[ 128 * i]),
-					(output == nullptr) ? nullptr : &(output[128 * i]),
-					((128 * (i + 1)) > length) ? (length - (128 * i)) : 128,
-					party,
-					0);
-			if (answer != 0) {
-				return answer;
-			}
-			++count;
 		}
-
-		return 0;
+		BitVec_T<Wire> iv_bv(128, &counter_iv, party);
+		Bit_T<Wire> counter_block[128];
+		for (int i = 0; i < 128; ++i) counter_block[i] = iv_bv.bits[i];
+		return run(key, counter_block, input, output, length);
 	}
 
-	int aes_128_ctr(const __m128i key,// key here is out-of-circuit information
-			const __m128i iv, // IV here is out-of-circuit information
-			Bit_T<Wire> input[], // if this is null, we'll just do a blind of length length
-			Bit_T<Wire> * output = nullptr, // if this is null, we'll encrypt in place
+	// Out-of-circuit key + out-of-circuit IV: the keystream is fully public,
+	// so generate it on the CPU and import as a BitVec.
+	int aes_128_ctr(const __m128i key,
+			const __m128i iv,
+			Bit_T<Wire> input[],
+			Bit_T<Wire> * output = nullptr,
 			const size_t length = 128, // in bits
 			const int party = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
@@ -247,21 +178,19 @@ class AES_128_CTR_Calculator_T { public:
 			std::cerr << "input and output cannot both be nullptr\n" << std::flush;
 			return -1;
 		}
-
-		uint8_t * bytes = new uint8_t[(length + 7) / 8];
-		int success = emp::aes_128_ctr(key, iv, (uint8_t *) nullptr, bytes, (length + 7) / 8, start_chunk);
+		const size_t nbytes = (length + 7) / 8;
+		uint8_t * bytes = new uint8_t[nbytes];
+		int success = emp::aes_128_ctr(key, iv, (uint8_t *) nullptr, bytes, nbytes, start_chunk);
 		if (success != 0) {
 			delete[] bytes;
 			return success;
 		}
 		BitVec_T<Wire> blind_int(length, bytes, party);
-
 		if (input == nullptr) {
-			for(size_t i = 0; i < length; ++i) {
+			for (size_t i = 0; i < length; ++i)
 				output[i] = blind_int[i];
-			}
 		} else {
-			for(size_t i = 0; i < length; ++i) {
+			for (size_t i = 0; i < length; ++i) {
 				Bit_T<Wire>* dst = (output == nullptr) ? &input[i] : &output[i];
 				*dst = input[i] ^ blind_int[i];
 			}
@@ -269,6 +198,51 @@ class AES_128_CTR_Calculator_T { public:
 		delete[] bytes;
 		return 0;
 	}
+
+private:
+	// Shared per-block CTR loop. `counter_block` already encodes the
+	// starting counter (start_chunk applied). Mutates it in-place per block.
+	int run(const Bit_T<Wire> key[],
+	        Bit_T<Wire> counter_block[128],
+	        Bit_T<Wire> input[],
+	        Bit_T<Wire> * output,
+	        size_t length) {
+		if (input == nullptr && output == nullptr) {
+			std::cerr << "input and output cannot both be nullptr\n" << std::flush;
+			return -1;
+		}
+		if (key != nullptr) {
+			aes_calc.key_schedule(key, expanded_key);
+			key_set = true;
+		}
+		if (!key_set) {
+			std::cerr << "aes_128_ctr called with null key before any key was set\n" << std::flush;
+			return -2;
+		}
+		const bool blind_only = (input == nullptr);
+		if (output == nullptr) output = input; // encrypt in place
+
+		Bit_T<Wire> keystream[128];
+		for (size_t off = 0; off < length; off += 128) {
+			const size_t take = std::min<size_t>(128, length - off);
+			aes_calc.encrypt(counter_block, expanded_key, keystream);
+			if (blind_only) {
+				for (size_t i = 0; i < take; ++i)
+					output[off + i] = keystream[i];
+			} else {
+				for (size_t i = 0; i < take; ++i)
+					output[off + i] = input[off + i] ^ keystream[i];
+			}
+			if (off + 128 < length)
+				ctr_inc_be64_inplace<Wire>(counter_block, 1);
+		}
+		return 0;
+	}
+
+	AES_Calculator_T<Wire> aes_calc;
+	Bit_T<Wire> expanded_key[1408];
+	bool key_set = false;
 };
+
 }
 #endif

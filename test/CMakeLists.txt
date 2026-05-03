@@ -41,6 +41,7 @@ add_test_case(float)
 add_test_case_with_run(garble)
 add_test_case(gen_circuit)
 add_test_case(halfgate)
+add_test_case(aes_circuit)
 
 if(EMP_TOOL_CRYPTO_IN_CIRCUIT)
     add_test_case(sha3_256)
