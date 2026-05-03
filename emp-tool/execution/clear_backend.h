@@ -34,7 +34,12 @@ public:
 	bool print = false;
 	std::string filename;
 	std::ofstream fout;
-	std::vector<int64_t> output_indices;
+	struct OutputRef {
+		bool is_public;
+		bool value;
+		int64_t gate_id;
+	};
+	std::vector<OutputRef> output_indices;
 
 	block public_one_blk, public_zero_blk;
 
@@ -146,8 +151,12 @@ public:
 		const block* lbls = static_cast<const block*>(in_);
 		for (size_t i = 0; i < n; ++i) {
 			auto* a = reinterpret_cast<const uint64_t*>(&lbls[i]);
-			output_indices.push_back(static_cast<int64_t>(a[1]));
-			out[i] = get_value(lbls[i]);
+			bool val = get_value(lbls[i]);
+			bool is_pub = (a[0] == P0 || a[0] == P1);
+			output_indices.push_back({is_pub, val,
+			                          is_pub ? int64_t{0}
+			                                 : static_cast<int64_t>(a[1])});
+			out[i] = val;
 		}
 		n3 += n;
 	}
@@ -156,14 +165,33 @@ public:
 
 	void finalize() override {
 		if (!print) return;
-		// Append circuit-trailer wiring outputs to a fixed XOR id, matching
-		// the previous PlainProt behavior so existing tools that consume
-		// this format keep working.
+		// Trailer: synthesize a constant-0 wire (z_index = wires[0] XOR
+		// wires[0]) and, if any public-true output needs it, a
+		// constant-1 wire (o_index = NOT z_index). Both helpers must be
+		// emitted before the output XOR block so the last n3 wires
+		// remain exactly the output gates, as BristolFormat::compute
+		// assumes (out[i] = wires[num_wire - n3 + i]). Each output XOR
+		// routes through one of {z_index, o_index, real gate id} so
+		// public-constant reveals carry the right value instead of
+		// leaking input wire 0.
 		int64_t z_index = gid++;
 		fout << "2 1 0 0 " << z_index << " XOR\n";
-		for (auto v : output_indices)
-			fout << "2 1 " << z_index << ' ' << v << ' ' << gid++ << " XOR\n";
-		gates += (1 + output_indices.size());
+		size_t extra = 1;
+		bool need_one = false;
+		for (auto& v : output_indices)
+			if (v.is_public && v.value) { need_one = true; break; }
+		int64_t o_index = -1;
+		if (need_one) {
+			o_index = gid++;
+			fout << "1 1 " << z_index << ' ' << o_index << " INV\n";
+			++extra;
+		}
+		for (auto& v : output_indices) {
+			int64_t src = v.is_public ? (v.value ? o_index : z_index)
+			                          : v.gate_id;
+			fout << "2 1 " << z_index << ' ' << src << ' ' << gid++ << " XOR\n";
+		}
+		gates += (extra + output_indices.size());
 
 		fout.flush();
 		fout.close();
