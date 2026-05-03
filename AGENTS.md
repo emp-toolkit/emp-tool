@@ -30,6 +30,7 @@ self-contained and assumes you've read this index.
 | Translate ordinary C++ / Python to an EMP secure circuit | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
 | Write or modify a `test/*.cpp` file | [docs/test_conventions.md](docs/test_conventions.md) |
 | Verify or debug a numeric corner case (wrap, division, shifts, resize) | [docs/numeric_semantics.md](docs/numeric_semantics.md) |
+| Convert between byte buffers and `BitVec` / `Bit[]`, or debug an endianness mismatch | [docs/circuits.md § Bit / byte ordering](docs/circuits.md) |
 
 ## Top-level rules (apply to all work)
 

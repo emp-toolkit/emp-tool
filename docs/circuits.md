@@ -48,3 +48,49 @@ instead.
   consume them. Sign semantics live one level up: signed division is
   unsigned div with pre/post `cond_neg`, signed comparison is
   sign-extended subtraction, etc.
+
+## Bit / byte ordering
+
+The toolkit-wide convention is **LSB-first within a byte, byte
+sequential in memory**. Two pieces:
+
+1. **Bit-within-byte: LSB at index 0.** `(byte >> k) & 1` with `k=0`
+   gives the least-significant bit. This matches FIPS-197's `b_0` =
+   "low order bit" and the C language convention.
+2. **Bytes sequential: byte `i` of the buffer fills `bits[8i..8i+7]`.**
+   No byte reordering inside `BitVec_T`.
+
+Concretely, `BitVec(8*N, ptr, party)` lays out bits like:
+
+```
+buffer:    a[0]                a[1]                a[2]              ...
+bit index: 0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15  16 ...
+           ↑                       ↑                          ↑
+           LSB of a[0]             LSB of a[1]                LSB of a[2]
+```
+
+So `bits[7]` (MSB of `a[0]`) and `bits[8]` (LSB of `a[1]`) are
+adjacent — the BitVec treats the byte buffer as one large
+little-endian multi-byte integer. On a little-endian host (modern
+x86 / ARM in default config) this means
+`BitVec(N, &uint_var, party).bits[i]` equals bit `i` of `uint_var`
+directly — no transformation. On a big-endian host you'd need to
+byte-swap before feeding `BitVec`.
+
+`BitVec::reveal(void* out, party)` is the inverse: writes the same
+LSB-first-within-byte, byte-sequential layout back to memory.
+
+### Exceptions / things that flip
+
+- **Some published cryptographic circuits use MSB-first per-byte
+  notation.** The Boyar-Peralta AES SBox formulas in
+  [aes_circuit.h](../emp-tool/circuits/aes_circuit.h) are written
+  with `U[0]` = MSB of the byte. The function does a one-time
+  index flip (`U[i] = U_lsb[7-i]`) at entry and exit so callers
+  see the LSB-first convention. The flip emits zero gates — it's
+  pure renaming.
+- **`aes_128_ctr.h`'s `reverse_bytes(i) = 8*(15 - i/8) + (i%8)`** is
+  *byte* (not bit) reordering, specific to the wire layout of the
+  shipped `bristol_fashion/aes_128.txt` file (which expects byte
+  15 of the input first). It is not a general convention — new
+  code that builds AES from `aes_circuit.h` does not need it.
