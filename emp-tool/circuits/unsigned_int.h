@@ -4,25 +4,35 @@
 #include "emp-tool/circuits/sortable.h"
 #include "emp-tool/circuits/numeric_kernels.h"
 #include <cmath>
+#include <type_traits>
 
 namespace emp {
 
-template<typename Wire> class SignedInt_T;
+template<typename Wire, size_t N> class SignedInt_T;
 
-// Runtime-width unsigned integer. Wraps mod 2^width on +/-/* (matches
-// uint{N}_t exactly). Logical shifts; comparisons are unsigned. resize()
-// zero-extends. Bit ordering is LSB-first.
-template<typename Wire>
+// Unsigned integer over `Wire`. Width is either fixed at compile time (N > 0)
+// or set at construction (N == 0, the default — runtime width). Wraps mod
+// 2^width on +/-/* (matches uint{N}_t exactly). Logical shifts; comparisons
+// are unsigned. resize() zero-extends. Bit ordering is LSB-first.
+//
+// When N > 0:
+//   - default ctor produces a width-N value
+//   - additional ctors `(value, party)` and `(data, party)` are unlocked
+//     (no width arg needed)
+//   - operators preserve width N (UnsignedInt_T<W,64> + UnsignedInt_T<W,64>
+//     -> UnsignedInt_T<W,64>)
+template<typename Wire, size_t N = 0>
 class UnsignedInt_T : public BitVec_T<Wire>,
-                     public Sortable<Wire, UnsignedInt_T> { public:
+                     public Sortable<Wire, UnsignedInt_T<Wire, N>> { public:
 	using BitVec_T<Wire>::bits;
 	using BitVec_T<Wire>::size;
 
-	UnsignedInt_T() = default;
+	UnsignedInt_T() {
+		if constexpr (N > 0) bits.resize(N);
+	}
 
-	// SFINAE-restricted to integral T so pointer arguments resolve to the
-	// (size_t, const void*, int) overload below instead of being captured
-	// by this template.
+	// Runtime-width ctors — usable in either mode (N==0 picks width up here;
+	// N>0 ignores `width` and just fills N bits from the value).
 	template<typename T,
 	         typename = std::enable_if_t<std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
@@ -30,54 +40,69 @@ class UnsignedInt_T : public BitVec_T<Wire>,
 	UnsignedInt_T(size_t width, T value, int party = PUBLIC)
 	    : BitVec_T<Wire>(width, value, party) {}
 
-	// Read raw bytes as the bits.
 	UnsignedInt_T(size_t width, const void* data, int party)
 	    : BitVec_T<Wire>(width, data, party) {}
+
+	// Fixed-width ctors: only available when N > 0 (SFINAE-gated). Width is
+	// implicit from the type, so callers don't pass it.
+	template<typename T,
+	         size_t M = N,
+	         typename = std::enable_if_t<(M > 0) && (std::is_integral_v<T>
+	                                  || std::is_same_v<T, __uint128_t>
+	                                  || std::is_same_v<T, __int128>)>>
+	UnsignedInt_T(T value, int party = PUBLIC)
+	    : BitVec_T<Wire>(N, value, party) {}
+
+	template<size_t M = N, typename = std::enable_if_t<(M > 0)>>
+	UnsignedInt_T(const void* data, int party)
+	    : BitVec_T<Wire>(N, data, party) {}
 
 	explicit UnsignedInt_T(const BitVec_T<Wire>& bv) : BitVec_T<Wire>(bv) {}
 	explicit UnsignedInt_T(BitVec_T<Wire>&& bv) : BitVec_T<Wire>(std::move(bv)) {}
 
 	// Bit-cast to SignedInt with the same width and bits.
-	SignedInt_T<Wire> as_signed() const;
+	SignedInt_T<Wire, N> as_signed() const;
 
-	// Zero-extend (or truncate) to new_width.
-	UnsignedInt_T resize(size_t new_width) const;
+	// Zero-extend (or truncate) to new_width. Always returns a runtime-width
+	// UnsignedInt (N=0); width changes can't be expressed in the static type.
+	UnsignedInt_T<Wire, 0> resize(size_t new_width) const;
 
 	// Arithmetic — both operands must have equal width.
 	UnsignedInt_T operator+(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator-(const UnsignedInt_T& rhs) const;
-	UnsignedInt_T operator-() const;                       // unary, wraps (-x = ~x + 1)
+	UnsignedInt_T operator-() const;
 	UnsignedInt_T operator*(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator/(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator%(const UnsignedInt_T& rhs) const;
 
-	// Bitwise overrides preserve UnsignedInt typing (BitVec base would
-	// strip signedness).
+	// Bitwise overrides preserve UnsignedInt typing.
 	UnsignedInt_T operator&(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator|(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator^(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T operator~() const;
 
-	// Static-shamt logical shifts (delegate to BitVec but typed as UnsignedInt).
 	UnsignedInt_T operator<<(size_t shamt) const;
 	UnsignedInt_T operator>>(size_t shamt) const;
 
-	// Dynamic shifts. shamt is treated as unsigned.
 	UnsignedInt_T operator<<(const UnsignedInt_T& shamt) const;
 	UnsignedInt_T operator>>(const UnsignedInt_T& shamt) const;
 
 	// Sortable mixin hooks.
-	Bit_T<Wire>      geq(const UnsignedInt_T& rhs) const;   // unsigned ≥
+	Bit_T<Wire>      geq(const UnsignedInt_T& rhs) const;
 	Bit_T<Wire>      equal(const UnsignedInt_T& rhs) const;
 	UnsignedInt_T    select(const Bit_T<Wire>& sel, const UnsignedInt_T& rhs) const;
 
-	// Bit-vector niceties — leading_zeros and hamming_weight return an
-	// UnsignedInt wide enough to hold the count without truncation.
-	UnsignedInt_T leading_zeros() const;
-	UnsignedInt_T hamming_weight() const;
-	// modular exponentiation: (*this)^p mod q. p/q must share width.
-	UnsignedInt_T mod_exp(UnsignedInt_T p, UnsignedInt_T q) const;
+	UnsignedInt_T<Wire, 0> leading_zeros() const;
+	UnsignedInt_T<Wire, 0> hamming_weight() const;
+	UnsignedInt_T<Wire, 0> mod_exp(UnsignedInt_T<Wire, 0> p,
+	                               UnsignedInt_T<Wire, 0> q) const;
 };
+
+// Convenience aliases for common fixed widths.
+template<typename Wire> using UInt8_T  = UnsignedInt_T<Wire, 8>;
+template<typename Wire> using UInt16_T = UnsignedInt_T<Wire, 16>;
+template<typename Wire> using UInt32_T = UnsignedInt_T<Wire, 32>;
+template<typename Wire> using UInt64_T = UnsignedInt_T<Wire, 64>;
 
 #include "emp-tool/circuits/unsigned_int.hpp"
 

@@ -154,9 +154,9 @@ void fp_if(double a, double b) {
 	Bit one = Bit(true, PUBLIC);
 	Bit zero = Bit(false, PUBLIC);
 
-	Float z = x.If(one, y);
+	Float z = If(one).Then(y).Else(x);
 	cout << z.reveal<string>() << " ";
-	z = x.If(zero, y);
+	z = If(zero).Then(y).Else(x);
 	cout << z.reveal<string>() << endl<<endl;
 	swap(Bit(true, PUBLIC), x, y);
 	cout << x.reveal<string>() << " "<<y.reveal<string>();

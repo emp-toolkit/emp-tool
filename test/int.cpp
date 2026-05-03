@@ -234,10 +234,77 @@ static bool run_correctness() {
 	return ok;
 }
 
+// ---- fixed-width aliases (Int8 / Int16 / Int32 / Int64) -----------------
+// `Int32` is `SignedInt_T<block, 32>` — width baked into the type.
+
+static bool run_fixed_width() {
+	cout << "=== fixed-width aliases ===\n";
+	bool ok = true;
+
+	// Construction without width arg.
+	Int32 a(-7, ALICE);
+	Int32 b(3, BOB);
+	Int32 c = a + b;        // Int32 + Int32 -> Int32
+	if (c.reveal<int32_t>(PUBLIC) != -4) {
+		cout << "  FAIL Int32 +  got=" << c.reveal<int32_t>(PUBLIC) << "\n"; ok = false;
+	}
+
+	// Default-ctor sizes the wire vector to N.
+	Int64 z;
+	if (z.size() != 64) { cout << "  FAIL Int64 default-ctor size\n"; ok = false; }
+
+	// 64-bit signed via implicit width.
+	Int64 v(-1ll, ALICE);
+	if (v.reveal<int64_t>(PUBLIC) != -1ll) {
+		cout << "  FAIL Int64 ctor + reveal\n"; ok = false;
+	}
+
+	// Signed comparison: -7 < 3.
+	if ( (a >= b).reveal<bool>(PUBLIC)) { cout << "  FAIL Int32 >= (signed)\n"; ok = false; }
+	if (!(a <  b).reveal<bool>(PUBLIC)) { cout << "  FAIL Int32 <  (signed)\n"; ok = false; }
+	if ( (a == b).reveal<bool>(PUBLIC)) { cout << "  FAIL Int32 ==\n"; ok = false; }
+
+	// abs() returns the matching unsigned alias (UInt32 here).
+	UInt32 ua = a.abs();
+	if (ua.reveal<uint32_t>(PUBLIC) != 7u) {
+		cout << "  FAIL Int32::abs\n"; ok = false;
+	}
+
+	// Random arithmetic.
+	PRG prg;
+	for (int i = 0; i < 200; ++i) {
+		int32_t ia, ib;
+		prg.random_data_unaligned(&ia, 4);
+		prg.random_data_unaligned(&ib, 4);
+		Int32 A(ia, ALICE), B(ib, BOB);
+		if ((A + B).reveal<int32_t>(PUBLIC) != (int32_t)((uint32_t)ia + (uint32_t)ib)) { ok = false; break; }
+		if ((A * B).reveal<int32_t>(PUBLIC) != (int32_t)((uint32_t)ia * (uint32_t)ib)) { ok = false; break; }
+		if ((A < B).reveal<bool>(PUBLIC)    != (ia < ib)) { ok = false; break; }
+	}
+
+	// Sort signed values.
+	const int n = 6;
+	Int32 keys[n];
+	int32_t in_vals[n] = {3, -5, 0, -2, 7, -9};
+	for (int i = 0; i < n; ++i) keys[i] = Int32(in_vals[i], ALICE);
+	sort(keys, n);
+	int32_t want_sorted[n] = {-9, -5, -2, 0, 3, 7};
+	for (int i = 0; i < n; ++i)
+		if (keys[i].reveal<int32_t>(PUBLIC) != want_sorted[i]) {
+			cout << "  FAIL sort at i=" << i << " got="
+			     << keys[i].reveal<int32_t>(PUBLIC) << " want=" << want_sorted[i] << "\n";
+			ok = false;
+		}
+
+	cout << (ok ? "  fixed-width: OK\n" : "  fixed-width: FAIL\n");
+	return ok;
+}
+
 int main(int /*argc*/, char ** /*argv*/) {
 	setup_clear_backend();
 	example();
 	bool ok = run_correctness();
+	ok &= run_fixed_width();
 	cout << "AND gates: " << backend->num_and() << "\n";
 	finalize_clear_backend();
 	return ok ? 0 : 1;

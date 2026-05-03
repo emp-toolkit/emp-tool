@@ -53,7 +53,8 @@ endif()
 # Source list
 # ---------------------------------------------------------------------
 set(emp_tool_sources
-    emp-tool/emp-tool.cpp)
+    emp-tool/emp-tool.cpp
+    emp-tool/circuits/circuit.cpp)
 
 # Generated circuit blobs land in the build tree, not the source tree.
 if(EMP_TOOL_CRYPTO_IN_CIRCUIT)

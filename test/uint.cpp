@@ -218,10 +218,78 @@ static bool run_correctness() {
 	return ok;
 }
 
+// ---- fixed-width aliases (UInt8 / UInt16 / UInt32 / UInt64) -------------
+// `UInt32` is `UnsignedInt_T<block, 32>` — width baked into the type, so
+// callers don't pass it to the ctor and arithmetic preserves UInt32-ness.
+
+static bool run_fixed_width() {
+	cout << "=== fixed-width aliases ===\n";
+	bool ok = true;
+
+	// Construction without width arg.
+	UInt32 a(7u, ALICE);
+	UInt32 b(3u, BOB);
+	UInt32 c = a + b;        // UInt32 + UInt32 -> UInt32 (type preserved)
+	if (c.reveal<uint32_t>(PUBLIC) != 10u) {
+		cout << "  FAIL UInt32 +\n"; ok = false;
+	}
+
+	// Default-ctor sizes the wire vector to the template width.
+	UInt64 z;
+	if (z.size() != 64) { cout << "  FAIL UInt64 default-ctor size\n"; ok = false; }
+
+	// 64-bit width is implicit.
+	UInt64 v(0xDEADBEEFCAFEBABEull, ALICE);
+	if (v.reveal<uint64_t>(PUBLIC) != 0xDEADBEEFCAFEBABEull) {
+		cout << "  FAIL UInt64 ctor + reveal\n"; ok = false;
+	}
+
+	// Sortable mixin still works (CRTP refactor).
+	if (!(a >= b).reveal<bool>(PUBLIC)) { cout << "  FAIL UInt32 >=\n"; ok = false; }
+	if ( (a <  b).reveal<bool>(PUBLIC)) { cout << "  FAIL UInt32 <\n";  ok = false; }
+	if ( (a == b).reveal<bool>(PUBLIC)) { cout << "  FAIL UInt32 ==\n"; ok = false; }
+
+	// Random arithmetic — same wrap semantics as the runtime-width path.
+	PRG prg;
+	for (int i = 0; i < 200; ++i) {
+		uint32_t ia, ib;
+		prg.random_data_unaligned(&ia, 4);
+		prg.random_data_unaligned(&ib, 4);
+		UInt32 A(ia, ALICE), B(ib, BOB);
+		if ((A + B).reveal<uint32_t>(PUBLIC) != ia + ib) { ok = false; break; }
+		if ((A * B).reveal<uint32_t>(PUBLIC) != ia * ib) { ok = false; break; }
+		if ((A < B).reveal<bool>(PUBLIC)     != (ia < ib)) { ok = false; break; }
+	}
+
+	// emp::sort over a fixed-width array (Sortable / cmp_swap path).
+	const int n = 8;
+	UInt32 keys[n];
+	for (int i = 0; i < n; ++i) keys[i] = UInt32((uint32_t)(n - i), ALICE);
+	sort(keys, n);
+	for (int i = 0; i < n; ++i)
+		if (keys[i].reveal<uint32_t>(PUBLIC) != (uint32_t)(i + 1)) {
+			cout << "  FAIL sort at i=" << i << "\n"; ok = false;
+		}
+
+	// Fluent-builder selection: If(cond).Then(a).Else(b).
+	Bit cond_t(true, ALICE), cond_f(false, ALICE);
+	UInt32 av(11u, ALICE), bv(22u, BOB);
+	if (If(cond_t).Then(av).Else(bv).reveal<uint32_t>(PUBLIC) != 11u) {
+		cout << "  FAIL If(true).Then.Else\n"; ok = false;
+	}
+	if (If(cond_f).Then(av).Else(bv).reveal<uint32_t>(PUBLIC) != 22u) {
+		cout << "  FAIL If(false).Then.Else\n"; ok = false;
+	}
+
+	cout << (ok ? "  fixed-width: OK\n" : "  fixed-width: FAIL\n");
+	return ok;
+}
+
 int main(int /*argc*/, char ** /*argv*/) {
 	setup_clear_backend();
 	example();
 	bool ok = run_correctness();
+	ok &= run_fixed_width();
 	cout << "AND gates: " << backend->num_and() << "\n";
 	finalize_clear_backend();
 	return ok ? 0 : 1;

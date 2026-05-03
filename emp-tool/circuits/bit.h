@@ -8,7 +8,7 @@
 namespace emp {
 
 template<typename Wire>
-class Bit_T: public Sortable<Wire, Bit_T> { public:
+class Bit_T: public Sortable<Wire, Bit_T<Wire>> { public:
 	Wire bit;
 
 	Bit_T() {}

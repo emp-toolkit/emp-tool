@@ -71,5 +71,6 @@ inline Bit_T<Wire> Bit_T<Wire>::operator!() const {
 
 template<typename Wire>
 inline Bit_T<Wire> Bit_T<Wire>::geq(const Bit_T & rhs) const {
-	return ! ( (!this) & rhs);
+	// Bit ≥ rhs ⇔ ¬(¬*this ∧ rhs) — false only when *this=0 ∧ rhs=1.
+	return ! ( (!*this) & rhs);
 }

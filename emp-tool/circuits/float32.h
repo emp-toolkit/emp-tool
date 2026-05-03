@@ -11,7 +11,7 @@
 namespace emp {
 
 template<typename Wire>
-class Float_T: public Sortable<Wire, Float_T> { public:
+class Float_T: public Sortable<Wire, Float_T<Wire>> { public:
 	static const int FLOAT_LEN = 32;
 	static const int BIAS = 127;
 	static const int SGNFC_LEN = 23;
