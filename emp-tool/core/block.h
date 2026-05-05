@@ -244,6 +244,59 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
 #undef INP
 #undef OUT
 
+// Specialization of sse_trans for nrows=128 (the SoftSpoken Conv shape:
+// 128 plane rows × ncols output bits). Same algorithm as the generic
+// sse_trans's nrows%16==0 && ncols%128==0 fast path, but with nrows=128
+// constant-folded so the outer 8-iteration "rr" loop unrolls and
+// bpr_out=16 collapses to a constant. The store pattern is unchanged
+// vs the generic version (8 partial 2-byte stores per output column,
+// at staggered rr/8 offsets) — earlier experiments with full
+// 16-byte-store coalescing won ~+26% on Intel SR+ k=4 but cost ~6% on
+// AMD Zen5 k=2, where the generic 8-store pattern is well-tuned.
+// Constant-folding alone keeps both architectures' wins available
+// without the AMD regression.
+//
+// On non-x86 the function dispatches into the generic sse_trans (which
+// already takes the same fast path under sse2neon) — no measurable
+// difference on Apple M, and avoids carrying a separate impl.
+#ifdef __x86_64__
+__attribute__((target("sse2")))
+#endif
+inline void sse_trans_n128(uint8_t *out, const uint8_t *inp, uint64_t ncols) {
+#ifndef __x86_64__
+  sse_trans(out, inp, /*nrows=*/128, ncols);
+#else
+  assert((ncols % 128) == 0);
+  constexpr uint64_t bpr_out = 16;          // nrows/8 with nrows=128
+  const uint64_t bpr_in = ncols / 8;
+
+  // Outer "rr" loop unrolled at compile time: 8 iterations at
+  // rr = 0, 16, ..., 112. The per-strip output sub-offset rr/8 becomes
+  // a compile-time constant 0, 2, 4, ..., 14 inside each unrolled body.
+  #pragma GCC unroll 8
+  for (int rr_idx = 0; rr_idx < 8; ++rr_idx) {
+    const uint64_t rr = (uint64_t)rr_idx * 16;
+    for (uint64_t col_byte = 0; col_byte < bpr_in; col_byte += 16) {
+      __m128i m[16];
+      for (int r = 0; r < 16; ++r) {
+        m[r] = _mm_loadu_si128(
+            (const __m128i *)(inp + (rr + r) * bpr_in + col_byte));
+      }
+      sse_trans_16x16_byte(m);
+      for (int j = 0; j < 16; ++j) {
+        __m128i x = m[j];
+        const uint64_t cc8 = (col_byte + j) * 8;
+        for (int b = 7; b >= 0; --b) {
+          *(uint16_t *)(out + (cc8 + b) * bpr_out + (size_t)rr_idx * 2) =
+              (uint16_t)_mm_movemask_epi8(x);
+          x = _mm_slli_epi64(x, 1);
+        }
+      }
+    }
+  }
+#endif
+}
+
 // Pack 32 bool/byte values (any nonzero treated as 1) into 32 bits of a
 // uint32_t. Inverse of bits32_to_bytes. Input alignment not required.
 static inline uint32_t bytes_to_bits32(const void *in) {
