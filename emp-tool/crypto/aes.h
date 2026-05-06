@@ -87,6 +87,17 @@ namespace detail {
 // supplies the same six primitives; the tile kernel below uses them
 // uniformly. To add a new width (e.g. AVX-1024 if it ever ships), drop in
 // another struct with the appropriate intrinsics.
+// Each Lane provides:
+//   - vec_t / N           : the SIMD vector type and how many AES blocks fit
+//   - broadcast / load /
+//     store / xorv /
+//     aesenc / aesenclast : the six round-loop primitives
+//   - ctr_xor_tweak       : build (counter | 0) ⊕ broadcasted-tweak directly
+//                           in a vec_t (used by aes_tiles_src callers that
+//                           build plaintexts inline rather than reading them
+//                           from memory — e.g. fixed-key AES with a per-leaf
+//                           tweak in SoftSpoken's sfvole inner loop).
+
 struct Lane128 {
 	static constexpr int N = 1;
 	using vec_t = block;
@@ -96,6 +107,9 @@ struct Lane128 {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm_xor_si128(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm_aesenc_si128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm_aesenclast_si128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
+		return _mm_xor_si128(_mm_set_epi64x(0, b0 + slot), tw);
+	}
 };
 
 #if EMP_AES_HAS_VAES256
@@ -108,6 +122,10 @@ struct Lane256 {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm256_xor_si256(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm256_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm256_aesenclast_epi128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
+		return _mm256_xor_si256(
+			_mm256_set_epi64x(0, b0 + 2 * slot + 1, 0, b0 + 2 * slot), tw);
+	}
 };
 #endif
 
@@ -121,26 +139,47 @@ struct Lane512 {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm512_aesenclast_epi128(s, k); }
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
+		return _mm512_xor_si512(
+			_mm512_set_epi64(0, b0 + 4 * slot + 3, 0, b0 + 4 * slot + 2,
+			                 0, b0 + 4 * slot + 1, 0, b0 + 4 * slot), tw);
+	}
 };
 #endif
+
+// Encrypt n_tiles tiles of L::N blocks each under a single key, sourcing
+// each tile's plaintext via the caller's `src(t)` callable. `src` is
+// invoked as `L::vec_t src(int t)` for t in [0, n_tiles); the round-key
+// loop is unrolled and round keys are broadcast once per call.
+//
+// Used directly by callers that build plaintexts inline (e.g. fixed-key
+// AES-CTR with tweak); the in-place form `aes_tiles` below is a thin
+// wrapper that supplies `L::load` as the source.
+template <class L, int n_tiles, class Source>
+EMP_AES_TARGET_ATTR
+static inline void aes_tiles_src(block *dst, Source&& src, const AES_KEY *kk) {
+	if constexpr (n_tiles == 0) return;
+	typename L::vec_t rk[11];
+	for (int r = 0; r < 11; ++r)
+		rk[r] = L::broadcast(kk->rd_key[r]);
+	for (int t = 0; t < n_tiles; ++t) {
+		auto x = src(t);
+		x = L::xorv(x, rk[0]);
+		for (int r = 1; r < 10; ++r)
+			x = L::aesenc(x, rk[r]);
+		x = L::aesenclast(x, rk[10]);
+		L::store(dst + (size_t)t * L::N, x);
+	}
+}
 
 // Encrypt n_tiles tiles of L::N blocks each, in place, under a single key.
 // Round keys are broadcast to all lanes once per call.
 template <class L, int n_tiles>
 EMP_AES_TARGET_ATTR
 static inline void aes_tiles(block *p, const AES_KEY *kk) {
-	if constexpr (n_tiles == 0) return;
-	typename L::vec_t rk[11];
-	for (int r = 0; r < 11; ++r)
-		rk[r] = L::broadcast(kk->rd_key[r]);
-	for (int t = 0; t < n_tiles; ++t) {
-		auto x = L::load(p + (size_t)t * L::N);
-		x = L::xorv(x, rk[0]);
-		for (int r = 1; r < 10; ++r)
-			x = L::aesenc(x, rk[r]);
-		x = L::aesenclast(x, rk[10]);
-		L::store(p + (size_t)t * L::N, x);
-	}
+	aes_tiles_src<L, n_tiles>(p,
+		[p](int t) -> typename L::vec_t { return L::load(p + (size_t)t * L::N); },
+		kk);
 }
 
 }  // namespace detail
