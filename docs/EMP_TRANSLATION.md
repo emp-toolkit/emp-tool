@@ -41,7 +41,7 @@ return secret_value;                 // early-exit branch
 
 The circuit is *static*. Both branches of every conditional must be
 evaluated; the choice between them happens via an oblivious mux
-(`.select(sel, rhs)` / `If(sel, a, b)`). Loops must have public bounds.
+(`.select(sel, rhs)` / `If(sel).Then(a).Else(b)`). Loops must have public bounds.
 Arrays at secret indices must be linearly enumerated. See §4.
 
 If your input C++ / Python relies on early exit or data-dependent loop
@@ -173,13 +173,14 @@ placeholder elsewhere. Translators should preserve this symmetry.
 int max = (a > b) ? a : b;
 
 // EMP:
-SignedInt max = If(a > b, a, b);     // free function from sortable.h
-// or, equivalently, the method form:
-SignedInt max = b.select(a > b, a);  // result = sel ? this_arg : self
+SignedInt max = If(a > b).Then(a).Else(b);     // fluent builder from sortable.h
+// or, equivalently, the underlying method form
+// (b.select(sel, rhs) returns sel ? rhs : b):
+SignedInt max = b.select(a > b, a);
 ```
 
-`a > b` returns `Bit`. `If(sel, x, y)` returns `x` when `sel` is true,
-`y` otherwise. Both branches are always evaluated.
+`a > b` returns `Bit`. `If(cond).Then(x).Else(y)` returns `x` when
+`cond` is true, `y` otherwise. Both branches are always evaluated.
 
 ### 4.2. `if (cond) x = y;` (mutation form)
 
@@ -188,7 +189,7 @@ SignedInt max = b.select(a > b, a);  // result = sel ? this_arg : self
 if (cond) x = y;
 
 // EMP:
-x = If(cond_bit, y, x);    // identity on the false side
+x = If(cond_bit).Then(y).Else(x);    // identity on the false side
 ```
 
 ### 4.3. Comparisons
@@ -224,8 +225,8 @@ Bit running(true, PUBLIC);
 for (size_t i = 0; i < MAX; ++i) {
     Bit alive = running & (n > UnsignedInt(W, 0, PUBLIC));
     UnsignedInt next_acc = acc + step(n);
-    acc = If(alive, next_acc, acc);
-    n   = If(alive, n - UnsignedInt(W, 1, PUBLIC), n);
+    acc = If(alive).Then(next_acc).Else(acc);
+    n   = If(alive).Then(n - UnsignedInt(W, 1, PUBLIC)).Else(n);
     running = alive;
 }
 ```
@@ -242,7 +243,7 @@ If MAX is unknown, the program is not translatable.
 SignedInt y(W, 0, PUBLIC);
 for (size_t k = 0; k < arr.size(); ++k) {
     Bit eq = (idx == UnsignedInt(IDX_W, k, PUBLIC));
-    y = If(eq, arr[k], y);
+    y = If(eq).Then(arr[k]).Else(y);
 }
 ```
 
@@ -252,7 +253,7 @@ for (size_t k = 0; k < arr.size(); ++k) {
 // arr[idx] = v;
 for (size_t k = 0; k < arr.size(); ++k) {
     Bit eq = (idx == UnsignedInt(IDX_W, k, PUBLIC));
-    arr[k] = If(eq, v, arr[k]);
+    arr[k] = If(eq).Then(v).Else(arr[k]);
 }
 ```
 
@@ -265,7 +266,7 @@ itself ships no ORAM.
 ```cpp
 SignedInt best = a[0];
 for (size_t i = 1; i < a.size(); ++i)
-    best = If(a[i] < best, a[i], best);
+    best = If(a[i] < best).Then(a[i]).Else(best);
 ```
 
 ### 4.8. Counting matches (popcount-style)
@@ -273,9 +274,10 @@ for (size_t i = 1; i < a.size(); ++i)
 ```cpp
 UnsignedInt count(W, 0u, PUBLIC);
 for (size_t i = 0; i < a.size(); ++i)
-    count = count + UnsignedInt(W, 1u, PUBLIC).select(a[i] == target,
-                                                       UnsignedInt(W, 0u, PUBLIC));
-// or more idiomatic, using BitVec.hamming_weight on a packed mask
+    count = count + If(a[i] == target).Then(UnsignedInt(W, 1u, PUBLIC))
+                                      .Else(UnsignedInt(W, 0u, PUBLIC));
+// or, more idiomatic when N fits in one BitVec: assemble matches into a
+// width-N BitVec, view it as UnsignedInt, and call `.hamming_weight()`.
 ```
 
 ### 4.9. Bit-level packing / unpacking
@@ -309,8 +311,10 @@ Cost is O(N log² N) compare-swaps; each compare-swap is O(W) gates.
 
 `Float` is IEEE 754 binary32. It supplies `+ - * / unary-`, `sqr`,
 `sqrt`, `sin`, `cos`, `exp`, `exp2`, `ln`, `log2`, plus `equal`,
-`less_than`, `less_equal`, and `select`. There is **no** `>=`, `>`,
-`!=` on Float directly — use `!less_than` etc. There is no float64.
+`less_than`, `less_equal`, and `select`. `==` and `!=` come from the
+Sortable mixin (which dispatches to `equal`); `<`, `<=`, `>`, `>=`
+aren't wired up — call `less_than` / `less_equal` directly (and
+`!less_than` for `>`). There is no float64.
 
 Float circuits are large (thousands of AND gates for a single mul).
 For ML-style fixed-point work, prefer `SignedInt` with a chosen scale.
@@ -558,7 +562,7 @@ int32_t f(const int32_t alice_xs[N], int32_t bob_y_value, int party) {
         // Each party feeds its own value; the other passes a dummy.
         SignedInt x(W, alice_xs[i], ALICE);
         Bit       gt   = (x > y);              // signed comparison, returns Bit
-        SignedInt addend = If(gt, x, SignedInt(W, 0, PUBLIC));
+        SignedInt addend = If(gt).Then(x).Else(SignedInt(W, 0, PUBLIC));
         total = total + addend;
     }
     return total.reveal<int32_t>(PUBLIC);
@@ -581,7 +585,7 @@ int main(int argc, char** argv) {
 
 Notes on what changed:
 
-* `if x > bob_y: total += x` became `If(x > y, x, 0)` then unconditional
+* `if x > bob_y: total += x` became `If(x > y).Then(x).Else(0)` then unconditional
   `+`. Both branches happen for every `i`.
 * `total = 0` became `SignedInt(W, 0, PUBLIC)`. The accumulator is a
   circuit value, not an `int`, after the first iteration.
@@ -643,7 +647,7 @@ Float(float, party)                        // IEEE 754 binary32
   operator[i] -> Bit& (i in [0, 32))
   reveal<float|double|string>(party)
 
-If(sel_bit, x, y) -> T                     // free function from sortable.h
+If(sel_bit).Then(x).Else(y) -> T           // fluent builder from sortable.h
 sort(arr, n, data=nullptr, acc=true)       // bitonic, in-place
 
 setup_clear_backend([filename])            // ClearBackend; optional Bristol dump
@@ -687,8 +691,9 @@ Don't reference `backend` from circuit code — use the wrapper types.
 * `emp-tool/circuits/{bit,bitvec,unsigned_int,signed_int,float32}.h`
   — the user-facing circuit primitives. The headers are short; read
   them.
-* `emp-tool/circuits/sortable.h` — `If(sel, x, y)` and `sort(arr, n)`,
-  plus the `Sortable` mixin every numeric type inherits from.
+* `emp-tool/circuits/sortable.h` — `If(cond).Then(x).Else(y)` and
+  `sort(arr, n)`, plus the `Sortable` mixin every numeric type
+  inherits from.
 * `emp-tool/circuits/{aes_128_ctr,sha3_256}.h` — pre-built crypto
   circuits with calculator classes; also the non-circuit OpenSSL
   reference functions you'd use to verify them.
