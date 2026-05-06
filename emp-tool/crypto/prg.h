@@ -4,6 +4,7 @@
 #include "emp-tool/crypto/aes.h"
 #include "emp-tool/core/utils.h"
 #include "emp-tool/core/constants.h"
+#include "emp-tool/core/test_mode.h"
 #include <climits>
 #include <memory>
 #include <random>
@@ -27,8 +28,17 @@ class PRG { public:
 			// stack-aligned block*.
 			block v = _mm_loadu_si128((const __m128i *)seed);
 			reseed(&v, id);
+			return;
+		}
+
+		block v;
+		if (is_test_mode()) {
+			// Deterministic seed from the global counter. Each PRG()
+			// default-construction in test mode gets a distinct value
+			// so streams don't collide. Single-threaded determinism
+			// only — see emp-tool/core/test_mode.h.
+			v = makeBlock(0LL, (int64_t)next_test_seed());
 		} else {
-			block v;
 #ifndef ENABLE_RDSEED
 			v = from_urand();
 #else
@@ -42,11 +52,11 @@ class PRG { public:
 				if((_rdseed64_step(&r1) == 1) && (r1 != ULLONG_MAX) && (r1 != 0)) break;
 			if (i == 10 or j == 10)
 				v = from_urand();
-			else 
+			else
 				v = makeBlock(r0, r1);
 #endif
-			reseed(&v, id);
 		}
+		reseed(&v, id);
 	}
 	block from_urand () {
 		block v;

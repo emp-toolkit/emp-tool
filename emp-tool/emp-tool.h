@@ -11,10 +11,12 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 #include "emp-tool/io/mem_io_channel.h"
 #include "emp-tool/io/net_io_channel.h"
 #include "emp-tool/io/net_io_buffered_channel.h"
+#include "emp-tool/io/trace_io.h"
 
 #include "emp-tool/core/block.h"
 #include "emp-tool/core/block_vector.h"
 #include "emp-tool/core/constants.h"
+#include "emp-tool/core/test_mode.h"
 #include "emp-tool/core/utils.h"
 #include "emp-tool/crypto/hash.h"
 #include "emp-tool/crypto/prg.h"

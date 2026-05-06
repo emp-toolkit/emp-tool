@@ -289,6 +289,27 @@ Each test file under `test/` doubles as a tutorial for the
 corresponding header — see `CLAUDE.md` for the file conventions
 (`example()` / `run_correctness()` / `bench(double sec)` per file).
 
+### Wire-byte equivalence (test mode)
+
+Setting `EMP_TEST_MODE=1` swaps every randomness source in the
+toolkit (`PRG()` default-construction, `Group::get_rand_bn`) for a
+deterministic counter-derived stream so two runs of the same code
+produce byte-identical wire output. Combined with `TraceIO` (an
+`IOChannel` adapter that tees wire bytes to a file), this lets you
+verify that an optimization or refactor doesn't change a protocol's
+observable behavior:
+
+```bash
+EMP_TEST_MODE=1 ./run ./build/your_protocol_test before
+# … apply your refactor …
+EMP_TEST_MODE=1 ./run ./build/your_protocol_test after
+diff before.alice.send after.alice.send   # must be empty
+diff before.alice.recv after.alice.recv   # must be empty
+```
+
+See [docs/test_mode.md](docs/test_mode.md) for the full design,
+determinism contract, and limitations.
+
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
 
 ## License

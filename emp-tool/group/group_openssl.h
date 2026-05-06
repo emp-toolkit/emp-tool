@@ -1,8 +1,11 @@
 #ifndef EMP_GROUP_OPENSSL_H__
 #define EMP_GROUP_OPENSSL_H__
 
+#include "emp-tool/core/test_mode.h"
+#include "emp-tool/crypto/prg.h"
 #include <openssl/evp.h>
 #include <algorithm>
+#include <vector>
 
 namespace emp {
 
@@ -370,7 +373,29 @@ inline void Group::resize_scratch(size_t size) {
 }
 
 inline void Group::get_rand_bn(BigInt & n) {
-	BN_rand_range(n.n(), order_.n());
+	if (!is_test_mode()) {
+		BN_rand_range(n.n(), order_.n());
+		return;
+	}
+	// Test mode: deterministic uniform sample in [0, order_) via
+	// emp::PRG instead of OpenSSL's BN_rand_range (which pulls from
+	// OpenSSL's internal CSPRNG and is the only OpenSSL-randomness
+	// leak in the toolkit). Rejection sampling: draw n_bits-wide
+	// random bytes, retry if ≥ order_. P-256's order is just under
+	// 2^256, so the per-iteration reject probability is ≪ 1.
+	thread_local PRG prg;
+	const int n_bits = BN_num_bits(order_.n());
+	const int n_bytes = (n_bits + 7) / 8;
+	const unsigned char top_mask = (n_bits % 8 == 0)
+		? (unsigned char)0xff
+		: (unsigned char)((1u << (n_bits % 8)) - 1);
+	std::vector<unsigned char> buf((size_t)n_bytes);
+	do {
+		prg.random_data_unaligned(buf.data(), n_bytes);
+		buf[0] &= top_mask;
+		if (BN_bin2bn(buf.data(), n_bytes, n.n()) == nullptr)
+			error("Group::get_rand_bn: BN_bin2bn");
+	} while (BN_cmp(n.n(), order_.n()) >= 0);
 }
 
 inline Point Group::get_generator() {
