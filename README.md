@@ -5,6 +5,18 @@
 
 <img src="https://raw.githubusercontent.com/emp-toolkit/emp-readme/master/art/logo-full.jpg" width=300px/>
 
+> **Which version do I want?**
+>
+> - **Existing projects pinned to a published release: stay on `0.3.0`** —
+>   tag [`0.3.0`](https://github.com/emp-toolkit/emp-tool/releases/tag/0.3.0)
+>   or branch [`v0.3.x`](https://github.com/emp-toolkit/emp-tool/tree/v0.3.x).
+>   Bug fixes and security patches will be backported to `v0.3.x`.
+> - **New projects, or willing to migrate: track the development branch**
+>   (this branch). It will become `1.0.0-alpha` after a polish pass and
+>   then `1.0.0`. Faster, cleaner APIs (test-mode determinism, trace I/O,
+>   refactored AES/PRG/group), but the API is not yet frozen and headers
+>   may move between alphas.
+
 Foundational primitives for the emp-toolkit family: SIMD `block` types,
 fast AES / PRG / PRP / hash / GF(2^128) kernels, OpenSSL-backed elliptic
 curve ops, IO channels, a templated boolean-circuit frontend
