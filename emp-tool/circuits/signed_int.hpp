@@ -1,5 +1,31 @@
 // SignedInt_T<Wire, N> implementation.
 
+// Bit-pattern ctor: extends `value` to `width` bits, sign-extending if
+// T is signed and value < 0, otherwise zero-extending. Same shape as
+// BitVec_T's ctor but with the sign-aware fill bit. Cannot just
+// delegate to BitVec_T because the fill choice depends on `value`.
+template<typename Wire, size_t N>
+template<typename T, typename>
+inline SignedInt_T<Wire, N>::SignedInt_T(size_t width, T value, int party) {
+	bool fill = false;
+	if constexpr (std::is_signed_v<T>) {
+		if (value < 0) fill = true;
+	}
+
+	this->bits.resize(width);
+	bool* tmp = new bool[width];
+
+	constexpr size_t value_bits = sizeof(T) * 8;
+	const     size_t copy_bits  = std::min(width, value_bits);
+
+	bits_to_bools(tmp, &value, copy_bits);
+	if (width > value_bits)
+		std::fill(tmp + value_bits, tmp + width, fill);
+
+	backend->feed(this->bits.data(), party, tmp, width);
+	delete[] tmp;
+}
+
 template<typename Wire, size_t N>
 inline UnsignedInt_T<Wire, N> SignedInt_T<Wire, N>::as_unsigned() const {
 	return UnsignedInt_T<Wire, N>(static_cast<const BitVec_T<Wire>&>(*this));

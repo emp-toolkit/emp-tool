@@ -1,11 +1,22 @@
 // BitVec_T<Wire> implementation.
 
+// Bit-pattern ctor: BitVec has no signedness concept, so the bytes
+// past sizeof(T) are always zero-extended. UnsignedInt inherits this
+// straight; SignedInt overrides the ctor to sign-extend instead so
+// `Integer(64, (int)-1, …)` round-trips through the int's sign bit.
 template<typename Wire>
 template<typename T, typename>
 inline BitVec_T<Wire>::BitVec_T(size_t width, T value, int party) {
 	bits.resize(width);
 	bool* tmp = new bool[width];
-	bits_to_bools(tmp, &value, width);
+
+	constexpr size_t value_bits = sizeof(T) * 8;
+	const     size_t copy_bits  = std::min(width, value_bits);
+
+	bits_to_bools(tmp, &value, copy_bits);
+	if (width > value_bits)
+		std::fill(tmp + value_bits, tmp + width, false);
+
 	backend->feed(bits.data(), party, tmp, width);
 	delete[] tmp;
 }
