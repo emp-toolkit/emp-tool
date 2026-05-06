@@ -49,7 +49,7 @@ namespace emp {
 // "data eventually arrives slowly".
 //
 // Rule of thumb: if the next thing you do on this NetIO isn't a recv,
-// flush first. test/netio.cpp encodes the contract.
+// flush first. test/test_netio.cpp encodes the contract.
 
 class NetIO : public IOChannel { public:
 	int sock = -1;

@@ -1,4 +1,4 @@
-// utils/prp.h — pseudorandom permutation = fixed-key AES-128-ECB. Models
+// crypto/prp.h — pseudorandom permutation = fixed-key AES-128-ECB. Models
 // f(x) = AES_K(x) as a random permutation in the random-permutation model.
 // Read example() first; the rest is verification + throughput.
 //

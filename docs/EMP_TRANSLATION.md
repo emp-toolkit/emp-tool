@@ -330,7 +330,7 @@ uint8_t hash[32];
 output.reveal(hash, PUBLIC);                // raw byte reveal
 
 // AES-128-CTR with a secret key over secret data, public nonce / length.
-// (See test/aes_128_ctr.cpp — it walks both the in-circuit and the
+// (See test/test_aes_128_ctr.cpp — it walks both the in-circuit and the
 // reference OpenSSL paths, useful as a template.)
 AES_128_CTR_Calculator aes;
 // ... see header for full signature ...
@@ -439,7 +439,7 @@ caller wants.
 both satisfy the `IOChannel` contract and can be passed to any of the
 `setup_*` helpers. Pick `NetIO` for protocol traffic; `NetIOBuffered`
 only when you're moving large blobs in one shot. Both are not
-thread-safe — see CLAUDE.md "IO channel layer".
+thread-safe — see [docs/io_channel.md](io_channel.md).
 
 For malicious-secure 2PC use **emp-ag2pc**; for malicious-secure
 multi-party (n ≥ 3) use **emp-agmpc** (in `ref/`).
@@ -458,7 +458,7 @@ delete backend; backend = nullptr;
 ```
 
 You're now responsible for the OT-driven `feed` / `reveal` surrounding
-the circuit. `test/garble.cpp` is the closest in-tree example. Most
+the circuit. `test/test_garble.cpp` is the closest in-tree example. Most
 users do **not** want this path — the higher-level libraries above
 already handle it.
 
@@ -692,15 +692,15 @@ Don't reference `backend` from circuit code — use the wrapper types.
 * `emp-tool/circuits/{aes_128_ctr,sha3_256}.h` — pre-built crypto
   circuits with calculator classes; also the non-circuit OpenSSL
   reference functions you'd use to verify them.
-* `test/{bit,bitvec,uint,int,float}.cpp` — each test file's
+* `test/test_{bit,bitvec,uint,int,float}.cpp` — each test file's
   `example()` block is a tutorial for the corresponding primitive.
-  Particularly `test/int.cpp` for `SignedInt`.
-* `test/{aes_128_ctr,sha3_256}.cpp` — end-to-end examples of using the
-  crypto calculators from circuit code, including reveal back to host
-  bytes for a ground-truth check.
-* `test/gen_circuit.cpp` — minimal example of generating a Bristol
+  Particularly `test/test_int.cpp` for `SignedInt`.
+* `test/test_{aes_128_ctr,sha3_256}.cpp` — end-to-end examples of using
+  the crypto calculators from circuit code, including reveal back to
+  host bytes for a ground-truth check.
+* `test/test_gen_circuit.cpp` — minimal example of generating a Bristol
   circuit file under `setup_clear_backend("filename")` and converting
   it via `BristolFormat::to_file`.
-* `CLAUDE.md` (top of repo) — project conventions for circuit-class
-  layer, backend layer, numeric semantics, and the IO channel
-  thread-safety contract.
+* `AGENTS.md` (top of repo) — project conventions index, with topical
+  subdocs under `docs/` for the circuit-class layer, backend layer,
+  numeric semantics, and the IO channel thread-safety contract.

@@ -1,4 +1,4 @@
-// utils/hash.h — SHA-256 wrapper around OpenSSL EVP plus a fixed-size KDF
+// crypto/hash.h — SHA-256 wrapper around OpenSSL EVP plus a fixed-size KDF
 // for elliptic-curve points. Read example() first; the rest is verification +
 // throughput.
 //

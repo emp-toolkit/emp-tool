@@ -1,4 +1,4 @@
-// utils/aes.h — AES-128 ECB primitives used as the bottom crypto layer of
+// crypto/aes.h — AES-128 ECB primitives used as the bottom crypto layer of
 // emp's PRG/PRP/CCRH chain. Read example() first; the rest is verification +
 // throughput.
 //

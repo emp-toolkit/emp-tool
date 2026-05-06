@@ -20,7 +20,7 @@ namespace emp {
 //
 // When constructed with a non-empty filename, ClearBackend writes a circuit
 // in Bristol-fashion-ish format on `finalize()`; otherwise it just evaluates
-// in plaintext. Replaces the old PlainCircExec + PlainProt pair.
+// in plaintext.
 class ClearBackend : public Backend {
 public:
 	static constexpr uint64_t P1 = 1;

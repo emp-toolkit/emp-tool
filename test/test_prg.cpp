@@ -1,4 +1,4 @@
-// utils/prg.h — AES-CTR pseudorandom generator. Read example() first; the
+// crypto/prg.h — AES-CTR pseudorandom generator. Read example() first; the
 // rest is verification + throughput.
 //
 // What's in prg.h:

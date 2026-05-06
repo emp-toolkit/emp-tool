@@ -5,7 +5,7 @@
 //   ctor(existing_sock)                wrap an already-connected fd
 //   send_data / recv_data              raw bytes (size_t-correct)
 //   send_block / recv_block            block-typed wrapper
-//   send_bool / recv_bool              packed via utils/bools_to_bits
+//   send_bool / recv_bool              packed via bools_to_bits
 //   flush()                            drain outbound only (no peer coupling)
 //   sync()                             1-byte ping/pong handshake
 //

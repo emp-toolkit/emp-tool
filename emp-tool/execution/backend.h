@@ -13,9 +13,8 @@ namespace emp {
 // feeding and output revealing. Wires are passed through as void* so the
 // dispatch interface stays one type regardless of the protocol's wire
 // representation; each concrete backend interprets the pointers as its
-// own wire_t. The user-facing `Bit_T<Wire>` (Phase 2) carries the static
-// wire type so user code stays type-safe; only the dispatch boundary is
-// type-erased.
+// own wire_t. The user-facing `Bit_T<Wire>` carries the static wire type
+// so user code stays type-safe; only the dispatch boundary is type-erased.
 //
 // Backends whose feed / reveal need cryptographic machinery beyond what
 // emp-tool ships (typically OT) leave the default no-op overrides in
@@ -88,7 +87,7 @@ public:
 };
 
 // The single global backend pointer. Set by the protocol's setup helper
-// (e.g. setup_clear_backend), used by every Bit / Integer / circuit op.
+// (e.g. setup_clear_backend), used by every Bit / BitVec / circuit op.
 // Honors the THREADING build flag for thread-local backends.
 #ifndef THREADING
 extern Backend* backend;

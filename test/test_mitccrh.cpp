@@ -1,4 +1,4 @@
-// utils/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Yang 2019).
+// crypto/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Yang 2019).
 // A batched key schedule + AES-encrypt-then-XOR-input construction used by
 // half-gates garbling. Read example() first; the rest is verification + throughput.
 //

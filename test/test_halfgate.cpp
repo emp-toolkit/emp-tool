@@ -4,9 +4,6 @@ using namespace std;
 using namespace emp;
 
 void printt(block a) {
-	//uint64_t i0 = _mm_extract_epi64(a, 0);
-	//uint64_t i1 = _mm_extract_epi64(a, 1);
-	//printf("%X %X\n", i0, i1);
 	unsigned char *c = (unsigned char*)(&a);
 	for(int i = 0; i < 16; ++i) printf("%x ", c[i]);
 	printf("\n");

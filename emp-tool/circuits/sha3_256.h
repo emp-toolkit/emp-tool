@@ -112,10 +112,10 @@ class SHA3_256_Calculator_T {
 		}
 
 
-		// Calculate the sha3_256 of a bunch of Integers (essentially concatenates the Integers "inputs")
+		// Calculate the sha3_256 of a bunch of BitVecs (essentially concatenates the BitVecs "inputs")
 		void sha3_256(Bit_T<Wire> output[], // we'll write 256 bits to here as the output hash.
 				const BitVec_T<Wire> inputs[], // we'll concatenate these, and hash the result.
-				const size_t input_count = 1) { // the number of Integers in "inputs"
+				const size_t input_count = 1) { // the number of BitVecs in "inputs"
 			for (size_t i = 0; i < 1600; ++i) blocks[i] = zero;
 
 			size_t index = 0;
@@ -159,10 +159,10 @@ class SHA3_256_Calculator_T {
 			this->sha3_256(output->bits.data(), input, len);
 		}
 
-		// Calculate the sha3_256 of a bunch of Integers (essentially concatenates the Integers "inputs")
+		// Calculate the sha3_256 of a bunch of BitVecs (essentially concatenates the BitVecs "inputs")
 		void sha3_256(BitVec_T<Wire> * output,// we'll write 256 bits to here as the output hash.
 				const BitVec_T<Wire> inputs[],// we'll concatenate these, and hash the result.
-				const size_t input_count = 1) {// the number of Integers in "inputs"
+				const size_t input_count = 1) {// the number of BitVecs in "inputs"
 			output->bits.resize(256);
 			this->sha3_256(output->bits.data(), inputs, input_count);
 		}

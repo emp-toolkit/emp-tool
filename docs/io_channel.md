@@ -34,7 +34,7 @@ flush first. Applies to function boundaries, phase boundaries within
 a function, and any blocking wait (thread join, barrier, recv on a
 *different* NetIO).
 
-`test/netio.cpp` is templated on the IO type and runs the full
+`test/test_netio.cpp` is templated on the IO type and runs the full
 correctness + send-only-regression + bench suite against both classes
 back-to-back.
 

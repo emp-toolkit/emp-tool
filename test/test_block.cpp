@@ -1,6 +1,6 @@
-// utils/block.h — 128-bit SIMD block (__m128i alias) plus the small bit/byte
-// helpers everything else in utils/ builds on. Read example() first; the rest
-// is verification + throughput.
+// core/block.h — 128-bit SIMD block (__m128i alias) plus the small bit/byte
+// helpers everything else in emp-tool builds on. Read example() first; the
+// rest is verification + throughput.
 //
 // What's in block.h:
 //   block, makeBlock(hi, lo), zero_block, all_one_block

@@ -1,4 +1,4 @@
-// utils/f2k.h — GF(2^128) primitives for emp's correlated and almost-universal
+// crypto/f2k.h — GF(2^128) primitives for emp's correlated and almost-universal
 // hashing. Read example() first; the rest is verification + throughput.
 //
 // What's in f2k.h:

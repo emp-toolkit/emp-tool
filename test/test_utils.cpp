@@ -1,4 +1,4 @@
-// utils/utils.h, utils/utils.hpp — small free-standing helpers. Read example()
+// core/utils.h, core/utils.hpp — small free-standing helpers. Read example()
 // first; the rest is verification + throughput.
 //
 // What's in utils.h/utils.hpp (the parts worth testing):

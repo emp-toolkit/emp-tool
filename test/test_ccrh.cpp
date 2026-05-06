@@ -1,4 +1,4 @@
-// utils/ccrh.h — Circular CRH. H(x) = sigma(x) ^ PRP_K(sigma(x)). Reduces to
+// crypto/ccrh.h — Circular CRH. H(x) = sigma(x) ^ PRP_K(sigma(x)). Reduces to
 // CRH applied to sigma(x) = x ^ rotate_halves(x). Read example() first; the
 // rest is verification + throughput.
 //
