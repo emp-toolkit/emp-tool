@@ -8,10 +8,12 @@ modifying an existing test.
 ## One file per component
 
 Each primitive header has exactly one corresponding file in `test/`,
-named after the header (e.g. `crypto/f2k.h` → `test/f2k.cpp`). The
-numeric circuit headers use abbreviated names: `circuits/unsigned_int.h`
-→ `test/uint.cpp`, `circuits/signed_int.h` → `test/int.cpp`,
-`circuits/bitvec.h` → `test/bitvec.cpp`.
+named `test_<header>.cpp` (e.g. `crypto/f2k.h` → `test/test_f2k.cpp`).
+Binaries land at `build/test_<header>` (no `build/test/` traversal).
+The numeric circuit headers use abbreviated names:
+`circuits/unsigned_int.h` → `test/test_uint.cpp`,
+`circuits/signed_int.h` → `test/test_int.cpp`,
+`circuits/bitvec.h` → `test/test_bitvec.cpp`.
 
 No separate `_bench.cpp` companions — example, correctness, and
 benchmarks all live in the same file. CMake registers it as a single
