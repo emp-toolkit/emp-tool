@@ -29,14 +29,14 @@ namespace emp {
 // passes true; the other party passes false (e.g. for NetIO, use
 // is_server, or for emp-ot protocols, party == ALICE).
 //
-// get_digest() returns the first block of H(d_AB ‖ H(d_BA)) where
-// d_AB is the A→B wire digest and d_BA is the B→A digest. Both
-// parties produce the same value: the send_first side has my_send =
-// d_AB and computes H(my_send ‖ H(my_recv)); the other side has
-// my_recv = d_AB and computes H(my_recv ‖ H(my_send)). Both reduce
-// to H(d_AB ‖ H(d_BA)). Robust against protocols that batch sends
-// asymmetrically (e.g. PVW's two-round structure) because we hash
-// per-direction, not per-call-site.
+// get_digest() returns the first block of H(d_AB ‖ d_BA), where d_AB
+// is the A→B wire digest and d_BA is the B→A digest. Both parties
+// produce the same value: the send_first side computes
+// H(my_send ‖ my_recv), the other side H(my_recv ‖ my_send), and
+// my_send/my_recv just swap meanings between the two parties.
+// Robust against protocols that batch sends asymmetrically (e.g.
+// PVW's two-round structure) because we hash per-direction, not
+// per-call-site.
 //
 // Off by default — one predictable branch per send/recv when off,
 // invisible vs syscall cost. Mirrors IKNP-malicious / ferret-malicious's
@@ -78,28 +78,18 @@ public:
 	// 32-B SHA-256 digest). Does not reset — call repeatedly across
 	// protocol stages to derive sub-challenges. Asserts FS is on.
 	//
-	// Output: H(d_AB ‖ H(d_BA))[0..16). Send-first side computes
-	// H(my_send ‖ H(my_recv)); the other side H(my_recv ‖ H(my_send)).
+	// Output: H(d_AB ‖ d_BA)[0..16). Send-first side concatenates
+	// my_send first, the other side concatenates my_recv first.
 	block get_digest() {
 		assert(fs_send_.has_value() && "get_digest: enable_fs first");
 		constexpr int N = Hash::DIGEST_SIZE;        // 32
-		char d_send[N], d_recv[N];
-		fs_send_->digest(d_send, /*reset_after=*/false);
-		fs_recv_->digest(d_recv, /*reset_after=*/false);
-
-		const char* outer_first  = fs_send_first_ ? d_send : d_recv;
-		const char* inner_input  = fs_send_first_ ? d_recv : d_send;
-		char inner[N];
-		Hash::hash_once(inner, inner_input, N);
-
-		char outer_buf[2 * N];
-		std::memcpy(outer_buf, outer_first, N);
-		std::memcpy(outer_buf + N, inner, N);
-
-		alignas(block) char outer[N];
-		Hash::hash_once(outer, outer_buf, sizeof(outer_buf));
+		char buf[2 * N];
+		fs_send_->digest(buf + (fs_send_first_ ? 0 : N), /*reset_after=*/false);
+		fs_recv_->digest(buf + (fs_send_first_ ? N : 0), /*reset_after=*/false);
+		alignas(block) char out_buf[N];
+		Hash::hash_once(out_buf, buf, sizeof(buf));
 		block out;
-		std::memcpy(&out, outer, sizeof(block));
+		std::memcpy(&out, out_buf, sizeof(block));
 		return out;
 	}
 
