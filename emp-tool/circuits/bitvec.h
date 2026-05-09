@@ -28,15 +28,17 @@ class BitVec_T { public:
 	BitVec_T(const std::vector<Bit_T<Wire>>& bs) : bits(bs) {}
 	BitVec_T(std::vector<Bit_T<Wire>>&& bs) : bits(std::move(bs)) {}
 
-	// Feed `width` bits of an integral `value` (LSB-first), interpreted by
-	// `party` as their input. PUBLIC means everyone agrees on the value.
-	// SFINAE-restricted to integral T so that pointer arguments resolve
-	// to the (size_t, const void*, int) overload below.
+	// Feed `width` bits of an integral `value` (LSB-first), interpreted
+	// by `party` as their input. PUBLIC means everyone agrees on the
+	// value. SFINAE-restricted to integral T so that pointer arguments
+	// resolve to the (size_t, const void*, int) overload below.
+	// `party` has NO default: PUBLIC would silently leak a forgotten
+	// private input as public. Explicit party required.
 	template<typename T,
 	         typename = std::enable_if_t<std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
 	                                  || std::is_same_v<T, __int128>>>
-	BitVec_T(size_t width, T value, int party = PUBLIC);
+	BitVec_T(size_t width, T value, int party);
 
 	// Feed `width` bits read from raw memory (LSB-first within each byte).
 	BitVec_T(size_t width, const void* data, int party);

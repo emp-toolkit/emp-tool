@@ -12,7 +12,10 @@ class Bit_T: public Sortable<Wire, Bit_T<Wire>> { public:
 	Wire bit;
 
 	Bit_T() {}
-	Bit_T(bool _b, int party = PUBLIC);
+	// `party` has NO default: PUBLIC means "everyone holds this value",
+	// so a default would silently leak a forgotten private input as
+	// public. Explicit party required at every input ctor.
+	Bit_T(bool _b, int party);
 	Bit_T(const Wire& a) {
 		bit = a;
 	}

@@ -32,26 +32,32 @@ class UnsignedInt_T : public BitVec_T<Wire>,
 		if constexpr (N > 0) bits.resize(N);
 	}
 
-	// Runtime-width ctors — usable in either mode (N==0 picks width up here;
-	// N>0 ignores `width` and just fills N bits from the value).
+	// Runtime-width ctors — usable in either mode (N==0 picks width up
+	// here; N>0 ignores `width` and just fills N bits from the value).
+	// `party` has NO default: that's what disambiguates this overload
+	// from the fixed-width form below for calls like
+	// `UnsignedInt_T<W, 64>(uv, PUBLIC)`. Without this, on platforms
+	// where size_t and uint64_t are the same type both ctors are
+	// identity-rank matches and the call is ambiguous.
 	template<typename T,
 	         typename = std::enable_if_t<std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
 	                                  || std::is_same_v<T, __int128>>>
-	UnsignedInt_T(size_t width, T value, int party = PUBLIC)
+	UnsignedInt_T(size_t width, T value, int party)
 	    : BitVec_T<Wire>(width, value, party) {}
 
 	UnsignedInt_T(size_t width, const void* data, int party)
 	    : BitVec_T<Wire>(width, data, party) {}
 
 	// Fixed-width ctors: only available when N > 0 (SFINAE-gated). Width is
-	// implicit from the type, so callers don't pass it.
+	// implicit from the type, so callers don't pass it. `party` has NO
+	// default — see BitVec_T for the rationale.
 	template<typename T,
 	         size_t M = N,
 	         typename = std::enable_if_t<(M > 0) && (std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
 	                                  || std::is_same_v<T, __int128>)>>
-	UnsignedInt_T(T value, int party = PUBLIC)
+	UnsignedInt_T(T value, int party)
 	    : BitVec_T<Wire>(N, value, party) {}
 
 	template<size_t M = N, typename = std::enable_if_t<(M > 0)>>

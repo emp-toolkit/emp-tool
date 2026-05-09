@@ -1,5 +1,6 @@
 #ifndef EMP_TOOL_NUMERIC_H__
 #define EMP_TOOL_NUMERIC_H__
+#include "emp-tool/core/constants.h"
 namespace emp {
 
 template<typename Wire>
@@ -120,7 +121,7 @@ void bitonic_sort(T* key, D* data, int lo, int n,
 
 template<typename T, typename D = Bit_T<typename T::wire_type>>
 void sort(T* key, int size, D* data = nullptr,
-          Bit_T<typename T::wire_type> acc = Bit_T<typename T::wire_type>(true)) {
+          Bit_T<typename T::wire_type> acc = Bit_T<typename T::wire_type>(true, PUBLIC)) {
 	bitonic_sort(key, data, 0, size, acc);
 }
 

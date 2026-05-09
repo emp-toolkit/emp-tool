@@ -29,24 +29,28 @@ class SignedInt_T : public BitVec_T<Wire>,
 
 	// Runtime-width ctors. Body in signed_int.hpp — sign-extends `value`
 	// to `width` bits when T is signed and value < 0 (vs the BitVec
-	// base, which always zero-extends).
+	// base, which always zero-extends). `party` has NO default: that's
+	// what disambiguates this overload from the fixed-width form below
+	// for calls like `SignedInt_T<W, 64>(uv, PUBLIC)` on platforms
+	// where size_t and uint64_t are the same type.
 	template<typename T,
 	         typename = std::enable_if_t<std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
 	                                  || std::is_same_v<T, __int128>>>
-	SignedInt_T(size_t width, T value, int party = PUBLIC);
+	SignedInt_T(size_t width, T value, int party);
 
 	SignedInt_T(size_t width, const void* data, int party)
 	    : BitVec_T<Wire>(width, data, party) {}
 
 	// Fixed-width ctors: SFINAE-gated to N > 0. Delegates to the
 	// runtime-width form so the sign-extension lives in one place.
+	// `party` has NO default — see BitVec_T for the rationale.
 	template<typename T,
 	         size_t M = N,
 	         typename = std::enable_if_t<(M > 0) && (std::is_integral_v<T>
 	                                  || std::is_same_v<T, __uint128_t>
 	                                  || std::is_same_v<T, __int128>)>>
-	SignedInt_T(T value, int party = PUBLIC) : SignedInt_T(N, value, party) {}
+	SignedInt_T(T value, int party) : SignedInt_T(N, value, party) {}
 
 	template<size_t M = N, typename = std::enable_if_t<(M > 0)>>
 	SignedInt_T(const void* data, int party)

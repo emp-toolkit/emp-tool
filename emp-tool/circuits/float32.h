@@ -34,7 +34,12 @@ class Float_T: public Sortable<Wire, Float_T<Wire>> { public:
 		return *this;
 	}
 
-	Float_T(float input = 0.0, int party = PUBLIC);
+	// No-arg ctor: leaves `value` default-initialized (Bit_T<Wire>{}).
+	// Useful for vector<Float> and similar default-constructed slots.
+	Float_T() = default;
+	// Input ctor: feeds `input`'s 32-bit pattern as `party`'s input.
+	// `party` has NO default — see Bit_T/BitVec_T for the rationale.
+	Float_T(float input, int party);
 
 	template<typename O> 
 	O reveal(int party = PUBLIC) const;
