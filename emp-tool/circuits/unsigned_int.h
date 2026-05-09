@@ -9,6 +9,7 @@
 namespace emp {
 
 template<typename Wire, size_t N> class SignedInt_T;
+template<typename Wire>           class Float_T;
 
 // Unsigned integer over `Wire`. Width is either fixed at compile time (N > 0)
 // or set at construction (N == 0, the default — runtime width). Wraps mod
@@ -96,6 +97,13 @@ class UnsignedInt_T : public BitVec_T<Wire>,
 	UnsignedInt_T<Wire, 0> hamming_weight() const;
 	UnsignedInt_T<Wire, 0> mod_exp(UnsignedInt_T<Wire, 0> p,
 	                               UnsignedInt_T<Wire, 0> q) const;
+
+	// Encode the unsigned magnitude (interpreted as a fixed-point value
+	// with `s` fractional bits) as IEEE-754 single-precision. Definition
+	// in float32.hpp; requires float32.h to be included at the call site.
+	// Returns +0.0 for an all-zero input. Caller must ensure the value
+	// fits in float's representable range.
+	Float_T<Wire> to_float32(size_t s) const;
 };
 
 // Convenience aliases for common fixed widths.

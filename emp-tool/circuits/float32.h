@@ -3,6 +3,8 @@
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/bitvec.h"
 #include "emp-tool/circuits/sortable.h"
+#include "emp-tool/circuits/signed_int.h"
+#include "emp-tool/circuits/unsigned_int.h"
 #include "emp-tool/circuits/circuit_file.h"
 #include <math.h>
 #include <array>
@@ -65,6 +67,17 @@ class Float_T: public Sortable<Wire, Float_T<Wire>> { public:
 	Bit_T<Wire>& operator[](int index);
 	const Bit_T<Wire> & operator[](int index) const;
 	size_t size() const {return 32;};
+
+	// Decode this float as a non-negative N-bit fixed-point integer with
+	// `s` fractional bits. The IEEE sign bit is ignored — caller's job to
+	// reject negative inputs if that matters. Truncates toward zero.
+	// Returns 0 when the input is zero. NaN, Inf, and subnormals are
+	// preconditions: undefined behavior. Definition in float32.hpp.
+	template<int N> UnsignedInt_T<Wire, N> to_unsigned(size_t s) const;
+
+	// Decode this float as a signed N-bit fixed-point integer with `s`
+	// fractional bits. Composes to_unsigned with the IEEE sign bit.
+	template<int N> SignedInt_T<Wire, N>   to_signed(size_t s) const;
 };
 
 #include "emp-tool/circuits/float32.hpp"

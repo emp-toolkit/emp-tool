@@ -9,6 +9,8 @@
 
 namespace emp {
 
+template<typename Wire> class Float_T;
+
 // Signed integer (two's-complement) over `Wire`. Width is fixed at compile
 // time when N > 0, runtime when N == 0 (default). Wraps mod 2^width on
 // +/-/* (matches int{N}_t on x86/ARM hardware; C signed-overflow UB ignored).
@@ -81,6 +83,11 @@ class SignedInt_T : public BitVec_T<Wire>,
 	Bit_T<Wire>  geq(const SignedInt_T& rhs) const;
 	Bit_T<Wire>  equal(const SignedInt_T& rhs) const;
 	SignedInt_T  select(const Bit_T<Wire>& sel, const SignedInt_T& rhs) const;
+
+	// Encode this signed value (interpreted as a fixed-point number with
+	// `s` fractional bits) as IEEE-754 single-precision. Definition in
+	// float32.hpp; requires float32.h at the call site.
+	Float_T<Wire> to_float32(size_t s) const;
 };
 
 // Convenience aliases for common fixed widths.
