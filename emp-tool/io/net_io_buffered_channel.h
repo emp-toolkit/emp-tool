@@ -9,12 +9,8 @@
 #include <iostream>
 
 #include "emp-tool/io/io_channel.h"
+#include "emp-tool/io/tcp_socket.h"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 namespace emp {
@@ -78,7 +74,7 @@ class NetIOBuffered : public IOChannel { public:
 			throw std::runtime_error("Invalid port number!");
 
 		is_server = (address == nullptr);
-		init_from_sock(is_server ? server_listen(port) : client_connect(address, port));
+		init_from_sock(is_server ? tcp::server_listen(port) : tcp::client_connect(address, port));
 		if (!quiet) std::cout << "connected\n";
 	}
 
@@ -112,21 +108,15 @@ class NetIOBuffered : public IOChannel { public:
 
 	void init_from_sock(int new_sock) {
 		sock = new_sock;
-		set_nodelay();
+		tcp::set_nodelay(sock);
 		stream_buf = new char[NETWORK_BUFFER_SIZE];
 		send_buf   = new char[NETWORK_BUFFER_SIZE2];
 		stream = fdopen(sock, "wb+");
 		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
 	}
 
-	void set_nodelay() {
-		const int one = 1;
-		setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-	}
-	void set_delay() {
-		const int zero = 0;
-		setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &zero, sizeof(zero));
-	}
+	void set_nodelay() { tcp::set_nodelay(sock); }
+	void set_delay()   { tcp::set_delay(sock); }
 
 	// 1-byte ping/pong handshake to verify both directions are alive.
 	void sync() override {
@@ -192,38 +182,6 @@ private:
 		}
 	}
 
-	int server_listen(int port) {
-		struct sockaddr_in dest, serv;
-		socklen_t socksize = sizeof(struct sockaddr_in);
-		memset(&serv, 0, sizeof(serv));
-		serv.sin_family = AF_INET;
-		serv.sin_addr.s_addr = htonl(INADDR_ANY);
-		serv.sin_port = htons(port);
-		int listener = socket(AF_INET, SOCK_STREAM, 0);
-		int reuse = 1;
-		setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
-		if (bind(listener, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) { perror("error: bind"); exit(1); }
-		if (listen(listener, 1) < 0) { perror("error: listen"); exit(1); }
-		int s = accept(listener, (struct sockaddr *)&dest, &socksize);
-		close(listener);
-		return s;
-	}
-
-	int client_connect(const char *address, int port) {
-		struct sockaddr_in dest;
-		memset(&dest, 0, sizeof(dest));
-		dest.sin_family = AF_INET;
-		dest.sin_addr.s_addr = inet_addr(address);
-		dest.sin_port = htons(port);
-		int s;
-		while (true) {
-			s = socket(AF_INET, SOCK_STREAM, 0);
-			if (connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0) break;
-			close(s);
-			usleep(1000);
-		}
-		return s;
-	}
 };
 
 }  // namespace emp

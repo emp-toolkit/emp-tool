@@ -37,6 +37,7 @@ add_test_case(test_ecc)
 
 # circuits / IO / higher-level — not utils/* but kept here for convenience
 add_test_case_with_run(test_netio)
+add_test_case_with_run(test_tlsio)
 add_test_case(test_bit)
 add_test_case(test_bitvec)
 add_test_case(test_uint)

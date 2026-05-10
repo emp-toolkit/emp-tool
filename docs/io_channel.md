@@ -61,3 +61,22 @@ concurrent <op> on the same NetIO`. Zero cost under `-DNDEBUG`.
 
 Use this when a multi-party protocol behaves flakily — race or no
 race, the answer falls out of a Debug build.
+
+## TLS variant
+
+`TLSIO` (in `emp-tool/io/tls_io_channel.h`) is a third `IOChannel` for
+deployments where the wire crosses an untrusted network. Same flush
+contract, same single-thread-owned discipline, same telemetry counters
+as NetIO; the only difference is the wire — TLS 1.3 over OpenSSL
+instead of raw TCP. Pin both ends of the protocol-version range to
+TLS 1.3 (no negotiation surface), use the default socket BIO (we
+already coalesce above SSL_write so `BIO_f_buffer` would just double-
+buffer), and do a two-phase `SSL_shutdown` from the destructor so
+buffered records actually leave the box before FIN.
+
+Cert / key / CA material is caller-supplied via `TLSConfig` (PEM file
+paths). mTLS is on by default — both sides verify; clear
+`require_peer_cert` on the server to make client-cert presentation
+optional, or set `insecure_skip_verify` in dev only. One `SSL_CTX` per
+channel; if a profile shows the per-channel cert-parse cost mattering,
+share a CTX via a thin factory.

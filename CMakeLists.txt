@@ -73,6 +73,7 @@ target_include_directories(emp-tool PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 target_link_libraries(emp-tool PUBLIC
+    OpenSSL::SSL
     OpenSSL::Crypto
     Threads::Threads)
 
