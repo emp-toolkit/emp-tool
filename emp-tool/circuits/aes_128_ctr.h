@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <unistd.h>
 
 namespace emp {
@@ -178,14 +179,16 @@ class AES_128_CTR_Calculator_T { public:
 			std::cerr << "input and output cannot both be nullptr\n" << std::flush;
 			return -1;
 		}
+		// Keystream scratch: blind_int's BitVec ctor copies these bytes
+		// into wire form, so the buffer is dead after the BitVec_T
+		// construction. unique_ptr keeps the early-return success-path
+		// and the late-return both clean of a leak.
 		const size_t nbytes = (length + 7) / 8;
-		uint8_t * bytes = new uint8_t[nbytes];
-		int success = emp::aes_128_ctr(key, iv, (uint8_t *) nullptr, bytes, nbytes, start_chunk);
-		if (success != 0) {
-			delete[] bytes;
-			return success;
-		}
-		BitVec_T<Wire> blind_int(length, bytes, party);
+		auto bytes = std::make_unique<uint8_t[]>(nbytes);
+		int success = emp::aes_128_ctr(key, iv, (uint8_t *) nullptr,
+		                               bytes.get(), nbytes, start_chunk);
+		if (success != 0) return success;
+		BitVec_T<Wire> blind_int(length, bytes.get(), party);
 		if (input == nullptr) {
 			for (size_t i = 0; i < length; ++i)
 				output[i] = blind_int[i];
@@ -195,7 +198,6 @@ class AES_128_CTR_Calculator_T { public:
 				*dst = input[i] ^ blind_int[i];
 			}
 		}
-		delete[] bytes;
 		return 0;
 	}
 

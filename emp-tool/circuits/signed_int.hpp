@@ -7,23 +7,24 @@
 template<typename Wire, size_t N>
 template<typename T, typename>
 inline SignedInt_T<Wire, N>::SignedInt_T(size_t width, T value, int party) {
+	width = resolved_runtime_width(width);
+
 	bool fill = false;
 	if constexpr (std::is_signed_v<T>) {
 		if (value < 0) fill = true;
 	}
 
 	this->bits.resize(width);
-	bool* tmp = new bool[width];
+	auto tmp = std::make_unique<bool[]>(width);
 
 	constexpr size_t value_bits = sizeof(T) * 8;
 	const     size_t copy_bits  = std::min(width, value_bits);
 
-	bits_to_bools(tmp, &value, copy_bits);
+	bits_to_bools(tmp.get(), &value, copy_bits);
 	if (width > value_bits)
-		std::fill(tmp + value_bits, tmp + width, fill);
+		std::fill(tmp.get() + value_bits, tmp.get() + width, fill);
 
-	backend->feed(this->bits.data(), party, tmp, width);
-	delete[] tmp;
+	backend->feed(this->bits.data(), party, tmp.get(), width);
 }
 
 template<typename Wire, size_t N>
@@ -155,24 +156,49 @@ inline SignedInt_T<Wire, N> SignedInt_T<Wire, N>::operator>>(size_t shamt) const
 	return res;
 }
 
+// Same overflow story as the UnsignedInt_T dynamic shifts (see comment
+// there): any high shamt bit means shamt >= W, which the documented
+// semantics require to yield zero for logical `<<` and sign-fill for
+// arithmetic `>>` (docs/numeric_semantics.md). The static-shamt forms
+// above already handle that branch; we reuse `(*this) >> W` as a
+// pre-built sign-fill SignedInt for the select.
 template<typename Wire, size_t N>
 inline SignedInt_T<Wire, N> SignedInt_T<Wire, N>::operator<<(
 		const UnsignedInt_T<Wire, N>& shamt) const {
 	SignedInt_T res(*this);
-	size_t bound = std::min((size_t)std::ceil(std::log2((double)size())), shamt.size() - 1);
-	for (size_t i = 0; i < bound; ++i)
+	const size_t W = size();
+	const size_t need = (W <= 1) ? 0 : (size_t)std::ceil(std::log2((double)W));
+	const size_t use = std::min(need, shamt.size());
+	for (size_t i = 0; i < use; ++i)
 		res = res.select(shamt.bits[i], res << (size_t(1) << i));
-	return res;
+
+	Bit_T<Wire> overflow(false, PUBLIC);
+	for (size_t i = use; i < shamt.size(); ++i)
+		overflow = overflow | shamt.bits[i];
+
+	SignedInt_T zero(W, 0, PUBLIC);
+	return res.select(overflow, zero);
 }
 
 template<typename Wire, size_t N>
 inline SignedInt_T<Wire, N> SignedInt_T<Wire, N>::operator>>(
 		const UnsignedInt_T<Wire, N>& shamt) const {
 	SignedInt_T res(*this);
-	size_t bound = std::min((size_t)std::ceil(std::log2((double)size())), shamt.size() - 1);
-	for (size_t i = 0; i < bound; ++i)
+	const size_t W = size();
+	const size_t need = (W <= 1) ? 0 : (size_t)std::ceil(std::log2((double)W));
+	const size_t use = std::min(need, shamt.size());
+	for (size_t i = 0; i < use; ++i)
 		res = res.select(shamt.bits[i], res >> (size_t(1) << i));
-	return res;
+
+	Bit_T<Wire> overflow(false, PUBLIC);
+	for (size_t i = use; i < shamt.size(); ++i)
+		overflow = overflow | shamt.bits[i];
+
+	// (*this) >> W lands in the static-shamt overload's "shamt >= size"
+	// branch, which fills the result with the original msb. Free of
+	// AND gates.
+	SignedInt_T sign_fill = (*this) >> W;
+	return res.select(overflow, sign_fill);
 }
 
 template<typename Wire, size_t N>

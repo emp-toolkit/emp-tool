@@ -1,7 +1,13 @@
+// IEEE-754 round-trip: extract / reinject the 32 bits via uint32_t and
+// std::memcpy. The previous pointer-cast form (`int *in = (int*)&input`
+// and `float *fp = (float*)&out`) violates strict aliasing, and the
+// `tmp << i` accumulator was a signed-shift UB when i == 31 placed a 1
+// into the sign bit. Unsigned arithmetic + memcpy fixes both.
 template<typename Wire>
 inline Float_T<Wire>::Float_T(float input, int party) {
-	int *in = (int*)(&input);
-	BitVec_T<Wire> val(FLOAT_LEN, *in, party);
+	uint32_t bits;
+	std::memcpy(&bits, &input, sizeof(bits));
+	BitVec_T<Wire> val(FLOAT_LEN, bits, party);
 	for(int i = 0; i < FLOAT_LEN; ++i)
 		value[i] = val.bits[i];
 }
@@ -9,16 +15,17 @@ inline Float_T<Wire>::Float_T(float input, int party) {
 template<typename Wire>
 template<typename O>
 inline O Float_T<Wire>::reveal(int party) const {
-	int out = 0;
+	uint32_t bits = 0;
 	for(int i = 0; i < FLOAT_LEN; ++i) {
-		int tmp = value[i].template reveal<bool>(party);
-		out += (tmp << i);
+		bool tmp = value[i].template reveal<bool>(party);
+		if (tmp) bits |= (uint32_t(1) << i);
 	}
-	float *fp = (float*)(&out);
+	float fp;
+	std::memcpy(&fp, &bits, sizeof(fp));
 	if constexpr (std::is_same_v<O, std::string>)
-		return std::to_string(*fp);
+		return std::to_string(fp);
 	else
-		return (O)(*fp);
+		return (O)fp;
 }
 
 template<typename Wire>

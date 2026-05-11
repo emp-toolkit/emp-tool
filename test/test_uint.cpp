@@ -136,6 +136,27 @@ static bool check_shift_static() {
 	return true;
 }
 
+// Dynamic (secret) shift amount. Sweeps shamt across [0, 2*width) — values
+// >= 32 exercise the "high shamt bits" overflow path the static form
+// gets right and the dynamic form historically missed.
+static bool check_shift_dynamic() {
+	std::vector<uint32_t> vs = {0, 1, 0x80000000u, UINT32_MAX, 0x55555555u, 0xAAAAAAAAu};
+	for (auto v : vs)
+		for (unsigned s = 0; s <= 65; ++s) {
+			UnsignedInt a(32, v, ALICE);
+			UnsignedInt sh(32, s, BOB);
+			if ((a << sh).reveal<uint32_t>(PUBLIC) != shl_w(v, s)) {
+				cout << "  FAIL << (dyn)  v=" << v << " s=" << s << "\n";
+				return false;
+			}
+			if ((a >> sh).reveal<uint32_t>(PUBLIC) != shr_w(v, s)) {
+				cout << "  FAIL >> (dyn)  v=" << v << " s=" << s << "\n";
+				return false;
+			}
+		}
+	return true;
+}
+
 static bool check_resize() {
 	// Zero-extend up.
 	for (uint32_t v : {0u, 1u, UINT32_MAX, 0x80000000u}) {
@@ -212,6 +233,7 @@ static bool run_correctness() {
 	run("- (unary)",         check_unary_neg());
 	run("< <= > >= == !=",   check_compare_random());
 	run("<<  >>  (static)",  check_shift_static());
+	run("<<  >>  (dynamic)", check_shift_dynamic());
 	run("resize zero-extend",check_resize());
 	run("hamming/leading_zeros", check_hamming_lz());
 	run("boundary wrap",     check_boundaries());
@@ -237,6 +259,63 @@ static bool run_fixed_width() {
 	// Default-ctor sizes the wire vector to the template width.
 	UInt64 z;
 	if (z.size() != 64) { cout << "  FAIL UInt64 default-ctor size\n"; ok = false; }
+
+	// Runtime-width ctor with width == N: documented "you can pass width
+	// explicitly to disambiguate from the fixed-width form on platforms
+	// where size_t == uint64_t". Underlying BitVec must end up N bits.
+	UInt32 explicit_w((size_t)32, 7u, ALICE);
+	if (explicit_w.size() != 32) {
+		cout << "  FAIL UInt32(width=32, ...) size: got " << explicit_w.size() << "\n";
+		ok = false;
+	}
+	if (explicit_w.reveal<uint32_t>(PUBLIC) != 7u) {
+		cout << "  FAIL UInt32(width=32, ...) reveal\n"; ok = false;
+	}
+#ifdef NDEBUG
+	// Release-only: when the assert is compiled out, a mismatched width
+	// must still normalize to N. Pre-fix, this silently produced a 16-bit
+	// underlying BitVec inside a UInt32 type, which downstream operators
+	// later trip on via size-equality asserts in apparently unrelated
+	// code paths. Debug builds abort at the assert and never get here.
+	UInt32 width_mismatch((size_t)16, 7u, ALICE);
+	if (width_mismatch.size() != 32) {
+		cout << "  FAIL UInt32(width=16, ...) normalize: got "
+		     << width_mismatch.size() << " want 32\n";
+		ok = false;
+	}
+#endif
+
+	// Pointer-data ctor: width != N must throw in *all* build types,
+	// because the alternative would either over-read the caller's buffer
+	// (when normalize-to-N widens) or silently drop bits (when truncating).
+	{
+		uint16_t two_bytes = 0xABCDu;
+		bool threw = false;
+		try {
+			UInt32 bad((size_t)16, &two_bytes, ALICE);
+			(void)bad;
+		} catch (const std::runtime_error&) { threw = true; }
+		if (!threw) {
+			cout << "  FAIL UInt32(width=16, void*) should throw\n";
+			ok = false;
+		}
+	}
+
+	// BitVec-converting ctor: a same-Wire BitVec of mismatched size must
+	// also be rejected, so the explicit conversion can't be used as a
+	// backdoor to UInt32-with-16-bit-BitVec.
+	{
+		BitVec_T<block> narrow(16, 0u, ALICE);
+		bool threw = false;
+		try {
+			UInt32 bad(narrow);
+			(void)bad;
+		} catch (const std::runtime_error&) { threw = true; }
+		if (!threw) {
+			cout << "  FAIL UInt32(BitVec(16)) should throw\n";
+			ok = false;
+		}
+	}
 
 	// 64-bit width is implicit.
 	UInt64 v(0xDEADBEEFCAFEBABEull, ALICE);

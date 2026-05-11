@@ -36,8 +36,7 @@ jobs:
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DEMP_TOOL_NATIVE_ARCH=OFF \
-            -DEMP_TOOL_CRYPTO_IN_CIRCUIT=ON
+            -DEMP_TOOL_NATIVE_ARCH=OFF
           cmake --build build -j
 
       - name: Perform CodeQL Analysis

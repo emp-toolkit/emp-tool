@@ -20,7 +20,6 @@ jobs:
           cmake -B build
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DEMP_TOOL_NATIVE_ARCH=OFF
-          -DEMP_TOOL_CRYPTO_IN_CIRCUIT=ON
       - name: Build
         run: cmake --build build -j
       - name: Test

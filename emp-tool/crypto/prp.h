@@ -39,6 +39,7 @@ class PRP { public:
 		while (nblocks > 0) {
 			int n = nblocks < CHUNK ? nblocks : CHUNK;
 			ParaEnc(data, &aes, 1, n);
+			data    += n;
 			nblocks -= n;
 		}
 	}

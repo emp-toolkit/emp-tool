@@ -4,30 +4,31 @@
 // past sizeof(T) are always zero-extended. UnsignedInt inherits this
 // straight; SignedInt overrides the ctor to sign-extend instead so
 // `Integer(64, (int)-1, …)` round-trips through the int's sign bit.
+//
+// `tmp` is a per-bit unpack of `value` handed to backend->feed. RAII
+// via std::unique_ptr<bool[]> so the (rare) exception path doesn't leak.
 template<typename Wire>
 template<typename T, typename>
 inline BitVec_T<Wire>::BitVec_T(size_t width, T value, int party) {
 	bits.resize(width);
-	bool* tmp = new bool[width];
+	auto tmp = std::make_unique<bool[]>(width);
 
 	constexpr size_t value_bits = sizeof(T) * 8;
 	const     size_t copy_bits  = std::min(width, value_bits);
 
-	bits_to_bools(tmp, &value, copy_bits);
+	bits_to_bools(tmp.get(), &value, copy_bits);
 	if (width > value_bits)
-		std::fill(tmp + value_bits, tmp + width, false);
+		std::fill(tmp.get() + value_bits, tmp.get() + width, false);
 
-	backend->feed(bits.data(), party, tmp, width);
-	delete[] tmp;
+	backend->feed(bits.data(), party, tmp.get(), width);
 }
 
 template<typename Wire>
 inline BitVec_T<Wire>::BitVec_T(size_t width, const void* data, int party) {
 	bits.resize(width);
-	bool* tmp = new bool[width];
-	bits_to_bools(tmp, data, width);
-	backend->feed(bits.data(), party, tmp, width);
-	delete[] tmp;
+	auto tmp = std::make_unique<bool[]>(width);
+	bits_to_bools(tmp.get(), data, width);
+	backend->feed(bits.data(), party, tmp.get(), width);
 }
 
 // Bitwise ops dispatch through Backend's bulk gate API: one virtual
@@ -151,37 +152,59 @@ inline BitVec_T<Wire> BitVec_T<Wire>::select(const Bit_T<Wire>& sel,
 	return res;
 }
 
+// `b` is the unpacked-bit scratch handed back from backend->reveal. RAII
+// via std::unique_ptr<bool[]> so error paths (e.g. reveal throws on a
+// disconnected channel) can't leak it.
+//
+// Sign-bit shift safety: `O(1) << (sizeof(O)*8 - 1)` is UB in C++17 when
+// O is signed (the shift lands a 1 in the sign bit). Common in practice:
+// reveal<int32_t>() on a value with bit 31 set, e.g. negative ints or
+// INT32_MIN. Accumulate into the matching unsigned type instead and
+// memcpy back — same bit pattern, no UB on either path.
 template<typename Wire>
 template<typename O>
 inline O BitVec_T<Wire>::reveal(int party) const {
 	if constexpr (std::is_same_v<O, std::string>) {
 		std::string out;
 		out.reserve(size());
-		bool* b = new bool[size()];
-		backend->reveal(b, party, bits.data(), size());
+		auto b = std::make_unique<bool[]>(size());
+		backend->reveal(b.get(), party, bits.data(), size());
 		for (size_t i = size(); i-- > 0; )
 			out += b[i] ? '1' : '0';
-		delete[] b;
 		return out;
 	} else {
 		static_assert(std::is_integral_v<O> || std::is_same_v<O, __uint128_t>
 		              || std::is_same_v<O, __int128>,
 		              "BitVec_T::reveal<O>(): O must be integral or std::string");
 		size_t n = std::min(sizeof(O) * 8, size());
-		bool* b = new bool[n];
-		backend->reveal(b, party, bits.data(), n);
-		O res = 0;
-		for (size_t i = 0; i < n; ++i)
-			if (b[i]) res = res | (O(1) << i);
-		delete[] b;
-		return res;
+		auto b = std::make_unique<bool[]>(n);
+		backend->reveal(b.get(), party, bits.data(), n);
+		if constexpr (std::is_unsigned_v<O> || std::is_same_v<O, __uint128_t>) {
+			// Unsigned arithmetic doesn't have the sign-bit-shift UB.
+			O res = 0;
+			for (size_t i = 0; i < n; ++i)
+				if (b[i]) res = res | (O(1) << i);
+			return res;
+		} else {
+			// Signed O: accumulate into the matching unsigned type so we
+			// never shift a 1 into the sign bit. __int128 isn't covered by
+			// std::make_unsigned in the standard, so spell that case manually.
+			using U = std::conditional_t<std::is_same_v<O, __int128>,
+			                             __uint128_t,
+			                             std::make_unsigned_t<O>>;
+			U acc = 0;
+			for (size_t i = 0; i < n; ++i)
+				if (b[i]) acc = acc | (U(1) << i);
+			O res;
+			std::memcpy(&res, &acc, sizeof(O));
+			return res;
+		}
 	}
 }
 
 template<typename Wire>
 inline void BitVec_T<Wire>::reveal(void* output, int party) const {
-	bool* b = new bool[size()];
-	backend->reveal(b, party, bits.data(), size());
-	bools_to_bits(output, b, size());
-	delete[] b;
+	auto b = std::make_unique<bool[]>(size());
+	backend->reveal(b.get(), party, bits.data(), size());
+	bools_to_bits(output, b.get(), size());
 }

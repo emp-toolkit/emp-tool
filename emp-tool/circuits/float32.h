@@ -8,6 +8,8 @@
 #include "emp-tool/circuits/circuit_file.h"
 #include <math.h>
 #include <array>
+#include <cstdint>
+#include <cstring>
 #include <string>
 #include <algorithm>
 namespace emp {

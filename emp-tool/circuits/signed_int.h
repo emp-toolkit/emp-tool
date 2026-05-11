@@ -4,8 +4,11 @@
 #include "emp-tool/circuits/unsigned_int.h"
 #include "emp-tool/circuits/sortable.h"
 #include "emp-tool/circuits/numeric_kernels.h"
+#include <cassert>
 #include <cmath>
+#include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 namespace emp {
 
@@ -40,7 +43,7 @@ class SignedInt_T : public BitVec_T<Wire>,
 	SignedInt_T(size_t width, T value, int party);
 
 	SignedInt_T(size_t width, const void* data, int party)
-	    : BitVec_T<Wire>(width, data, party) {}
+	    : BitVec_T<Wire>(enforced_data_width(width), data, party) {}
 
 	// Fixed-width ctors: SFINAE-gated to N > 0. Delegates to the
 	// runtime-width form so the sign-extension lives in one place.
@@ -56,8 +59,10 @@ class SignedInt_T : public BitVec_T<Wire>,
 	SignedInt_T(const void* data, int party)
 	    : BitVec_T<Wire>(N, data, party) {}
 
-	explicit SignedInt_T(const BitVec_T<Wire>& bv) : BitVec_T<Wire>(bv) {}
-	explicit SignedInt_T(BitVec_T<Wire>&& bv) : BitVec_T<Wire>(std::move(bv)) {}
+	explicit SignedInt_T(const BitVec_T<Wire>& bv)
+	    : BitVec_T<Wire>(enforce_bv_width(bv)) {}
+	explicit SignedInt_T(BitVec_T<Wire>&& bv)
+	    : BitVec_T<Wire>(std::move(enforce_bv_width(bv))) {}
 
 	UnsignedInt_T<Wire, N> as_unsigned() const;
 
@@ -92,6 +97,39 @@ class SignedInt_T : public BitVec_T<Wire>,
 	// `s` fractional bits) as IEEE-754 single-precision. Definition in
 	// float32.hpp; requires float32.h at the call site.
 	Float_T<Wire> to_float32(size_t s) const;
+
+private:
+	// Same set of fixed-width-N invariant guards as UnsignedInt_T —
+	// see the comments there. Lives in this class too so the body in
+	// signed_int.hpp can call resolved_runtime_width without crossing
+	// class boundaries.
+	static size_t resolved_runtime_width(size_t width) {
+		if constexpr (N > 0) {
+			assert(width == N &&
+			       "SignedInt_T<N>: runtime ctor width must equal N");
+			return N;
+		}
+		return width;
+	}
+
+	static size_t enforced_data_width(size_t width) {
+		if constexpr (N > 0) {
+			if (width != N)
+				throw std::runtime_error(
+				    "SignedInt_T<N>(width, data, party): width must equal N");
+		}
+		return width;
+	}
+
+	template<typename Bv>
+	static Bv&& enforce_bv_width(Bv&& bv) {
+		if constexpr (N > 0) {
+			if (bv.size() != N)
+				throw std::runtime_error(
+				    "SignedInt_T<N>(BitVec): bv.size() must equal N");
+		}
+		return std::forward<Bv>(bv);
+	}
 };
 
 // Convenience aliases for common fixed widths.

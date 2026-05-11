@@ -77,28 +77,40 @@ static bool blocks_eq(block a, block b) {
 	return _mm_testz_si128(d, d);
 }
 
-static bool check_against_openssl(int trials = 32, int blks_per = 17) {
+static bool check_against_openssl(int trials = 32) {
+	// permute_block chunks the input into 64-block batches internally. Sizes
+	// must straddle that boundary — 1 (single block), 64 (exactly one chunk),
+	// 65 (one chunk + one block), 128 (two full chunks), 257 (four chunks +
+	// one block) — so a regression that fails to advance the data pointer
+	// between chunks surfaces as a mismatch on the second chunk onwards.
+	const int sizes[] = {1, 17, 63, 64, 65, 128, 257};
 	PRG prg;
-	for (int t = 0; t < trials; ++t) {
-		uint8_t kb[16];
-		prg.random_data_unaligned(kb, 16);
-		block k = bytes_to_block(kb);
+	for (int blks_per : sizes) {
+		for (int t = 0; t < trials; ++t) {
+			uint8_t kb[16];
+			prg.random_data_unaligned(kb, 16);
+			block k = bytes_to_block(kb);
 
-		alignas(16) vector<block> in(blks_per);
-		prg.random_block(in.data(), blks_per);
-		alignas(16) vector<block> out = in;
+			alignas(16) vector<block> in(blks_per);
+			prg.random_block(in.data(), blks_per);
+			alignas(16) vector<block> out = in;
 
-		PRP prp(k);
-		prp.permute_block(out.data(), blks_per);
+			PRP prp(k);
+			prp.permute_block(out.data(), blks_per);
 
-		vector<uint8_t> ref(16 * blks_per);
-		openssl_aes128_ecb(kb, reinterpret_cast<const uint8_t *>(in.data()),
-		                   ref.data(), blks_per);
+			vector<uint8_t> ref(16 * blks_per);
+			openssl_aes128_ecb(kb, reinterpret_cast<const uint8_t *>(in.data()),
+			                   ref.data(), blks_per);
 
-		if (memcmp(out.data(), ref.data(), ref.size()) != 0) return false;
+			if (memcmp(out.data(), ref.data(), ref.size()) != 0) {
+				cout << "  FAIL permute_block vs OpenSSL  blks=" << blks_per
+				     << " trial=" << t << "\n";
+				return false;
+			}
+		}
 	}
 	cout << "  [permute_block vs OpenSSL AES-128-ECB]  OK   trials=" << trials
-	     << " blks/trial=" << blks_per << "\n";
+	     << " sizes={1,17,63,64,65,128,257}\n";
 	return true;
 }
 

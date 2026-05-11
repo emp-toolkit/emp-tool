@@ -1,7 +1,14 @@
+// Auto-generated from a Bristol-fashion float32 reference circuit. DO NOT
+// EDIT BY HAND. Each file is one template method on Float_T<Wire>; the
+// `gates[]` table holds flat (dest_wire, src1_wire, src2_wire, kind)
+// tuples that execute_circuit dispatches onto the active Backend.
+// Regenerate, don't tweak: hand-edits will be clobbered the next time
+// the circuit table changes.
+
 template<typename Wire>
 Float_T<Wire> Float_T<Wire>::log2() const {
 	Float_T<Wire> res(*this);
-	Bit_T<Wire> *B = new Bit_T<Wire>[17797];
+	std::vector<Bit_T<Wire>> B(17797);
 	for(int i = 0; i < 32; ++i) B[i] = value[i];
 	uint32_t gates[] = {
 28, 0, 32, 2, 
@@ -17770,8 +17777,7 @@ Float_T<Wire> Float_T<Wire>::log2() const {
 17764, 17748, 17795, 1, 
 17764, 17662, 17796, 1, 
 };
-	execute_circuit<uint32_t>(B, gates, sizeof(gates)/sizeof(uint32_t)/4);
+	execute_circuit<uint32_t>(B.data(), gates, sizeof(gates)/sizeof(uint32_t)/4);
 	for(int i = 0; i < 32; ++i) res[i] = B[17797-32+i];
-	delete[] B;
 	return res;
 }

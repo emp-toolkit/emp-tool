@@ -1,7 +1,14 @@
+// Auto-generated from a Bristol-fashion float32 reference circuit. DO NOT
+// EDIT BY HAND. Each file is one template method on Float_T<Wire>; the
+// `gates[]` table holds flat (dest_wire, src1_wire, src2_wire, kind)
+// tuples that execute_circuit dispatches onto the active Backend.
+// Regenerate, don't tweak: hand-edits will be clobbered the next time
+// the circuit table changes.
+
 template<typename Wire>
 Bit_T<Wire> Float_T<Wire>::equal(const Float_T<Wire> & rhs) const {
 	Float_T<Wire> res(*this);
-	Bit_T<Wire> *B = new Bit_T<Wire>[507];
+	std::vector<Bit_T<Wire>> B(507);
 	for(int i = 0; i < 32; ++i) B[i] = value[i];
 	for(int i = 0; i < 32; ++i) B[i+32] = rhs[i];
 	uint32_t gates[] = {
@@ -449,8 +456,7 @@ Bit_T<Wire> Float_T<Wire>::equal(const Float_T<Wire> & rhs) const {
 383, 0, 505, 2, 
 504, 505, 506, 0, 
 };
-	execute_circuit<uint32_t>(B, gates, sizeof(gates)/sizeof(uint32_t)/4);
+	execute_circuit<uint32_t>(B.data(), gates, sizeof(gates)/sizeof(uint32_t)/4);
 	Bit_T<Wire> ret = B[506];
-	delete[] B;
 	return ret;
 }

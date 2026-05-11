@@ -139,6 +139,15 @@ public:
 	// within each byte, see utils/block.h). Streamed in 8 KiB-of-bools chunks
 	// so the staging buffer fits comfortably on the stack regardless of the
 	// caller's buffer size.
+	//
+	// Security: bools_to_bits is a read-modify-write on the tail byte and
+	// preserves any high padding bits that come along (positions
+	// [batch%8 .. 8) in the last destination byte). With an uninitialized
+	// stack `buf`, those bits would leak stack contents onto the wire and
+	// make Fiat-Shamir transcripts non-deterministic for non-multiple-of-8
+	// lengths. Zero the one byte that bools_to_bits leaves partially-
+	// written before each pack. Whole-byte bytes get fully overwritten by
+	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
 	void send_bool(const bool *data, size_t length) {
 		if (length == 0) return;
 		constexpr size_t CHUNK_BOOLS = 8 * 1024;
@@ -146,6 +155,7 @@ public:
 		while (length > 0) {
 			size_t batch = length < CHUNK_BOOLS ? length : CHUNK_BOOLS;
 			size_t bytes = (batch + 7) / 8;
+			if (batch % 8 != 0) buf[bytes - 1] = 0;
 			bools_to_bits(buf, data, batch);
 			send_data(buf, bytes);
 			data += batch;

@@ -169,6 +169,33 @@ static bool check_shift_static() {
 	return true;
 }
 
+// Dynamic (secret) shift amount. Sweeps shamt across [0, 2*width); shamt
+// >= 32 exercises the overflow path — `<<` must zero, `>>` must sign-fill
+// (all bits = msb), per numeric_semantics.md.
+static bool check_shift_dynamic() {
+	std::vector<int32_t> vs = {0, 1, -1, 7, -7, INT32_MAX, INT32_MIN, 0x55555555, (int32_t)0xAAAAAAAA};
+	for (auto v : vs)
+		for (unsigned s = 0; s <= 65; ++s) {
+			SignedInt a(32, v, ALICE);
+			UnsignedInt sh(32, s, BOB);
+			int32_t want_l = shl_w(v, s);
+			int32_t want_r = shr_w(v, s);
+			int32_t got_l = (a << sh).reveal<int32_t>(PUBLIC);
+			int32_t got_r = (a >> sh).reveal<int32_t>(PUBLIC);
+			if (got_l != want_l) {
+				cout << "  FAIL << (dyn)  v=" << v << " s=" << s
+				     << " want=" << want_l << " got=" << got_l << "\n";
+				return false;
+			}
+			if (got_r != want_r) {
+				cout << "  FAIL >> (dyn)  v=" << v << " s=" << s
+				     << " want=" << want_r << " got=" << got_r << "\n";
+				return false;
+			}
+		}
+	return true;
+}
+
 static bool check_resize() {
 	// Sign-extend up.
 	for (int32_t v : {0, 1, -1, 7, -7, INT32_MIN, INT32_MAX}) {
@@ -229,6 +256,7 @@ static bool run_correctness() {
 	run("- (unary boundary)",check_unary_neg());
 	run("< <= > >= == !=",   check_compare_random());
 	run("<<  >>  (static)",  check_shift_static());
+	run("<<  >>  (dynamic)", check_shift_dynamic());
 	run("resize sign-extend",check_resize());
 	run("boundary wrap",     check_boundaries());
 	return ok;
@@ -252,6 +280,55 @@ static bool run_fixed_width() {
 	// Default-ctor sizes the wire vector to N.
 	Int64 z;
 	if (z.size() != 64) { cout << "  FAIL Int64 default-ctor size\n"; ok = false; }
+
+	// Runtime-width ctor with width == N: documented "you can pass width
+	// explicitly to disambiguate from the fixed-width form". Underlying
+	// BitVec must end up N bits.
+	Int32 explicit_w((size_t)32, -7, ALICE);
+	if (explicit_w.size() != 32) {
+		cout << "  FAIL Int32(width=32, ...) size: got " << explicit_w.size() << "\n";
+		ok = false;
+	}
+	if (explicit_w.reveal<int32_t>(PUBLIC) != -7) {
+		cout << "  FAIL Int32(width=32, ...) reveal\n"; ok = false;
+	}
+#ifdef NDEBUG
+	// Release-only: assert is compiled out; mismatched width must still
+	// normalize to N. See test_uint.cpp for the rationale.
+	Int32 width_mismatch((size_t)16, -7, ALICE);
+	if (width_mismatch.size() != 32) {
+		cout << "  FAIL Int32(width=16, ...) normalize: got "
+		     << width_mismatch.size() << " want 32\n";
+		ok = false;
+	}
+#endif
+
+	// Pointer-data and BitVec-converting ctors throw on mismatch in all
+	// build types — see test_uint.cpp's run_fixed_width for the rationale.
+	{
+		uint16_t two_bytes = 0xABCDu;
+		bool threw = false;
+		try {
+			Int32 bad((size_t)16, &two_bytes, ALICE);
+			(void)bad;
+		} catch (const std::runtime_error&) { threw = true; }
+		if (!threw) {
+			cout << "  FAIL Int32(width=16, void*) should throw\n";
+			ok = false;
+		}
+	}
+	{
+		BitVec_T<block> narrow(16, 0u, ALICE);
+		bool threw = false;
+		try {
+			Int32 bad(narrow);
+			(void)bad;
+		} catch (const std::runtime_error&) { threw = true; }
+		if (!threw) {
+			cout << "  FAIL Int32(BitVec(16)) should throw\n";
+			ok = false;
+		}
+	}
 
 	// 64-bit signed via implicit width.
 	Int64 v(-1ll, ALICE);

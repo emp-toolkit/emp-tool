@@ -87,22 +87,45 @@ inline UnsignedInt_T<Wire, N> UnsignedInt_T<Wire, N>::operator>>(size_t shamt) c
 	return UnsignedInt_T(BitVec_T<Wire>::operator>>(shamt));
 }
 
+// Dynamic-shamt shifts compose `need = ceil(log2(W))` muxes over the low
+// shamt bits, where each stage i conditionally shifts the running result
+// by 2^i. Any high shamt bit at index >= need means shamt >= 2^need >= W,
+// which the documented semantics (docs/numeric_semantics.md) require to
+// yield zero. We OR those high bits into an `overflow` flag and select
+// zero at the end; otherwise a regression like "shift by exactly W"
+// silently returns the input unchanged.
 template<typename Wire, size_t N>
 inline UnsignedInt_T<Wire, N> UnsignedInt_T<Wire, N>::operator<<(const UnsignedInt_T& shamt) const {
 	UnsignedInt_T res(*this);
-	size_t bound = std::min((size_t)std::ceil(std::log2((double)size())), shamt.size() - 1);
-	for (size_t i = 0; i < bound; ++i)
+	const size_t W = size();
+	const size_t need = (W <= 1) ? 0 : (size_t)std::ceil(std::log2((double)W));
+	const size_t use = std::min(need, shamt.size());
+	for (size_t i = 0; i < use; ++i)
 		res = res.select(shamt.bits[i], res << (size_t(1) << i));
-	return res;
+
+	Bit_T<Wire> overflow(false, PUBLIC);
+	for (size_t i = use; i < shamt.size(); ++i)
+		overflow = overflow | shamt.bits[i];
+
+	UnsignedInt_T zero(W, 0, PUBLIC);
+	return res.select(overflow, zero);
 }
 
 template<typename Wire, size_t N>
 inline UnsignedInt_T<Wire, N> UnsignedInt_T<Wire, N>::operator>>(const UnsignedInt_T& shamt) const {
 	UnsignedInt_T res(*this);
-	size_t bound = std::min((size_t)std::ceil(std::log2((double)size())), shamt.size() - 1);
-	for (size_t i = 0; i < bound; ++i)
+	const size_t W = size();
+	const size_t need = (W <= 1) ? 0 : (size_t)std::ceil(std::log2((double)W));
+	const size_t use = std::min(need, shamt.size());
+	for (size_t i = 0; i < use; ++i)
 		res = res.select(shamt.bits[i], res >> (size_t(1) << i));
-	return res;
+
+	Bit_T<Wire> overflow(false, PUBLIC);
+	for (size_t i = use; i < shamt.size(); ++i)
+		overflow = overflow | shamt.bits[i];
+
+	UnsignedInt_T zero(W, 0, PUBLIC);
+	return res.select(overflow, zero);
 }
 
 template<typename Wire, size_t N>

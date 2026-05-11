@@ -1,6 +1,7 @@
 #ifndef EMP_BITVEC_H__
 #define EMP_BITVEC_H__
 #include <algorithm>
+#include <memory>
 #include <type_traits>
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/core/utils.h"
