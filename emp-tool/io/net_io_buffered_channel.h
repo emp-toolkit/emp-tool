@@ -7,10 +7,13 @@
 
 #include <atomic>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 #include "emp-tool/io/io_channel.h"
 #include "emp-tool/io/tcp_socket.h"
 
+#include <errno.h>
 #include <unistd.h>
 
 namespace emp {
@@ -112,6 +115,16 @@ class NetIOBuffered : public IOChannel { public:
 		stream_buf = new char[NETWORK_BUFFER_SIZE];
 		send_buf   = new char[NETWORK_BUFFER_SIZE2];
 		stream = fdopen(sock, "wb+");
+		if (stream == nullptr) {
+			// Constructor is about to throw — ~NetIOBuffered() will not run.
+			// Release the two backing buffers and close the fd. POSIX:
+			// on fdopen failure the fd is still ours.
+			int saved_errno = errno;
+			::close(sock); sock = -1;
+			delete[] stream_buf; stream_buf = nullptr;
+			delete[] send_buf;   send_buf   = nullptr;
+			throw std::runtime_error(std::string("NetIOBuffered: fdopen failed: ") + std::strerror(saved_errno));
+		}
 		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
 	}
 

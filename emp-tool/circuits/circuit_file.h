@@ -5,9 +5,35 @@
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
 #include <fstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 using std::vector;
 namespace emp {
+
+// Bristol parsing — defensive validation.
+//
+// `.txt` circuit files are an interchange format and are routinely
+// loaded from third-party sources (Bristol's standard library, MPC
+// benchmark suites, generated/printed circuits). Trusting the header
+// counts or gate indices verbatim opens a CWE-121 stack smash (via
+// %s into a fixed buffer) and CWE-787 OOB write (via wire indices
+// that exceed num_wire). The parser below validates every field at
+// read time and throws std::runtime_error on malformed input.
+//
+// Validation policy:
+//   - num_gate, num_wire, fan-in/out counts must be >= 0.
+//   - %s scans are width-limited to the destination buffer minus 1.
+//   - fscanf return values are checked; short reads throw.
+//   - Per-gate arity ∈ {1, 2}; the type token must start with the
+//     letter matching the arity (A/X for 2, anything for arity-1 →
+//     NOT). Unknown values throw rather than leaving slots zero.
+//   - Every wire index emitted into `gates[]` satisfies idx < num_wire.
+
+inline void validate_wire_idx(int idx, int num_wire, const char *ctx) {
+	if (idx < 0 || idx >= num_wire)
+		throw std::runtime_error(std::string(ctx) + ": wire index out of range");
+}
 
 template<typename T, typename Wire>
 void execute_circuit(Bit_T<Wire> * wires, const T * gates, size_t num_gate) {
@@ -67,37 +93,57 @@ class BristolFormat { public:
 	}
 
 
-	// `(void)fscanf(...)` does not suppress glibc's _FORTIFY_SOURCE
-	// warn_unused_result decoration under GCC, so we localize the
-	// suppression here instead of pushing -Wno-unused-result PUBLIC
-	// onto every consumer of emp-tool.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
 	void from_file(FILE * f) {
-		int tmp;
-		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
-		(void)fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
+		if (fscanf(f, "%d%d\n", &num_gate, &num_wire) != 2)
+			throw std::runtime_error("BristolFormat: malformed header (num_gate num_wire)");
+		if (num_gate < 0 || num_wire < 0)
+			throw std::runtime_error("BristolFormat: negative num_gate or num_wire");
+		if (fscanf(f, "%d%d%d\n", &n1, &n2, &n3) != 3)
+			throw std::runtime_error("BristolFormat: malformed header (n1 n2 n3)");
+		if (n1 < 0 || n2 < 0 || n3 < 0)
+			throw std::runtime_error("BristolFormat: negative fan-in/out");
+		if ((long long)n1 + (long long)n2 > (long long)num_wire ||
+		    (long long)n3 > (long long)num_wire)
+			throw std::runtime_error("BristolFormat: fan-in/out exceeds num_wire");
 		(void)fscanf(f, "\n");
 		char str[200];
-		gates.resize(num_gate*4);
+		gates.resize((size_t)num_gate * 4);
 		for(int i = 0; i < num_gate; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			if (tmp == 2) {
-				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
-				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
+			int arity = 0;
+			if (fscanf(f, "%d", &arity) != 1)
+				throw std::runtime_error("BristolFormat: missing gate arity");
+			if (arity == 2) {
+				int fanout = 0; (void)fanout;
+				if (fscanf(f, "%d%d%d%d%199s",
+				           &fanout, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str) != 5)
+					throw std::runtime_error("BristolFormat: malformed 2-input gate");
+				validate_wire_idx(gates[4*i],   num_wire, "BristolFormat");
+				validate_wire_idx(gates[4*i+1], num_wire, "BristolFormat");
+				validate_wire_idx(gates[4*i+2], num_wire, "BristolFormat");
+				if (str[0] == 'A')      gates[4*i+3] = AND_GATE;
 				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
+				else throw std::runtime_error(std::string("BristolFormat: unknown 2-input gate type '") + str + "'");
 			}
-			else if (tmp == 1) {
-				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
+			else if (arity == 1) {
+				int fanout = 0; (void)fanout;
+				if (fscanf(f, "%d%d%d%199s",
+				           &fanout, &gates[4*i], &gates[4*i+2], str) != 4)
+					throw std::runtime_error("BristolFormat: malformed 1-input gate");
+				validate_wire_idx(gates[4*i],   num_wire, "BristolFormat");
+				validate_wire_idx(gates[4*i+2], num_wire, "BristolFormat");
+				gates[4*i+1] = 0;
 				gates[4*i+3] = NOT_GATE;
+			}
+			else {
+				throw std::runtime_error("BristolFormat: unsupported gate arity");
 			}
 		}
 	}
-#pragma GCC diagnostic pop
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
-		this->from_file(f);
+		if (!f) throw std::runtime_error(std::string("BristolFormat: cannot open ") + file);
+		try { this->from_file(f); } catch (...) { fclose(f); throw; }
 		fclose(f);
 	}
 
@@ -127,43 +173,70 @@ class BristolFashion { public:
 		this->from_file(file);
 	}
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
 	void from_file(FILE * f) {
-		int tmp;
-		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
+		if (fscanf(f, "%d%d\n", &num_gate, &num_wire) != 2)
+			throw std::runtime_error("BristolFashion: malformed header (num_gate num_wire)");
+		if (num_gate < 0 || num_wire < 0)
+			throw std::runtime_error("BristolFashion: negative num_gate or num_wire");
 		int niov = 0;
-		(void)fscanf(f, "%d", &niov);
+		int tmp = 0;
+		if (fscanf(f, "%d", &niov) != 1 || niov < 0)
+			throw std::runtime_error("BristolFashion: malformed input-vector count");
 		for(int i = 0; i < niov; ++i) {
-			(void)fscanf(f, "%d", &tmp);
+			if (fscanf(f, "%d", &tmp) != 1 || tmp < 0)
+				throw std::runtime_error("BristolFashion: malformed input-vector width");
+			if ((long long)num_input + (long long)tmp > (long long)num_wire)
+				throw std::runtime_error("BristolFashion: input widths exceed num_wire");
 			num_input += tmp;
 		}
-		(void)fscanf(f, "%d", &niov);
+		if (fscanf(f, "%d", &niov) != 1 || niov < 0)
+			throw std::runtime_error("BristolFashion: malformed output-vector count");
 		for(int i = 0; i < niov; ++i) {
-			(void)fscanf(f, "%d", &tmp);
+			if (fscanf(f, "%d", &tmp) != 1 || tmp < 0)
+				throw std::runtime_error("BristolFashion: malformed output-vector width");
+			if ((long long)num_output + (long long)tmp > (long long)num_wire)
+				throw std::runtime_error("BristolFashion: output widths exceed num_wire");
 			num_output += tmp;
 		}
 
 		char str[10];
-		gates.resize(num_gate*4);
+		gates.resize((size_t)num_gate * 4);
 		for(int i = 0; i < num_gate; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			if (tmp == 2) {
-				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
-				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
+			int arity = 0;
+			if (fscanf(f, "%d", &arity) != 1)
+				throw std::runtime_error("BristolFashion: missing gate arity");
+			if (arity == 2) {
+				int fanout = 0; (void)fanout;
+				if (fscanf(f, "%d%d%d%d%9s",
+				           &fanout, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str) != 5)
+					throw std::runtime_error("BristolFashion: malformed 2-input gate");
+				validate_wire_idx(gates[4*i],   num_wire, "BristolFashion");
+				validate_wire_idx(gates[4*i+1], num_wire, "BristolFashion");
+				validate_wire_idx(gates[4*i+2], num_wire, "BristolFashion");
+				if (str[0] == 'A')      gates[4*i+3] = AND_GATE;
 				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
+				else throw std::runtime_error(std::string("BristolFashion: unknown 2-input gate type '") + str + "'");
 			}
-			else if (tmp == 1) {
-				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
+			else if (arity == 1) {
+				int fanout = 0; (void)fanout;
+				if (fscanf(f, "%d%d%d%9s",
+				           &fanout, &gates[4*i], &gates[4*i+2], str) != 4)
+					throw std::runtime_error("BristolFashion: malformed 1-input gate");
+				validate_wire_idx(gates[4*i],   num_wire, "BristolFashion");
+				validate_wire_idx(gates[4*i+2], num_wire, "BristolFashion");
+				gates[4*i+1] = 0;
 				gates[4*i+3] = NOT_GATE;
+			}
+			else {
+				throw std::runtime_error("BristolFashion: unsupported gate arity");
 			}
 		}
 	}
-#pragma GCC diagnostic pop
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
-		this->from_file(f);
+		if (!f) throw std::runtime_error(std::string("BristolFashion: cannot open ") + file);
+		try { this->from_file(f); } catch (...) { fclose(f); throw; }
 		fclose(f);
 	}
 

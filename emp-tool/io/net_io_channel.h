@@ -7,6 +7,8 @@
 
 #include <atomic>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 #include "emp-tool/io/io_channel.h"
 #include "emp-tool/io/tcp_socket.h"
@@ -136,6 +138,18 @@ class NetIO : public IOChannel { public:
 		send_buf   = new char[NETWORK_BUFFER_SIZE2];
 		recv_buf   = new char[NETWORK_BUFFER_SIZE2];
 		stream = fdopen(sock, "wb");
+		if (stream == nullptr) {
+			// The constructor is about to throw — ~NetIO() will not run,
+			// so release everything we allocated above and close the fd
+			// before propagating. POSIX: on fdopen failure the fd is
+			// still ours to close.
+			int saved_errno = errno;
+			::close(sock); sock = -1;
+			delete[] stream_buf; stream_buf = nullptr;
+			delete[] send_buf;   send_buf   = nullptr;
+			delete[] recv_buf;   recv_buf   = nullptr;
+			throw std::runtime_error(std::string("NetIO: fdopen failed: ") + std::strerror(saved_errno));
+		}
 		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
 	}
 
