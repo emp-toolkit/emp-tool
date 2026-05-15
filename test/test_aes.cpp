@@ -169,6 +169,63 @@ static bool check_paraenc_template() {
 	return ok;
 }
 
+// Two-pointer ParaEnc<K,N>(dst, src, keys): byte-identical to the in-place
+// form. Validates that the new overload doesn't perturb output and that
+// callers can rely on dst[i] == in-place-encrypt(src)[i].
+template <int K, int N>
+static bool check_paraenc_template_out_of_place() {
+	PRG prg;
+	alignas(16) block keys[K];
+	alignas(16) block in[K * N];
+	prg.random_block(keys, K);
+	prg.random_block(in, K * N);
+
+	alignas(16) AES_KEY skeys[K];
+	AES_opt_key_schedule<K>(keys, skeys);
+
+	alignas(16) block ref[K * N];
+	memcpy(ref, in, sizeof(in));
+	ParaEnc<K, N>(ref, skeys);                // existing one-pointer baseline
+
+	alignas(16) block oop[K * N];
+	ParaEnc<K, N>(oop, in, skeys);            // new two-pointer overload
+
+	bool ok = memcmp(ref, oop, sizeof(ref)) == 0;
+	ostringstream os;
+	os << "  [ParaEnc<" << K << "," << N << ">(dst,src) vs in-place]";
+	cout << left << setw(42) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_paraenc_runtime_out_of_place(int K, int N, int trials = 4) {
+	PRG prg;
+	for (int t = 0; t < trials; ++t) {
+		vector<block> keys(K);
+		prg.random_block(keys.data(), K);
+		vector<block> in(K * N);
+		prg.random_block(in.data(), K * N);
+
+		vector<AES_KEY> skeys(K);
+		for (int k = 0; k < K; ++k)
+			AES_set_encrypt_key(keys[k], &skeys[k]);
+
+		vector<block> ref = in;
+		ParaEnc(ref.data(), skeys.data(), K, N);
+
+		vector<block> oop(K * N);
+		ParaEnc(oop.data(), in.data(), skeys.data(), K, N);
+
+		if (memcmp(ref.data(), oop.data(), 16 * K * N) != 0) {
+			cout << "  [ParaEnc(K=" << K << ",N=" << N << ")(dst,src) vs in-place]  FAIL  t=" << t << "\n";
+			return false;
+		}
+	}
+	ostringstream os;
+	os << "  [ParaEnc(K=" << K << ",N=" << N << ")(dst,src) vs in-place]";
+	cout << left << setw(42) << os.str() << "OK\n";
+	return true;
+}
+
 static bool check_paraenc_runtime(int K, int N, int trials = 4) {
 	PRG prg;
 	for (int t = 0; t < trials; ++t) {
@@ -216,6 +273,19 @@ static bool run_correctness() {
 	ok &= check_paraenc_runtime(1, 1);
 	ok &= check_paraenc_runtime(1, 17);   // exercises 8+4+2+1 dispatcher
 	ok &= check_paraenc_runtime(5, 11);
+
+	ok &= check_paraenc_template_out_of_place<1, 1>();
+	ok &= check_paraenc_template_out_of_place<1, 2>();
+	ok &= check_paraenc_template_out_of_place<1, 4>();
+	ok &= check_paraenc_template_out_of_place<1, 8>();
+	ok &= check_paraenc_template_out_of_place<1, 16>();
+	ok &= check_paraenc_template_out_of_place<2, 1>();
+	ok &= check_paraenc_template_out_of_place<2, 2>();
+	ok &= check_paraenc_template_out_of_place<2, 4>();
+	ok &= check_paraenc_template_out_of_place<4, 1>();
+	ok &= check_paraenc_template_out_of_place<4, 4>();
+	ok &= check_paraenc_runtime_out_of_place(1, 17);
+	ok &= check_paraenc_runtime_out_of_place(5, 11);
 	return ok;
 }
 

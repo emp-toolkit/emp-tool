@@ -21,8 +21,9 @@ inline block halfgates_garble(block LA0, block A1, block LB0, block B1,
                               block delta, block* table, MITCCRH<8>* mitccrh) {
 	bool pa = getLSB(LA0);
 	bool pb = getLSB(LB0);
-	block H[4] = {LA0, A1, LB0, B1};
-	mitccrh->hash_cir<2, 2>(H);
+	block in[4] = {LA0, A1, LB0, B1};
+	block H[4];
+	mitccrh->hash_cir<2, 2>(H, in);
 	block HLA0 = H[0], HA1 = H[1], HLB0 = H[2], HB1 = H[3];
 
 	table[0] = HLA0 ^ HA1 ^ (select_mask[pb] & delta);
@@ -37,8 +38,9 @@ inline block halfgates_eval(block A, block B, const block* table,
                             MITCCRH<8>* mitccrh) {
 	int sa = getLSB(A);
 	int sb = getLSB(B);
-	block H[2] = {A, B};
-	mitccrh->hash_cir<2, 1>(H);
+	block in[2] = {A, B};
+	block H[2];
+	mitccrh->hash_cir<2, 1>(H, in);
 	block W = H[0] ^ H[1];
 	W ^= (select_mask[sa] & table[0]);
 	W ^= (select_mask[sb] & table[1]);

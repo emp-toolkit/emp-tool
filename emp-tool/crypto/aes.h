@@ -172,14 +172,48 @@ static inline void aes_tiles_src(block *dst, Source&& src, const AES_KEY *kk) {
 	}
 }
 
-// Encrypt n_tiles tiles of L::N blocks each, in place, under a single key.
-// Round keys are broadcast to all lanes once per call.
+// Encrypt n_tiles tiles of L::N blocks each, under a single key. Callers
+// pass src == dst for the in-place case; the out-of-place no-overlap
+// contract is communicated by the public ParaEnc wrappers' __restrict__
+// parameters, propagated here through inlining.
 template <class L, int n_tiles>
 EMP_AES_TARGET_ATTR
-static inline void aes_tiles(block *p, const AES_KEY *kk) {
-	aes_tiles_src<L, n_tiles>(p,
-		[p](int t) -> typename L::vec_t { return L::load(p + (size_t)t * L::N); },
+static inline void aes_tiles(block *dst, const block *src, const AES_KEY *kk) {
+	aes_tiles_src<L, n_tiles>(dst,
+		[src](int t) -> typename L::vec_t { return L::load(src + (size_t)t * L::N); },
 		kk);
+}
+
+// Per-platform implementation core. Single body for in-place and out-of-place
+// — callers in this file forward through public ParaEnc wrappers that supply
+// the __restrict__ annotation where appropriate.
+template<int numKeys, int numEncs>
+EMP_AES_TARGET_ATTR
+static inline void ParaEnc_impl(block *dst, const block *src, const AES_KEY *keys) {
+#if EMP_AES_HAS_VAES512
+	constexpr int W4 = 4, N4 = numEncs / 4;
+#else
+	constexpr int W4 = 0, N4 = 0;
+#endif
+#if EMP_AES_HAS_VAES256
+	constexpr int W2 = 2, N2 = (numEncs - N4 * W4) / 2;
+#else
+	constexpr int W2 = 0, N2 = 0;
+#endif
+	constexpr int N1 = numEncs - N4 * W4 - N2 * W2;
+
+	for (size_t k = 0; k < numKeys; ++k) {
+		block * const pd = dst + k * (size_t)numEncs;
+		const block * const ps = src + k * (size_t)numEncs;
+		const AES_KEY * const kk = keys + k;
+#if EMP_AES_HAS_VAES512
+		if constexpr (N4 > 0) aes_tiles<Lane512, N4>(pd, ps, kk);
+#endif
+#if EMP_AES_HAS_VAES256
+		if constexpr (N2 > 0) aes_tiles<Lane256, N2>(pd + N4 * W4, ps + N4 * W4, kk);
+#endif
+		if constexpr (N1 > 0) aes_tiles<Lane128, N1>(pd + N4 * W4 + N2 * W2, ps + N4 * W4 + N2 * W2, kk);
+	}
 }
 
 }  // namespace detail
@@ -202,46 +236,28 @@ static inline void aes_tiles(block *p, const AES_KEY *kk) {
  *   - 1-block scalar tail (AES-NI).
  * Tiers absent at build time fall through to the next available width.
  */
-#ifdef __x86_64__
+#ifdef __aarch64__
+namespace detail {
+// aarch64 ParaEnc core. Round 0 reads from src; rounds 1..9 operate on dst.
+// In-place callers pass src == dst, which collapses round 0 to the original
+// in-place behavior (*cur = vaesmcq_u8(vaeseq_u8(*cur, K0))).
 template<int numKeys, int numEncs>
-EMP_AES_TARGET_ATTR
-static inline void ParaEnc(block *blks, const AES_KEY *keys) {
-	EMP_AES_ASSERT_ALIGNED(blks);
-	EMP_AES_ASSERT_ALIGNED(keys);
+static inline void ParaEnc_impl(block *dst, const block *src, const AES_KEY *keys) {
+	uint8x16_t * first_dst = (uint8x16_t*)(dst);
+	const uint8x16_t * first_src = (const uint8x16_t*)(src);
 
-#if EMP_AES_HAS_VAES512
-	constexpr int W4 = 4, N4 = numEncs / 4;
-#else
-	constexpr int W4 = 0, N4 = 0;
-#endif
-#if EMP_AES_HAS_VAES256
-	constexpr int W2 = 2, N2 = (numEncs - N4 * W4) / 2;
-#else
-	constexpr int W2 = 0, N2 = 0;
-#endif
-	constexpr int N1 = numEncs - N4 * W4 - N2 * W2;
-
-	for (size_t k = 0; k < numKeys; ++k) {
-		block * const p = blks + k * (size_t)numEncs;
-		const AES_KEY * const kk = keys + k;
-#if EMP_AES_HAS_VAES512
-		if constexpr (N4 > 0) detail::aes_tiles<detail::Lane512, N4>(p, kk);
-#endif
-#if EMP_AES_HAS_VAES256
-		if constexpr (N2 > 0) detail::aes_tiles<detail::Lane256, N2>(p + N4 * W4, kk);
-#endif
-		if constexpr (N1 > 0) detail::aes_tiles<detail::Lane128, N1>(p + N4 * W4 + N2 * W2, kk);
+	{
+		auto cur_dst = first_dst;
+		auto cur_src = first_src;
+		for(size_t i = 0; i < numKeys; ++i) {
+			uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[0]);
+			for(size_t j = 0; j < numEncs; ++j, ++cur_dst, ++cur_src)
+			   *cur_dst = vaesmcq_u8(vaeseq_u8(*cur_src, K));
+		}
 	}
-}
-#elif __aarch64__
-template<int numKeys, int numEncs>
-static inline void ParaEnc(block *blks, const AES_KEY *keys) {
-	EMP_AES_ASSERT_ALIGNED(blks);
-	EMP_AES_ASSERT_ALIGNED(keys);
-	uint8x16_t * first = (uint8x16_t*)(blks);
 
-	for (unsigned int r = 0; r < 9; ++r) {
-		auto cur = first;
+	for (unsigned int r = 1; r < 9; ++r) {
+		auto cur = first_dst;
 		for(size_t i = 0; i < numKeys; ++i) {
 			uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[r]);
 			for(size_t j = 0; j < numEncs; ++j, ++cur)
@@ -249,7 +265,7 @@ static inline void ParaEnc(block *blks, const AES_KEY *keys) {
 		}
 	}
 
-	auto cur = first;
+	auto cur = first_dst;
 	for(size_t i = 0; i < numKeys; ++i) {
 		uint8x16_t K = vreinterpretq_u8_m128i(keys[i].rd_key[9]);
 		uint8x16_t K2 = vreinterpretq_u8_m128i(keys[i].rd_key[10]);
@@ -257,7 +273,31 @@ static inline void ParaEnc(block *blks, const AES_KEY *keys) {
 			*cur = vaeseq_u8(*cur, K) ^ K2;
 	}
 }
+}  // namespace detail
 #endif
+
+// Public templated ParaEnc — in-place form (blks ← AES(blks)).
+template<int numKeys, int numEncs>
+EMP_AES_TARGET_ATTR
+static inline void ParaEnc(block *blks, const AES_KEY *keys) {
+	EMP_AES_ASSERT_ALIGNED(blks);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	detail::ParaEnc_impl<numKeys, numEncs>(blks, blks, keys);
+}
+
+// Public templated ParaEnc — out-of-place form (dst ← AES(src)).
+// dst and src must not overlap; the __restrict__ propagates into the impl
+// via inlining so the compiler can reorder loads/stores across iterations.
+template<int numKeys, int numEncs>
+EMP_AES_TARGET_ATTR
+static inline void ParaEnc(block * __restrict__ dst,
+                           const block * __restrict__ src,
+                           const AES_KEY *keys) {
+	EMP_AES_ASSERT_ALIGNED(dst);
+	EMP_AES_ASSERT_ALIGNED(src);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	detail::ParaEnc_impl<numKeys, numEncs>(dst, src, keys);
+}
 
 /*
  * Runtime-sized companion to ParaEnc<K, N>: encrypts N blocks under each
@@ -269,18 +309,38 @@ static inline void ParaEnc(block *blks, const AES_KEY *keys) {
  * tiling on N would require interleaved layouts. Hot callers that know
  * (K, N) at compile time should use ParaEnc<K, N> directly.
  */
+namespace detail {
+EMP_AES_TARGET_ATTR
+inline void ParaEnc_runtime_impl(block *dst, const block *src, const AES_KEY *keys, int K, int N) {
+	for (int k = 0; k < K; ++k) {
+		block *pd = dst + (size_t)k * N;
+		const block *ps = src + (size_t)k * N;
+		int n = N;
+		while (n >= 8) { ParaEnc_impl<1, 8>(pd, ps, keys + k); pd += 8; ps += 8; n -= 8; }
+		if (n >= 4)    { ParaEnc_impl<1, 4>(pd, ps, keys + k); pd += 4; ps += 4; n -= 4; }
+		if (n >= 2)    { ParaEnc_impl<1, 2>(pd, ps, keys + k); pd += 2; ps += 2; n -= 2; }
+		if (n >= 1)      ParaEnc_impl<1, 1>(pd, ps, keys + k);
+	}
+}
+}  // namespace detail
+
+// Runtime in-place form.
 EMP_AES_TARGET_ATTR
 inline void ParaEnc(block *blks, const AES_KEY *keys, int K, int N) {
 	EMP_AES_ASSERT_ALIGNED(blks);
 	EMP_AES_ASSERT_ALIGNED(keys);
-	for (int k = 0; k < K; ++k) {
-		block *p = blks + (size_t)k * N;
-		int n = N;
-		while (n >= 8) { ParaEnc<1, 8>(p, keys + k); p += 8; n -= 8; }
-		if (n >= 4)    { ParaEnc<1, 4>(p, keys + k); p += 4; n -= 4; }
-		if (n >= 2)    { ParaEnc<1, 2>(p, keys + k); p += 2; n -= 2; }
-		if (n >= 1)      ParaEnc<1, 1>(p, keys + k);
-	}
+	detail::ParaEnc_runtime_impl(blks, blks, keys, K, N);
+}
+
+// Runtime out-of-place form. dst and src must not overlap.
+EMP_AES_TARGET_ATTR
+inline void ParaEnc(block * __restrict__ dst,
+                    const block * __restrict__ src,
+                    const AES_KEY *keys, int K, int N) {
+	EMP_AES_ASSERT_ALIGNED(dst);
+	EMP_AES_ASSERT_ALIGNED(src);
+	EMP_AES_ASSERT_ALIGNED(keys);
+	detail::ParaEnc_runtime_impl(dst, src, keys, K, N);
 }
 
 // --- Single-key encrypt/decrypt wrappers ---
