@@ -77,12 +77,12 @@ class BristolFormat { public:
 
 	void to_file(const char * filename, const char * prefix) {
 		fout.open(filename);
-		fout << "int "<<string(prefix)+"_num_gate = "<<num_gate<<";\n";
-		fout << "int "<<string(prefix)+"_num_wire = "<<num_wire<<";\n";
-		fout << "int "<<string(prefix)+"_n1 = "<<n1<<";\n";
-		fout << "int "<<string(prefix)+"_n2 = "<<n2<<";\n";
-		fout << "int "<<string(prefix)+"_n3 = "<<n3<<";\n";
-		fout << "int "<<string(prefix)+"_gate_arr ["<< num_gate*4 <<"] = {\n";
+		fout << "int "<<std::string(prefix)+"_num_gate = "<<num_gate<<";\n";
+		fout << "int "<<std::string(prefix)+"_num_wire = "<<num_wire<<";\n";
+		fout << "int "<<std::string(prefix)+"_n1 = "<<n1<<";\n";
+		fout << "int "<<std::string(prefix)+"_n2 = "<<n2<<";\n";
+		fout << "int "<<std::string(prefix)+"_n3 = "<<n3<<";\n";
+		fout << "int "<<std::string(prefix)+"_gate_arr ["<< num_gate*4 <<"] = {\n";
 		for(int i = 0; i < num_gate; ++i) {
 			for(int j = 0; j < 4; ++j)
 				fout<<gates[4*i+j]<<", ";

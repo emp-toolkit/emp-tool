@@ -24,13 +24,17 @@ class CCRH: public PRP { public:
 	// needs a SIMD register; the architectural file holds 16–32 of them
 	// depending on the target). Callers wanting large batches should use
 	// Hn() below, or stay at n ≤ 16 where throughput peaks.
+	//
+	// H(x) = AES_K(σ(x)) ⊕ σ(x) (Davies–Meyer over σ). Compute σ(in)
+	// once into `pt`, AES it into `out` out-of-place, then XOR pt back
+	// — one σ pass instead of two and `out` is touched twice (AES write
+	// + XOR-back), not three times (σ write + AES read/write + XOR).
 	template<int n>
 	void H(block out[n], block in[n]) {
-		block tmp[n];
-		for (int i = 0; i < n; ++i)
-			tmp[i] = out[i] = sigma(in[i]);
-		permute_block(tmp, n);
-		xorBlocksTo_arr(out, tmp, n);
+		block pt[n];
+		for (int i = 0; i < n; ++i) pt[i] = sigma(in[i]);
+		ParaEnc<1, n>(out, pt, &aes);
+		xorBlocksTo_arr(out, pt, n);
 	}
 
 	void Hn(block*out, block* in, int length, block * scratch = nullptr) {

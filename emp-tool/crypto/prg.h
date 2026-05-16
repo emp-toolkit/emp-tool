@@ -170,23 +170,17 @@ class PRG { public:
 		// Caller must pass block-aligned `data` (16 bytes). random_data and
 		// random_data_unaligned wrap unaligned inputs.
 		//
-		// AES_BATCH_SIZE keeps the counter-write phase and the AES-encrypt
-		// phase touching the same cache lines while still hot in L1 (64
-		// blocks = 1 KiB = 16 lines, well under L1d). It also lets the
-		// runtime ParaEnc dispatcher amortize its per-call setup (round-key
-		// broadcasts on the VAES path) over more blocks per invocation.
+		// AES_BATCH_SIZE keeps the AES-encrypt phase's per-call setup
+		// (round-key broadcasts on the VAES path) amortized over many
+		// blocks; ParaCtrEnc builds counter plaintexts in-register and
+		// writes only the encrypted output to `data` — no intermediate
+		// counter-write pass.
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_block requires 16-byte aligned data");
-		const block one = makeBlock(0, 1);
 		while (nblocks > 0) {
 			int n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
-			block ctr = makeBlock(0, counter);
-			for (int j = 0; j < n; ++j) {
-				data[j] = ctr;
-				ctr = _mm_add_epi64(ctr, one);
-			}
+			detail::ParaCtrEnc(data, (int64_t)counter, &aes, n);
 			counter += n;
-			ParaEnc(data, &aes, 1, n);
 			data += n;
 			nblocks -= n;
 		}

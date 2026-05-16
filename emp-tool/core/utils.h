@@ -11,12 +11,16 @@
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
-using std::string;
+namespace emp {
 using std::chrono::time_point;
 using std::chrono::high_resolution_clock;
 
-namespace emp {
-inline void error(const char * s, int line = 0, const char * file = nullptr);
+// Defaults capture the caller's source location via __builtin_LINE /
+// __builtin_FILE — both evaluate at the call site, so an unadorned
+// `error("msg")` records where it fired.
+[[noreturn]] inline void error(const char * s,
+                               int line = __builtin_LINE(),
+                               const char * file = __builtin_FILE());
 
 inline void parse_party_and_port(const char * const * arg, int * party, int * port);
 

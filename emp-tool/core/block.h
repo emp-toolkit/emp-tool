@@ -23,9 +23,7 @@ inline block  sigma(block a);                     // [eprint 2019/074]
 inline block  set_bit(const block& a, int i);
 std::ostream& operator<<(std::ostream& out, const block& blk);
 
-extern const block zero_block;
-extern const block all_one_block;
-extern const block select_mask[2];
+// zero_block, all_one_block, select_mask[2]: defined in block.hpp.
 
 // --- XOR / compare --------------------------------------------------------
 

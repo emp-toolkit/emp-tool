@@ -7,10 +7,7 @@ inline double time_from(const time_point<high_resolution_clock>& s) {
 }
 
 inline void error(const char * s, int line, const char * file) {
-	fprintf(stderr, "%s\n", s);
-	if(file != nullptr) {
-		fprintf(stderr, "at %d, %s\n", line, file);
-	}
+	fprintf(stderr, "%s at %s:%d\n", s, file, line);
 	exit(1);
 }
 
