@@ -10,10 +10,8 @@ namespace emp {
 
 // Allocator that skips value-initialization for trivial types when
 // vector::resize(N) / vector(N) would otherwise zero each element.
-// Resize-then-overwrite patterns spend a surprising fraction of their
-// time in __bzero on memory that gets overwritten on the very next
-// line; this allocator drops that cost. Non-trivial types still go
-// through their default ctor.
+// Saves the bzero on memory that's about to be overwritten. Non-trivial
+// types still go through their default ctor.
 template <typename T, typename A = std::allocator<T>>
 class default_init_allocator : public A {
     using a_t = std::allocator_traits<A>;

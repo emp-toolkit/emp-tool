@@ -39,10 +39,10 @@ template <typename IO>
 static void run_correctness(IO *io, int party, const char *tag) {
 	// Stream of unaligned-byte sends: sends `length` bytes 1000 times in
 	// each direction, with `length` chosen to straddle the 32 KiB sender
-	// staging buffer (NETWORK_BUFFER_SIZE2/5 + 100) so most send_data calls
+	// staging buffer (NETWORK_STAGING_BUFFER_SIZE/5 + 100) so most send_data calls
 	// trigger a staging-overflow path.
 	{
-		int length = NETWORK_BUFFER_SIZE2 / 5 + 100;
+		int length = NETWORK_STAGING_BUFFER_SIZE / 5 + 100;
 		char *data = new char[length];
 		char *data2 = new char[length];
 		PRG prg(&zero_block);
@@ -104,7 +104,7 @@ static void run_correctness(IO *io, int party, const char *tag) {
 // or the 1 MiB stdio stream buffer) must still deliver its tail bytes to
 // the peer. Mirrors the IKNP receiver-role pattern where setup_recv ends
 // with ~4 KiB of OTCO::send writes and rcot_recv_end ends with check_x +
-// check_t — both ranges are below NETWORK_BUFFER_SIZE2 (32 KiB), so the
+// check_t — both ranges are below NETWORK_STAGING_BUFFER_SIZE (32 KiB), so the
 // only things that can move the bytes are an explicit flush() or ~IO.
 // Two checks, on two short-lived IOs that don't pollute the main channel:
 //   (a) explicit io.flush() drains a send-only batch.
@@ -116,7 +116,7 @@ static void run_correctness(IO *io, int party, const char *tag) {
 // -------------------------------------------------------------------------
 template <typename IO>
 static void run_send_only_regression(int port, int party, const char *tag) {
-	constexpr int N = 4096;            // well under NETWORK_BUFFER_SIZE2 (32 KiB)
+	constexpr int N = 4096;            // well under NETWORK_STAGING_BUFFER_SIZE (32 KiB)
 	char *data  = new char[N];
 	char *data2 = new char[N];
 	PRG prg(&zero_block);

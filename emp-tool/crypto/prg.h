@@ -170,17 +170,16 @@ class PRG { public:
 		// Caller must pass block-aligned `data` (16 bytes). random_data and
 		// random_data_unaligned wrap unaligned inputs.
 		//
-		// CHUNK keeps the counter-write phase and the AES-encrypt phase
-		// touching the same cache lines while still hot in L1 (CHUNK=64
+		// AES_BATCH_SIZE keeps the counter-write phase and the AES-encrypt
+		// phase touching the same cache lines while still hot in L1 (64
 		// blocks = 1 KiB = 16 lines, well under L1d). It also lets the
 		// runtime ParaEnc dispatcher amortize its per-call setup (round-key
 		// broadcasts on the VAES path) over more blocks per invocation.
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_block requires 16-byte aligned data");
-		constexpr int CHUNK = 64;
 		const block one = makeBlock(0, 1);
 		while (nblocks > 0) {
-			int n = nblocks < CHUNK ? nblocks : CHUNK;
+			int n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			block ctr = makeBlock(0, counter);
 			for (int j = 0; j < n; ++j) {
 				data[j] = ctr;

@@ -150,10 +150,9 @@ public:
 	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
 	void send_bool(const bool *data, size_t length) {
 		if (length == 0) return;
-		constexpr size_t CHUNK_BOOLS = 8 * 1024;
-		uint8_t buf[CHUNK_BOOLS / 8];
+		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
-			size_t batch = length < CHUNK_BOOLS ? length : CHUNK_BOOLS;
+			size_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
 			size_t bytes = (batch + 7) / 8;
 			if (batch % 8 != 0) buf[bytes - 1] = 0;
 			bools_to_bits(buf, data, batch);
@@ -165,10 +164,9 @@ public:
 
 	void recv_bool(bool *data, size_t length) {
 		if (length == 0) return;
-		constexpr size_t CHUNK_BOOLS = 8 * 1024;
-		uint8_t buf[CHUNK_BOOLS / 8];
+		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
-			size_t batch = length < CHUNK_BOOLS ? length : CHUNK_BOOLS;
+			size_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
 			size_t bytes = (batch + 7) / 8;
 			recv_data(buf, bytes);
 			bits_to_bools(data, buf, batch);

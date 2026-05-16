@@ -6,8 +6,8 @@
 //   PRP()                          zero-key constructor
 //   PRP(const char * key)          key from 16 raw bytes (loadu)
 //   PRP(const block & key)         key from a block
-//   aes_set_key(const block &)     re-key
 //   permute_block(blks, n)         n-block in-place AES-ECB
+// To re-key, reassign: prp = PRP(new_key).
 
 #include "emp-tool/emp-tool.h"
 
@@ -63,8 +63,8 @@ static void example() {
 	cout << "  PRP_k(1)                     = " << buf2[0] << "\n";
 	cout << "  PRP_k(2)                     = " << buf2[1] << "\n";
 
-	// (3) Re-key in place.
-	prp_k.aes_set_key(zero_block);
+	// (3) Re-key by reassignment.
+	prp_k = PRP(zero_block);
 	alignas(16) block buf3 = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
 	prp_k.permute_block(&buf3, 1);
 	cout << "  re-keyed to zero, PRP(...)   = " << buf3 << "\n";
@@ -151,12 +151,12 @@ static bool check_re_key_idempotent() {
 	block k1 = makeBlock(1, 2), k2 = makeBlock(3, 4);
 	PRP a(k1), b(k2);
 	alignas(16) block x = makeBlock(7, 8), y = x, z = x;
-	a.aes_set_key(k2);
+	a = PRP(k2);
 	a.permute_block(&x, 1);
 	b.permute_block(&y, 1);
 	bool ok = blocks_eq(x, y);
 	(void)z;
-	cout << "  [aes_set_key swaps key correctly]       " << (ok ? "OK" : "FAIL") << "\n";
+	cout << "  [re-key by reassignment matches fresh]  " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 

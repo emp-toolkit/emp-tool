@@ -1,26 +1,17 @@
 #ifndef EMP_TEST_MODE_H__
 #define EMP_TEST_MODE_H__
 
-// Test-mode toggle for wire-byte determinism. When enabled, every
-// randomness source in the toolkit (PRG()-default-construction,
-// Group::get_rand_bn) yields a deterministic byte stream so two runs
-// of the same protocol produce byte-identical wire output. Used to
-// verify that an optimization / refactor doesn't change the protocol's
-// observable behavior — run it once "before", once "after", diff the
-// recorded traces (see emp-tool/io/trace_io.h).
+// Test-mode toggle for wire-byte determinism. When enabled, default-
+// constructed randomness sources yield a deterministic byte stream so
+// two runs of the same protocol produce byte-identical wire output.
 //
 // Toggle:
 //   - $EMP_TEST_MODE=1 in the environment, OR
 //   - emp::set_test_mode(true) at program start.
 // First call to is_test_mode() caches the env-var read.
 //
-// Single-threaded determinism only. Multiple threads racing for seeds
-// from the global counter produce non-reproducible orderings; protocols
-// with internal threading need their own determinism contract.
-//
-// Cost when not in test mode: one cached atomic-bool load per PRG()
-// default-construction. Branch predicts perfectly; no measurable
-// overhead in production.
+// Single-threaded determinism only: multiple threads racing for seeds
+// from the global counter produce non-reproducible orderings.
 
 #include <atomic>
 #include <cstdint>

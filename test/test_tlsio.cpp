@@ -203,7 +203,7 @@ static TLSConfig make_cfg(int party) {
 // -------------------------------------------------------------------------
 static void run_correctness(TLSIO *io, int party) {
 	{
-		int length = NETWORK_BUFFER_SIZE2 / 5 + 100;
+		int length = NETWORK_STAGING_BUFFER_SIZE / 5 + 100;
 		char *data  = new char[length];
 		char *data2 = new char[length];
 		PRG prg(&zero_block);

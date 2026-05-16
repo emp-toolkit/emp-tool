@@ -134,9 +134,9 @@ class NetIO : public IOChannel { public:
 	void init_from_sock(int new_sock) {
 		sock = new_sock;
 		tcp::set_nodelay(sock);
-		stream_buf = new char[NETWORK_BUFFER_SIZE];
-		send_buf   = new char[NETWORK_BUFFER_SIZE2];
-		recv_buf   = new char[NETWORK_BUFFER_SIZE2];
+		stream_buf = new char[NETWORK_STREAM_BUFFER_SIZE];
+		send_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
+		recv_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
 		stream = fdopen(sock, "wb");
 		if (stream == nullptr) {
 			// The constructor is about to throw — ~NetIO() will not run,
@@ -150,7 +150,7 @@ class NetIO : public IOChannel { public:
 			delete[] recv_buf;   recv_buf   = nullptr;
 			throw std::runtime_error(std::string("NetIO: fdopen failed: ") + std::strerror(saved_errno));
 		}
-		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
+		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
 	}
 
 	void set_nodelay() { tcp::set_nodelay(sock); }
@@ -172,7 +172,7 @@ class NetIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
-		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
+		if (len + send_ptr <= (size_t)NETWORK_STAGING_BUFFER_SIZE) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {
@@ -198,7 +198,7 @@ class NetIO : public IOChannel { public:
 				// kernel has available — fread would block waiting for a
 				// full staging buffer's worth of bytes.
 				ssize_t n;
-				do { n = ::read(sock, recv_buf, NETWORK_BUFFER_SIZE2); }
+				do { n = ::read(sock, recv_buf, NETWORK_STAGING_BUFFER_SIZE); }
 				while (n < 0 && errno == EINTR);
 				if (n <= 0) { fprintf(stderr, "error: net_recv_data\n"); exit(1); }
 				recv_ptr = 0;

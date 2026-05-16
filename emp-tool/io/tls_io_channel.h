@@ -206,8 +206,8 @@ class TLSIO : public IOChannel { public:
 	void init_from_sock(int new_sock, const TLSConfig &cfg) {
 		sock = new_sock;
 		tcp::set_nodelay(sock);
-		send_buf = new char[NETWORK_BUFFER_SIZE2];
-		recv_buf = new char[NETWORK_BUFFER_SIZE2];
+		send_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
+		recv_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
 
 		ctx = SSL_CTX_new(TLS_method());
 		if (!ctx) tls_detail::die("SSL_CTX_new failed");
@@ -304,7 +304,7 @@ class TLSIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
-		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
+		if (len + send_ptr <= (size_t)NETWORK_STAGING_BUFFER_SIZE) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {
@@ -328,7 +328,7 @@ class TLSIO : public IOChannel { public:
 		size_t got = 0;
 		while (got < len) {
 			if (recv_ptr == recv_fill) {
-				size_t n = ssl_read_some(recv_buf, NETWORK_BUFFER_SIZE2);
+				size_t n = ssl_read_some(recv_buf, NETWORK_STAGING_BUFFER_SIZE);
 				if (n == 0) tls_detail::die("recv_data: peer closed");
 				recv_ptr = 0;
 				recv_fill = n;

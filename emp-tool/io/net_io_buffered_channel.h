@@ -112,8 +112,8 @@ class NetIOBuffered : public IOChannel { public:
 	void init_from_sock(int new_sock) {
 		sock = new_sock;
 		tcp::set_nodelay(sock);
-		stream_buf = new char[NETWORK_BUFFER_SIZE];
-		send_buf   = new char[NETWORK_BUFFER_SIZE2];
+		stream_buf = new char[NETWORK_STREAM_BUFFER_SIZE];
+		send_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
 		stream = fdopen(sock, "wb+");
 		if (stream == nullptr) {
 			// Constructor is about to throw — ~NetIOBuffered() will not run.
@@ -125,7 +125,7 @@ class NetIOBuffered : public IOChannel { public:
 			delete[] send_buf;   send_buf   = nullptr;
 			throw std::runtime_error(std::string("NetIOBuffered: fdopen failed: ") + std::strerror(saved_errno));
 		}
-		setvbuf(stream, stream_buf, _IOFBF, NETWORK_BUFFER_SIZE);
+		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
 	}
 
 	void set_nodelay() { tcp::set_nodelay(sock); }
@@ -149,7 +149,7 @@ class NetIOBuffered : public IOChannel { public:
 #endif
 		// Small writes accumulate in send_buf; oversized writes flush
 		// the staging buffer first then go straight to fwrite.
-		if (len + send_ptr <= (size_t)NETWORK_BUFFER_SIZE2) {
+		if (len + send_ptr <= (size_t)NETWORK_STAGING_BUFFER_SIZE) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {

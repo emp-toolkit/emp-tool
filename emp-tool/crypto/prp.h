@@ -17,27 +17,20 @@ class PRP { public:
 
 	// `key`, if non-null, must point to at least sizeof(block) (16) bytes.
 	PRP(const char * key = nullptr) {
-		if(key == nullptr) {
-			aes_set_key(zero_block);
-		} else {
-			aes_set_key(_mm_loadu_si128((const __m128i *)key));
-		}
+		AES_set_encrypt_key(
+			key == nullptr ? zero_block : _mm_loadu_si128((const __m128i *)key),
+			&aes);
 	}
 
 	PRP(const block& key) {
-		aes_set_key(key);
-	}
-
-	void aes_set_key(const block& v) {
-		AES_set_encrypt_key(v, &aes);
+		AES_set_encrypt_key(key, &aes);
 	}
 
 	void permute_block(block *data, int nblocks) {
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_block requires 16-byte aligned data");
-		constexpr int CHUNK = 64;
 		while (nblocks > 0) {
-			int n = nblocks < CHUNK ? nblocks : CHUNK;
+			int n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			ParaEnc(data, &aes, 1, n);
 			data    += n;
 			nblocks -= n;
