@@ -1,6 +1,7 @@
 #ifndef EMP_CONFIG_H__
 #define EMP_CONFIG_H__
 #include <cstddef>
+#include <cstdint>
 namespace emp {
 // Counter-mode AES tile size in blocks. Tuned for L1d locality and to
 // amortize ParaEnc's per-call setup (round-key broadcasts).
@@ -20,6 +21,10 @@ enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };
 
 // Bristol-format gate-type tags (the 4th int per gate record).
 enum GateType : int { AND_GATE = 0, XOR_GATE = 1, NOT_GATE = 2 };
+
+// Upper bound on a group point's serialized length on the wire.
+// EC points are ≤ ~129 bytes; this caps wire-corruption at recv.
+const static uint32_t MAX_POINT_BYTES = 2048;
 
 }
 #endif// CONFIG_H__

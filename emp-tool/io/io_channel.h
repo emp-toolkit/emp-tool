@@ -3,7 +3,7 @@
 #include "emp-tool/core/block.h"
 #include "emp-tool/crypto/hash.h"
 #include "emp-tool/crypto/prg.h"
-#include "emp-tool/group/group.h"
+#include "emp-tool/crypto/ec.h"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -100,20 +100,23 @@ public:
 
 	void send_pt(Point *A, size_t num_pts = 1) {
 		for (size_t i = 0; i < num_pts; ++i) {
-			size_t len = A[i].size();
+			const size_t len = A[i].size();
+			assert(len <= MAX_POINT_BYTES);
+			const uint32_t len_wire = static_cast<uint32_t>(len);
 			A[i].group()->resize_scratch(len);
 			unsigned char *tmp = A[i].group()->scratch();
-			send_data(&len, 4);
+			send_data(&len_wire, sizeof(len_wire));
 			A[i].to_bin(tmp, len);
 			send_data(tmp, len);
 		}
 	}
 
-	void recv_pt(Group *g, Point *A, size_t num_pts = 1) {
-		size_t len = 0;
+	void recv_pt(ECGroup *g, Point *A, size_t num_pts = 1) {
 		for (size_t i = 0; i < num_pts; ++i) {
-			recv_data(&len, 4);
-			assert(len <= 2048);
+			uint32_t len_wire = 0;
+			recv_data(&len_wire, sizeof(len_wire));
+			assert(len_wire <= MAX_POINT_BYTES);
+			const size_t len = len_wire;
 			g->resize_scratch(len);
 			unsigned char *tmp = g->scratch();
 			recv_data(tmp, len);

@@ -2,8 +2,8 @@
 
 How `test/*.cpp` files are structured. Read this when writing a new
 test file for a header under `emp-tool/core/`, `emp-tool/crypto/`,
-`emp-tool/group/`, `emp-tool/io/`, or `emp-tool/circuits/`, or when
-modifying an existing test.
+`emp-tool/io/`, or `emp-tool/circuits/`, or when modifying an existing
+test.
 
 ## One file per component
 

@@ -93,8 +93,7 @@ using namespace emp;
 ```
 emp-tool/
 ├── core/         block, constants, utils
-├── crypto/       PRG, PRP, AES, Hash, CCRH, MITCCRH, f2k
-├── group/        BigInt + elliptic-curve Group/Point (OpenSSL-backed)
+├── crypto/       PRG, PRP, AES, Hash, CCRH, MITCCRH, f2k, ec (Scalar/Point/ECGroup)
 ├── io/           IOChannel, NetIO, TLSIO, TraceIO
 ├── execution/    Backend interface, ClearBackend, HalfGate*, PrivacyFree*
 ├── circuits/     Bit, BitVec, UnsignedInt, SignedInt, Float (all templated on Wire), BristolFormat/Fashion

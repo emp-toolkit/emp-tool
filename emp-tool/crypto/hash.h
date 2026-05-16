@@ -2,7 +2,8 @@
 #define EMP_HASH_H__
 
 #include "emp-tool/core/block.h"
-#include "emp-tool/group/group.h"
+#include "emp-tool/core/utils.h"
+#include "emp-tool/crypto/ec.h"
 #include <openssl/evp.h>
 #include <stdio.h>
 

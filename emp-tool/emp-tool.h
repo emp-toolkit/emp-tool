@@ -24,7 +24,7 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 #include "emp-tool/crypto/mitccrh.h"
 #include "emp-tool/crypto/aes.h"
 #include "emp-tool/crypto/f2k.h"
-#include "emp-tool/group/group.h"
+#include "emp-tool/crypto/ec.h"
 #include "emp-tool/third_party/ThreadPool.h"
 
 #include "emp-tool/execution/backend.h"

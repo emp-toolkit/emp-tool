@@ -9,8 +9,8 @@ using namespace emp;
 
 
 int main() {
-	Group G;
-	BigInt ia, ib, ic, id;
+	ECGroup G;
+	Scalar ia, ib, ic, id;
 	G.get_rand_bn(ia);
 	G.get_rand_bn(ib);
 	G.get_rand_bn(ic);
@@ -48,9 +48,12 @@ int main() {
 		{"abc",              "0bb8b87485551aa43ed54f009230450b492fead5f1cc91658775dac4a3388a0f"},
 		{"abcdef0123456789", "65038ac8f2b1def042a5df0b33b1f4eca6bff7cb0f9c6c1526811864e544ed80"},
 	};
+	static constexpr const char kRFC9380DST[] =
+		"QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
 	for (const auto &v : vecs) {
 		Point P;
-		G.hash_to_point(v.msg, strlen(v.msg), P);
+		G.hash_to_point(v.msg, strlen(v.msg),
+		                kRFC9380DST, sizeof(kRFC9380DST) - 1, P);
 		BIGNUM *xb = BN_new(), *yb = BN_new();
 		EC_POINT_get_affine_coordinates(G.ec_group(), P.point(), xb, yb, G.bn_ctx());
 		char *xh = BN_bn2hex(xb);

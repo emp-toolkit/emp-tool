@@ -1,16 +1,18 @@
-#ifndef EMP_GROUP_OPENSSL_H__
-#define EMP_GROUP_OPENSSL_H__
-
+#include "emp-tool/crypto/ec.h"
 #include "emp-tool/core/test_mode.h"
+#include "emp-tool/core/utils.h"
 #include "emp-tool/crypto/prg.h"
+
 #include <openssl/evp.h>
 #include <algorithm>
+#include <cstring>
 #include <vector>
 
 namespace emp {
 
-// ===== RFC 9380 hash-to-curve helpers (P-256, SSWU_RO_) =====
-// expand_message_xmd with SHA-256 — RFC 9380 §5.3.1.
+namespace {
+
+// RFC 9380 §5.3.1 — expand_message_xmd with SHA-256.
 inline void expand_message_xmd_sha256(
 		unsigned char *out, size_t out_len,
 		const unsigned char *msg, size_t msg_len,
@@ -22,11 +24,10 @@ inline void expand_message_xmd_sha256(
 	size_t ell = (out_len + b_in_bytes - 1) / b_in_bytes;
 	if (ell > 255) error("H2C XMD ell");
 
-	// DST_prime = DST || I2OSP(len(DST), 1). Bounded above: dst_len ≤
-	// 255 (checked above) plus the appended length byte = 256.
+	// DST_prime = DST || I2OSP(len(DST), 1). dst_len ≤ 255 checked above.
 	constexpr size_t kMaxDstPrime = 256;
 	unsigned char dst_prime[kMaxDstPrime];
-	memcpy(dst_prime, dst, dst_len);
+	std::memcpy(dst_prime, dst, dst_len);
 	dst_prime[dst_len] = (unsigned char)dst_len;
 	size_t dst_prime_len = dst_len + 1;
 
@@ -57,8 +58,8 @@ inline void expand_message_xmd_sha256(
 	EVP_DigestUpdate(md, dst_prime, dst_prime_len);
 	EVP_DigestFinal_ex(md, bi, &outlen);
 
-	memcpy(out, bi, std::min(out_len, b_in_bytes));
-	memcpy(prev, bi, b_in_bytes);
+	std::memcpy(out, bi, std::min(out_len, b_in_bytes));
+	std::memcpy(prev, bi, b_in_bytes);
 
 	// b_i = H((b_0 XOR b_{i-1}) || I2OSP(i,1) || DST_prime), i=2..ell
 	for (size_t i = 2; i <= ell; i++) {
@@ -72,13 +73,13 @@ inline void expand_message_xmd_sha256(
 		EVP_DigestFinal_ex(md, bi, &outlen);
 
 		size_t off = (i - 1) * b_in_bytes;
-		memcpy(out + off, bi, std::min(out_len - off, b_in_bytes));
-		memcpy(prev, bi, b_in_bytes);
+		std::memcpy(out + off, bi, std::min(out_len - off, b_in_bytes));
+		std::memcpy(prev, bi, b_in_bytes);
 	}
 	EVP_MD_CTX_free(md);
 }
 
-// hash_to_field for P-256: count=2, L=48 (k=128 security).
+// RFC 9380 hash_to_field for P-256: count=2, L=48 (k=128 security).
 inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 		const unsigned char *msg, size_t msg_len,
 		const unsigned char *dst, size_t dst_len, BN_CTX *ctx) {
@@ -91,17 +92,16 @@ inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 	if (BN_mod(u1, u1, p, ctx) == 0)          error("hash_to_field: BN_mod u1");
 }
 
-// Simplified SWU for P-256, A=-3, Z=-10. Non-optimized version per §6.6.2.
-// Uses BN_mod_sqrt (Tonelli-Shanks); not constant-time, but P-256 has
-// p ≡ 3 (mod 4) so OpenSSL takes the fast (p+1)/4 path internally.
+// Simplified SWU for P-256, A=-3, Z=-10. RFC 9380 §6.6.2 non-optimized
+// version. Uses BN_mod_sqrt (Tonelli-Shanks); not constant-time, but
+// P-256 has p ≡ 3 (mod 4) so OpenSSL takes the fast (p+1)/4 path
+// internally.
 //
-// BN_mod_* return values aren't checked individually — they only fail on
-// OOM, which `error()` would catch via downstream null derefs / shape
-// mismatches anyway. The two failure modes that *can* hit valid inputs
-// — BN_mod_inverse on a non-invertible value and BN_mod_sqrt on a
-// non-residue — are checked explicitly. `error()` exits the process, so
-// the BN_free cleanup at the bottom is unreached on the error path; not
-// a leak in practice.
+// BN_mod_* return values aren't checked individually — they only fail
+// on OOM, which `error()` would catch via downstream null derefs.
+// The two failure modes that can hit valid inputs — non-invertible
+// BN_mod_inverse and BN_mod_sqrt on a non-residue — are checked
+// explicitly.
 inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		const BIGNUM *u, const BIGNUM *p, const BIGNUM *A, const BIGNUM *B,
 		const BIGNUM *Z, BN_CTX *ctx) {
@@ -169,93 +169,108 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	BN_free(x1); BN_free(gx); BN_free(y);
 }
 
-// ===== BigInt =====
-
-inline BigInt::BigInt() {
-	n_ = BN_new();
-	if (n_ == nullptr) error("BigInt: BN_new");
+// Z constant per curve, per RFC 9380 suite registry. Adding a curve =
+// a new branch here. P-256: Z = -10 (mod p).
+void sswu_z_for_curve(BIGNUM * z_out, const BIGNUM * p, int curve_nid) {
+	switch (curve_nid) {
+	case NID_X9_62_prime256v1:
+		BN_set_word(z_out, 10);
+		BN_sub(z_out, p, z_out);
+		return;
+	default:
+		error("hash_to_point: unsupported curve (no SSWU Z table entry)");
+	}
 }
-inline BigInt::BigInt(const BigInt &oth) {
+
+}  // namespace
+
+// ===== Scalar =====
+
+Scalar::Scalar() {
 	n_ = BN_new();
-	if (n_ == nullptr) error("BigInt: BN_new");
+	if (n_ == nullptr) error("Scalar: BN_new");
+}
+Scalar::Scalar(const Scalar &oth) {
+	n_ = BN_new();
+	if (n_ == nullptr) error("Scalar: BN_new");
 	BN_copy(n_, oth.n_);
 }
-inline BigInt::BigInt(BigInt && oth) noexcept : n_(oth.n_) {
+Scalar::Scalar(Scalar && oth) noexcept : n_(oth.n_) {
 	oth.n_ = nullptr;
 }
-inline BigInt & BigInt::operator=(BigInt oth) {
+Scalar & Scalar::operator=(Scalar oth) {
 	std::swap(n_, oth.n_);
 	return *this;
 }
-inline BigInt::~BigInt() {
+Scalar::~Scalar() {
 	if (n_ != nullptr) BN_free(n_);
 }
 
-inline int BigInt::size() const {
+int Scalar::size() const {
 	return BN_num_bytes(n_);
 }
 
-inline void BigInt::to_bin(unsigned char * out) const {
+void Scalar::to_bin(unsigned char * out) const {
 	BN_bn2bin(n_, out);
 }
 
-inline void BigInt::to_bin_padded(unsigned char * out, size_t fixed_len) const {
+void Scalar::to_bin_padded(unsigned char * out, size_t fixed_len) const {
 	int actual = BN_num_bytes(n_);
-	if ((size_t)actual > fixed_len) error("BigInt::to_bin_padded: number too large");
-	memset(out, 0, fixed_len - (size_t)actual);
+	if ((size_t)actual > fixed_len) error("Scalar::to_bin_padded: number too large");
+	std::memset(out, 0, fixed_len - (size_t)actual);
 	BN_bn2bin(n_, out + (fixed_len - (size_t)actual));
 }
 
-inline void BigInt::from_bin(const unsigned char * in, size_t length) {
+void Scalar::from_bin(const unsigned char * in, size_t length) {
 	if (n_ != nullptr) BN_free(n_);
 	n_ = BN_bin2bn(in, (int)length, nullptr);
-	if (n_ == nullptr) error("BigInt::from_bin: BN_bin2bn");
+	if (n_ == nullptr) error("Scalar::from_bin: BN_bin2bn");
 }
 
-inline BigInt BigInt::add(const BigInt &oth) const {
-	BigInt ret;
+Scalar Scalar::add(const Scalar &oth) const {
+	Scalar ret;
 	BN_add(ret.n_, n_, oth.n_);
 	return ret;
 }
 
-inline BigInt BigInt::mul_mod(const BigInt & b, const BigInt &m, BN_CTX *ctx) const {
-	BigInt ret;
+Scalar Scalar::mul_mod(const Scalar & b, const Scalar &m, BN_CTX *ctx) const {
+	Scalar ret;
 	BN_mod_mul(ret.n_, n_, b.n_, m.n_, ctx);
 	return ret;
 }
 
-inline BigInt BigInt::add_mod(const BigInt & b, const BigInt &m, BN_CTX *ctx) const {
-	BigInt ret;
+Scalar Scalar::add_mod(const Scalar & b, const Scalar &m, BN_CTX *ctx) const {
+	Scalar ret;
 	BN_mod_add(ret.n_, n_, b.n_, m.n_, ctx);
 	return ret;
 }
 
-inline BigInt BigInt::mul(const BigInt &oth, BN_CTX *ctx) const {
-	BigInt ret;
+Scalar Scalar::mul(const Scalar &oth, BN_CTX *ctx) const {
+	Scalar ret;
 	BN_mul(ret.n_, n_, oth.n_, ctx);
 	return ret;
 }
 
-inline BigInt BigInt::mod(const BigInt &oth, BN_CTX *ctx) const {
-	BigInt ret;
+Scalar Scalar::mod(const Scalar &oth, BN_CTX *ctx) const {
+	Scalar ret;
 	BN_mod(ret.n_, n_, oth.n_, ctx);
 	return ret;
 }
 
 // ===== Point =====
 
-inline Point::Point(Group * g) {
+Point::Point(ECGroup * g) {
 	if (g == nullptr) return;
 	group_ = g;
 	point_ = EC_POINT_new(g->ec_group());
 	if (point_ == nullptr) error("Point: EC_POINT_new");
 }
 
-inline Point::~Point() {
+Point::~Point() {
 	if (point_ != nullptr) EC_POINT_free(point_);
 }
 
-inline Point::Point(const Point & p) {
+Point::Point(const Point & p) {
 	if (p.group_ == nullptr) return;
 	group_ = p.group_;
 	point_ = EC_POINT_new(group_->ec_group());
@@ -263,26 +278,26 @@ inline Point::Point(const Point & p) {
 	if (EC_POINT_copy(point_, p.point_) == 0) error("ECC COPY");
 }
 
-inline Point::Point(Point && p) noexcept
+Point::Point(Point && p) noexcept
 		: point_(p.point_), group_(p.group_) {
 	p.point_ = nullptr;
 	p.group_ = nullptr;
 }
 
-inline Point& Point::operator=(Point p) {
+Point& Point::operator=(Point p) {
 	std::swap(p.point_, point_);
 	std::swap(p.group_, group_);
 	return *this;
 }
 
-inline void Point::to_bin(unsigned char * buf, size_t buf_len) const {
+void Point::to_bin(unsigned char * buf, size_t buf_len) const {
 	if (group_ == nullptr) error("Point::to_bin on uninitialized point");
 	int ret = EC_POINT_point2oct(group_->ec_group(), point_,
 	                             POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, group_->bn_ctx());
 	if (ret == 0) error("ECC TO_BIN");
 }
 
-inline size_t Point::size() const {
+size_t Point::size() const {
 	if (group_ == nullptr) error("Point::size on uninitialized point");
 	size_t ret = EC_POINT_point2oct(group_->ec_group(), point_,
 	                                POINT_CONVERSION_UNCOMPRESSED, NULL, 0, group_->bn_ctx());
@@ -290,11 +305,11 @@ inline size_t Point::size() const {
 	return ret;
 }
 
-inline void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len) {
+void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
 	if (g == nullptr) error("Point::from_bin: null group");
 	// If already initialized against a different group, drop the old
-	// point and re-allocate against `g`. Without this, the silent fall-
-	// through used the prior group's curve while ignoring `g`.
+	// point and re-allocate against `g`. Without this, the silent
+	// fall-through used the prior group's curve while ignoring `g`.
 	if (point_ != nullptr && group_ != g) {
 		EC_POINT_free(point_);
 		point_ = nullptr;
@@ -308,7 +323,7 @@ inline void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len
 	if (ret == 0) error("ECC FROM_BIN");
 }
 
-inline Point Point::add(const Point & rhs) const {
+Point Point::add(const Point & rhs) const {
 	if (group_ == nullptr) error("Point::add on uninitialized point");
 	if (rhs.group_ != group_) error("Point::add: group mismatch");
 	Point ret(group_);
@@ -317,7 +332,7 @@ inline Point Point::add(const Point & rhs) const {
 	return ret;
 }
 
-inline Point Point::mul(const BigInt &m) const {
+Point Point::mul(const Scalar &m) const {
 	if (group_ == nullptr) error("Point::mul on uninitialized point");
 	Point ret(group_);
 	int res = EC_POINT_mul(group_->ec_group(), ret.point_, NULL, point_, m.n(), group_->bn_ctx());
@@ -325,7 +340,7 @@ inline Point Point::mul(const BigInt &m) const {
 	return ret;
 }
 
-inline Point Point::inv() const {
+Point Point::inv() const {
 	if (group_ == nullptr) error("Point::inv on uninitialized point");
 	Point ret(*this);
 	int res = EC_POINT_invert(group_->ec_group(), ret.point_, group_->bn_ctx());
@@ -333,7 +348,7 @@ inline Point Point::inv() const {
 	return ret;
 }
 
-inline bool Point::operator==(const Point & rhs) const {
+bool Point::operator==(const Point & rhs) const {
 	if (group_ == nullptr || rhs.group_ == nullptr)
 		error("Point::operator== on uninitialized point");
 	if (rhs.group_ != group_) error("Point::operator==: group mismatch");
@@ -342,29 +357,27 @@ inline bool Point::operator==(const Point & rhs) const {
 	return (ret == 0);
 }
 
-// ===== Group =====
+// ===== ECGroup =====
 
-inline Group::Group(int curve_nid) : curve_nid_(curve_nid) {
+ECGroup::ECGroup(int curve_nid) : curve_nid_(curve_nid) {
 	ec_group_ = EC_GROUP_new_by_curve_name(curve_nid);
-	if (ec_group_ == nullptr) error("Group: unsupported curve NID");
+	if (ec_group_ == nullptr) error("ECGroup: unsupported curve NID");
 	bn_ctx_ = BN_CTX_new();
-	if (bn_ctx_ == nullptr) error("Group: BN_CTX_new");
+	if (bn_ctx_ == nullptr) error("ECGroup: BN_CTX_new");
 	if (EC_GROUP_get_order(ec_group_, order_.n(), bn_ctx_) == 0)
-		error("Group: EC_GROUP_get_order");
+		error("ECGroup: EC_GROUP_get_order");
 	scratch_ = new unsigned char[scratch_size_];
 }
 
-inline Group::~Group() {
+ECGroup::~ECGroup() {
 	// Manual frees first, nulled out so the (no-op) member dtors that
 	// run after this body can't observe stale handles.
 	if (ec_group_ != nullptr) { EC_GROUP_free(ec_group_); ec_group_ = nullptr; }
 	if (bn_ctx_ != nullptr)   { BN_CTX_free(bn_ctx_);     bn_ctx_   = nullptr; }
 	if (scratch_ != nullptr)  { delete[] scratch_;        scratch_  = nullptr; }
-	// order_ is destroyed by its member dtor; BN_free(order_.n_) doesn't
-	// need bn_ctx_, so the freed bn_ctx_ above is fine.
 }
 
-inline void Group::resize_scratch(size_t size) {
+void ECGroup::resize_scratch(size_t size) {
 	if (size > scratch_size_) {
 		delete[] scratch_;
 		scratch_size_ = size;
@@ -372,17 +385,17 @@ inline void Group::resize_scratch(size_t size) {
 	}
 }
 
-inline void Group::get_rand_bn(BigInt & n) {
+void ECGroup::get_rand_bn(Scalar & n) {
 	if (!is_test_mode()) {
 		BN_rand_range(n.n(), order_.n());
 		return;
 	}
 	// Test mode: deterministic uniform sample in [0, order_) via
-	// emp::PRG instead of OpenSSL's BN_rand_range (which pulls from
-	// OpenSSL's internal CSPRNG and is the only OpenSSL-randomness
-	// leak in the toolkit). Rejection sampling: draw n_bits-wide
-	// random bytes, retry if ≥ order_. P-256's order is just under
-	// 2^256, so the per-iteration reject probability is ≪ 1.
+	// emp::PRG instead of OpenSSL's BN_rand_range (the only
+	// OpenSSL-randomness leak in the toolkit). Rejection sampling:
+	// draw n_bits-wide random bytes, retry if ≥ order_. P-256's order
+	// is just under 2^256, so the per-iteration reject probability
+	// is ≪ 1.
 	thread_local PRG prg;
 	const int n_bits = BN_num_bits(order_.n());
 	const int n_bytes = (n_bits + 7) / 8;
@@ -394,43 +407,36 @@ inline void Group::get_rand_bn(BigInt & n) {
 		prg.random_data_unaligned(buf.data(), n_bytes);
 		buf[0] &= top_mask;
 		if (BN_bin2bn(buf.data(), n_bytes, n.n()) == nullptr)
-			error("Group::get_rand_bn: BN_bin2bn");
+			error("ECGroup::get_rand_bn: BN_bin2bn");
 	} while (BN_cmp(n.n(), order_.n()) >= 0);
 }
 
-inline Point Group::get_generator() {
+Point ECGroup::get_generator() {
 	Point res(this);
 	int ret = EC_POINT_copy(res.point_, EC_GROUP_get0_generator(ec_group_));
 	if (ret == 0) error("ECC GEN");
 	return res;
 }
 
-inline Point Group::mul_gen(const BigInt &m) {
+Point ECGroup::mul_gen(const Scalar &m) {
 	Point res(this);
 	int ret = EC_POINT_mul(ec_group_, res.point_, m.n(), NULL, NULL, bn_ctx_);
 	if (ret == 0) error("ECC GEN MUL");
 	return res;
 }
 
-inline void Group::hash_to_point(const char * msg, size_t length, Point & out) {
-	if (curve_nid_ != NID_X9_62_prime256v1)
-		error("hash_to_point: only P-256 supported (SSWU_RO_ params hardcoded)");
-
-	// Hardcoded to the canonical RFC 9380 §J.1.1 DST so the result can
-	// be validated against published test vectors. Lift to a parameter
-	// if you need per-protocol domain separation.
-	static const unsigned char DST[] =
-		"QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
-	const size_t dst_len = sizeof(DST) - 1;
-
+void ECGroup::hash_to_point(const char * msg, size_t length,
+                            const char * dst, size_t dst_len,
+                            Point & out) {
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
 	EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_);
-	BN_set_word(Z, 10); BN_sub(Z, p, Z);   // Z = -10 mod p
+	sswu_z_for_curve(Z, p, curve_nid_);
 
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
 	hash_to_field_p256(u0, u1, p,
-	                   reinterpret_cast<const unsigned char*>(msg),
-	                   length, DST, dst_len, bn_ctx_);
+	                   reinterpret_cast<const unsigned char*>(msg), length,
+	                   reinterpret_cast<const unsigned char*>(dst), dst_len,
+	                   bn_ctx_);
 
 	BIGNUM *x0 = BN_new(), *y0 = BN_new();
 	BIGNUM *x1 = BN_new(), *y1 = BN_new();
@@ -442,9 +448,9 @@ inline void Group::hash_to_point(const char * msg, size_t length, Point & out) {
 	EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_);
 	EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_);
 
-	// If `out` was previously bound to a different Group, drop it and
-	// re-allocate. Skipping this would add Q0+Q1 (in *this's curve)
-	// into out.point_ (in another curve) — undefined behavior.
+	// If `out` was previously bound to a different ECGroup, drop it
+	// and re-allocate. Skipping this would add Q0+Q1 (in *this's
+	// curve) into out.point_ (in another curve) — undefined behavior.
 	if (out.point_ != nullptr && out.group_ != this) {
 		EC_POINT_free(out.point_);
 		out.point_ = nullptr;
@@ -466,4 +472,3 @@ inline void Group::hash_to_point(const char * msg, size_t length, Point & out) {
 }
 
 }  // namespace emp
-#endif

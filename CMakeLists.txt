@@ -53,7 +53,8 @@ endif()
 # ---------------------------------------------------------------------
 set(emp_tool_sources
     emp-tool/emp-tool.cpp
-    emp-tool/circuits/circuit.cpp)
+    emp-tool/circuits/circuit.cpp
+    emp-tool/crypto/ec.cpp)
 
 # ---------------------------------------------------------------------
 # Library target
