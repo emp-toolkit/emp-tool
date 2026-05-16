@@ -8,9 +8,7 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 
 #include <thread>
 #include "emp-tool/io/io_channel.h"
-#include "emp-tool/io/mem_io_channel.h"
 #include "emp-tool/io/net_io_channel.h"
-#include "emp-tool/io/net_io_buffered_channel.h"
 #include "emp-tool/io/tls_io_channel.h"
 #include "emp-tool/io/trace_io.h"
 

@@ -22,26 +22,21 @@
 
 namespace emp {
 
-// TLSIO — single-socket full-duplex IOChannel that runs TLS 1.3 over
-// one TCP fd. The shape (32 KiB user-space coalescing send buffer,
-// 32 KiB recv staging, same flush contract, same single-thread-owned
-// discipline, same telemetry counters) is copied verbatim from NetIO;
-// only the wire primitives swap to SSL_write_ex / SSL_read_ex.
+// TLSIO — single-socket full-duplex IOChannel running TLS 1.3 over one
+// TCP fd. Same shape as NetIO (32 KiB user-space send + recv staging,
+// same flush contract, single-thread-owned, same telemetry counters);
+// the wire primitives are SSL_write_ex / SSL_read_ex.
 //
-// Why no BIO_f_buffer on top of the socket BIO: this class already
-// coalesces small writes into a 32 KiB staging buffer above SSL_write,
-// so each SSL_write produces at most one or two records — the place
-// where BIO_f_buffer would help is already covered. Adding it would
-// just force an extra BIO_flush in flush_unlocked for no win.
+// Why no BIO_f_buffer on top of the socket BIO: small writes are already
+// coalesced into the 32 KiB staging buffer above SSL_write, so each
+// SSL_write produces at most one or two records.
 //
 // Why per-channel SSL_CTX: simplest ownership model, no global state.
 // Callers that build hundreds of TLSIOs pay the per-channel cert parse
-// cost; if a profile ever shows that mattering, share an SSL_CTX
-// across channels via a thin factory. Out of scope today.
+// cost.
 //
 // Cert / key / CA material is caller-supplied via TLSConfig: PEM file
-// paths, no auto self-signed default. The same flush contract that
-// applies to NetIO applies here — see docs/io_channel.md.
+// paths, no auto self-signed default.
 
 struct TLSConfig {
 	// Role on the TLS handshake. Independent of the address-vs-port
@@ -155,9 +150,9 @@ class TLSIO : public IOChannel { public:
 		if (!quiet) std::cout << "TLS connected\n";
 	}
 
-	// Wrap an already-connected socket fd. The TLS-role bit is now
-	// independent of who accepted the TCP connection, so caller passes
-	// it explicitly.
+	// Wrap an already-connected socket fd. The TLS-role bit is
+	// independent of who accepted the TCP connection, so the caller
+	// passes it explicitly.
 	TLSIO(int existing_sock, bool is_tls_server,
 	      const TLSConfig &cfg, bool quiet = true)
 	    : quiet(quiet), is_tls_server(is_tls_server) {
@@ -287,8 +282,7 @@ class TLSIO : public IOChannel { public:
 	}
 
 	// 1-byte ping/pong handshake to verify both directions are alive.
-	// is_server (the TCP-acceptor bit) decides who sends first, matching
-	// NetIO. Works fine over TLS.
+	// is_server (the TCP-acceptor bit) decides who sends first.
 	void sync() override {
 		int tmp = 0;
 		if (is_server) {
@@ -321,8 +315,7 @@ class TLSIO : public IOChannel { public:
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. SSL_read goes straight to the socket BIO, no implicit
-		// drain, so this has to be explicit — same as NetIO's raw read
-		// path.
+		// drain, so this has to be explicit.
 		flush_unlocked();
 		bytes_recv += len;
 		size_t got = 0;
@@ -376,7 +369,7 @@ private:
 	// Read up to cap bytes via SSL_read_ex, retrying on WANT_READ /
 	// WANT_WRITE. Returns whatever's in the next decrypted record (one
 	// record at a time); 0 only on clean shutdown (caller treats as
-	// EOF). Same partial-fill semantics as NetIO's raw ::read refill.
+	// EOF).
 	size_t ssl_read_some(void *data, size_t cap) {
 		while (true) {
 			size_t got = 0;

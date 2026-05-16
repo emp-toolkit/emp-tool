@@ -8,7 +8,7 @@ file first, then load only the subdocs relevant to your task.
 emp-tool is the foundation of the EMP toolkit: a header-mostly C++
 library providing the circuit primitives (`Bit` / `BitVec` /
 `UnsignedInt` / `SignedInt` / `Float`), backend execution (clear /
-half-gate / privacy-free), IO channels (`NetIO`, `NetIOBuffered`), and
+half-gate / privacy-free), IO channels (`NetIO`, `TLSIO`), and
 crypto utilities (AES, hash, PRG, group ops) that the higher-level
 emp-ot, emp-sh2pc, emp-ag2pc, emp-agmpc protocols build on.
 

@@ -9,11 +9,9 @@
 
 namespace emp {
 
-// Privacy-free garbling. Same shape as half_gate.h: a base PrivacyFree
-// holding the io / constants / PRP and providing the asymmetry-free gate
-// ops, with PrivacyFreeGen / PrivacyFreeEva overriding `and_gate`.
-// feed / reveal stay as no-op stubs in emp-tool — OT-aware variants live
-// downstream.
+// Privacy-free garbling. PrivacyFree holds the io / constants / PRP and
+// the asymmetry-free gate ops; PrivacyFreeGen / PrivacyFreeEva override
+// `and_gate` with the garble / eval halves.
 
 inline block privacy_free_garble(block LA0, block A1, block LB0, block B1,
                                   block delta, block* table, uint64_t idx,

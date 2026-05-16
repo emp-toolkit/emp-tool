@@ -13,9 +13,7 @@ namespace emp {
 // surface (xor / not / public_label) that's identical between gen and eva,
 // plus a shared MITCCRH for the H-call. Concrete HalfGateGen and
 // HalfGateEva override `and_gate` with the garbling / evaluation
-// asymmetry. `feed` and `reveal` are stubbed at this layer because they
-// require OT, which lives in emp-ot — the OT-aware subclass there
-// overrides them.
+// asymmetry.
 
 inline block halfgates_garble(block LA0, block A1, block LB0, block B1,
                               block delta, block* table, MITCCRH<8>* mitccrh) {

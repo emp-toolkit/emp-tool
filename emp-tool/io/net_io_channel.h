@@ -24,30 +24,15 @@ namespace emp {
 // ::read() into its own 32 KiB staging buffer, no stdio. The two paths
 // share the fd but no libc-level state.
 //
-// A bidirectional-stdio variant (NetIOBuffered, in
-// net_io_buffered_channel.h) implements the same IOChannel contract.
-// Prefer NetIO for small-message workloads (per-recv FILE* lock matters);
-// NetIOBuffered for multi-MiB bulk transfers (one big stdio copy
-// amortizes the lock).
+// Flush contract: callers must call flush() at the end of any protocol
+// step that ends in sends, before returning to the caller or blocking
+// on anything other than a recv on this same NetIO. recv_data_internal
+// flushes implicitly, so mixed-direction patterns drain themselves; a
+// step that is purely sends strands its tail bytes otherwise. ~NetIO
+// also flushes, so "send-then-destruct" patterns work.
 //
-// Flush contract:
-//
-// Callers MUST call flush() at the end of any protocol step that ends
-// in sends, before returning to the caller or blocking on anything
-// other than a recv on this same NetIO. recv_data_internal calls
-// flush() at the top automatically, so mixed-direction patterns drain
-// themselves — but a step that is purely sends strands its tail bytes
-// in send_buf otherwise.
-//
-// ~NetIO also flushes, so pure "send-then-destruct" patterns work. A
-// long-lived NetIO that does a mid-life send-only step does not: the
-// destructor only fires at NetIO end-of-life, which doesn't happen
-// until the protocol completes, which can't complete because the peer
-// is blocked on bytes stuck in send_buf. Circular-wait deadlock, not
-// "data eventually arrives slowly".
-//
-// Rule of thumb: if the next thing you do on this NetIO isn't a recv,
-// flush first. test/test_netio.cpp encodes the contract.
+// Rule of thumb: if the next thing on this NetIO isn't a recv, flush
+// first.
 
 class NetIO : public IOChannel { public:
 	int sock = -1;
@@ -102,10 +87,8 @@ class NetIO : public IOChannel { public:
 		if (!quiet) std::cout << "connected\n";
 	}
 
-	// Wrap an already-connected socket fd. Useful for callers that run their
-	// own listener / accept loop (e.g. a multi-party mesh that dispatches
-	// inbound connections by peer id) and want to hand each accepted fd to a
-	// NetIO without going back through bind/listen/accept.
+	// Wrap an already-connected socket fd, for callers that run their
+	// own accept loop and want to skip bind/listen/accept.
 	NetIO(int existing_sock, bool quiet = true) : quiet(quiet) {
 		is_server = false;
 		init_from_sock(existing_sock);

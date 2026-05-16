@@ -2,8 +2,8 @@
 #define EMP_TRACE_IO_H__
 
 // IOChannel adapter that tees every wire byte to a pair of files
-// alongside delivering it to an underlying transport (NetIO, MemIO,
-// etc.). Use to record protocol traces for diff-based wire-equivalent
+// alongside delivering it to an underlying transport. Use to record
+// protocol traces for diff-based wire-equivalent
 // verification of refactors / optimizations:
 //
 //   1. Set EMP_TEST_MODE=1 (so all randomness is deterministic).

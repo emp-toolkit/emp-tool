@@ -12,22 +12,21 @@
 
 namespace emp {
 
-// Plaintext / circuit-printer backend. A wire (still `block`-shaped here so
-// existing emp-tool tests are unaffected) carries:
-//   - low 64 bits: a sentinel tag {P0, P1, S0, S1} encoding (public|private,
-//     value), and
-//   - high 64 bits: a gate id used when printing the circuit to file.
-//
-// When constructed with a non-empty filename, ClearBackend writes a circuit
-// in Bristol-fashion-ish format on `finalize()`; otherwise it just evaluates
-// in plaintext.
+// Plaintext / circuit-printer backend. A wire carries:
+//   - gid:        Bristol gate id (only meaningful for private wires)
+//   - is_public:  1 = public constant, 0 = private share
+//   - value:      0 or 1
+// With a non-empty filename, ClearBackend writes the circuit in Bristol-
+// fashion-ish format on `finalize()`; otherwise it just evaluates in
+// plaintext.
+struct ClearWire {
+	uint64_t gid;
+	uint32_t is_public;
+	uint32_t value;
+};
+
 class ClearBackend : public Backend {
 public:
-	static constexpr uint64_t P1 = 1;
-	static constexpr uint64_t P0 = 2;
-	static constexpr uint64_t S0 = 3;
-	static constexpr uint64_t S1 = 4;
-
 	int64_t gid = 0;
 	uint64_t gates = 0, ands = 0;
 	uint64_t n1 = 0, n2 = 0, n3 = 0;
@@ -41,17 +40,11 @@ public:
 	};
 	std::vector<OutputRef> output_indices;
 
-	block public_one_blk, public_zero_blk;
+	static constexpr ClearWire public_one  { /*gid=*/0, /*is_public=*/1, /*value=*/1 };
+	static constexpr ClearWire public_zero { /*gid=*/0, /*is_public=*/1, /*value=*/0 };
 
 	explicit ClearBackend(const std::string& filename_ = "")
 	    : Backend(PUBLIC), filename(filename_) {
-		public_one_blk = zero_block;
-		public_zero_blk = zero_block;
-		auto* a = reinterpret_cast<uint64_t*>(&public_one_blk);
-		a[0] = P1;
-		a = reinterpret_cast<uint64_t*>(&public_zero_blk);
-		a[0] = P0;
-
 		print = !filename.empty();
 		if (print) {
 			fout.open(filename);
@@ -66,76 +59,53 @@ public:
 		if (fout.is_open()) fout.close();
 	}
 
-	size_t wire_bytes() const override { return sizeof(block); }
+	size_t wire_bytes() const override { return sizeof(ClearWire); }
 
 	void public_label(void* out, bool b) override {
-		*static_cast<block*>(out) = b ? public_one_blk : public_zero_blk;
-	}
-
-	bool get_value(const block& w) const {
-		auto* a = reinterpret_cast<const uint64_t*>(&w);
-		return !(a[0] == S0 || a[0] == P0);
+		*static_cast<ClearWire*>(out) = b ? public_one : public_zero;
 	}
 
 	void and_gate(void* out, const void* l_, const void* r_) override {
-		const block& l = *static_cast<const block*>(l_);
-		const block& r = *static_cast<const block*>(r_);
-		auto* la = reinterpret_cast<const uint64_t*>(&l);
-		auto* ra = reinterpret_cast<const uint64_t*>(&r);
+		const ClearWire& l = *static_cast<const ClearWire*>(l_);
+		const ClearWire& r = *static_cast<const ClearWire*>(r_);
+		ClearWire& o = *static_cast<ClearWire*>(out);
 
-		if (la[0] == P1) { *static_cast<block*>(out) = r; return; }
-		if (ra[0] == P1) { *static_cast<block*>(out) = l; return; }
-		if (la[0] == P0 || ra[0] == P0) {
-			*static_cast<block*>(out) = public_zero_blk;
-			return;
-		}
-		block res = zero_block;
-		auto* a = reinterpret_cast<uint64_t*>(&res);
-		a[0] = (la[0] == S0 || ra[0] == S0) ? S0 : S1;
-		a[1] = static_cast<uint64_t>(gid);
+		if (l.is_public) { o = l.value ? r : public_zero; return; }
+		if (r.is_public) { o = r.value ? l : public_zero; return; }
+		o = ClearWire{ static_cast<uint64_t>(gid), 0, l.value & r.value };
 		if (print)
-			fout << "2 1 " << la[1] << ' ' << ra[1] << ' ' << gid << " AND\n";
+			fout << "2 1 " << l.gid << ' ' << r.gid << ' ' << gid << " AND\n";
 		++gid; ++gates; ++ands;
-		*static_cast<block*>(out) = res;
 	}
 
 	void xor_gate(void* out, const void* l_, const void* r_) override {
-		const block& l = *static_cast<const block*>(l_);
-		const block& r = *static_cast<const block*>(r_);
-		auto* la = reinterpret_cast<const uint64_t*>(&l);
-		auto* ra = reinterpret_cast<const uint64_t*>(&r);
+		const ClearWire& l = *static_cast<const ClearWire*>(l_);
+		const ClearWire& r = *static_cast<const ClearWire*>(r_);
+		ClearWire& o = *static_cast<ClearWire*>(out);
 
-		if (la[0] == P1) { not_gate(out, r_); return; }
-		if (ra[0] == P1) { not_gate(out, l_); return; }
-		if (la[0] == P0) { *static_cast<block*>(out) = r; return; }
-		if (ra[0] == P0) { *static_cast<block*>(out) = l; return; }
-		block res = zero_block;
-		auto* a = reinterpret_cast<uint64_t*>(&res);
-		a[0] = (la[0] == ra[0]) ? S0 : S1;
-		a[1] = static_cast<uint64_t>(gid);
+		if (l.is_public && l.value) { not_gate(out, r_); return; }
+		if (r.is_public && r.value) { not_gate(out, l_); return; }
+		if (l.is_public)            { o = r; return; }
+		if (r.is_public)            { o = l; return; }
+		o = ClearWire{ static_cast<uint64_t>(gid), 0, l.value ^ r.value };
 		if (print)
-			fout << "2 1 " << la[1] << ' ' << ra[1] << ' ' << gid << " XOR\n";
+			fout << "2 1 " << l.gid << ' ' << r.gid << ' ' << gid << " XOR\n";
 		++gid; ++gates;
-		*static_cast<block*>(out) = res;
 	}
 
 	void not_gate(void* out, const void* in_) override {
-		const block& in = *static_cast<const block*>(in_);
-		auto* ia = reinterpret_cast<const uint64_t*>(&in);
-		if (ia[0] == P1) { *static_cast<block*>(out) = public_zero_blk; return; }
-		if (ia[0] == P0) { *static_cast<block*>(out) = public_one_blk;  return; }
-		block res = zero_block;
-		auto* a = reinterpret_cast<uint64_t*>(&res);
-		a[0] = (ia[0] == S0) ? S1 : S0;
-		a[1] = static_cast<uint64_t>(gid);
+		const ClearWire& in = *static_cast<const ClearWire*>(in_);
+		ClearWire& o = *static_cast<ClearWire*>(out);
+
+		if (in.is_public) { o = in.value ? public_zero : public_one; return; }
+		o = ClearWire{ static_cast<uint64_t>(gid), 0, in.value ^ 1u };
 		if (print)
-			fout << "1 1 " << ia[1] << ' ' << gid << " INV\n";
+			fout << "1 1 " << in.gid << ' ' << gid << " INV\n";
 		++gid; ++gates;
-		*static_cast<block*>(out) = res;
 	}
 
 	void feed(void* out, int from_party, const bool* in, size_t n) override {
-		auto* lbls = static_cast<block*>(out);
+		auto* lbls = static_cast<ClearWire*>(out);
 		if (from_party == PUBLIC) {
 			for (size_t i = 0; i < n; ++i)
 				public_label(&lbls[i], in[i]);
@@ -148,14 +118,13 @@ public:
 	}
 
 	void reveal(bool* out, int /*to_party*/, const void* in_, size_t n) override {
-		const block* lbls = static_cast<const block*>(in_);
+		const ClearWire* lbls = static_cast<const ClearWire*>(in_);
 		for (size_t i = 0; i < n; ++i) {
-			auto* a = reinterpret_cast<const uint64_t*>(&lbls[i]);
-			bool val = get_value(lbls[i]);
-			bool is_pub = (a[0] == P0 || a[0] == P1);
+			const bool is_pub = (lbls[i].is_public != 0);
+			const bool val    = (lbls[i].value != 0);
 			output_indices.push_back({is_pub, val,
 			                          is_pub ? int64_t{0}
-			                                 : static_cast<int64_t>(a[1])});
+			                                 : static_cast<int64_t>(lbls[i].gid)});
 			out[i] = val;
 		}
 		n3 += n;
@@ -204,12 +173,8 @@ public:
 	}
 
 private:
-	block private_label(bool v) {
-		block res = zero_block;
-		auto* a = reinterpret_cast<uint64_t*>(&res);
-		a[0] = v ? S1 : S0;
-		a[1] = static_cast<uint64_t>(gid++);
-		return res;
+	ClearWire private_label(bool v) {
+		return ClearWire{ static_cast<uint64_t>(gid++), 0, v ? 1u : 0u };
 	}
 };
 

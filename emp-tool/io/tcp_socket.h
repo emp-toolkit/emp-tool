@@ -18,8 +18,7 @@ namespace tcp {
 
 // Bind, listen, accept once, return the accepted fd. Closes the
 // listener after a single accept — every transport here is one-channel-
-// per-port. Fail-fast on bind/listen errors to match NetIO's existing
-// behavior.
+// per-port. Fail-fast on bind/listen errors.
 inline int server_listen(int port) {
 	struct sockaddr_in dest, serv;
 	socklen_t socksize = sizeof(struct sockaddr_in);
@@ -44,9 +43,8 @@ inline int server_listen(int port) {
 }
 
 // Connect to address:port, retrying on failure with a 1 ms backoff so
-// the server side has time to come up. Same retry-forever loop the
-// pre-extraction NetIO had — callers are expected to time out at a
-// higher level if needed.
+// the server side has time to come up. Retries forever — callers are
+// expected to time out at a higher level if needed.
 inline int client_connect(const char *address, int port) {
 	struct sockaddr_in dest;
 	std::memset(&dest, 0, sizeof(dest));

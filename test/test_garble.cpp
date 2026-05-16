@@ -43,20 +43,6 @@ void test(T* netio) {
 		delete aio;
 		delete backend; backend = nullptr;
 
-		MemIO* mio = new MemIO();
-		backend = new HalfGateGen(mio);
-
-		start = clock_start();
-		for (int i = 0; i < N/5; ++i) {
-			mio->clear();
-			for (int j = 0; j < 5; ++j)
-				cf.compute(c, a, b);
-		}
-		interval = time_from(start);
-		cout << "AES garbling + Writing to Memory : " << N * 6800 / interval << " million gate per second\n";
-		delete mio;
-		delete backend; backend = nullptr;
-
 		backend = new HalfGateGen(netio);
 
 		start = clock_start();

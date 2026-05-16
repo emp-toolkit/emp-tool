@@ -16,31 +16,19 @@ namespace emp {
 // / recv_data_internal; everything else (block / point / packed-bool helpers,
 // byte counter, optional Fiat-Shamir transcript) is inherited.
 //
-// The previous CRTP base (IOChannel<T>) made every consumer of IO a template
-// (HalfGateGen<T>, BristolFashion::compute<T>, etc.) to dodge a virtual call
-// per send_data. Per-call cost in practice is dominated by stdio locks +
-// syscalls, not function-call indirection, so the template tax was paying
-// for nothing measurable. Switching to a virtual base costs ~1 indirect call
-// per send_data and frees the rest of the toolkit to be non-templated.
-//
 // Fiat-Shamir support: enable_fs(send_first) turns on TWO SHA-256
 // transcripts — one absorbing every byte sent (direction self→peer),
-// one absorbing every byte received (peer→self). The send-first party
-// passes true; the other party passes false (e.g. for NetIO, use
-// is_server, or for emp-ot protocols, party == ALICE).
+// one absorbing every byte received (peer→self). Exactly one party
+// passes true.
 //
 // get_digest() returns the first block of H(d_AB ‖ d_BA), where d_AB
 // is the A→B wire digest and d_BA is the B→A digest. Both parties
-// produce the same value: the send_first side computes
-// H(my_send ‖ my_recv), the other side H(my_recv ‖ my_send), and
-// my_send/my_recv just swap meanings between the two parties.
-// Robust against protocols that batch sends asymmetrically (e.g.
-// PVW's two-round structure) because we hash per-direction, not
-// per-call-site.
+// produce the same value: the send_first side concatenates my_send
+// first, the other side concatenates my_recv first, and the meanings
+// swap between the two parties. Hashing per-direction (not per
+// call-site) is robust against protocols that batch sends asymmetrically.
 //
-// Off by default — one predictable branch per send/recv when off,
-// invisible vs syscall cost. Mirrors IKNP-malicious / ferret-malicious's
-// chi-binding pattern.
+// Off by default.
 
 class IOChannel {
 public:
@@ -51,14 +39,12 @@ public:
 	virtual void send_data_internal(const void *data, size_t nbyte) = 0;
 	virtual void recv_data_internal(void *data, size_t nbyte) = 0;
 
-	// Drain any outbound buffer to the underlying transport. NetIO needs
-	// this to push staged TCP writes; MemIO and other in-memory transports
-	// have nothing to flush, so the default is a no-op.
+	// Drain any outbound buffer to the underlying transport. Default
+	// is a no-op for transports with nothing to flush.
 	virtual void flush() {}
 
-	// Optional barrier — implementations that need a wire-level handshake
-	// (NetIO does a 1-byte ping/pong) override; in-memory transports
-	// default to no-op.
+	// Optional wire-level handshake (e.g. 1-byte ping/pong). Default
+	// no-op for transports that don't need one.
 	virtual void sync() {}
 
 	// Turn on Fiat-Shamir transcript hashing. `send_first` selects which

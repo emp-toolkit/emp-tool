@@ -95,7 +95,7 @@ emp-tool/
 ├── core/         block, constants, utils
 ├── crypto/       PRG, PRP, AES, Hash, CCRH, MITCCRH, f2k
 ├── group/        BigInt + elliptic-curve Group/Point (OpenSSL-backed)
-├── io/           IOChannel, NetIO, MemIO
+├── io/           IOChannel, NetIO, TLSIO, TraceIO
 ├── execution/    Backend interface, ClearBackend, HalfGate*, PrivacyFree*
 ├── circuits/     Bit, BitVec, UnsignedInt, SignedInt, Float (all templated on Wire), BristolFormat/Fashion
 └── third_party/  ThreadPool, sse2neon
@@ -196,9 +196,6 @@ io.send_data(buf, n);                            // buffered
 io.flush();                                      // drain outbound
 io.recv_data(buf, n);                            // blocks until n bytes arrive
 ```
-
-`MemIO` has the same interface and is useful for benchmarks or unit
-tests that don't need a socket.
 
 ### Plaintext circuit evaluation
 

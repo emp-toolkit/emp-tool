@@ -1,17 +1,8 @@
 # IO channel layer (`emp-tool/io/`)
 
-Conventions for `NetIO`, `NetIOBuffered`, and any code that uses them.
-Read this when writing protocol code that does sends / recvs / flushes
-across multiple threads, or when investigating a NetIO deadlock.
-
-## Two implementations, one contract
-
-- Two NetIO implementations, same `IOChannel` contract: `NetIO` (default,
-  `"wb"` stdio + raw `::read` on recv — faster on small-message protocol
-  workloads) and `NetIOBuffered` (`"wb+"` stdio + `fread` on both paths
-  — faster on multi-MiB bulk transfers). Pick `NetIO` unless you're
-  specifically pushing bulk data; the rest of this section applies to
-  both.
+Conventions for `NetIO` and any code that uses it. Read this when
+writing protocol code that does sends / recvs / flushes across multiple
+threads, or when investigating a NetIO deadlock.
 
 ## Flush contract
 
@@ -34,26 +25,20 @@ flush first. Applies to function boundaries, phase boundaries within
 a function, and any blocking wait (thread join, barrier, recv on a
 *different* NetIO).
 
-`test/test_netio.cpp` is templated on the IO type and runs the full
-correctness + send-only-regression + bench suite against both classes
-back-to-back.
+`test/test_netio.cpp` runs the full correctness + send-only-regression
++ bench suite.
 
 ## Thread-safety
 
-NetIO and NetIOBuffered are NOT thread-safe. The user-space `send_buf`
-coalescing has no per-call lock; concurrent `send_data` / `recv_data`
-/ `flush` from two threads on the same instance corrupts the buffer.
-Each instance must be owned by one thread at a time — `flush()` counts
-as a "touch" and is unsafe to call from a thread other than the one
-currently sending.
-
-(The pre-rewrite NetIO didn't have this hazard because every send went
-through `fwrite`, which serializes via stdio's `flockfile`. The
-user-space buffer is faster but loses that implicit serialization.)
+NetIO is NOT thread-safe. The user-space `send_buf` coalescing has no
+per-call lock; concurrent `send_data` / `recv_data` / `flush` from two
+threads on the same instance corrupts the buffer. Each instance must be
+owned by one thread at a time — `flush()` counts as a "touch" and is
+unsafe to call from a thread other than the one currently sending.
 
 ## Debug build assertion
 
-Under `!NDEBUG`, NetIO and NetIOBuffered carry an `_in_use` atomic
+Under `!NDEBUG`, NetIO carries an `_in_use` atomic
 counter and `touch_guard` that wraps `send_data_internal` /
 `recv_data_internal` / `flush`. If two threads enter any of those on
 the same instance simultaneously, the build aborts with `NetIO race:

@@ -1,6 +1,6 @@
-// io/net_io_channel.h + io/net_io_buffered_channel.h — TCP IOChannels.
+// io/net_io_channel.h — TCP IOChannel.
 //
-// Public surface (both NetIO and NetIOBuffered):
+// Public surface:
 //   ctor(addr, port)                   open one TCP fd
 //   ctor(existing_sock)                wrap an already-connected fd
 //   send_data / recv_data              raw bytes (size_t-correct)
@@ -9,17 +9,8 @@
 //   flush()                            drain outbound only (no peer coupling)
 //   sync()                             1-byte ping/pong handshake
 //
-// NetIO (default) uses "wb" stdio + raw ::read on the recv path. Faster
-// on small messages — picks up most protocol workloads (IKNP rows, OT
-// extension check tags, half-gate ciphertexts).
-//
-// NetIOBuffered uses "wb+" stdio + fread on both paths. Faster on
-// multi-MiB bulk transfers but pays per-recv FILE* lock overhead.
-//
-// Same flush contract for both. Every test function below is templated
-// on the IO type so the same correctness + regression + bench checks
-// run against both. main() runs the full suite for NetIO then for
-// NetIOBuffered — same protocol behavior must hold.
+// Test functions below are templated on the IO type so the same
+// correctness + regression + bench checks run via run_suite.
 
 #include <cassert>
 #include <cstring>
@@ -203,10 +194,6 @@ int main(int argc, char **argv) {
 	int port, party;
 	parse_party_and_port(argv, &party, &port);
 
-	// Run the full contract suite for both classes back-to-back. Each suite
-	// uses 3 contiguous ports (main, regression-a, regression-b); we leave
-	// a 10-port gap between suites so a leftover TIME_WAIT from one doesn't
-	// trip the next.
-	run_suite<NetIO>        (port + 0,  party, "NetIO");
-	run_suite<NetIOBuffered>(port + 10, party, "NetIOBuffered");
+	// Three contiguous ports: main, regression-a, regression-b.
+	run_suite<NetIO>(port, party, "NetIO");
 }

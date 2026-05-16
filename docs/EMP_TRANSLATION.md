@@ -438,11 +438,8 @@ The circuit body is byte-for-byte the same as under `ClearBackend`.
 **This is the point** — translate once, run on whichever backend the
 caller wants.
 
-`NetIO` (default `"wb"` + raw read; faster on small messages) and
-`NetIOBuffered` (`"wb+"` + fread; faster on multi-MiB bulk transfers)
-both satisfy the `IOChannel` contract and can be passed to any of the
-`setup_*` helpers. Pick `NetIO` for protocol traffic; `NetIOBuffered`
-only when you're moving large blobs in one shot. Both are not
+`NetIO` (`"wb"` stdio + raw read on recv) satisfies the `IOChannel`
+contract and can be passed to any of the `setup_*` helpers. Not
 thread-safe — see [docs/io_channel.md](io_channel.md).
 
 For malicious-secure 2PC use **emp-ag2pc**; for malicious-secure
