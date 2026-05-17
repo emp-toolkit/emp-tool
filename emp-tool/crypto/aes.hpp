@@ -10,6 +10,106 @@
 
 namespace emp {
 
+// Encrypt n_tiles tiles of L::N blocks each under a single key. Both
+// the per-tile plaintext and what to do with each tile's AES output are
+// caller-supplied via callables:
+//   src(t)            -> L::vec_t        : plaintext for tile t
+//   store(t, x, pt)   -> void            : tile t's AES output x and the
+//                                          plaintext pt; the store decides
+//                                          where/how to write.
+// The kernel keeps `pt` live in a SIMD register from src(t) through to
+// store(t, …), so Davies–Meyer / CRH stores (`L::store(dst, L::xorv(x, pt))`)
+// don't need a separate plaintext stash buffer.
+template <class L, int n_tiles, class Source, class Store>
+EMP_AES_TARGET_ATTR
+inline void aes_tiles_src(Source&& src, Store&& store, const AES_KEY *kk) {
+	if constexpr (n_tiles == 0) return;
+	typename L::vec_t rk[11];
+	for (int r = 0; r < 11; ++r)
+		rk[r] = L::broadcast(kk->rd_key[r]);
+	for (int t = 0; t < n_tiles; ++t) {
+		auto pt = src(t);
+		auto x = L::xorv(pt, rk[0]);
+		for (int r = 1; r < 10; ++r)
+			x = L::aesenc(x, rk[r]);
+		x = L::aesenclast(x, rk[10]);
+		store(t, x, pt);
+	}
+}
+
+// Convenience overload for the plain-store case: writes AES output to
+// dst[t * L::N..(t+1) * L::N) and ignores the plaintext. Kept so existing
+// callers that don't need DM stay terse.
+template <class L, int n_tiles, class Source>
+EMP_AES_TARGET_ATTR
+inline void aes_tiles_src(block *dst, Source&& src, const AES_KEY *kk) {
+	aes_tiles_src<L, n_tiles>(
+		std::forward<Source>(src),
+		[dst](int t, typename L::vec_t x, typename L::vec_t /*pt*/) {
+			L::store(dst + (size_t)t * L::N, x);
+		},
+		kk);
+}
+
+// Encrypt n_tiles tiles of L::N blocks each, under a single key. Callers
+// pass src == dst for the in-place case; the out-of-place no-overlap
+// contract is communicated by the public ParaEnc wrappers' __restrict__
+// parameters, propagated here through inlining.
+template <class L, int n_tiles>
+EMP_AES_TARGET_ATTR
+inline void aes_tiles(block *dst, const block *src, const AES_KEY *kk) {
+	aes_tiles_src<L, n_tiles>(dst,
+		[src](int t) -> typename L::vec_t { return L::load(src + (size_t)t * L::N); },
+		kk);
+}
+
+// Davies–Meyer / CRH counter-mode fill:
+//   dst[i] = AES_K(counter + i ⊕ tweak) ⊕ (counter + i ⊕ tweak),  i ∈ [0, W).
+// Correlation-robust under a *public* AES key (fixed-key AES modelled as
+// an ideal cipher) — use this when callers want the AES key public for
+// schedule-amortization and rely on the XOR-back for output PRG-ness.
+// For a secret AES key (regular PRG), use the plain `aes_ctr_fill` in
+// emp::detail instead.
+//
+// The XOR-back is done in-register at store time inside aes_tiles_src,
+// so there's no pt[] stash / second pass over dst.
+template <int W>
+EMP_AES_TARGET_ATTR
+inline void aes_ctr_fill_dm(block *dst, int64_t counter,
+                            const AES_KEY *kk, block tweak = zero_block) {
+#if EMP_HAS_VAES512
+	if constexpr (W % 4 == 0) {
+		using L = AesLane<4>;
+		const auto tw = L::broadcast(tweak);
+		aes_tiles_src<L, W/4>(
+			[&](int t) { return L::ctr_xor_tweak(counter, t, tw); },
+			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
+				L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
+			}, kk);
+		return;
+	}
+#endif
+#if EMP_HAS_VAES256
+	if constexpr (W % 2 == 0) {
+		using L = AesLane<2>;
+		const auto tw = L::broadcast(tweak);
+		aes_tiles_src<L, W/2>(
+			[&](int t) { return L::ctr_xor_tweak(counter, t, tw); },
+			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
+				L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
+			}, kk);
+		return;
+	}
+#endif
+	using L = AesLane<1>;
+	const auto tw = L::broadcast(tweak);
+	aes_tiles_src<L, W>(
+		[&](int t) { return L::ctr_xor_tweak(counter, t, tw); },
+		[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
+			L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
+		}, kk);
+}
+
 namespace detail {
 
 template<int NumKeys>
@@ -25,43 +125,6 @@ static inline void ks_rounds(AES_KEY* keys, block con, block con3, block mask, i
 		key=_mm_xor_si128(globAux, key);
 		keys[i].rd_key[r] = _mm_xor_si128(aux, key);
 	}
-}
-
-// Encrypt n_tiles tiles of L::N blocks each under a single key, sourcing
-// each tile's plaintext via the caller's `src(t)` callable. `src` is
-// invoked as `L::vec_t src(int t)` for t in [0, n_tiles); the round-key
-// loop is unrolled and round keys are broadcast once per call.
-//
-// Used directly by callers that build plaintexts inline (e.g. fixed-key
-// AES-CTR with tweak); the in-place form `aes_tiles` below is a thin
-// wrapper that supplies `L::load` as the source.
-template <class L, int n_tiles, class Source>
-EMP_AES_TARGET_ATTR
-static inline void aes_tiles_src(block *dst, Source&& src, const AES_KEY *kk) {
-	if constexpr (n_tiles == 0) return;
-	typename L::vec_t rk[11];
-	for (int r = 0; r < 11; ++r)
-		rk[r] = L::broadcast(kk->rd_key[r]);
-	for (int t = 0; t < n_tiles; ++t) {
-		auto x = src(t);
-		x = L::xorv(x, rk[0]);
-		for (int r = 1; r < 10; ++r)
-			x = L::aesenc(x, rk[r]);
-		x = L::aesenclast(x, rk[10]);
-		L::store(dst + (size_t)t * L::N, x);
-	}
-}
-
-// Encrypt n_tiles tiles of L::N blocks each, under a single key. Callers
-// pass src == dst for the in-place case; the out-of-place no-overlap
-// contract is communicated by the public ParaEnc wrappers' __restrict__
-// parameters, propagated here through inlining.
-template <class L, int n_tiles>
-EMP_AES_TARGET_ATTR
-static inline void aes_tiles(block *dst, const block *src, const AES_KEY *kk) {
-	aes_tiles_src<L, n_tiles>(dst,
-		[src](int t) -> typename L::vec_t { return L::load(src + (size_t)t * L::N); },
-		kk);
 }
 
 // Per-key tile decomposition: split numEncs into {AesLane<4>,

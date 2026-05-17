@@ -66,11 +66,13 @@
   #define EMP_F2K_TARGET_ATTR
 #endif
 
-// --- Section 2: SIMD Lane traits (x86_64 only) ---------------------------
+// --- Section 2: SIMD Lane traits -----------------------------------------
+//
+// AesLane<N> lives in emp:: (public). ClmulLane<N> lives in emp::detail.
 
 #ifdef __x86_64__
 
-namespace emp { namespace detail {
+namespace emp {
 
 // AesLane<N>: AES-round primitives over N AES blocks per vector register.
 // AesLane<1> = xmm (AES-NI baseline); <2> = ymm (VAES+AVX2); <4> = zmm
@@ -130,6 +132,10 @@ struct AesLane<4> {
 	}
 };
 #endif
+
+}  // namespace emp
+
+namespace emp { namespace detail {
 
 // ClmulLane<N>: carryless-multiply primitives over N AES blocks per
 // vector. <1> = scalar PCLMULQDQ (universal on x86_64), <2> = ymm
@@ -212,14 +218,14 @@ struct ClmulLane<4> {
 
 #ifdef __aarch64__
 
-namespace emp { namespace detail {
+namespace emp {
 
-// aarch64 single-block specializations. NEON has no widening VAES or
-// VPCLMULQDQ, so only N=1 exists. AesLane<1>::aesenc / aesenclast use
-// x86-compatible "key-after" semantics — vaeseq_u8 with a zero key,
-// then XOR the real key. This breaks AESE/AESMC fusion (the natural
-// NEON pattern XORs the key BEFORE the round), so the abstraction is
-// heavier than a hand-rolled NEON loop would be.
+// aarch64 AesLane<1>. NEON has no widening VAES, so only N=1 exists.
+// aesenc / aesenclast use x86-compatible "key-after" semantics —
+// vaeseq_u8 with a zero key, then XOR the real key. This breaks
+// AESE/AESMC fusion (the natural NEON pattern XORs the key BEFORE
+// the round), so the abstraction is heavier than a hand-rolled NEON
+// loop would be.
 template<int N> struct AesLane;
 
 template<>
@@ -244,6 +250,10 @@ struct AesLane<1> {
 		return _mm_xor_si128(_mm_set_epi64x(0, b0 + slot), tw);
 	}
 };
+
+}  // namespace emp
+
+namespace emp { namespace detail {
 
 // ClmulLane<1> aarch64: NEON poly64 carryless multiply, one block per
 // iter.
