@@ -28,7 +28,7 @@ curve ops, IO channels, a templated boolean-circuit frontend
 
 - CMake ≥ 3.21
 - A C++17 compiler (Clang ≥ 12, GCC ≥ 9, AppleClang 14+)
-- OpenSSL (≥ 1.1; tested against 3.x)
+- OpenSSL ≥ 3.0
 - pthreads
 - x86_64 with AES-NI + PCLMULQDQ + SSE4.1, **or** arm64 with `armv8-a+crypto+crc`. The default build uses `-march=native` and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
 
