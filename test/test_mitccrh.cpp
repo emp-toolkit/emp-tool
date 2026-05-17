@@ -36,7 +36,7 @@ static void example() {
 	MITCCRH<8> mit;
 	mit.setS(S);
 
-	alignas(16) block buf[8] = {
+	block buf[8] = {
 		makeBlock(0, 1), makeBlock(0, 2), makeBlock(0, 3), makeBlock(0, 4),
 		makeBlock(0, 5), makeBlock(0, 6), makeBlock(0, 7), makeBlock(0, 8),
 	};
@@ -46,16 +46,16 @@ static void example() {
 
 	// (2) hash_cir<K, H> applies sigma() first, then hash. Used in half-gates.
 	mit.setS(S);  // reset for a fresh transcript
-	alignas(16) block buf2[2] = {makeBlock(0, 0xAA), makeBlock(0, 0xBB)};
+	block buf2[2] = {makeBlock(0, 0xAA), makeBlock(0, 0xBB)};
 	mit.hash_cir<2, 1>(buf2);
 	cout << "  hash_cir<2,1>[0]    = " << buf2[0] << "\n";
 
 	// (3) renew_ks(tweaks): schedule from explicit tweaks instead of gid.
 	mit.setS(S);
-	alignas(16) block tweaks[8];
+	block tweaks[8];
 	for (int i = 0; i < 8; ++i) tweaks[i] = makeBlock(i + 100, 0);
 	mit.renew_ks(tweaks);
-	alignas(16) block buf3[8];
+	block buf3[8];
 	for (int i = 0; i < 8; ++i) buf3[i] = makeBlock(i, i);
 	mit.hash<8, 1>(buf3);
 	cout << "  hash<8,1> w/ tweaks[0] = " << buf3[0] << "\n";
@@ -78,19 +78,19 @@ static bool check_mitccrh_against_paraenc() {
 	mit.gid = gid0;
 	mit.key_used = B;  // force a fresh schedule on first hash()
 
-	alignas(16) block in[K * H];
+	block in[K * H];
 	PRG().random_block(in, K * H);
 
-	alignas(16) block emp_out[K * H];
+	block emp_out[K * H];
 	memcpy(emp_out, in, sizeof(in));
 	mit.template hash<K, H>(emp_out);
 
-	alignas(16) block ref_keys[B];
+	block ref_keys[B];
 	for (int i = 0; i < B; ++i) ref_keys[i] = S ^ makeBlock(gid0 + (uint64_t)i, 0);
-	alignas(16) AES_KEY skeys[B];
+	AES_KEY skeys[B];
 	AES_opt_key_schedule<B>(ref_keys, skeys);
 
-	alignas(16) block ref_out[K * H];
+	block ref_out[K * H];
 	memcpy(ref_out, in, sizeof(in));
 	ParaEnc<K, H>(ref_out, skeys);
 	for (int i = 0; i < K * H; ++i) ref_out[i] = ref_out[i] ^ in[i];
@@ -110,10 +110,10 @@ static bool check_hash_cir() {
 	a.gid = b.gid = 0;
 	a.key_used = b.key_used = 8;
 
-	alignas(16) block in[K * H];
+	block in[K * H];
 	PRG().random_block(in, K * H);
 
-	alignas(16) block via_cir[K * H], via_manual[K * H];
+	block via_cir[K * H], via_manual[K * H];
 	memcpy(via_cir, in, sizeof(in));
 	a.template hash_cir<K, H>(via_cir);
 
@@ -189,7 +189,7 @@ static double bench_hash(double sec) {
 	MITCCRH<8> mit;
 	mit.setS(makeBlock(1, 2));
 	mit.renew_ks(uint64_t{0});
-	alignas(16) block buf[K * H];
+	block buf[K * H];
 	PRG().random_block(buf, K * H);
 	return run_for(sec, [&]() { mit.template hash<K, H>(buf); }, &buf[0]);
 }
@@ -200,7 +200,7 @@ static double bench_hash_cir(double sec) {
 	MITCCRH<8> mit;
 	mit.setS(makeBlock(1, 2));
 	mit.renew_ks(uint64_t{0});
-	alignas(16) block buf[K * H];
+	block buf[K * H];
 	PRG().random_block(buf, K * H);
 	return run_for(sec, [&]() { mit.template hash_cir<K, H>(buf); }, &buf[0]);
 }

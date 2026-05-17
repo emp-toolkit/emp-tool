@@ -51,21 +51,21 @@ static void example() {
 	// (1) Zero-key PRP (default): models the fixed-key cipher in the JustGarble
 	// permutation model.
 	PRP prp0;
-	alignas(16) block buf = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
+	block buf = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
 	prp0.permute_block(&buf, 1);
 	cout << "  PRP_0(0xcafe...beef)         = " << buf << "\n";
 
 	// (2) Keyed PRP via block constructor.
 	block key = makeBlock(0x0123456789ABCDEFULL, 0xFEDCBA9876543210ULL);
 	PRP prp_k(key);
-	alignas(16) block buf2[2] = {makeBlock(0, 1), makeBlock(0, 2)};
+	block buf2[2] = {makeBlock(0, 1), makeBlock(0, 2)};
 	prp_k.permute_block(buf2, 2);
 	cout << "  PRP_k(1)                     = " << buf2[0] << "\n";
 	cout << "  PRP_k(2)                     = " << buf2[1] << "\n";
 
 	// (3) Re-key by reassignment.
 	prp_k = PRP(zero_block);
-	alignas(16) block buf3 = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
+	block buf3 = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
 	prp_k.permute_block(&buf3, 1);
 	cout << "  re-keyed to zero, PRP(...)   = " << buf3 << "\n";
 }
@@ -91,9 +91,9 @@ static bool check_against_openssl(int trials = 32) {
 			prg.random_data_unaligned(kb, 16);
 			block k = bytes_to_block(kb);
 
-			alignas(16) vector<block> in(blks_per);
+			vector<block> in(blks_per);
 			prg.random_block(in.data(), blks_per);
-			alignas(16) vector<block> out = in;
+			vector<block> out = in;
 
 			PRP prp(k);
 			prp.permute_block(out.data(), blks_per);
@@ -120,8 +120,8 @@ static bool check_constructors_agree() {
 	PRP via_block(kblk);
 	PRP via_bytes(reinterpret_cast<const char *>(kb));
 
-	alignas(16) block in[3] = {makeBlock(0, 1), makeBlock(0, 2), makeBlock(0, 3)};
-	alignas(16) block a[3], b[3];
+	block in[3] = {makeBlock(0, 1), makeBlock(0, 2), makeBlock(0, 3)};
+	block a[3], b[3];
 	memcpy(a, in, sizeof(in));
 	memcpy(b, in, sizeof(in));
 	via_block.permute_block(a, 3);
@@ -134,9 +134,9 @@ static bool check_constructors_agree() {
 static bool check_zero_key_matches_default_ctor() {
 	PRP a;
 	PRP b(zero_block);
-	alignas(16) block in[4] = {makeBlock(1, 0), makeBlock(2, 0),
+	block in[4] = {makeBlock(1, 0), makeBlock(2, 0),
 	                            makeBlock(3, 0), makeBlock(4, 0)};
-	alignas(16) block x[4], y[4];
+	block x[4], y[4];
 	memcpy(x, in, sizeof(in));
 	memcpy(y, in, sizeof(in));
 	a.permute_block(x, 4);
@@ -150,7 +150,7 @@ static bool check_re_key_idempotent() {
 	// permute_block result must depend on the current key, not stale state.
 	block k1 = makeBlock(1, 2), k2 = makeBlock(3, 4);
 	PRP a(k1), b(k2);
-	alignas(16) block x = makeBlock(7, 8), y = x, z = x;
+	block x = makeBlock(7, 8), y = x, z = x;
 	a = PRP(k2);
 	a.permute_block(&x, 1);
 	b.permute_block(&y, 1);
@@ -206,7 +206,7 @@ static void bench(double sec) {
 
 	cout << "=== permute_block (sweep N blocks) ===\n";
 	for (int n : {1, 4, 8, 16, 64, 256, 1024, 4096, 16384}) {
-		alignas(16) vector<block> buf(n);
+		vector<block> buf(n);
 		prg.random_block(buf.data(), n);
 		double calls = run_for(sec, [&]() { prp.permute_block(buf.data(), n); }, buf.data());
 		ostringstream lbl; lbl << "permute_block(N=" << n << ")";

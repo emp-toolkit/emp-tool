@@ -234,13 +234,20 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
 #ifdef __x86_64__
 __attribute__((target("sse2")))
 #endif
-inline void sse_trans_n128(uint8_t *out, const uint8_t *inp, uint64_t ncols) {
+inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
 #ifndef __x86_64__
-  sse_trans(out, inp, /*nrows=*/128, ncols);
+  sse_trans(reinterpret_cast<uint8_t *>(out),
+            reinterpret_cast<const uint8_t *>(inp),
+            /*nrows=*/128, ncols);
 #else
   assert((ncols % 128) == 0);
-  constexpr uint64_t bpr_out = 16;          // nrows/8 with nrows=128
-  const uint64_t bpr_in = ncols / 8;
+  const uint64_t bpr_in_blocks = ncols / 128;   // input row stride in blocks
+  constexpr uint64_t bpr_out_bytes = 16;        // output row stride in bytes
+                                                // (nrows/8 with nrows=128)
+  // Sub-block writes (16 bits at byte offsets cc8 + b inside the
+  // output row) need byte-pointer arithmetic — confined to one cast
+  // here.
+  uint8_t *out_b = reinterpret_cast<uint8_t *>(out);
 
   // Outer "rr" loop unrolled at compile time: 8 iterations at
   // rr = 0, 16, ..., 112. The per-strip output sub-offset rr/8 becomes
@@ -248,18 +255,17 @@ inline void sse_trans_n128(uint8_t *out, const uint8_t *inp, uint64_t ncols) {
   #pragma GCC unroll 8
   for (int rr_idx = 0; rr_idx < 8; ++rr_idx) {
     const uint64_t rr = (uint64_t)rr_idx * 16;
-    for (uint64_t col_byte = 0; col_byte < bpr_in; col_byte += 16) {
+    for (uint64_t col_block = 0; col_block < bpr_in_blocks; ++col_block) {
       __m128i m[16];
       for (int r = 0; r < 16; ++r) {
-        m[r] = _mm_loadu_si128(
-            (const __m128i *)(inp + (rr + r) * bpr_in + col_byte));
+        m[r] = _mm_loadu_si128(inp + (rr + r) * bpr_in_blocks + col_block);
       }
       sse_trans_16x16_byte(m);
       for (int j = 0; j < 16; ++j) {
         __m128i x = m[j];
-        const uint64_t cc8 = (col_byte + j) * 8;
+        const uint64_t cc8 = (col_block * 16 + j) * 8;
         for (int b = 7; b >= 0; --b) {
-          *(uint16_t *)(out + (cc8 + b) * bpr_out + (size_t)rr_idx * 2) =
+          *(uint16_t *)(out_b + (cc8 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
               (uint16_t)_mm_movemask_epi8(x);
           x = _mm_slli_epi64(x, 1);
         }

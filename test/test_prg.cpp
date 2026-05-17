@@ -109,8 +109,8 @@ static bool check_random_data_matches_block() {
 	block seed = makeBlock(3, 4);
 	for (int nblocks : {1, 4, 64, 1023}) {
 		PRG a(&seed), b(&seed);
-		alignas(16) vector<block> via_block(nblocks);
-		alignas(16) vector<uint8_t> via_data(nblocks * 16);
+		vector<block> via_block(nblocks);
+		vector<uint8_t> via_data(nblocks * 16);
 		a.random_block(via_block.data(), nblocks);
 		b.random_data(via_data.data(), nblocks * 16);
 		if (memcmp(via_block.data(), via_data.data(), nblocks * 16) != 0)
@@ -232,7 +232,7 @@ static void bench(double sec) {
 
 	cout << "=== random_block (sweep N blocks) ===\n";
 	for (int n : {1, 8, 64, 256, 1024, 4096, 16384}) {
-		alignas(16) vector<block> buf(n);
+		vector<block> buf(n);
 		double calls = run_for(sec, [&]() { prg.random_block(buf.data(), n); }, buf.data());
 		ostringstream lbl; lbl << "random_block(N=" << n << ")";
 		print_vec(lbl.str(), calls, (size_t)n * 16);
@@ -240,7 +240,7 @@ static void bench(double sec) {
 
 	cout << "\n=== random_data (16-byte-aligned dest, sweep nbytes) ===\n";
 	for (int nb : {16, 64, 256, 1024, 4096, 16384, 65536}) {
-		alignas(16) vector<uint8_t> buf((nb + 15) & ~15);
+		vector<uint8_t> buf((nb + 15) & ~15);
 		double calls = run_for(sec, [&]() { prg.random_data(buf.data(), nb); }, buf.data());
 		ostringstream lbl; lbl << "random_data(N=" << nb << ")";
 		print_vec(lbl.str(), calls, (size_t)nb);

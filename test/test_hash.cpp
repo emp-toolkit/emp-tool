@@ -245,7 +245,7 @@ static void bench(double sec) {
 
 	cout << "\n=== hash_for_block (single-shot, chained-dep) ===\n";
 	{
-		alignas(16) block x; prg.random_block(&x, 1);
+		block x; prg.random_block(&x, 1);
 		double calls = run_for(sec, [&]() {
 			x = Hash::hash_for_block(&x, sizeof(block));
 		}, &x);

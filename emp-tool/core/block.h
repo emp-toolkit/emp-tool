@@ -51,8 +51,11 @@ inline bool cmpBlock(const block* x, const block* y, int nblocks);
 // nrows and ncols must each be multiples of 8.
 inline void sse_trans(uint8_t* out, const uint8_t* inp, uint64_t nrows, uint64_t ncols);
 
-// nrows=128 specialization. ncols must be a multiple of 128.
-inline void sse_trans_n128(uint8_t* out, const uint8_t* inp, uint64_t ncols);
+// nrows=128 specialization. ncols must be a multiple of 128. Both
+// buffers are block arrays (nrows=128 means each input row is a
+// multiple of one block); takes block* directly to spare callers
+// the reinterpret_cast.
+inline void sse_trans_n128(block* out, const block* inp, uint64_t ncols);
 
 // 16x16 byte transpose in place. Building block for block-loop
 // transpose variants.
