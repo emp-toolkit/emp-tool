@@ -37,14 +37,14 @@ class CCRH: public PRP { public:
 		xorBlocksTo_arr(out, pt, n);
 	}
 
-	void Hn(block*out, block* in, int length, block * scratch = nullptr) {
+	void Hn(block*out, block* in, int64_t length, block * scratch = nullptr) {
 		bool del = false;
 		if(scratch == nullptr) {
 			del = true;
 			scratch = new block[length];
 		}
 
-		for (int i = 0; i < length; ++i)
+		for (int64_t i = 0; i < length; ++i)
 			scratch[i] = out[i] = sigma(in[i]);
 
 		permute_block(scratch, length);

@@ -23,10 +23,10 @@ class Hash { public:
 	// Owns a raw EVP_MD_CTX*; copying would double-destroy on dtor.
 	Hash(const Hash&) = delete;
 	Hash& operator=(const Hash&) = delete;
-	void put(const void * data, int nbyte) {
+	void put(const void * data, int64_t nbyte) {
 		EVP_DigestUpdate(mdctx, data, nbyte);
 	}
-	void put_block(const block* blk, int nblock=1){
+	void put_block(const block* blk, int64_t nblock=1){
 		put(blk, sizeof(block)*nblock);
 	}
 	// reset_after = false snapshots the running hash without disturbing
@@ -50,7 +50,7 @@ class Hash { public:
 	void reset() {
 		EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
 	}
-	static void hash_once(void * dgst, const void * data, int nbyte) {
+	static void hash_once(void * dgst, const void * data, int64_t nbyte) {
 		// Per-thread persistent EVP_MD_CTX. The dominant cost of a
 		// transient Hash object on small inputs is EVP_MD_CTX_new/free
 		// (~700–1000 cy each); reusing a context drops that to a single
@@ -72,7 +72,7 @@ class Hash { public:
 	#ifdef __x86_64__
 	__attribute__((target("sse2")))
 	#endif
-	static block hash_for_block(const void * data, int nbyte) {
+	static block hash_for_block(const void * data, int64_t nbyte) {
 		alignas(block) char digest[DIGEST_SIZE];
 		hash_once(digest, data, nbyte);
 		return _mm_load_si128((__m128i*)&digest[0]);

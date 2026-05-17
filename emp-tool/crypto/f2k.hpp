@@ -120,7 +120,7 @@ template <class L>
 EMP_F2K_TARGET_ATTR
 static inline void inn_prdt_drain_lanes(block &lo, block &hi,
                                           const block *a, const block *b,
-                                          int &i, int sz) {
+                                          int64_t &i, int64_t sz) {
 	using V = typename L::vec_t;
 	V lo_v = L::zero(), hi_v = L::zero(), mid_v = L::zero();
 	for (; i + L::N <= sz; i += L::N) {
@@ -173,9 +173,9 @@ static inline void gf_pack_byte(const block *data, block &lo, block &hi) {
 }  // namespace detail
 
 EMP_F2K_TARGET_ATTR
-inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *b, int sz) {
+inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *b, int64_t sz) {
 	block lo = zero_block, hi = zero_block;
-	int i = 0;
+	int64_t i = 0;
 #if EMP_HAS_VPCLMUL512
 	detail::inn_prdt_drain_lanes<detail::ClmulLane<4>>(lo, hi, a, b, i, sz);
 #endif
@@ -194,7 +194,7 @@ inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *
 }
 
 EMP_F2K_TARGET_ATTR
-inline void vector_inn_prdt_sum_red(block *res, const block *a, const block *b, int sz) {
+inline void vector_inn_prdt_sum_red(block *res, const block *a, const block *b, int64_t sz) {
 	// Defer reduction: sum unreduced 256-bit products, then reduce once.
 	// GF(2^128) addition is XOR (linear), so reduce(Σ unred(a_i*b_i)) ==
 	// Σ reduce(a_i*b_i). One reduce instead of sz.
@@ -208,9 +208,9 @@ inline void vector_inn_prdt_sum_red(block *res, block const *a, const block *b) 
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
-inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b, int sz) {
+inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b, int64_t sz) {
 	block r0 = zero_block, r1 = zero_block, r2 = zero_block, r3 = zero_block;
-	int i = 0;
+	int64_t i = 0;
 	for (; i + 4 <= sz; i += 4) {
 		r0 = r0 ^ (a[i  ] & select_mask[b[i  ]]);
 		r1 = r1 ^ (a[i+1] & select_mask[b[i+1]]);
@@ -227,7 +227,7 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b) {
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
-inline void uni_hash_coeff_gen(block* coeff, block seed, int sz) {
+inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz) {
 	assert(sz > 0);
 	coeff[0] = seed;
 	if(sz == 1) return;
@@ -244,7 +244,7 @@ inline void uni_hash_coeff_gen(block* coeff, block seed, int sz) {
 	if(sz == 4) return;
 
 	// Compute the rest in batches of 4.
-	int i = 4;
+	int64_t i = 4;
 	for(; i < sz - 3; i += 4) {
 		gfmul(coeff[i - 4], multiplier, &coeff[i]);
 		gfmul(coeff[i - 3], multiplier, &coeff[i + 1]);
@@ -252,7 +252,7 @@ inline void uni_hash_coeff_gen(block* coeff, block seed, int sz) {
 		gfmul(coeff[i - 1], multiplier, &coeff[i + 3]);
 	}
 
-	int remainder = sz % 4;
+	int64_t remainder = sz % 4;
 	if(remainder != 0) {
 		i = sz - remainder;
 		for(; i < sz; ++i)
@@ -293,19 +293,19 @@ inline void GaloisFieldPacking::packing(block *res, const bool *data) {
 	bools_to_bits(res, data, 128);
 }
 
-inline void vector_self_xor(block *sum, block *data, int sz) {
+inline void vector_self_xor(block *sum, block *data, int64_t sz) {
 	block res[4];
 	res[0] = zero_block;
 	res[1] = zero_block;
 	res[2] = zero_block;
 	res[3] = zero_block;
-	for(int i = 0; i < (sz/4)*4; i+=4) {
+	for(int64_t i = 0; i < (sz/4)*4; i+=4) {
 		res[0] = data[i] ^ res[0];
 		res[1] = data[i+1] ^ res[1];
 		res[2] = data[i+2] ^ res[2];
 		res[3] = data[i+3] ^ res[3];
 	}
-	for(int i = (sz/4)*4, j = 0; i < sz; ++i, ++j)
+	for(int64_t i = (sz/4)*4, j = 0; i < sz; ++i, ++j)
 		res[j] = data[i] ^ res[j];
 	res[0] = res[0] ^ res[1];
 	res[2] = res[2] ^ res[3];

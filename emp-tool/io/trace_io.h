@@ -53,10 +53,10 @@ public:
         if (recv_fp_ != nullptr) std::fclose(recv_fp_);
     }
 
-    void send_data_internal(const void* data, size_t nbyte) override {
+    void send_data_internal(const void* data, int64_t nbyte) override {
         // Tee first, deliver after, so a crash mid-write still leaves
         // a trace prefix that matches what the peer didn't yet see.
-        if (std::fwrite(data, 1, nbyte, send_fp_) != nbyte) {
+        if ((int64_t)std::fwrite(data, 1, nbyte, send_fp_) != nbyte) {
             std::fprintf(stderr, "TraceIO: short write to .send\n");
             std::abort();
         }
@@ -65,9 +65,9 @@ public:
         under_->send_data_internal(data, nbyte);
     }
 
-    void recv_data_internal(void* data, size_t nbyte) override {
+    void recv_data_internal(void* data, int64_t nbyte) override {
         under_->recv_data_internal(data, nbyte);
-        if (std::fwrite(data, 1, nbyte, recv_fp_) != nbyte) {
+        if ((int64_t)std::fwrite(data, 1, nbyte, recv_fp_) != nbyte) {
             std::fprintf(stderr, "TraceIO: short write to .recv\n");
             std::abort();
         }

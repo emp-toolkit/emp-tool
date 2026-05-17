@@ -24,27 +24,27 @@ inline void gfmul_reflect(block a, block b, block* res);
 // unreduced (two 128-bit halves in res[0..1]); the *_red variants
 // reduce once at the end. GF addition is XOR (linear), so deferring
 // reduction is identity.
-inline void vector_inn_prdt_sum_no_red(block* res, const block* a, const block* b, int sz);
+inline void vector_inn_prdt_sum_no_red(block* res, const block* a, const block* b, int64_t sz);
 template<int N>
 inline void vector_inn_prdt_sum_no_red(block* res, const block* a, const block* b);
 
-inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b, int sz);
+inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b, int64_t sz);
 template<int N>
 inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b);
 
 // Σ a[i] * b[i] in GF(2^128) where b[i] ∈ {0, 1}. Each contribution is
 // either 0 or a[i], so no carryless multiply is needed — branchless
 // mask + XOR per element. Stable timing for adversarial b.
-inline void vector_inn_prdt_sum_red(block* res, const block* a, const bool* b, int sz);
+inline void vector_inn_prdt_sum_red(block* res, const block* a, const bool* b, int64_t sz);
 template<int N>
 inline void vector_inn_prdt_sum_red(block* res, const block* a, const bool* b);
 
 // Coefficients of the almost-universal hash {seed, seed^2, seed^3, ...}.
-inline void uni_hash_coeff_gen(block* coeff, block seed, int sz);
+inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz);
 template<int N>
 inline void uni_hash_coeff_gen(block* coeff, block seed);
 
-inline void vector_self_xor(block* sum, block* data, int sz);
+inline void vector_self_xor(block* sum, block* data, int64_t sz);
 template<int N>
 inline void vector_self_xor(block* sum, block* data);
 

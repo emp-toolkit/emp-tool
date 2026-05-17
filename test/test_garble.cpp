@@ -5,8 +5,8 @@ using namespace std;
 using namespace emp;
 
 class AbandonIO: public IOChannel { public:
-	void send_data_internal(const void * /*data*/, size_t /*len*/) override {}
-	void recv_data_internal(void * /*data*/, size_t /*len*/) override {}
+	void send_data_internal(const void * /*data*/, int64_t /*len*/) override {}
+	void recv_data_internal(void * /*data*/, int64_t /*len*/) override {}
 };
 
 int port, party;

@@ -60,14 +60,14 @@ inline std::ostream& operator<<(std::ostream& out, const block& blk) {
 	return out;
 }
 
-inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, const block* __restrict__ y, int nblocks) {
+inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, const block* __restrict__ y, int64_t nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;) {
 		*(res++) = *(x++) ^ *(y++);
 	}
 }
 
-inline void xorBlocksTo_arr(block* __restrict__ dst, const block* __restrict__ src, int nblocks) {
+inline void xorBlocksTo_arr(block* __restrict__ dst, const block* __restrict__ src, int64_t nblocks) {
 	const block * dest = nblocks+src;
 	for (; src != dest;) {
 		*dst = *dst ^ *(src++);
@@ -75,7 +75,7 @@ inline void xorBlocksTo_arr(block* __restrict__ dst, const block* __restrict__ s
 	}
 }
 
-inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, block y, int nblocks) {
+inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, block y, int64_t nblocks) {
 	const block * dest = nblocks+x;
 	for (; x != dest;)
 		*(res++) =  *(x++) ^ y;
@@ -84,7 +84,7 @@ inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, 
 #ifdef __x86_64__
 __attribute__((target("sse4")))
 #endif
-inline bool cmpBlock(const block * x, const block * y, int nblocks) {
+inline bool cmpBlock(const block * x, const block * y, int64_t nblocks) {
 	__m128i acc = _mm_setzero_si128();
 	const block * dest = nblocks+x;
 	for (; x != dest;)

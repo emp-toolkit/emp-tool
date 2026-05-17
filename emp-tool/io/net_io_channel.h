@@ -151,11 +151,11 @@ class NetIO : public IOChannel { public:
 		}
 	}
 
-	void send_data_internal(const void *data, size_t len) override {
+	void send_data_internal(const void *data, int64_t len) override {
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
-		if (len + send_ptr <= (size_t)NETWORK_STAGING_BUFFER_SIZE) {
+		if (len + (int64_t)send_ptr <= (int64_t)NETWORK_STAGING_BUFFER_SIZE) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {
@@ -165,7 +165,7 @@ class NetIO : public IOChannel { public:
 		send_dirty = true;
 	}
 
-	void recv_data_internal(void *data, size_t len) override {
+	void recv_data_internal(void *data, int64_t len) override {
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "recv_data");
 #endif
@@ -174,7 +174,7 @@ class NetIO : public IOChannel { public:
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.
 		flush_unlocked();
 		bytes_recv += len;
-		size_t got = 0;
+		int64_t got = 0;
 		while (got < len) {
 			if (recv_ptr == recv_fill) {
 				// Raw read() (not fread) so the refill accepts whatever the
@@ -187,7 +187,7 @@ class NetIO : public IOChannel { public:
 				recv_ptr = 0;
 				recv_fill = (size_t)n;
 			}
-			size_t take = recv_fill - recv_ptr;
+			int64_t take = recv_fill - recv_ptr;
 			if (take > len - got) take = len - got;
 			memcpy((char *)data + got, recv_buf + recv_ptr, take);
 			recv_ptr += take;

@@ -26,11 +26,11 @@ class PRP { public:
 		AES_set_encrypt_key(key, &aes);
 	}
 
-	void permute_block(block *data, int nblocks) {
+	void permute_block(block *data, int64_t nblocks) {
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_block requires 16-byte aligned data");
 		while (nblocks > 0) {
-			int n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
+			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			ParaEnc(data, &aes, 1, n);
 			data    += n;
 			nblocks -= n;

@@ -43,11 +43,11 @@ static inline void bits32_to_bytes(uint32_t bits, void* out);
 // pack into a stack buffer must zero the trailing partial byte before the
 // call if they care about its contents (e.g. wire-format determinism).
 // out must hold at least ⌈len/8⌉ bytes.
-inline void bools_to_bits(void* out, const bool* bools, size_t len);
+inline void bools_to_bits(void* out, const bool* bools, int64_t len);
 
 // Unpack the first `len` bits of `in` (LSB-first within each byte) into
 // `len` bools (each 0/1, byte-sized). bools must hold at least `len` bytes.
-inline void bits_to_bools(bool* bools, const void* in, size_t len);
+inline void bits_to_bools(bool* bools, const void* in, int64_t len);
 
 // Value-returning conveniences for fixed-size targets.
 template<typename T>

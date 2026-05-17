@@ -44,3 +44,12 @@ from a subdoc.
 - `random_data` (in PRG) requires 16-byte-aligned destinations and
   asserts. Use `random_data_unaligned` for stack ints, small structs,
   and any other call site that isn't naturally aligned.
+- Buffer-length and count parameters on emp-tool's public API use
+  `int64_t`, not `int` or `size_t`. `int` overflows at 2^31 elements;
+  unsigned `size_t` underflows silently in `len -= batch` style loops
+  that decrement to zero. `int64_t` avoids both. New emp-tool APIs
+  that take a "number of bytes / blocks / bools / points" parameter
+  follow this convention. Internal counters and indices in the bodies
+  match (`int64_t i = 0; i < len; ++i`). Template non-type parameters
+  (`int N`, `int K` etc.) stay as `int` since they're compile-time
+  bounded small constants.

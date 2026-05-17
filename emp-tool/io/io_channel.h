@@ -36,8 +36,8 @@ public:
 
 	virtual ~IOChannel() = default;
 
-	virtual void send_data_internal(const void *data, size_t nbyte) = 0;
-	virtual void recv_data_internal(void *data, size_t nbyte) = 0;
+	virtual void send_data_internal(const void *data, int64_t nbyte) = 0;
+	virtual void recv_data_internal(void *data, int64_t nbyte) = 0;
 
 	// Drain any outbound buffer to the underlying transport. Default
 	// is a no-op for transports with nothing to flush.
@@ -79,27 +79,27 @@ public:
 		return out;
 	}
 
-	void send_data(const void *data, size_t nbyte) {
+	void send_data(const void *data, int64_t nbyte) {
 		counter += nbyte;
 		if (fs_send_) fs_send_->put(data, nbyte);
 		send_data_internal(data, nbyte);
 	}
 
-	void recv_data(void *data, size_t nbyte) {
+	void recv_data(void *data, int64_t nbyte) {
 		recv_data_internal(data, nbyte);
 		if (fs_recv_) fs_recv_->put(data, nbyte);
 	}
 
-	void send_block(const block *data, size_t nblock) {
+	void send_block(const block *data, int64_t nblock) {
 		send_data(data, nblock * sizeof(block));
 	}
 
-	void recv_block(block *data, size_t nblock) {
+	void recv_block(block *data, int64_t nblock) {
 		recv_data(data, nblock * sizeof(block));
 	}
 
-	void send_pt(Point *A, size_t num_pts = 1) {
-		for (size_t i = 0; i < num_pts; ++i) {
+	void send_pt(Point *A, int64_t num_pts = 1) {
+		for (int64_t i = 0; i < num_pts; ++i) {
 			const size_t len = A[i].size();
 			assert(len <= MAX_POINT_BYTES);
 			const uint32_t len_wire = static_cast<uint32_t>(len);
@@ -111,8 +111,8 @@ public:
 		}
 	}
 
-	void recv_pt(ECGroup *g, Point *A, size_t num_pts = 1) {
-		for (size_t i = 0; i < num_pts; ++i) {
+	void recv_pt(ECGroup *g, Point *A, int64_t num_pts = 1) {
+		for (int64_t i = 0; i < num_pts; ++i) {
 			uint32_t len_wire = 0;
 			recv_data(&len_wire, sizeof(len_wire));
 			assert(len_wire <= MAX_POINT_BYTES);
@@ -137,12 +137,12 @@ public:
 	// lengths. Zero the one byte that bools_to_bits leaves partially-
 	// written before each pack. Whole-byte bytes get fully overwritten by
 	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
-	void send_bool(const bool *data, size_t length) {
-		if (length == 0) return;
+	void send_bool(const bool *data, int64_t length) {
+		if (length <= 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
-			size_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
-			size_t bytes = (batch + 7) / 8;
+			int64_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
+			int64_t bytes = (batch + 7) / 8;
 			if (batch % 8 != 0) buf[bytes - 1] = 0;
 			bools_to_bits(buf, data, batch);
 			send_data(buf, bytes);
@@ -151,12 +151,12 @@ public:
 		}
 	}
 
-	void recv_bool(bool *data, size_t length) {
-		if (length == 0) return;
+	void recv_bool(bool *data, int64_t length) {
+		if (length <= 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
-			size_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
-			size_t bytes = (batch + 7) / 8;
+			int64_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
+			int64_t bytes = (batch + 7) / 8;
 			recv_data(buf, bytes);
 			bits_to_bools(data, buf, batch);
 			data += batch;

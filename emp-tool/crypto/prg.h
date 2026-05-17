@@ -75,7 +75,7 @@ class PRG { public:
 	}
 
 	// `data` must be block-aligned (16-byte). Use random_data_unaligned otherwise.
-	void random_data(void *data, int nbytes) {
+	void random_data(void *data, int64_t nbytes) {
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_data requires 16-byte aligned data; use random_data_unaligned");
 		random_block((block *)data, nbytes/16);
@@ -89,25 +89,25 @@ class PRG { public:
 	// Unpacks 8 bools per random byte (= 128 bools per AES block) instead of
 	// consuming a full byte for one bit, an 8x cut in AES work. Inner unpack
 	// uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
-	void random_bool(bool * data, int length) {
+	void random_bool(bool * data, int64_t length) {
 		if (length <= 0) return;
 		constexpr int CHUNK_B = 16;  // 16 blocks = 2048 bits per pass
 		block buf[CHUNK_B];
-		int produced = 0;
+		int64_t produced = 0;
 		while (produced < length) {
-			int remaining = length - produced;
-			int bits_pass = remaining < CHUNK_B * 128 ? remaining : CHUNK_B * 128;
-			int blocks_pass = (bits_pass + 127) / 128;
+			int64_t remaining = length - produced;
+			int64_t bits_pass = remaining < CHUNK_B * 128 ? remaining : CHUNK_B * 128;
+			int64_t blocks_pass = (bits_pass + 127) / 128;
 			random_block(buf, blocks_pass);
 			const uint8_t *bytes = reinterpret_cast<const uint8_t *>(buf);
-			int full32 = bits_pass / 32;
-			for (int i = 0; i < full32; ++i) {
+			int64_t full32 = bits_pass / 32;
+			for (int64_t i = 0; i < full32; ++i) {
 				uint32_t b32;
 				memcpy(&b32, bytes + i * 4, 4);
 				bits32_to_bytes(b32, data + produced + i * 32);
 			}
 			produced += full32 * 32;
-			int tail_bits = bits_pass - full32 * 32;
+			int64_t tail_bits = bits_pass - full32 * 32;
 			if (tail_bits > 0) {
 				uint32_t b32 = 0;
 				memcpy(&b32, bytes + full32 * 4, (tail_bits + 7) / 8);
@@ -119,13 +119,13 @@ class PRG { public:
 		}
 	}
 
-    void random_data_unaligned(void *data, int nbytes) {
+    void random_data_unaligned(void *data, int64_t nbytes) {
         // Small-buffer fast path. Anything that fits in two blocks is
         // filled with one random_block draw and copied — no alignment
         // dance. This also covers every case where std::align below
         // could fail (failure requires nbytes <= 30, since the worst
         // alignment skew is 15 bytes and the aligned region needs 16).
-        if (nbytes <= (int)(2 * sizeof(block))) {
+        if (nbytes <= (int64_t)(2 * sizeof(block))) {
             block tmp[2];
             random_block(tmp, 2);
             memcpy(data, tmp, nbytes);
@@ -139,7 +139,7 @@ class PRG { public:
         std::align(sizeof(block), sizeof(block), aligned_data, size);
         // round down to a whole number of blocks
         size = sizeof(block) * (size / sizeof(block));
-        int chopped = nbytes - size;
+        int64_t chopped = nbytes - size;
 
         // temporarily fill the bulk of the buffer with random data
         random_data(aligned_data, nbytes - chopped);
@@ -148,7 +148,7 @@ class PRG { public:
         // (using memmove, not memcpy, because of memory overlap)
         memmove(data, aligned_data, nbytes - chopped);
 
-        int remaining_bytes = chopped;
+        int64_t remaining_bytes = chopped;
         char* end = (char*)data + nbytes;
 
         // there can be 0-2 blocks leftover
@@ -160,13 +160,13 @@ class PRG { public:
         while (remaining_bytes > 0) {
             block tmp;
             random_block(&tmp, 1);
-            int bytes_to_copy = std::min(remaining_bytes, (int)sizeof(block));
+            int64_t bytes_to_copy = std::min(remaining_bytes, (int64_t)sizeof(block));
             memcpy(end - remaining_bytes, &tmp, bytes_to_copy);
             remaining_bytes -= bytes_to_copy;
         }
     }
 
-	void random_block(block * data, int nblocks=1) {
+	void random_block(block * data, int64_t nblocks=1) {
 		// Caller must pass block-aligned `data` (16 bytes). random_data and
 		// random_data_unaligned wrap unaligned inputs.
 		//
@@ -178,7 +178,7 @@ class PRG { public:
 		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
 		       "random_block requires 16-byte aligned data");
 		while (nblocks > 0) {
-			int n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
+			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			detail::ParaCtrEnc(data, (int64_t)counter, &aes, n);
 			counter += n;
 			data += n;

@@ -66,28 +66,28 @@ static inline void bits32_to_bytes(uint32_t bits, void *out) {
 #endif
 }
 
-inline void bools_to_bits(void *out_, const bool *bools, size_t len) {
+inline void bools_to_bits(void *out_, const bool *bools, int64_t len) {
 	uint8_t *out = static_cast<uint8_t *>(out_);
-	size_t full32 = len / 32;
-	for (size_t i = 0; i < full32; ++i) {
+	int64_t full32 = len / 32;
+	for (int64_t i = 0; i < full32; ++i) {
 		uint32_t bits = bytes_to_bits32(bools + i * 32);
 		std::memcpy(out + i * 4, &bits, 4);
 	}
-	for (size_t i = full32 * 32; i < len; ++i) {
+	for (int64_t i = full32 * 32; i < len; ++i) {
 		uint8_t mask = (uint8_t)1 << (i % 8);
 		out[i / 8] = (uint8_t)((out[i / 8] & ~mask) | (((uint8_t)bools[i]) << (i % 8)));
 	}
 }
 
-inline void bits_to_bools(bool *bools, const void *in_, size_t len) {
+inline void bits_to_bools(bool *bools, const void *in_, int64_t len) {
 	const uint8_t *in = static_cast<const uint8_t *>(in_);
-	size_t full32 = len / 32;
-	for (size_t i = 0; i < full32; ++i) {
+	int64_t full32 = len / 32;
+	for (int64_t i = 0; i < full32; ++i) {
 		uint32_t bits;
 		std::memcpy(&bits, in + i * 4, 4);
 		bits32_to_bytes(bits, bools + i * 32);
 	}
-	for (size_t i = full32 * 32; i < len; ++i) {
+	for (int64_t i = full32 * 32; i < len; ++i) {
 		bools[i] = (in[i / 8] >> (i % 8)) & 1;
 	}
 }

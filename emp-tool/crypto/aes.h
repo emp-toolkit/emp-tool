@@ -38,11 +38,11 @@ inline void ParaEnc(block* __restrict__ dst,
 // here — preserving K-major layout while tiling on N would require
 // interleaved layouts. Hot callers that know (K, N) at compile time
 // should use ParaEnc<K, N> directly.
-inline void ParaEnc(block* blks, const AES_KEY* keys, int K, int N);
+inline void ParaEnc(block* blks, const AES_KEY* keys, int64_t K, int64_t N);
 
 inline void ParaEnc(block* __restrict__ dst,
                     const block* __restrict__ src,
-                    const AES_KEY* keys, int K, int N);
+                    const AES_KEY* keys, int64_t K, int64_t N);
 
 // Single-key convenience wrappers.
 inline void AES_set_encrypt_key(const block& userkey, AES_KEY* key);
@@ -50,7 +50,7 @@ inline void AES_set_encrypt_key(const block& userkey, AES_KEY* key);
 template<int N>
 inline void AES_ecb_encrypt_blks(block* blks, const AES_KEY* key);
 
-inline void AES_ecb_encrypt_blks(block* blks, unsigned nblks, const AES_KEY* key);
+inline void AES_ecb_encrypt_blks(block* blks, int64_t nblks, const AES_KEY* key);
 
 }  // namespace emp
 

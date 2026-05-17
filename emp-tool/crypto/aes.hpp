@@ -171,11 +171,11 @@ static inline void ParaEnc_impl(block *dst, const block *src, const AES_KEY *key
 // interleaved layout); hot callers that know (K, N) at compile time
 // should use ParaEnc<K, N> directly.
 EMP_AES_TARGET_ATTR
-inline void ParaEnc_runtime_impl(block *dst, const block *src, const AES_KEY *keys, int K, int N) {
-	for (int k = 0; k < K; ++k) {
-		block *pd = dst + (size_t)k * N;
-		const block *ps = src + (size_t)k * N;
-		int n = N;
+inline void ParaEnc_runtime_impl(block *dst, const block *src, const AES_KEY *keys, int64_t K, int64_t N) {
+	for (int64_t k = 0; k < K; ++k) {
+		block *pd = dst + k * N;
+		const block *ps = src + k * N;
+		int64_t n = N;
 		while (n >= 8) { ParaEnc_impl<1, 8>(pd, ps, keys + k); pd += 8; ps += 8; n -= 8; }
 		if (n >= 4)    { ParaEnc_impl<1, 4>(pd, ps, keys + k); pd += 4; ps += 4; n -= 4; }
 		if (n >= 2)    { ParaEnc_impl<1, 2>(pd, ps, keys + k); pd += 2; ps += 2; n -= 2; }
@@ -215,7 +215,7 @@ static inline void aes_ctr_fill(block *dst, int64_t counter, const AES_KEY *kk) 
 }
 
 EMP_AES_TARGET_ATTR
-inline void ParaCtrEnc(block *dst, int64_t counter, const AES_KEY *kk, int n) {
+inline void ParaCtrEnc(block *dst, int64_t counter, const AES_KEY *kk, int64_t n) {
 	while (n >= 8) { aes_ctr_fill<8>(dst, counter, kk); dst += 8; counter += 8; n -= 8; }
 	if (n >= 4)    { aes_ctr_fill<4>(dst, counter, kk); dst += 4; counter += 4; n -= 4; }
 	if (n >= 2)    { aes_ctr_fill<2>(dst, counter, kk); dst += 2; counter += 2; n -= 2; }
@@ -267,7 +267,7 @@ inline void ParaEnc(block * __restrict__ dst,
 }
 
 EMP_AES_TARGET_ATTR
-inline void ParaEnc(block *blks, const AES_KEY *keys, int K, int N) {
+inline void ParaEnc(block *blks, const AES_KEY *keys, int64_t K, int64_t N) {
 	EMP_AES_ASSERT_ALIGNED(blks);
 	EMP_AES_ASSERT_ALIGNED(keys);
 	detail::ParaEnc_runtime_impl(blks, blks, keys, K, N);
@@ -276,7 +276,7 @@ inline void ParaEnc(block *blks, const AES_KEY *keys, int K, int N) {
 EMP_AES_TARGET_ATTR
 inline void ParaEnc(block * __restrict__ dst,
                     const block * __restrict__ src,
-                    const AES_KEY *keys, int K, int N) {
+                    const AES_KEY *keys, int64_t K, int64_t N) {
 	EMP_AES_ASSERT_ALIGNED(dst);
 	EMP_AES_ASSERT_ALIGNED(src);
 	EMP_AES_ASSERT_ALIGNED(keys);
@@ -292,8 +292,8 @@ inline void AES_ecb_encrypt_blks(block *blks, const AES_KEY *key) {
 	ParaEnc<1, N>(blks, key);
 }
 
-inline void AES_ecb_encrypt_blks(block *blks, unsigned nblks, const AES_KEY *key) {
-	ParaEnc(blks, key, 1, (int)nblks);
+inline void AES_ecb_encrypt_blks(block *blks, int64_t nblks, const AES_KEY *key) {
+	ParaEnc(blks, key, 1, nblks);
 }
 
 }  // namespace emp

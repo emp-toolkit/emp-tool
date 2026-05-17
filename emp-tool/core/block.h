@@ -30,20 +30,20 @@ std::ostream& operator<<(std::ostream& out, const block& blk);
 // res[i] = x[i] ^ y[i]. Pointers must be pairwise non-overlapping.
 inline void xorBlocks_arr(block* __restrict__ res,
                           const block* __restrict__ x,
-                          const block* __restrict__ y, int nblocks);
+                          const block* __restrict__ y, int64_t nblocks);
 
 // In-place: dst[i] ^= src[i]. dst and src must not overlap.
 inline void xorBlocksTo_arr(block* __restrict__ dst,
-                            const block* __restrict__ src, int nblocks);
+                            const block* __restrict__ src, int64_t nblocks);
 
 // res[i] = x[i] ^ y (broadcast). res and x must not overlap.
 inline void xorBlocks_arr(block* __restrict__ res,
                           const block* __restrict__ x,
-                          block y, int nblocks);
+                          block y, int64_t nblocks);
 
 // True iff x[0..n) == y[0..n) element-wise. No early exit:
 // accumulator-OR exposes ILP on the equal-case path.
-inline bool cmpBlock(const block* x, const block* y, int nblocks);
+inline bool cmpBlock(const block* x, const block* y, int64_t nblocks);
 
 // --- SSE bit-matrix transpose --------------------------------------------
 
