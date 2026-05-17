@@ -32,7 +32,7 @@ Two randomness sources in emp-tool reach the wire:
    etc. In test mode, `PRG()` pulls a deterministic counter-derived
    seed from `next_test_seed()` instead of OS entropy
    (`/dev/urandom` or `RDSEED`).
-2. **`ECGroup::get_rand_bn`** — the only call to OpenSSL's
+2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's
    `BN_rand_range` in the toolkit. Used by P-256 base OTs (PVW,
    CSW, NP, CO). In test mode, it samples uniform in `[0, order)`
    via emp::PRG-driven rejection instead of OpenSSL's internal
@@ -76,8 +76,8 @@ in production paths.
 - **`PRG(const block*, int)` is unchanged in test mode.** Callers
   with their own explicit seed sources already control determinism;
   the test-mode hook only affects the OS-random default path.
-- **`ECGroup::get_rand_bn` uses a `thread_local PRG`.** Determinism
-  per thread depends on the order of `get_rand_bn` calls, which
+- **`ECGroup::rand_scalar` uses a `thread_local PRG`.** Determinism
+  per thread depends on the order of `rand_scalar` calls, which
   is determined by the protocol's call graph.
 - **External inputs are not deterministic.** Test inputs (choice
   bits, message buffers) come from the caller — the test harness
@@ -134,7 +134,7 @@ and may be a useful template for new wire-equivalence tests.
 - **Caller-provided randomness.** A `PRG` constructed with an
   explicit seed bypasses the test-mode hook entirely.
 - **Other OpenSSL randomness.** Only `BN_rand_range` (via
-  `ECGroup::get_rand_bn`) is intercepted. Direct `RAND_bytes` calls,
+  `ECGroup::rand_scalar`) is intercepted. Direct `RAND_bytes` calls,
   if any code path adds them, would still pull from OpenSSL's
   CSPRNG. As of the framework's introduction, no such call exists
   in emp-tool or emp-ot; `grep -rn "RAND_bytes\|BN_rand"` over

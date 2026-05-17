@@ -10,11 +10,10 @@ using namespace emp;
 
 int main() {
 	ECGroup G;
-	Scalar ia, ib, ic, id;
-	G.get_rand_bn(ia);
-	G.get_rand_bn(ib);
-	G.get_rand_bn(ic);
-	G.get_rand_bn(id);
+	Scalar ia = G.rand_scalar();
+	Scalar ib = G.rand_scalar();
+	Scalar ic = G.rand_scalar();
+	Scalar id = G.rand_scalar();
 	Point * a = new Point();
 	Point b;
 	*a = G.mul_gen(ia);//g^a
@@ -51,9 +50,8 @@ int main() {
 	static constexpr const char kRFC9380DST[] =
 		"QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_";
 	for (const auto &v : vecs) {
-		Point P;
-		G.hash_to_point(v.msg, strlen(v.msg),
-		                kRFC9380DST, sizeof(kRFC9380DST) - 1, P);
+		Point P = G.hash_to_point(v.msg, strlen(v.msg),
+		                          kRFC9380DST, sizeof(kRFC9380DST) - 1);
 		BIGNUM *xb = BN_new(), *yb = BN_new();
 		EC_POINT_get_affine_coordinates(G.ec_group(), P.point(), xb, yb, G.bn_ctx());
 		char *xh = BN_bn2hex(xb);

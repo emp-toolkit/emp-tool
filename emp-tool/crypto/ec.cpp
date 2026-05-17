@@ -385,10 +385,11 @@ void ECGroup::resize_scratch(size_t size) {
 	}
 }
 
-void ECGroup::get_rand_bn(Scalar & n) {
+Scalar ECGroup::rand_scalar() {
+	Scalar n;
 	if (!is_test_mode()) {
 		BN_rand_range(n.n(), order_.n());
-		return;
+		return n;
 	}
 	// Test mode: deterministic uniform sample in [0, order_) via
 	// emp::PRG instead of OpenSSL's BN_rand_range (the only
@@ -407,8 +408,9 @@ void ECGroup::get_rand_bn(Scalar & n) {
 		prg.random_data_unaligned(buf.data(), n_bytes);
 		buf[0] &= top_mask;
 		if (BN_bin2bn(buf.data(), n_bytes, n.n()) == nullptr)
-			error("ECGroup::get_rand_bn: BN_bin2bn");
+			error("ECGroup::rand_scalar: BN_bin2bn");
 	} while (BN_cmp(n.n(), order_.n()) >= 0);
+	return n;
 }
 
 Point ECGroup::get_generator() {
@@ -425,9 +427,9 @@ Point ECGroup::mul_gen(const Scalar &m) {
 	return res;
 }
 
-void ECGroup::hash_to_point(const char * msg, size_t length,
-                            const char * dst, size_t dst_len,
-                            Point & out) {
+Point ECGroup::hash_to_point(const char * msg, size_t length,
+                             const char * dst, size_t dst_len) {
+	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
 	EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_);
 	sswu_z_for_curve(Z, p, curve_nid_);
@@ -448,17 +450,6 @@ void ECGroup::hash_to_point(const char * msg, size_t length,
 	EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_);
 	EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_);
 
-	// If `out` was previously bound to a different ECGroup, drop it
-	// and re-allocate. Skipping this would add Q0+Q1 (in *this's
-	// curve) into out.point_ (in another curve) — undefined behavior.
-	if (out.point_ != nullptr && out.group_ != this) {
-		EC_POINT_free(out.point_);
-		out.point_ = nullptr;
-	}
-	if (out.point_ == nullptr) {
-		out.group_ = this;
-		out.point_ = EC_POINT_new(ec_group_);
-	}
 	if (EC_POINT_add(ec_group_, out.point_, Q0, Q1, bn_ctx_) == 0)
 		error("H2C ADD");
 	// P-256 cofactor h = 1 — clear_cofactor is identity, skip it.
@@ -469,6 +460,7 @@ void ECGroup::hash_to_point(const char * msg, size_t length,
 	BN_free(p); BN_free(A); BN_free(B); BN_free(Z);
 	BN_free(u0); BN_free(u1);
 	BN_free(x0); BN_free(y0); BN_free(x1); BN_free(y1);
+	return out;
 }
 
 }  // namespace emp

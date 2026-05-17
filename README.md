@@ -195,16 +195,14 @@ P-256; pass any OpenSSL `NID_*` to the constructor to switch.
 
 ```cpp
 ECGroup G;                                       // P-256 by default
-Scalar a;
-G.get_rand_bn(a);                                // uniform in [0, order)
+Scalar a = G.rand_scalar();                      // uniform in [0, order)
 Point P = G.mul_gen(a);                          // P = a · G_generator
 
 // Hash to curve, RFC 9380 §6 SSWU_RO_. Each protocol must pick its
 // own domain-separation tag (DST); there's no default — sharing a
 // DST across protocols defeats the point.
-Point T;
 const char dst[] = "my-protocol:v1";
-G.hash_to_point("my message", 10, dst, sizeof(dst) - 1, T);
+Point T = G.hash_to_point("my message", 10, dst, sizeof(dst) - 1);
 ```
 
 ### Network IO
@@ -299,7 +297,7 @@ corresponding header — see `CLAUDE.md` for the file conventions
 ### Wire-byte equivalence (test mode)
 
 Setting `EMP_TEST_MODE=1` swaps every randomness source in the
-toolkit (`PRG()` default-construction, `ECGroup::get_rand_bn`) for a
+toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for a
 deterministic counter-derived stream so two runs of the same code
 produce byte-identical wire output. Combined with `TraceIO` (an
 `IOChannel` adapter that tees wire bytes to a file), this lets you

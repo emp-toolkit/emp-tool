@@ -48,11 +48,11 @@ class ECGroup;
 
 // Owns an EC_POINT bound to an ECGroup. Default-constructible into a
 // "zombie" state (point() == nullptr, group() == nullptr) so that
-// Point[] arrays can be filled later via from_bin / hash_to_point. All
-// other methods require a fully-initialized Point and assert it.
+// Point[] arrays can be filled later via from_bin. All other methods
+// require a fully-initialized Point and assert it.
 class Point {
 public:
-	Point() = default;                     // zombie; valid only as from_bin / hash_to_point target
+	Point() = default;                     // zombie; valid only as from_bin target
 	explicit Point(ECGroup * g);
 	Point(const Point & p);
 	Point(Point && p) noexcept;
@@ -96,7 +96,7 @@ public:
 	void resize_scratch(size_t size);
 	unsigned char * scratch() const { return scratch_; }
 
-	void get_rand_bn(Scalar & n);
+	Scalar rand_scalar();
 	Point get_generator();
 	Point mul_gen(const Scalar & m);
 
@@ -106,9 +106,8 @@ public:
 	// protocol; the canonical "QUUX-V01-CS02-with-<suite>" is only for
 	// validating against §J vectors. Only P-256 is wired up today;
 	// other curves error at runtime.
-	void hash_to_point(const char * msg, size_t length,
-	                   const char * dst, size_t dst_len,
-	                   Point & out);
+	Point hash_to_point(const char * msg, size_t length,
+	                    const char * dst, size_t dst_len);
 
 	EC_GROUP * ec_group() const { return ec_group_; }
 	BN_CTX * bn_ctx() const { return bn_ctx_; }
