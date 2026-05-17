@@ -41,7 +41,7 @@ inline std::atomic<uint64_t>& test_seed_counter() {
 }  // namespace detail
 
 // Programmatic toggle. Affects all subsequent PRG()-default-
-// constructions and Group::get_rand_bn calls. Has no effect on
+// constructions and ECGroup::get_rand_bn calls. Has no effect on
 // PRG instances already constructed.
 inline void set_test_mode(bool on) {
     detail::test_mode_flag().store(on);
@@ -52,7 +52,7 @@ inline bool is_test_mode() {
 }
 
 // Yields the next deterministic seed counter value. Used internally
-// by PRG() and Group::get_rand_bn in test mode.
+// by PRG() and ECGroup::get_rand_bn in test mode.
 inline uint64_t next_test_seed() {
     return detail::test_seed_counter().fetch_add(1);
 }

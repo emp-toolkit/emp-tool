@@ -139,7 +139,7 @@ small structs, etc.) — the aligned variant asserts in debug.
 | Class | Models |
 |---|---|
 | `CCRH`    | circular correlation-robust hash |
-| `MITCCRH` | multi-instance tweakable CCRH (used by half-gate garbling) |
+| `MITCCRH` | multi-instance tweakable CCRH |
 
 ```cpp
 block key;
@@ -187,6 +187,26 @@ prg.random_block(&b, 1);
 gfmul(a, b, &c);                                 // c = a · b in GF(2^128)
 ```
 
+### Elliptic curves
+
+`ECGroup` wraps an OpenSSL `EC_GROUP` + `BN_CTX`. Default curve is
+P-256; pass any OpenSSL `NID_*` to the constructor to switch.
+`Scalar` and `Point` are the corresponding handles.
+
+```cpp
+ECGroup G;                                       // P-256 by default
+Scalar a;
+G.get_rand_bn(a);                                // uniform in [0, order)
+Point P = G.mul_gen(a);                          // P = a · G_generator
+
+// Hash to curve, RFC 9380 §6 SSWU_RO_. Each protocol must pick its
+// own domain-separation tag (DST); there's no default — sharing a
+// DST across protocols defeats the point.
+Point T;
+const char dst[] = "my-protocol:v1";
+G.hash_to_point("my message", 10, dst, sizeof(dst) - 1, T);
+```
+
 ### Network IO
 
 ```cpp
@@ -219,27 +239,6 @@ finalize_clear_backend();
 
 To dump the executed circuit as a Bristol-format file, pass a filename
 to `setup_clear_backend("circuit.txt")`.
-
-### Half-gate garbling
-
-`HalfGateGen` (Alice) and `HalfGateEva` (Bob) are template-parameterized
-on the IO channel. Input feeding and output revealing require OT and
-live in **emp-ot**; the bare classes in emp-tool are the gate-evaluation
-core, suitable for benchmarking garbling speed:
-
-```cpp
-NetIO io(party == ALICE ? nullptr : "127.0.0.1", 12345);
-backend = (party == ALICE) ? new HalfGateGen<NetIO>(&io)
-                           : new HalfGateEva<NetIO>(&io);
-
-// ... circuit using Bit / BitVec / UnsignedInt / SignedInt / Float ...
-
-delete backend;
-backend = nullptr;
-```
-
-For end-to-end 2PC use **emp-sh2pc** (semi-honest) or **emp-ag2pc**
-(malicious) which compose emp-tool and emp-ot.
 
 ### Pre-built circuits (Bristol format)
 
@@ -300,7 +299,7 @@ corresponding header — see `CLAUDE.md` for the file conventions
 ### Wire-byte equivalence (test mode)
 
 Setting `EMP_TEST_MODE=1` swaps every randomness source in the
-toolkit (`PRG()` default-construction, `Group::get_rand_bn`) for a
+toolkit (`PRG()` default-construction, `ECGroup::get_rand_bn`) for a
 deterministic counter-derived stream so two runs of the same code
 produce byte-identical wire output. Combined with `TraceIO` (an
 `IOChannel` adapter that tees wire bytes to a file), this lets you
