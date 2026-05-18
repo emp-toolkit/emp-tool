@@ -161,6 +161,13 @@ class TLSIO : public IOChannel { public:
 		init_from_sock(existing_sock, cfg);
 	}
 
+	// Non-copyable, non-movable: owns raw fd / OpenSSL handles /
+	// buffers that would multi-free.
+	TLSIO(const TLSIO&)             = delete;
+	TLSIO& operator=(const TLSIO&)  = delete;
+	TLSIO(TLSIO&&)                  = delete;
+	TLSIO& operator=(TLSIO&&)       = delete;
+
 	~TLSIO() {
 		flush();
 		if (!quiet) {

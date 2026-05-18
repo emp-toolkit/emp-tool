@@ -94,6 +94,13 @@ class NetIO : public IOChannel { public:
 		init_from_sock(existing_sock);
 	}
 
+	// Non-copyable, non-movable: owns raw fd / FILE* / buffers that
+	// would multi-free.
+	NetIO(const NetIO&)             = delete;
+	NetIO& operator=(const NetIO&)  = delete;
+	NetIO(NetIO&&)                  = delete;
+	NetIO& operator=(NetIO&&)       = delete;
+
 	~NetIO() {
 		flush();
 		if (!quiet) {

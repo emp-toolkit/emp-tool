@@ -107,6 +107,7 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		const BIGNUM *Z, BN_CTX *ctx) {
 	BIGNUM *u2 = BN_new(), *t = BN_new(), *tv1 = BN_new(), *tmp = BN_new();
 	BIGNUM *x1 = BN_new(), *gx = BN_new(), *y = BN_new();
+	if (!u2 || !t || !tv1 || !tmp || !x1 || !gx || !y) error("SSWU: BN_new");
 
 	// t = Z * u^2 ; tv1 = t^2 + t
 	BN_mod_sqr(u2, u, p, ctx);
@@ -123,12 +124,13 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	} else {
 		// x1 = (-B / A) * (1 + tv1^{-1})
 		BIGNUM *inv = BN_new(), *one_plus = BN_new();
+		BIGNUM *negB = BN_new(), *Ainv = BN_new();
+		if (!inv || !one_plus || !negB || !Ainv) error("SSWU: BN_new");
 		if (BN_mod_inverse(inv, tv1, p, ctx) == nullptr)
 			error("SSWU: tv1 not invertible");
 		BN_one(one_plus);
 		BN_mod_add(one_plus, one_plus, inv, p, ctx);
-		BIGNUM *negB = BN_new(); BN_sub(negB, p, B);
-		BIGNUM *Ainv = BN_new();
+		BN_sub(negB, p, B);
 		if (BN_mod_inverse(Ainv, A, p, ctx) == nullptr)
 			error("SSWU: A not invertible");
 		BN_mod_mul(tmp, negB, Ainv, p, ctx);
@@ -431,10 +433,12 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
                              const char * dst, size_t dst_len) {
 	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
+	if (!p || !A || !B || !Z) error("hash_to_point: BN_new");
 	EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_);
 	sswu_z_for_curve(Z, p, curve_nid_);
 
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
+	if (!u0 || !u1) error("hash_to_point: BN_new");
 	hash_to_field_p256(u0, u1, p,
 	                   reinterpret_cast<const unsigned char*>(msg), length,
 	                   reinterpret_cast<const unsigned char*>(dst), dst_len,
@@ -442,11 +446,13 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 
 	BIGNUM *x0 = BN_new(), *y0 = BN_new();
 	BIGNUM *x1 = BN_new(), *y1 = BN_new();
+	if (!x0 || !y0 || !x1 || !y1) error("hash_to_point: BN_new");
 	map_to_curve_sswu_p256(x0, y0, u0, p, A, B, Z, bn_ctx_);
 	map_to_curve_sswu_p256(x1, y1, u1, p, A, B, Z, bn_ctx_);
 
 	EC_POINT *Q0 = EC_POINT_new(ec_group_);
 	EC_POINT *Q1 = EC_POINT_new(ec_group_);
+	if (!Q0 || !Q1) error("hash_to_point: EC_POINT_new");
 	EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_);
 	EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_);
 
