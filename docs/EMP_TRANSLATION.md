@@ -327,7 +327,7 @@ pre-built Bristol circuits wrapped in calculator classes:
 ```cpp
 // SHA3-256 over a secret byte string of public length 2000.
 BitVec input[2000];        // each entry is BitVec(8, ..., ALICE/BOB/PUBLIC)
-BitVec output(10, (uint32_t)32, PUBLIC);   // 32 = output length in bytes
+BitVec output;             // sha3_256 resizes this to 256 bits internally
 SHA3_256_Calculator sha3;
 sha3.sha3_256(&output, input, /*input_count=*/2000);
 uint8_t hash[32];
