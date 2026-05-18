@@ -5,7 +5,7 @@
 namespace emp {
 // Counter-mode AES tile size in blocks. Tuned for L1d locality and to
 // amortize ParaEnc's per-call setup (round-key broadcasts).
-const static int AES_BATCH_SIZE = 64;
+constexpr int64_t AES_BATCH_SIZE = 64;
 const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;
 const static int NETWORK_STREAM_BUFFER_SIZE = 1024*1024;
 

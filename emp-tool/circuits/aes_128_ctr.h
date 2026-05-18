@@ -128,13 +128,14 @@ template<typename Wire>
 class AES_128_CTR_Calculator_T { public:
 	AES_128_CTR_Calculator_T() = default;
 
-	// In-circuit key, in-circuit IV.
+	// In-circuit key, in-circuit IV. No party parameter — the IV is
+	// already typed as in-circuit wires, so the public/secret split is
+	// determined by the caller's BitVec construction.
 	int aes_128_ctr(const Bit_T<Wire> key[],
 			const Bit_T<Wire> iv[],
 			Bit_T<Wire> input[],
 			Bit_T<Wire> * output = nullptr,
 			const size_t length = 128, // in bits
-			const int /*party*/ = emp::PUBLIC,
 			const uint64_t start_chunk = 0) {
 		Bit_T<Wire> counter_block[128];
 		for (int i = 0; i < 128; ++i) counter_block[i] = iv[i];

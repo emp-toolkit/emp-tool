@@ -20,10 +20,10 @@ class CCRH: public PRP { public:
 	}
 
 	// NOTE: the body is fully unrolled by the compiler for small n. For
-	// n ≳ 64 the unrolled body spills its per-block scratch (each block
-	// needs a SIMD register; the architectural file holds 16–32 of them
-	// depending on the target). Callers wanting large batches should use
-	// Hn() below, or stay at n ≤ 16 where throughput peaks.
+	// large n the unrolled body spills its per-block scratch (each block
+	// needs a SIMD register, and the target's architectural register
+	// file is finite). Callers wanting large batches should use Hn()
+	// below.
 	//
 	// H(x) = AES_K(σ(x)) ⊕ σ(x) (Davies–Meyer over σ). Compute σ(in)
 	// once into `pt`, AES it into `out` out-of-place, then XOR pt back

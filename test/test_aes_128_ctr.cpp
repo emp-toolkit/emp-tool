@@ -53,7 +53,6 @@ int hash_in_circuit(){
                                      input_integer.bits.data(),
                                      output_integer.bits.data(),
                                      2000 * 8,
-                                     emp::PUBLIC,
                                      77777);
 
   output_integer.reveal(output_bytes2, PUBLIC);
