@@ -24,7 +24,8 @@ class Hash { public:
 	Hash(const Hash&) = delete;
 	Hash& operator=(const Hash&) = delete;
 	void put(const void * data, int64_t nbyte) {
-		EVP_DigestUpdate(mdctx, data, nbyte);
+		if (1 != EVP_DigestUpdate(mdctx, data, nbyte))
+			error("Hash::put: EVP_DigestUpdate");
 	}
 	void put_block(const block* blk, int64_t nblock=1){
 		put(blk, sizeof(block)*nblock);
@@ -36,19 +37,24 @@ class Hash { public:
 	void digest(void * a, bool reset_after = true) {
 		if (reset_after) {
 			uint32_t len = 0;
-			EVP_DigestFinal_ex(mdctx, (unsigned char *)a, &len);
+			if (1 != EVP_DigestFinal_ex(mdctx, (unsigned char *)a, &len))
+				error("Hash::digest: EVP_DigestFinal_ex");
 			reset();
 		} else {
 			EVP_MD_CTX *snap = EVP_MD_CTX_create();
 			if (snap == NULL || 1 != EVP_MD_CTX_copy_ex(snap, mdctx))
 				error("Hash snapshot error!");
 			uint32_t len = 0;
-			EVP_DigestFinal_ex(snap, (unsigned char *)a, &len);
+			if (1 != EVP_DigestFinal_ex(snap, (unsigned char *)a, &len)) {
+				EVP_MD_CTX_destroy(snap);
+				error("Hash::digest: EVP_DigestFinal_ex (snap)");
+			}
 			EVP_MD_CTX_destroy(snap);
 		}
 	}
 	void reset() {
-		EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
+		if (1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL))
+			error("Hash::reset: EVP_DigestInit_ex");
 	}
 	static void hash_once(void * dgst, const void * data, int64_t nbyte) {
 		// Per-thread persistent EVP_MD_CTX. The dominant cost of a
@@ -64,10 +70,11 @@ class Hash { public:
 			~Holder() { if (ctx) EVP_MD_CTX_free(ctx); }
 		};
 		thread_local Holder h;
-		EVP_DigestInit_ex(h.ctx, EVP_sha256(), nullptr);
-		EVP_DigestUpdate(h.ctx, data, nbyte);
 		uint32_t len = 0;
-		EVP_DigestFinal_ex(h.ctx, (unsigned char *)dgst, &len);
+		if (EVP_DigestInit_ex(h.ctx, EVP_sha256(), nullptr) != 1
+		    || EVP_DigestUpdate(h.ctx, data, nbyte) != 1
+		    || EVP_DigestFinal_ex(h.ctx, (unsigned char *)dgst, &len) != 1)
+			error("hash_once: EVP_Digest*");
 	}
 	#ifdef __x86_64__
 	__attribute__((target("sse2")))

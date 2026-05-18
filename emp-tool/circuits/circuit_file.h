@@ -105,7 +105,6 @@ class BristolFormat { public:
 		if ((long long)n1 + (long long)n2 > (long long)num_wire ||
 		    (long long)n3 > (long long)num_wire)
 			throw std::runtime_error("BristolFormat: fan-in/out exceeds num_wire");
-		(void)fscanf(f, "\n");
 		char str[200];
 		gates.resize((size_t)num_gate * 4);
 		for(int i = 0; i < num_gate; ++i) {

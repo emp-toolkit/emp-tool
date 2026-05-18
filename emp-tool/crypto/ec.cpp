@@ -43,20 +43,22 @@ inline void expand_message_xmd_sha256(
 	if (md == nullptr) error("H2C XMD: EVP_MD_CTX_new");
 
 	// b_0 = H(Z_pad || msg || l_i_b_str || 0x00 || DST_prime)
-	EVP_DigestInit_ex(md, EVP_sha256(), NULL);
-	EVP_DigestUpdate(md, z_pad, s_in_bytes);
-	EVP_DigestUpdate(md, msg, msg_len);
-	EVP_DigestUpdate(md, l_i_b_str, 2);
-	EVP_DigestUpdate(md, &zero, 1);
-	EVP_DigestUpdate(md, dst_prime, dst_prime_len);
-	EVP_DigestFinal_ex(md, b0, &outlen);
+	if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
+	    || EVP_DigestUpdate(md, z_pad, s_in_bytes) != 1
+	    || EVP_DigestUpdate(md, msg, msg_len) != 1
+	    || EVP_DigestUpdate(md, l_i_b_str, 2) != 1
+	    || EVP_DigestUpdate(md, &zero, 1) != 1
+	    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
+	    || EVP_DigestFinal_ex(md, b0, &outlen) != 1)
+		error("H2C XMD: EVP_Digest* (b0)");
 
 	// b_1 = H(b_0 || 0x01 || DST_prime)
-	EVP_DigestInit_ex(md, EVP_sha256(), NULL);
-	EVP_DigestUpdate(md, b0, b_in_bytes);
-	EVP_DigestUpdate(md, &one, 1);
-	EVP_DigestUpdate(md, dst_prime, dst_prime_len);
-	EVP_DigestFinal_ex(md, bi, &outlen);
+	if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
+	    || EVP_DigestUpdate(md, b0, b_in_bytes) != 1
+	    || EVP_DigestUpdate(md, &one, 1) != 1
+	    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
+	    || EVP_DigestFinal_ex(md, bi, &outlen) != 1)
+		error("H2C XMD: EVP_Digest* (b1)");
 
 	std::memcpy(out, bi, std::min(out_len, b_in_bytes));
 	std::memcpy(prev, bi, b_in_bytes);
@@ -66,11 +68,12 @@ inline void expand_message_xmd_sha256(
 		unsigned char tmp[32];
 		for (size_t j = 0; j < b_in_bytes; j++) tmp[j] = b0[j] ^ prev[j];
 		unsigned char ib = (unsigned char)i;
-		EVP_DigestInit_ex(md, EVP_sha256(), NULL);
-		EVP_DigestUpdate(md, tmp, b_in_bytes);
-		EVP_DigestUpdate(md, &ib, 1);
-		EVP_DigestUpdate(md, dst_prime, dst_prime_len);
-		EVP_DigestFinal_ex(md, bi, &outlen);
+		if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
+		    || EVP_DigestUpdate(md, tmp, b_in_bytes) != 1
+		    || EVP_DigestUpdate(md, &ib, 1) != 1
+		    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
+		    || EVP_DigestFinal_ex(md, bi, &outlen) != 1)
+			error("H2C XMD: EVP_Digest* (bi)");
 
 		size_t off = (i - 1) * b_in_bytes;
 		std::memcpy(out + off, bi, std::min(out_len - off, b_in_bytes));
@@ -390,7 +393,8 @@ void ECGroup::resize_scratch(size_t size) {
 Scalar ECGroup::rand_scalar() {
 	Scalar n;
 	if (!is_test_mode()) {
-		BN_rand_range(n.n(), order_.n());
+		if (BN_rand_range(n.n(), order_.n()) != 1)
+			error("ECGroup::rand_scalar: BN_rand_range");
 		return n;
 	}
 	// Test mode: deterministic uniform sample in [0, order_) via

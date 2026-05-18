@@ -45,12 +45,16 @@ inline Float_T<Wire> Float_T<Wire>::select(const Bit_T<Wire>& select, const Floa
 
 template<typename Wire>
 inline Bit_T<Wire>& Float_T<Wire>::operator[](int index) {
-	return value[std::min(index, FLOAT_LEN-1)];
+	if (index < 0 || index >= FLOAT_LEN)
+		error("Float_T::operator[]: index out of range");
+	return value[index];
 }
 
 template<typename Wire>
 inline const Bit_T<Wire> &Float_T<Wire>::operator[](int index) const {
-	return value[std::min(index, FLOAT_LEN-1)];
+	if (index < 0 || index >= FLOAT_LEN)
+		error("Float_T::operator[]: index out of range");
+	return value[index];
 }
 
 template<typename Wire>
