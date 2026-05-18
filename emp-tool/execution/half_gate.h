@@ -50,7 +50,6 @@ class HalfGate : public Backend {
 public:
 	IOChannel* io;
 	block constant[2];
-	MITCCRH<8> mitccrh;
 
 	HalfGate(int party_, IOChannel* io_) : Backend(party_), io(io_) {}
 
@@ -85,6 +84,13 @@ public:
 	}
 
 	uint64_t num_and() override { return mitccrh.gid / 2; }
+
+protected:
+	// Protected so HalfGateGen / HalfGateEva can renew_ks. Kept out of
+	// the public surface because the documented mix-mode invariant in
+	// mitccrh.h (tweak-mode vs gid-mode must not mix on one instance)
+	// is enforceable only if external code can't reach the field.
+	MITCCRH<8> mitccrh;
 };
 
 class HalfGateGen : public HalfGate {

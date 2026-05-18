@@ -63,8 +63,8 @@ class BristolFormat { public:
 		this->n1 = n1;
 		this->n2 = n2;
 		this->n3 = n3;
-		gates.resize(num_gate*4);
-		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
+		gates.resize((size_t)num_gate * 4);
+		memcpy(gates.data(), gate_arr, (size_t)num_gate * 4 * sizeof(int));
 	}
 
 	BristolFormat(FILE * file) {
@@ -146,6 +146,11 @@ class BristolFormat { public:
 		fclose(f);
 	}
 
+	// Precondition: caller's `in1`, `in2`, `out` must hold at least `n1`,
+	// `n2`, `n3` elements respectively. No bounds check is performed —
+	// a malformed circuit file with mismatched fan-in/out vs. caller
+	// allocation reads/writes OOB. n1/n2/n3 are the file-declared
+	// bit-widths exposed as public fields, so callers can size accordingly.
 	template<typename Wire>
 	void compute(Bit_T<Wire> * out, const Bit_T<Wire>* in1, const Bit_T<Wire> * in2) {
 		vector<Bit_T<Wire>> wires(num_wire);
@@ -239,6 +244,8 @@ class BristolFashion { public:
 		fclose(f);
 	}
 
+	// Precondition: caller's `in` and `out` must hold at least `num_input`
+	// and `num_output` elements respectively. No bounds check is performed.
 	template<typename Wire>
 	void compute(Bit_T<Wire> * out, const Bit_T<Wire> * in) {
 		vector<Bit_T<Wire>> wires(num_wire);

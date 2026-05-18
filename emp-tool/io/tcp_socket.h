@@ -27,6 +27,10 @@ inline int server_listen(int port) {
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
 	serv.sin_port = htons(port);
 	int listener = ::socket(AF_INET, SOCK_STREAM, 0);
+	if (listener < 0) {
+		std::perror("error: socket");
+		std::exit(1);
+	}
 	int reuse = 1;
 	::setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
 	if (::bind(listener, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) {
@@ -43,22 +47,29 @@ inline int server_listen(int port) {
 }
 
 // Connect to address:port, retrying on failure with a 1 ms backoff so
-// the server side has time to come up. Retries forever — callers are
-// expected to time out at a higher level if needed.
+// the server side has time to come up. Capped at ~60 s of total retry
+// time to catch a permanently-down peer instead of hanging the caller.
 inline int client_connect(const char *address, int port) {
 	struct sockaddr_in dest;
 	std::memset(&dest, 0, sizeof(dest));
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = ::inet_addr(address);
 	dest.sin_port = htons(port);
-	int s;
-	while (true) {
-		s = ::socket(AF_INET, SOCK_STREAM, 0);
-		if (::connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0) break;
+	const int max_retries = 60000;  // 60 s at 1 ms backoff
+	for (int attempt = 0; attempt < max_retries; ++attempt) {
+		int s = ::socket(AF_INET, SOCK_STREAM, 0);
+		if (s < 0) {
+			std::perror("error: socket");
+			std::exit(1);
+		}
+		if (::connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
+			return s;
 		::close(s);
 		::usleep(1000);
 	}
-	return s;
+	std::fprintf(stderr, "error: client_connect: %s:%d unreachable after %d attempts\n",
+	             address, port, max_retries);
+	std::exit(1);
 }
 
 inline void set_nodelay(int sock) {

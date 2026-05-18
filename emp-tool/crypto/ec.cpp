@@ -100,11 +100,9 @@ inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 // P-256 has p ≡ 3 (mod 4) so OpenSSL takes the fast (p+1)/4 path
 // internally.
 //
-// BN_mod_* return values aren't checked individually — they only fail
-// on OOM, which `error()` would catch via downstream null derefs.
-// The two failure modes that can hit valid inputs — non-invertible
-// BN_mod_inverse and BN_mod_sqrt on a non-residue — are checked
-// explicitly.
+// BN_mod_* failures (OOM on intermediate growth) leave the destination
+// BIGNUM in an indeterminate state — not null — so downstream reads
+// of garbage rather than crashing. Checked at every block boundary.
 inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		const BIGNUM *u, const BIGNUM *p, const BIGNUM *A, const BIGNUM *B,
 		const BIGNUM *Z, BN_CTX *ctx) {
@@ -113,17 +111,20 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	if (!u2 || !t || !tv1 || !tmp || !x1 || !gx || !y) error("SSWU: BN_new");
 
 	// t = Z * u^2 ; tv1 = t^2 + t
-	BN_mod_sqr(u2, u, p, ctx);
-	BN_mod_mul(t, Z, u2, p, ctx);
-	BN_mod_sqr(tmp, t, p, ctx);
-	BN_mod_add(tv1, tmp, t, p, ctx);
+	if (BN_mod_sqr(u2, u, p, ctx) != 1
+	    || BN_mod_mul(t, Z, u2, p, ctx) != 1
+	    || BN_mod_sqr(tmp, t, p, ctx) != 1
+	    || BN_mod_add(tv1, tmp, t, p, ctx) != 1)
+		error("SSWU: BN_mod_* (t/tv1)");
 
 	if (BN_is_zero(tv1)) {
 		// x1 = B / (Z * A)
-		BN_mod_mul(tmp, Z, A, p, ctx);
+		if (BN_mod_mul(tmp, Z, A, p, ctx) != 1)
+			error("SSWU: BN_mod_mul (Z*A)");
 		if (BN_mod_inverse(tmp, tmp, p, ctx) == nullptr)
 			error("SSWU: Z*A not invertible");
-		BN_mod_mul(x1, B, tmp, p, ctx);
+		if (BN_mod_mul(x1, B, tmp, p, ctx) != 1)
+			error("SSWU: BN_mod_mul (x1=B/(Z*A))");
 	} else {
 		// x1 = (-B / A) * (1 + tv1^{-1})
 		BIGNUM *inv = BN_new(), *one_plus = BN_new();
@@ -132,43 +133,48 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		if (BN_mod_inverse(inv, tv1, p, ctx) == nullptr)
 			error("SSWU: tv1 not invertible");
 		BN_one(one_plus);
-		BN_mod_add(one_plus, one_plus, inv, p, ctx);
-		BN_sub(negB, p, B);
+		if (BN_mod_add(one_plus, one_plus, inv, p, ctx) != 1
+		    || BN_sub(negB, p, B) != 1)
+			error("SSWU: BN_mod_add/sub (else-branch)");
 		if (BN_mod_inverse(Ainv, A, p, ctx) == nullptr)
 			error("SSWU: A not invertible");
-		BN_mod_mul(tmp, negB, Ainv, p, ctx);
-		BN_mod_mul(x1, tmp, one_plus, p, ctx);
+		if (BN_mod_mul(tmp, negB, Ainv, p, ctx) != 1
+		    || BN_mod_mul(x1, tmp, one_plus, p, ctx) != 1)
+			error("SSWU: BN_mod_mul (x1)");
 		BN_free(inv); BN_free(one_plus); BN_free(negB); BN_free(Ainv);
 	}
 
 	// gx1 = x1^3 + A*x1 + B
-	BN_mod_sqr(tmp, x1, p, ctx);
-	BN_mod_mul(gx, tmp, x1, p, ctx);
-	BN_mod_mul(tmp, A, x1, p, ctx);
-	BN_mod_add(gx, gx, tmp, p, ctx);
-	BN_mod_add(gx, gx, B, p, ctx);
+	if (BN_mod_sqr(tmp, x1, p, ctx) != 1
+	    || BN_mod_mul(gx, tmp, x1, p, ctx) != 1
+	    || BN_mod_mul(tmp, A, x1, p, ctx) != 1
+	    || BN_mod_add(gx, gx, tmp, p, ctx) != 1
+	    || BN_mod_add(gx, gx, B, p, ctx) != 1)
+		error("SSWU: BN_mod_* (gx1)");
 
 	// BN_mod_sqrt's prototype takes BIGNUM* (non-const) for the modulus
 	// even though it doesn't mutate it; the const_cast is safe.
 	if (BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) != NULL) {
-		BN_copy(x_out, x1);
+		if (BN_copy(x_out, x1) == NULL) error("SSWU: BN_copy x_out");
 	} else {
 		// x2 = t * x1 ; gx2 = x2^3 + A*x2 + B
-		BN_mod_mul(x1, t, x1, p, ctx);
-		BN_mod_sqr(tmp, x1, p, ctx);
-		BN_mod_mul(gx, tmp, x1, p, ctx);
-		BN_mod_mul(tmp, A, x1, p, ctx);
-		BN_mod_add(gx, gx, tmp, p, ctx);
-		BN_mod_add(gx, gx, B, p, ctx);
+		if (BN_mod_mul(x1, t, x1, p, ctx) != 1
+		    || BN_mod_sqr(tmp, x1, p, ctx) != 1
+		    || BN_mod_mul(gx, tmp, x1, p, ctx) != 1
+		    || BN_mod_mul(tmp, A, x1, p, ctx) != 1
+		    || BN_mod_add(gx, gx, tmp, p, ctx) != 1
+		    || BN_mod_add(gx, gx, B, p, ctx) != 1)
+			error("SSWU: BN_mod_* (gx2)");
 		if (BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) == NULL)
 			error("H2C SSWU: neither candidate square");
-		BN_copy(x_out, x1);
+		if (BN_copy(x_out, x1) == NULL) error("SSWU: BN_copy x_out");
 	}
 
 	// sgn0 correction: if sgn0(u) != sgn0(y), y = -y
-	if (BN_is_bit_set(u, 0) != BN_is_bit_set(y, 0))
-		BN_sub(y, p, y);
-	BN_copy(y_out, y);
+	if (BN_is_bit_set(u, 0) != BN_is_bit_set(y, 0)) {
+		if (BN_sub(y, p, y) != 1) error("SSWU: BN_sub (sgn0)");
+	}
+	if (BN_copy(y_out, y) == NULL) error("SSWU: BN_copy y_out");
 
 	BN_free(u2); BN_free(t); BN_free(tv1); BN_free(tmp);
 	BN_free(x1); BN_free(gx); BN_free(y);

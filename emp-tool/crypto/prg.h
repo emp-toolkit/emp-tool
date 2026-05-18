@@ -120,6 +120,7 @@ class PRG { public:
 	}
 
     void random_data_unaligned(void *data, int64_t nbytes) {
+        if (nbytes <= 0) return;
         // Small-buffer fast path. Anything that fits in two blocks is
         // filled with one random_block draw and copied — no alignment
         // dance. This also covers every case where std::align below

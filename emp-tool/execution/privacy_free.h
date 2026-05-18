@@ -17,7 +17,7 @@ inline block privacy_free_garble(block LA0, block A1, block LB0, block B1,
                                   block delta, block* table, uint64_t idx,
                                   const AES_KEY* key) {
 	(void)delta;  // delta is implicit via A1 = LA0 ^ delta etc.
-	block tweak = makeBlock(2 * idx, (long)0);
+	block tweak = makeBlock(2 * idx, 0ULL);
 	block masks[2] = { sigma(LA0) ^ tweak, sigma(A1) ^ tweak };
 	block keys[2]  = { masks[0], masks[1] };
 	AES_ecb_encrypt_blks(keys, 2, key);
@@ -33,7 +33,7 @@ inline block privacy_free_garble(block LA0, block A1, block LB0, block B1,
 
 inline block privacy_free_eval(block A, block B, const block& table,
                                 uint64_t idx, const AES_KEY* key) {
-	block tweak = makeBlock(2 * idx, (uint64_t)0);
+	block tweak = makeBlock(2 * idx, 0ULL);
 	block tmp = sigma(A) ^ tweak;
 	block mask = tmp;
 	AES_ecb_encrypt_blks(&tmp, 1, key);
@@ -49,7 +49,6 @@ inline block privacy_free_eval(block A, block B, const block& table,
 class PrivacyFree : public Backend {
 public:
 	IOChannel* io;
-	PRP prp;
 	block constant[2];
 	int64_t gid = 0;
 
@@ -72,6 +71,12 @@ public:
 	}
 
 	uint64_t num_and() override { return gid; }
+
+protected:
+	// Protected so PrivacyFreeGen / PrivacyFreeEva can access the AES
+	// key. Kept off the public surface to avoid external mutation that
+	// would break the gate-numbering scheme.
+	PRP prp;
 };
 
 class PrivacyFreeGen : public PrivacyFree {

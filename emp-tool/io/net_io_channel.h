@@ -162,6 +162,7 @@ class NetIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
+		if (len < 0) error("NetIO::send_data: negative len");
 		if (len + (int64_t)send_ptr <= (int64_t)NETWORK_STAGING_BUFFER_SIZE) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
@@ -176,6 +177,7 @@ class NetIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "recv_data");
 #endif
+		if (len < 0) error("NetIO::recv_data: negative len");
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.

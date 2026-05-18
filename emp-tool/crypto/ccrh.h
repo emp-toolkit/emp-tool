@@ -38,6 +38,7 @@ class CCRH: public PRP { public:
 	}
 
 	void Hn(block*out, block* in, int64_t length, block * scratch = nullptr) {
+		if (length <= 0) return;
 		bool del = false;
 		if(scratch == nullptr) {
 			del = true;
