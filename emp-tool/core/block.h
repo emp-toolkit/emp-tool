@@ -18,7 +18,7 @@ using block = __m128i;
 // --- Basic primitives -----------------------------------------------------
 
 inline bool   getLSB(const block& x);
-inline block  makeBlock(uint64_t high, uint64_t low);
+inline constexpr block  makeBlock(uint64_t high, uint64_t low);
 inline block  sigma(block a);                     // [eprint 2019/074]
 inline block  set_bit(const block& a, int i);
 std::ostream& operator<<(std::ostream& out, const block& blk);

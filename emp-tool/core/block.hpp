@@ -14,16 +14,17 @@ inline bool getLSB(const block & x) {
 	return (x[0] & 1) == 1;
 }
 
-#ifdef __x86_64__
-__attribute__((target("sse2")))
-inline block makeBlock(uint64_t high, uint64_t low) {
-	return _mm_set_epi64x(high, low);
+// `block` is a 128-bit vector type whose 64-bit-lane aggregate-init
+// is constant-evaluable on both x86 (`__m128i`) and aarch64 (sse2neon
+// typedef). `{(long long)low, (long long)high}` produces the same
+// byte pattern as `_mm_set_epi64x(high, low)` / `vcombine_u64(low,
+// high)` — low in lane 0, high in lane 1 — and the compiler lowers
+// the runtime form to the same hardware ops. constexpr lets
+// file-scope `inline constexpr block` constants compile-time-evaluate
+// into .rodata; see docs/static_init.md for why that matters.
+inline constexpr block makeBlock(uint64_t high, uint64_t low) {
+	return block{(long long)low, (long long)high};
 }
-#elif __aarch64__
-inline block makeBlock(uint64_t high, uint64_t low) {
-	return (block)vcombine_u64((uint64x1_t)low, (uint64x1_t)high);
-}
-#endif
 
 /* Linear orthomorphism function
  * [REF] Implementation of "Efficient and Secure Multiparty Computation from Fixed-Key Block Ciphers"
@@ -36,9 +37,9 @@ inline block sigma(block a) {
 	return _mm_shuffle_epi32(a, 78) ^ (a & makeBlock(0xFFFFFFFFFFFFFFFF, 0x00));
 }
 
-inline const block zero_block = makeBlock(0, 0);
-inline const block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFF,0xFFFFFFFFFFFFFFFF);
-inline const block select_mask[2] = {zero_block, all_one_block};
+inline constexpr block zero_block    = makeBlock(0, 0);
+inline constexpr block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
+inline constexpr block select_mask[2] = {zero_block, all_one_block};
 
 inline block set_bit(const block & a, int i) {
 	assert(i >= 0 && i < 128);

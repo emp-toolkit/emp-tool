@@ -32,6 +32,7 @@ self-contained and assumes you've read this index.
 | Verify wire-byte equivalence after a refactor / optimization (deterministic PRG, `TraceIO`) | [docs/test_mode.md](docs/test_mode.md) |
 | Verify or debug a numeric corner case (wrap, division, shifts, resize) | [docs/numeric_semantics.md](docs/numeric_semantics.md) |
 | Convert between byte buffers and `BitVec` / `Bit[]`, or debug an endianness mismatch | [docs/circuits.md § Bit / byte ordering](docs/circuits.md) |
+| Add a new file-scope `block` / `__m128i` / non-`constexpr`-initialized global, or debug a "constant is silently zero in some binaries" bug | [docs/static_init.md](docs/static_init.md) |
 
 ## Top-level rules (apply to all work)
 
@@ -53,3 +54,8 @@ from a subdoc.
   match (`int64_t i = 0; i < len; ++i`). Template non-type parameters
   (`int N`, `int K` etc.) stay as `int` since they're compile-time
   bounded small constants.
+- New file-scope `block`/`__m128i` constants use `inline constexpr`
+  with `makeBlock(...)` or aggregate-init — never `inline const`,
+  `static const`, or other dynamic-init forms. Same rule for other
+  types whose initializer would run at program start. See
+  [docs/static_init.md](docs/static_init.md) for why.
