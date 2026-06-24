@@ -17,6 +17,13 @@ inline bool getLSB(const block & x) {
 	return (x[0] & 1) == 1;
 }
 
+// Bit i of x as a bool (bit 0 is getLSB). Generic accessor; any protocol meaning
+// pinned to a specific bit is documented at the use site, not here.
+inline bool getBit(const block & x, int i) {
+	return i < 64 ? ((x[0] >> i) & 1) == 1
+	              : ((x[1] >> (i - 64)) & 1) == 1;
+}
+
 // `block` is a 128-bit vector type whose 64-bit-lane aggregate-init
 // is constant-evaluable on both x86 (`__m128i`) and aarch64 (sse2neon
 // typedef). `{(long long)low, (long long)high}` produces the same
@@ -43,6 +50,12 @@ inline block sigma(block a) {
 inline constexpr block zero_block    = makeBlock(0, 0);
 inline constexpr block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
 inline constexpr block select_mask[2] = {zero_block, all_one_block};
+
+// Blocks with a single low bit set (only bit 0 / only bit 1) — for isolating or
+// flipping a low bit. Generic constants; a protocol that reserves a specific low
+// bit (e.g. for a MAC/Δ encoding) documents that convention at its own use site.
+inline constexpr block bit0_mask = makeBlock(0, 1);
+inline constexpr block bit1_mask = makeBlock(0, 2);
 
 inline block set_bit(const block & a, int i) {
 	assert(i >= 0 && i < 128);

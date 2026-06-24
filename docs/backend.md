@@ -11,7 +11,8 @@ concept and the built-in analysis contexts (`ClearCtx` / `CountCtx` / `DigestCtx
 ## Implementing a backend: a pure context + a session
 
 A protocol provides two pieces. The **context** is pure circuit execution — only
-the four gate ops, no I/O — like emp-sh2pc's `SH2PCCtx` and emp-ag2pc's `AG2PCCtx`:
+the four gate ops, no I/O — like emp-sh2pc's `SH2PCCtx`, or the shared
+`ChunkRecorderCtx` that emp-ag2pc / emp-agmpc expose as `ctx_t`:
 
 - pick a `Wire` (a garbled label, a wire id, …) that is `std::regular`;
 - implement the four gate ops (eager crypto, or recording into an IR — whatever the

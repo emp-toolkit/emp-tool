@@ -14,6 +14,22 @@ inline double time_from(const time_point<high_resolution_clock>& s) {
 	return std::chrono::duration_cast<std::chrono::microseconds>(high_resolution_clock::now() - s).count();
 }
 
+// Wait for every future in `res`, then clear it — a barrier folding a batch of
+// ThreadPool tasks back together. Templated so it serves future<void> and
+// future<T> alike.
+template <typename T>
+inline void joinNclean(std::vector<std::future<T>>& res) {
+	for (auto& v : res) v.get();
+	res.clear();
+}
+// joinNclean that OR-reduces the bool results (e.g. "did any task flag a cheat?").
+inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
+	bool cheat = false;
+	for (auto& v : res) cheat = cheat || v.get();
+	res.clear();
+	return cheat;
+}
+
 inline void error(const char * s, int line, const char * file) {
 	fprintf(stderr, "%s at %s:%d\n", s, file, line);
 	// _Exit, not exit(): error() is the stack-wide fatal abort and fires from
@@ -29,10 +45,11 @@ inline void error(const char * s, int line, const char * file) {
 // both parties, read from the environment so a two-machine run sets EMP_PORT /
 // EMP_PEER_IP once per host with no source change. One consequence: two runs on
 // the same host share EMP_PORT, so don't launch them concurrently.
-inline int parse_party(const char *const * arg) {
+inline int parse_party(const char *const * arg, int max_party) {
 	const int p = arg[1] ? atoi(arg[1]) : 0;
-	if (p != ALICE && p != BOB)
-		error("parse_party: argv[1] (party) must be 1 (ALICE) or 2 (BOB)");
+	if (p < ALICE || p > max_party)
+		error("parse_party: argv[1] (party) is out of range [1, max_party] "
+		      "(default max is BOB=2; multi-party callers pass nP)");
 	return p;
 }
 inline int peer_port() {

@@ -64,8 +64,10 @@ add_test_case(ir test_boolean_program)
 add_test_case_cxx20(ir test_passes)              # ir/passes.h: count/liveness/schedule/layout
 add_test_case_cxx20(ir test_context)             # BooleanContext concept + contexts cross-check
 add_test_case_cxx20(ir test_session_concepts)    # Session/DirectSession/SessionIO + WireValue
+add_test_case_cxx20(ir test_chunk_recorder)        # shared chunk recorder: RAII wire + plan_flush
 add_test_case_cxx20(ir test_dynamic)             # runtime-width session I/O (RuntimeWidthValue) over ClearSession
 add_test_case_cxx20(ir test_builtin_circuits)    # AES/SHA/SHA3 IR-replay == live kernels (ir/builtins.h)
+add_test_case_cxx20(ir test_simd)                # ir/simd.h: SIMD-batched replay over a bitsliced BulkBooleanContext
 
 # ---- circuits/ : typed values, crypto circuits, frontend ----
 add_test_case_cxx20(circuits test_bit)           # per-type value headers over ClearCtx

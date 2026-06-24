@@ -10,6 +10,8 @@
 #include "emp-tool/runtime/core/constants.h"
 #include <chrono>
 #include <type_traits>
+#include <future>    // joinNclean / joinNcleanCheat: fold a batch of ThreadPool tasks back together
+#include <vector>
 #define macro_xstr(a) macro_str(a)
 #define macro_str(a) #a
 
@@ -24,7 +26,7 @@ using std::chrono::high_resolution_clock;
                                int line = __builtin_LINE(),
                                const char * file = __builtin_FILE());
 
-inline int parse_party(const char * const * arg);   // ALICE=1 / BOB=2, from argv[1]
+inline int parse_party(const char * const * arg, int max_party = BOB);   // argv[1] in [1, max_party]; default ALICE=1 / BOB=2
 inline int peer_port();                              // $EMP_PORT, default 12345
 inline const char * peer_ip();                       // $EMP_PEER_IP, default 127.0.0.1
 

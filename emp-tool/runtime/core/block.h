@@ -19,6 +19,7 @@ using block = __m128i;
 // --- Basic primitives -----------------------------------------------------
 
 inline bool   getLSB(const block& x);
+inline bool   getBit(const block& x, int i);      // bit i of x (getLSB is bit 0)
 inline constexpr block  makeBlock(uint64_t high, uint64_t low);
 inline block  sigma(block a);                     // [eprint 2019/074]
 inline block  set_bit(const block& a, int i);
@@ -29,7 +30,7 @@ inline block  set_bit(const block& a, int i);
 std::string to_hex(const void* data, size_t n);
 std::ostream& operator<<(std::ostream& out, const block& blk);
 
-// zero_block, all_one_block, select_mask[2]: defined in block.hpp.
+// zero_block, all_one_block, select_mask[2], bit0_mask, bit1_mask: defined in block.hpp.
 
 // --- XOR / compare --------------------------------------------------------
 
