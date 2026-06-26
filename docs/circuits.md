@@ -43,7 +43,7 @@ relies on:
   `UInt_T<RecordCtx,32>::rebind<ClearCtx> == UInt_T<ClearCtx,32>`.
 - **wire layout** — `static constexpr int width()`, `void pack_wires(Wire*) const`,
   `static X_T from_wires(Ctx&, const Wire*)`.
-- **clear codec** — `static std::vector<bool> encode(clear_t)` (LSB-first) and
+- **clear codec** — `static std::array<bool, width()> encode(clear_t)` (LSB-first) and
   `static clear_t decode(const bool*)`, with `using clear_t = …;` (`bool` for
   `Bit_T`, `uint64_t` for `UInt_T`, `int64_t` for `Int_T`, the host float type for
   `Float_T`, `std::array<bool,N>` for `BitVec_T`).
@@ -60,7 +60,7 @@ and the frontend can `compile`/`run` it.
 using namespace emp;
 
 ClearSession sess;                          // owns a ClearCtx + the I/O boundary
-using Ctx = ClearSession::DirectCtx;
+using Ctx = ClearSession::ctx_t;
 using UInt32 = UInt_T<Ctx, 32>;
 auto a = sess.input<UInt32>(ALICE, 7);      // feed inputs through the session
 auto b = sess.input<UInt32>(BOB,   5);
@@ -70,9 +70,9 @@ uint32_t r = sess.reveal<uint32_t>(s, PUBLIC).value();  // reveal -> std::option
 ```
 
 A session exposes `input` (and `input_batch` where applicable), `reveal`, and
-`direct_ctx()` for value/context-level work such as public constants
-(`UInt32::constant(sess.direct_ctx(), 7)`). It names no value family — values are
-context-bound (`UInt_T<DirectCtx,N>` etc.), so adding a value family needs no
+`ctx()` for value/context-level work such as public constants
+(`UInt32::constant(sess.ctx(), 7)`). It names no value family — values are
+context-bound (`UInt_T<ctx_t,N>` etc.), so adding a value family needs no
 session edit. A protocol library provides its own session over a garbled /
 secret-shared context with the same surface — only the constructor (IO, party,
 preprocessing) differs. Pure circuit bodies never call `input`/`reveal`; they take and return

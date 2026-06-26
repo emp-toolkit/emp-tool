@@ -91,8 +91,7 @@ question, no fiasco.
 
    Function-local statics are initialized on first call, after all
    dynamic-init has had a chance to run, so they're SIOF-immune by
-   construction. `emp-zk/ram-zk/gf_base.h:ramzk_gf_base()` is the
-   existing example.
+   construction.
 
 3. **When in doubt, prefer the function-local-static form.** Marginal
    cost is one branch on first call; marginal safety is total.
@@ -105,10 +104,8 @@ SIOF-immune:
 | File | Constant |
 |---|---|
 | `emp-tool/runtime/core/block.hpp` | `zero_block`, `all_one_block`, `select_mask[2]` |
-| `emp-ot/ot_extension/cggm.h` | `kCggmLsbClearMask` |
-| `emp-ot/ot_extension/ferret/constants.h` | `lsb_clear_mask`, `lsb_only_mask` |
-| `emp-zk/emp-svole/fp_utility.h` | `prs`, `PRs` |
-| `ref/emp-agmpc/helper.h` | `bit0_mask`, `bit1_mask` |
+| `emp-ot/common/cggm.h` | `kCggmLsbClearMask` |
+| `ref/emp-agmpc/backend/helper.h` | `bit0_mask`, `bit1_mask` |
 
 `grep -rn '^\(inline \|static \|const \)\+const block' .` over the
 codebase finds candidates; anything that isn't `inline constexpr` is

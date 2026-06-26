@@ -109,7 +109,7 @@ recorder, or a real MPC backend.</p>
 <div class="meta">
 <table>
 <tr><td>Report</td><td>3 of 3 — Circuit value objects &amp; frontend</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, uncommitted; HEAD <code>7f21adc</code>)</td></tr>
+<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>circuits/{bit,bitvec,unsigned_int,signed_int,float,float_traits,numeric_kernels,sort,value_traits,typed}.h</code>; <code>circuits/crypto/{aes128,sha256,keccak,crypto}.h</code>; <code>circuits/frontend/{circuit_fn,rec,frontend}.h</code>. The <code>WireValue</code> concept it satisfies lives in <code>ir/wire_value.h</code> (Report 2).</td></tr>
 <tr><td>Conventions</td><td><b>LSB at index 0</b> everywhere; gate cost = AND count (XOR/NOT free); tests cross-validate over <code>ClearCtx</code> against host references and FIPS/NIST vectors.</td></tr>
 </table>
@@ -117,7 +117,7 @@ recorder, or a real MPC backend.</p>
 
 <div class="stats">
   <div class="stat"><div class="n">5</div><div class="l">typed value families</div></div>
-  <div class="stat"><div class="n">4</div><div class="l">free gates per value (&amp;,^,!,public_bit)</div></div>
+  <div class="stat"><div class="n">4</div><div class="l">context gate primitives (public_bit,&amp;,^,!)</div></div>
   <div class="stat"><div class="n">32</div><div class="l">ANDs / AES S-box (Boyar–Peralta)</div></div>
   <div class="stat"><div class="n">6400</div><div class="l">ANDs / AES-128 block</div></div>
   <div class="stat"><div class="n">24744</div><div class="l">ANDs / SHA-256(256-bit)</div></div>
@@ -168,24 +168,24 @@ The class invariant — "a usable value has a non-null <code>ctx_</code>" — is
 release-mode guard. Cross-context mixing is guarded only by <code>check_same_context</code>, which is
 <b>debug-only by default</b> (see <a href="02-ir.html">Report 2</a>; <code>ir/context/checks.h</code>). The
 <b>scalar numeric</b> codecs cap at 64 bits: <code>UInt_T</code>/<code>Int_T</code> <code>encode</code>/<code>decode</code>
-<code>static_assert(N&nbsp;≤&nbsp;64)</code> (<code class="ref">unsigned_int.h:221</code>,
-<code class="ref">unsigned_int.h:225</code>; <code class="ref">signed_int.h:170</code>,
-<code class="ref">signed_int.h:175</code>) because their host <code>clear_t</code> is
+are constrained <code>requires (N&nbsp;&gt;&nbsp;0&nbsp;&amp;&amp;&nbsp;N&nbsp;≤&nbsp;64)</code>
+(<code class="ref">unsigned_int.h</code> / <code class="ref">signed_int.h</code> <code>encode</code>/<code>decode</code>) because their host <code>clear_t</code> is
 <code>uint64_t</code>/<code>int64_t</code>. This is <b>not</b> a general width limit —
 <code>BitVec_T&lt;N&gt;</code>'s <code>clear_t</code> is <code>std::array&lt;bool,N&gt;</code> and round-trips at
 <em>any</em> width; for &gt;64-bit values use <code>BitVec_T</code> for bit I/O, or convert through fixed widths.</p></div>
 
 <h2 id="wirevalue">A.2 · <code>WireValue</code> — the contract the families satisfy</h2>
 <p><span class="tag">ir/wire_value.h</span></p>
-<p>The structural typed-value concept lives one layer down, in <code>ir/wire_value.h</code>, and is documented in
-<a href="02-ir.html">Report 2</a>. It is the context-free vocabulary the IR execution and session layers speak; it
-names no concrete value family and no protocol. A value type satisfies it through its own static members
-(<code class="ref">wire_value.h:26-52</code>):</p>
+<p>These structural typed-value concepts live one layer down, in <code>ir/wire_value.h</code>, and are documented in
+<a href="02-ir.html">Report 2</a>. They are the context-free vocabulary the IR execution and session layers speak; they
+name no concrete value family and no protocol. The contract is split in two: <code>WireBundle</code> is what circuit
+execution needs (a fixed-width wire bundle, no clear codec); <code>WireValue</code> refines it by adding the
+clear-value codec session I/O needs. A value type satisfies them through its own static members:</p>
 <pre><code>template &lt;class V_&gt;
-concept WireValue =
-    requires { typename V::Wire; typename V::context_type; typename V::clear_t; } &&
-    BooleanContext&lt;typename V::context_type&gt; &&                        // wire_value.h:34
-    std::same_as&lt;typename V::Wire, typename V::context_type::Wire&gt; && // wire_value.h:35-36
+concept WireBundle =                                  // what circuit EXECUTION needs (no clear codec)
+    requires { typename V::Wire; typename V::context_type; } &&
+    BooleanContext&lt;typename V::context_type&gt; &&
+    std::same_as&lt;typename V::Wire, typename V::context_type::Wire&gt; &&
     requires { typename std::integral_constant&lt;int, V::width()&gt;; } && // STATIC width() — fixed-width only
     std::same_as&lt;typename V::template rebind&lt;V::context_type&gt;, V&gt; &&  // rebind is identity
     requires(const V v, V::Wire* out) {
@@ -194,26 +194,33 @@ concept WireValue =
     } &&
     requires(V::context_type& c, const V::Wire* in) {
         { V::from_wires(c, in) } -&gt; std::same_as&lt;V&gt;;
-    } &&
+    };
+
+template &lt;class V_&gt;
+concept WireValue = WireBundle&lt;V_&gt; &&                  // WireBundle + the clear-value codec
+    requires { typename V::clear_t; } &&
     requires(V::clear_t cv, const bool* bits) {
-        { V::encode(cv) } -&gt; std::convertible_to&lt;std::vector&lt;bool&gt;&gt;;
+        { V::encode(cv) } -&gt; std::same_as&lt;std::array&lt;bool, V::width()&gt;&gt;;
         { V::decode(bits) } -&gt; std::same_as&lt;typename V::clear_t&gt;;
     };</code></pre>
 <p>Every fixed-width family here models it: each exposes <code>Wire = Ctx::Wire</code>, a non-template
 <code>static constexpr int width()</code>, an identity <code>rebind&lt;C2&gt;</code>, <code>pack_wires</code>/<code>from_wires</code>,
 <code>context()</code>, and an <code>encode</code>/<code>decode</code> codec. Two structural requirements are worth
-flagging for an auditor: <code>WireValue</code> requires the value's <code>context_type</code> to itself satisfy
+flagging for an auditor: <code>WireBundle</code> (which <code>WireValue</code> refines) requires the value's <code>context_type</code> to itself satisfy
 <code>BooleanContext</code> and the value's <code>Wire</code> to be <em>that context's</em> <code>Wire</code>
-(<code class="ref">wire_value.h:34-36</code>) — so a value whose nested <code>Wire</code> drifts from its context's
-wire type is not a <code>WireValue</code>.</p>
-<div class="callout c-audit"><span class="lbl">Runtime-width values are deliberately NOT a WireValue</span>
-<p><code>WireValue</code> requires a <b>static, compile-time</b> <code>width()</code>
-(<code class="ref">wire_value.h:37-39</code>). The runtime-width forms <code>UInt_T&lt;Ctx,runtime_width&gt;</code> /
+(<code class="ref">ir/wire_value.h</code>, the <code>WireBundle</code> concept) — so a value whose nested <code>Wire</code> drifts from its context's
+wire type is not a <code>WireBundle</code> (hence not a <code>WireValue</code>).</p>
+<div class="callout c-audit"><span class="lbl">Runtime-width values model RuntimeWidthValue, not WireValue</span>
+<p><code>WireBundle</code> (and thus <code>WireValue</code>) requires a <b>static, compile-time</b> <code>width()</code>.
+The runtime-width forms <code>UInt_T&lt;Ctx,runtime_width&gt;</code> /
 <code>Int_T&lt;Ctx,runtime_width&gt;</code> (<code>N==0</code>) expose only a non-static
 <code>int width() const</code> (<code class="ref">unsigned_int.h:218</code>,
-<code class="ref">signed_int.h:167</code>) and <b>no <code>encode</code>/<code>decode</code> codec</b>, so they do
-<b>not</b> model <code>WireValue</code> — they cannot be a <code>compile()</code> argument, a session
-<code>input</code>/<code>reveal</code> type, or any frontend boundary value. They are in-circuit only (see §B.2).</p></div>
+<code class="ref">signed_int.h:167</code>) and no <em>fixed-width</em> clear codec, so they model neither
+<code>WireBundle</code> nor <code>WireValue</code> — they cannot be a <code>compile()</code> argument or a frontend
+boundary value. They <b>are</b> session-I/O eligible, though: they satisfy a separate <code>RuntimeWidthValue</code>
+concept (a runtime-width byte-bool <code>encode</code>/<code>decode</code> codec, <code class="ref">ir/wire_value.h</code>),
+which a session's runtime-width <code>input</code>/<code>reveal</code> overloads accept. In the frontend they remain
+in-circuit only (see §B.2).</p></div>
 
 <h2 id="bit">A.3 · <code>Bit_T</code> — the single garbled wire</h2>
 <p><span class="tag">bit.h</span></p>
@@ -227,8 +234,8 @@ a == b  → !(a ^ b)  (XNOR)               // free
 a.select(sel, t) → sel ? t : a   via kernel::mux</code></pre>
 <div class="callout c-audit"><span class="lbl">select argument order is inverted vs a C ternary</span>
 <p><code>b.select(sel, t)</code> returns <code>sel ? t : b</code> — the receiver is the <b>false</b> branch,
-<code>t</code> the <b>true</b> branch (<code class="ref">bit.h:44-48</code>; <code class="ref">test_bit.cpp:23</code>
-is the ground truth: <code>(b.select(a, t).w &amp; 1) == (x ? 1 : y)</code>). Consistent across all value types,
+<code>t</code> the <b>true</b> branch (<code class="ref">bit.h:44-48</code>; the <code>example sel</code> check in
+<code class="ref">test/circuits/test_bit.cpp</code> is the ground truth). Consistent across all value types,
 but easy to get backwards.</p></div>
 
 <h2 id="bitvec">A.4 · <code>BitVec_T</code> — packed bit vector</h2>
@@ -284,7 +291,7 @@ when <code>shamt ≥ N</code> (<code class="ref">unsigned_int.h:118-135</code>).
 (<code class="ref">unsigned_int.h:139-154</code>). Width views
 (<code>slice</code>/<code>extract</code>/<code>concat</code>/<code>zext</code>/<code>trunc</code>) are pure wiring
 (<code class="ref">unsigned_int.h:173-194</code>); <code>as_signed()</code> is a zero-gate reinterpret
-(<code class="ref">unsigned_int.h:168-169</code>, defined out-of-line in <code class="ref">signed_int.h:193-200</code>).</p>
+(<code class="ref">unsigned_int.h:168-169</code>, defined out-of-line in <code class="ref">signed_int.h</code> after <code>Int_T</code>).</p>
 <div class="callout c-audit"><span class="lbl">Edge cases</span>
 <p>Constants beyond 64 bits zero-extend (carrier is <code>uint64_t</code>, <code class="ref">unsigned_int.h:48-52</code>).
 <code>mod_exp</code> <b>assumes <code>q ≠ 0</code></b> (precondition, <code class="ref">unsigned_int.h:156-165</code>).
@@ -296,24 +303,26 @@ Raw <code>popcount&lt;R&gt;</code> <b>silently truncates</b> if <code>R</code> i
 by the width sentinel <code>inline constexpr int runtime_width = 0;</code> (<code class="ref">unsigned_int.h:26</code>):
 <code>UInt_T&lt;Ctx, runtime_width&gt;</code> and <code>Int_T&lt;Ctx, runtime_width&gt;</code> store their wires in a
 <code>std::vector</code> whose length <em>is</em> the width, fixed at construction (<code>UInt_T(ctx, width)</code>,
-validated <code>≥ 1</code> at <code class="ref">unsigned_int.h:45</code> and <code class="ref">unsigned_int.h:232</code>).
+validated <code>≥ 1</code> by <code class="ref">unsigned_int.h</code> <code>validate_width_</code>).
 The width-taking ctor and the conversions are gated <code>requires (N == 0)</code>; fixed-width operations are gated
 <code>requires (N &gt; 0)</code>, and <code>same_width_</code> enforces matching widths at runtime
-(<code class="ref">unsigned_int.h:234-236</code>).</p>
+(<code class="ref">unsigned_int.h</code> <code>same_width_</code>).</p>
 <table class="grid">
 <tr><th>Conversion</th><th>Direction</th><th>Note</th></tr>
 <tr><td><code>to_dynamic()</code></td><td>fixed <code>N&gt;0</code> → runtime</td><td>same wires, zero gates (<code class="ref">unsigned_int.h:196</code>)</td></tr>
 <tr><td><code>to_fixed&lt;M&gt;()</code></td><td>runtime → fixed <code>M</code></td><td><code>static_assert(M &gt; 0)</code>; zero-extend / truncate (<code class="ref">unsigned_int.h:197-202</code>)</td></tr>
 <tr><td><code>resize(int m)</code></td><td>runtime → runtime</td><td>zero-extend or truncate to width <code>m</code> (<code class="ref">unsigned_int.h:203-208</code>)</td></tr>
 </table>
-<div class="callout c-audit"><span class="lbl">Runtime-width values are in-circuit only — NOT a WireValue</span>
-<p>The <code>N==0</code> form deliberately has <b>no static <code>width()</code> and no <code>encode</code>/<code>decode</code>
-codec</b> (the codec members are <code>requires (N &gt; 0)</code>), so it does <b>not</b> satisfy the
-<code>WireValue</code> concept (<code>ir/wire_value.h</code>; see §A.2) and cannot be a <code>compile()</code>
-argument, a session <code>input</code>/<code>reveal</code> type, or a frontend boundary value. It is intended for
+<div class="callout c-audit"><span class="lbl">Runtime-width values model RuntimeWidthValue — session-I/O only, never compiled</span>
+<p>The <code>N==0</code> form deliberately has <b>no static <code>width()</code> and no <em>fixed-width</em> clear
+codec</b> (its <code>encode</code>/<code>decode</code> are <code>requires (N == 0)</code> — a runtime-width byte-bool
+codec), so it does <b>not</b> satisfy <code>WireBundle</code>/<code>WireValue</code>
+(<code>ir/wire_value.h</code>; see §A.2) and cannot be a <code>compile()</code>
+argument or a frontend boundary value. It <b>is</b> a <code>RuntimeWidthValue</code>, so a session's runtime-width
+<code>input</code>/<code>reveal</code> overloads do accept it. It is intended for
 <em>inside</em> a circuit body where a width is only known at run time (<code class="ref">unsigned_int.h:4-12</code>);
-cross to a fixed width via <code>to_fixed&lt;M&gt;()</code> before it reaches any I/O boundary. The signed form
-inherits the same property (<code class="ref">signed_int.h:165</code>).</p></div>
+cross to a fixed width via <code>to_fixed&lt;M&gt;()</code> before it reaches the frontend. The signed form
+mirrors it (<code class="ref">signed_int.h</code>).</p></div>
 
 <h2 id="int">B.3 · <code>Int_T</code> — two's-complement signed integer</h2>
 <p><span class="tag">signed_int.h</span></p>
@@ -332,11 +341,11 @@ inherits the same property (<code class="ref">signed_int.h:165</code>).</p></div
 </ul>
 <div class="callout c-warn"><span class="lbl">INT_MIN / −1 is a UB precondition</span>
 <p>The magnitude trick negates <code>INT_MIN</code> to itself (doesn't fit), producing a wrong quotient — the test
-explicitly skips this case (<code class="ref">test_int.cpp:100</code>:
+explicitly skips this case (<code class="ref">test/circuits/test_int.cpp</code>:
 <code>if (ia == INT32_MIN &amp;&amp; ib == -1) continue;</code>). Division by zero inherits the unsigned saturating
 behavior. Flag any caller that can reach <code>INT_MIN / −1</code>. The MSB is always <code>w[n_()−1]</code>; an
 off-by-one in width corrupts sign handling everywhere, so the centralized <code>n_()</code> width helper
-(<code class="ref">signed_int.h:183</code>) is load-bearing.</p></div>
+(<code class="ref">signed_int.h</code>) is load-bearing.</p></div>
 
 <!-- ============================== PART C ============================== -->
 <h2 id="float">C · <code>Float_T</code> — IEEE floating point</h2>
@@ -512,11 +521,11 @@ explicit-context / nullary / fp32-replay / live-run / BitVec paths.</p>
 <div class="callout c-note"><span class="lbl">Where the session boundary actually lives</span>
 <p>The frontend names <b>no</b> session and no party — I/O is the session layer's job (Report 2:
 <code>ir/session/session.h</code> + <code>session_io.h</code>). A <code>DirectSession</code> exposes its gate
-context via <code>direct_ctx()</code> and feeds/opens values via <code>SessionIO&lt;S,V&gt;</code>, generic over any
+context via <code>ctx()</code> and feeds/opens values via <code>SessionIO&lt;S,V&gt;</code>, generic over any
 <code>WireValue</code> (so adding a value family needs no session edit). <code>ClearSession</code>
-(<code>ir/session/clear_session.h</code>) is the plaintext reference: <code>DirectCtx == ClearCtx</code>,
+(<code>ir/session/clear_session.h</code>) is the plaintext reference: <code>ctx_t == ClearCtx</code>,
 <code>party() == PUBLIC</code>, and its <code>input</code>/<code>reveal</code> validate that the owner/recipient is
-<code>ALICE</code>/<code>BOB</code>/<code>PUBLIC</code> before (correctly) ignoring routing in the clear; its
+<code>PUBLIC</code> or a party id ≥ 1 (the plaintext oracle serves n-party protocols too) before (correctly) ignoring routing in the clear; its
 <code>reveal_t&lt;V&gt;</code> is <code>std::optional&lt;clear_t&gt;</code>, always populated. The always-on codec-width
 check (<code>V::encode</code> must produce <code>V::width()</code> bits) is a codec bug guard, not a debug-only
 condition.</p></div>
@@ -534,7 +543,7 @@ condition.</p></div>
 <tr><td>7</td><td>Crypto message lengths compile-time public</td><td>Gate counts (sbox 32, block 6400, sha256 24744, sha3 38400) asserted in tests — good change-detectors</td></tr>
 <tr><td>8</td><td>Sort is oblivious but <b>unstable</b>; NaN float keys unordered</td><td>—</td></tr>
 <tr><td>9</td><td><b>Scalar</b> UInt/Int host codecs cap at 64 bits (<code>static_assert N≤64</code>)</td><td>Not a general limit — <code>BitVec_T&lt;N&gt;</code> (<code>std::array&lt;bool,N&gt;</code>) round-trips at any width; use BitVec or fixed-width conversion for &gt;64-bit I/O</td></tr>
-<tr><td>10</td><td>Runtime-width <code>UInt_T</code>/<code>Int_T</code> (<code>N==0</code>) are <b>NOT <code>WireValue</code>s</b></td><td>No static <code>width()</code>, no codec; in-circuit only — cross to a fixed width via <code>to_fixed&lt;M&gt;()</code> before any I/O boundary</td></tr>
+<tr><td>10</td><td>Runtime-width <code>UInt_T</code>/<code>Int_T</code> (<code>N==0</code>) model <b><code>RuntimeWidthValue</code>, not <code>WireValue</code></b></td><td>No static <code>width()</code>, so never <code>compile()</code>d; but session-I/O eligible via the runtime-width <code>input</code>/<code>reveal</code> overloads — cross to a fixed width via <code>to_fixed&lt;M&gt;()</code> for the frontend</td></tr>
 <tr><td>11</td><td>Frontend <code>run</code> validates total input width, not per-arg identity</td><td>Swapping equal-width args = valid-but-wrong replay; cross-context guards at <code>run</code> are debug-only</td></tr>
 </table>
 <div class="callout c-ok"><span class="lbl">Strong test suite</span>
@@ -547,7 +556,7 @@ committed <code>.empbc</code> float assets plus their off-tree generation proven
 </main>
 <footer>
 emp-tool implementation audit · Circuits · runtime / ir / circuits three-layer architecture · working tree
-on <code>main</code> (uncommitted; HEAD <code>7f21adc</code>).
+on <code>main</code> (runtime/ir/circuits refactor, since committed).
 Reports: <a href="01-runtime.html">Runtime</a> · <a href="02-ir.html">IR</a> · <a href="03-circuits.html">Circuits</a>.
 </footer>
 </body>

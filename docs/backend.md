@@ -14,7 +14,7 @@ A protocol provides two pieces. The **context** is pure circuit execution — on
 the four gate ops, no I/O — like emp-sh2pc's `SH2PCCtx`, or the shared
 `ChunkRecorderCtx` that emp-ag2pc / emp-agmpc expose as `ctx_t`:
 
-- pick a `Wire` (a garbled label, a wire id, …) that is `std::regular`;
+- pick a `Wire` (a garbled label, a wire id, …) that is `std::semiregular`;
 - implement the four gate ops (eager crypto, or recording into an IR — whatever the
   protocol does per gate); optionally `and_many` for batched AND layers.
 
@@ -22,7 +22,7 @@ The **session** owns the clear↔circuit I/O boundary and the protocol state (IO
 party, OT/preprocessing, batching), wrapping a context — like emp-tool's
 `ClearSession` (`session/clear_session.h`):
 
-- hold the context and expose `direct_ctx()` for value/context-level work
+- hold the context and expose `ctx()` for value/context-level work
   (the `DirectSession` concept, `ir/session/session.h`);
 - expose `input<T>(owner, clear)` (and `input_batch` where applicable) /
   `reveal(value, recipient)`, implemented over the value's `WireValue`

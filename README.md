@@ -98,8 +98,8 @@ frontend in `emp-tool/circuits/frontend/`; include those directly when you write
 circuits (see "Circuit frontend" below).
 
 A **session** owns the I/O boundary and protocol state; it exposes a **direct
-context** via `direct_ctx()` (`Session` / `DirectSession` in `ir/session/`). Circuit
-values are context-bound (`UInt_T<DirectCtx,N>` etc.), so a session names no value
+context** via `ctx()` (`Session` / `DirectSession` in `ir/session/`). Circuit
+values are context-bound (`UInt_T<ctx_t,N>` etc.), so a session names no value
 family and adding a value family needs no session edit — `input`/`reveal` are
 generic over any `WireValue`. `ClearSession` is the trivial plaintext session;
 protocol libraries (emp-sh2pc, emp-ag2pc) provide their own over a garbled context.
@@ -254,19 +254,19 @@ context would run exactly. Build typed values over it and operate directly:
 using namespace emp;
 
 ClearSession sess;                               // owns a ClearCtx + the I/O boundary
-using Ctx = ClearSession::DirectCtx;             // the gate context values are built over
+using Ctx = ClearSession::ctx_t;                 // the gate context values are built over
 using S32 = Int_T<Ctx, 32>;
 
 auto a = sess.input<S32>(ALICE, 7);              // feed inputs through the session
 auto b = sess.input<S32>(BOB,   35);
-auto c = a * b + S32::constant(sess.direct_ctx(), 1);   // pure value-return gates; +1 is a public constant
+auto c = a * b + S32::constant(sess.ctx(), 1);          // pure value-return gates; +1 is a public constant
 
 std::cout << sess.reveal(c, PUBLIC).value() << "\n";  // reveal -> std::optional<clear_t>
 
 // Wrap on overflow is well-defined and matches int32_t / uint32_t hardware:
 using U32 = UInt_T<Ctx, 32>;
 auto big = sess.input<U32>(ALICE, UINT32_MAX);
-auto wrapped = big + U32::constant(sess.direct_ctx(), 1u);   // == 0
+auto wrapped = big + U32::constant(sess.ctx(), 1u);   // == 0
 ```
 
 `UInt_T` wraps mod 2^N, `Int_T` is two's-complement, `Float_T` is IEEE

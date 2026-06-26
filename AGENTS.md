@@ -40,7 +40,7 @@ self-contained and assumes you've read this index.
 | Write protocol code that uses NetIO (sends, recvs, multi-thread, flush) | [docs/io_channel.md](docs/io_channel.md) |
 | Investigate a NetIO deadlock | [docs/io_channel.md](docs/io_channel.md) |
 | Translate ordinary C++ / Python to an EMP secure circuit | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
-| Write or modify a `test/test_*.cpp` file | [docs/test_conventions.md](docs/test_conventions.md) |
+| Write or modify a `test/<layer>/test_*.cpp` file | [docs/test_conventions.md](docs/test_conventions.md) |
 | Write or modify a `bench/bench_*.cpp` file | [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |
 | Add or modify public API length/count parameters, or choose `random_data` vs `random_data_unaligned` | [docs/api_conventions.md](docs/api_conventions.md) |
 | Verify wire-byte equivalence after a refactor / optimization (deterministic PRG, `TraceIO`) | [docs/test_mode.md](docs/test_mode.md) |

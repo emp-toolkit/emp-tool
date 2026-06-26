@@ -4,8 +4,9 @@ How `bench/*.cpp` files are structured. Read this when adding or
 modifying throughput benchmarks.
 
 Benchmarks are built only when `EMP_TOOL_BUILD_BENCHMARKS=ON`; they are
-not registered with `ctest`. Two-party benchmarks such as NetIO, TLSIO,
-and garbling are run through `./run`.
+not registered with `ctest`. Two-party benchmarks such as NetIO and TLSIO
+are run through `./run`; single-process benchmarks (e.g. the half-gate
+garbling bench, which garbles and evaluates locally) run directly.
 
 ## File layout
 

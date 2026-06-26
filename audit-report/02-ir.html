@@ -98,7 +98,7 @@ recording, or a cryptographic backend — with the gate stream guaranteed identi
 <div class="meta">
 <table>
 <tr><td>Report</td><td>2 of 3 — Boolean IR, contexts &amp; sessions</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (uncommitted; HEAD <code>7f21adc</code>)</td></tr>
+<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (runtime/ir/circuits refactor, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>ir/{program,validate,visit,passes,schedule,execute,artifact,empbc,assets,builtins}.h</code> · <code>ir/{assets,builtins}.cpp</code> · <code>ir/wire_value.h</code> · <code>ir/context/{concept,checks,clear,count,digest,record}.h</code> · <code>ir/session/{session,session_io,clear_session}.h</code></td></tr>
 <tr><td>Wire value</td><td>A context names its own <code>Wire</code> type: <code>uint8_t</code> (Clear/Count), <code>uint32_t</code> (Record/Digest wire ids), or <code>block</code> (a downstream garbling backend label).</td></tr>
 <tr><td>Layering</td><td><code>ir/program.h</code> (the <code>BooleanProgram</code> IR) and <code>ir/context/concept.h</code> (the <code>BooleanContext</code> concept) are the two pure design roots — zero internal includes, usable without any backend. Everything else here is built on them.</td></tr>
@@ -249,8 +249,8 @@ plan-caching discipline. (Scheduled == scalar replay is cross-checked on real AE
 
 <h2 id="visit-exec">A.6 · The single gate-walk &amp; execution</h2>
 <p><span class="tag">ir/visit.h</span> <span class="tag">ir/execute.h</span></p>
-<p><code>for_each_gate(p, visitor)</code> (<code class="ref">visit.h:23-34</code>) is the <b>only</b> place the
-op-switch lives — adding a new <code>Op</code> is a compile error at every visitor, never a silent fallthrough.
+<p><code>for_each_gate(p, visitor)</code> (<code class="ref">visit.h</code>) is <b>one of several</b> defaultless
+op-switches (the others in <code>validate.h</code> / <code>schedule.h</code> / <code>passes.h</code> / <code>digest.h</code>) — adding a new <code>Op</code> is a <code>-Werror=switch</code> compile error at every site, never a silent fallthrough.
 Execution has two layers:</p>
 <ul>
 <li><b>Low level</b> <code>circuit::execute_program&lt;Wire,Dispatcher&gt;</code>
@@ -302,10 +302,10 @@ scalar-replay == kernel and scheduled-replay == scalar.</p></div>
 <!-- ============================== PART B ============================== -->
 <h2 id="concept">B.1 · The <code>BooleanContext</code> concept</h2>
 <p><span class="tag">ir/context/concept.h</span></p>
-<p>The contract (<code class="ref">concept.h:19-27</code>):</p>
+<p>The contract (<code class="ref">concept.h</code>):</p>
 <pre><code>template &lt;class Ctx&gt;
 concept BooleanContext =
-    std::regular&lt;typename Ctx::Wire&gt; &amp;&amp;
+    std::semiregular&lt;typename Ctx::Wire&gt; &amp;&amp;
     requires(Ctx&amp; c, typename Ctx::Wire a, typename Ctx::Wire b, bool v) {
         { c.public_bit(v) } -&gt; std::same_as&lt;typename Ctx::Wire&gt;;
         { c.and_gate(a, b) } -&gt; std::same_as&lt;typename Ctx::Wire&gt;;
@@ -313,7 +313,7 @@ concept BooleanContext =
         { c.not_gate(a) }    -&gt; std::same_as&lt;typename Ctx::Wire&gt;;
     };</code></pre>
 <ul>
-<li><b><code>Ctx::Wire</code> must be <code>std::regular</code></b> — copyable, because "fan-out needs copies"
+<li><b><code>Ctx::Wire</code> must be <code>std::semiregular</code></b> — copyable, because "fan-out needs copies"
 (<code class="ref">concept.h:17-18</code>). A wire is a cheap handle; the context holds the real state.</li>
 <li><b>Gates return by value</b>, not in-place mutation — static, inlineable dispatch
 (<code class="ref">concept.h:4-7</code>).</li>
@@ -371,7 +371,7 @@ and the same <code>external_input(num_inputs)</code> prefix mix at <code class="
 silently break determinism/staleness checks. <code>digest_source</code> (<code class="ref">digest.h:75-83</code>)
 streams a body through a <code>DigestCtx</code> and equals <code>digest_program</code> of the program the body
 records — the basis for the frontend's "recording is deterministic" test
-(<code class="ref">test_circuit_fn.cpp:53-55</code>). The digest is also the staleness guard on cached schedules
+(<code class="ref">test/circuits/test_circuit_fn.cpp</code>). The digest is also the staleness guard on cached schedules
 (§A.5).</p></div>
 
 <!-- ============================== PART C ============================== -->
@@ -382,34 +382,39 @@ records — the basis for the frontend's "recording is deterministic" test
 from raw <code>Ctx::Wire</code>, rebindable to another context, and reporting its own context pointer. It is the
 context-free vocabulary the IR execution and session layers speak; it names <b>no</b> concrete value family
 (<code>Bit</code>/<code>UInt</code>/<code>Int</code>/<code>Float</code>/<code>BitVec</code>) and no protocol
-(<code class="ref">wire_value.h:4-12</code>). The contract (<code class="ref">wire_value.h:26-52</code>):</p>
+(<code class="ref">wire_value.h:4-12</code>). The contract is split into a structural <code>WireBundle</code> and the codec-adding <code>WireValue</code> (<code class="ref">wire_value.h</code>):</p>
 <pre><code>template &lt;class V_&gt;
-concept WireValue =
-    requires { typename V::Wire; typename V::context_type; typename V::clear_t; } &amp;&amp;
+concept WireBundle =                                                    // what EXECUTION needs (no codec)
+    requires { typename V::Wire; typename V::context_type; } &amp;&amp;
     BooleanContext&lt;typename V::context_type&gt; &amp;&amp;                         // a real gate context
     std::same_as&lt;typename V::Wire, typename V::context_type::Wire&gt; &amp;&amp;    // its wire IS that context's wire
     requires { typename std::integral_constant&lt;int, V::width()&gt;; } &amp;&amp;   // static, compile-time width
     std::same_as&lt;typename V::rebind&lt;V::context_type&gt;, V&gt; &amp;&amp;             // identity rebind
     requires(const V v, V::Wire* out)            { v.context(); v.pack_wires(out); } &amp;&amp;
-    requires(V::context_type&amp; c, const V::Wire* in){ { V::from_wires(c, in) } -&gt; std::same_as&lt;V&gt;; } &amp;&amp;
-    requires(V::clear_t cv, const bool* bits)    { { V::encode(cv) } -&gt; convertible_to&lt;std::vector&lt;bool&gt;&gt;;
+    requires(V::context_type&amp; c, const V::Wire* in){ { V::from_wires(c, in) } -&gt; std::same_as&lt;V&gt;; };
+
+template &lt;class V_&gt;
+concept WireValue = WireBundle&lt;V_&gt; &amp;&amp;                                   // + the clear-value codec
+    requires { typename V::clear_t; } &amp;&amp;
+    requires(V::clear_t cv, const bool* bits)    { { V::encode(cv) } -&gt; std::same_as&lt;std::array&lt;bool, V::width()&gt;&gt;;
                                                    { V::decode(bits) } -&gt; std::same_as&lt;V::clear_t&gt;; };</code></pre>
 <p>Two requirements distinguish it from a looser "has wires" check:</p>
 <ul>
 <li><b>It binds to a real gate context.</b> <code>BooleanContext&lt;context_type&gt;</code> and
-<code>Wire == context_type::Wire</code> are both required (<code class="ref">wire_value.h:33-36</code>) — a value
+<code>Wire == context_type::Wire</code> are both required (in <code>WireBundle</code>, <code class="ref">wire_value.h</code>) — a value
 cannot claim a wire type its context does not use.</li>
 <li><b>It is fixed-width only.</b> <code>width()</code> must be usable as a compile-time
-<code>std::integral_constant&lt;int, …&gt;</code> template argument (<code class="ref">wire_value.h:37-39</code>), so a
+<code>std::integral_constant&lt;int, …&gt;</code> template argument (in <code>WireBundle</code>, <code class="ref">wire_value.h</code>), so a
 runtime-width value (whose <code>width()</code> is <code>requires (N&gt;0)</code> and absent at <code>N==0</code>)
-does <b>not</b> model <code>WireValue</code>. Session I/O and circuit compilation need a statically known width /
-signature; runtime-width values are in-circuit only (<code class="ref">wire_value.h:14-17</code>).</li>
+models neither <code>WireBundle</code> nor <code>WireValue</code> and is never compiled. It instead models a separate
+<code>RuntimeWidthValue</code> concept (<code class="ref">wire_value.h</code>), so it <em>is</em> session-I/O eligible
+through the runtime-width <code>input</code>/<code>reveal</code> overloads — only the frontend boundary excludes it.</li>
 </ul>
 <p>Every requirement is spelled through <code>std::decay_t&lt;V_&gt;</code> so the concept is stable under reference
 qualification. A convenience <code>is_wire_value_v&lt;V&gt;</code> variable template
 (<code class="ref">wire_value.h:54</code>) gives the boolean form. The frontend keeps a stricter
-<code>RecordValue</code> concept (<code class="ref">circuit_fn.h:51-54</code>) that <b>refines</b>
-<code>WireValue</code> by additionally requiring <code>context_type == RecordCtx</code> — see
+<code>RecordValue</code> concept (<code class="ref">circuit_fn.h</code>) that <b>refines</b>
+<code>WireBundle</code> by additionally requiring <code>context_type == RecordCtx</code> (no clear codec is needed) — see
 <a href="03-circuits.html">Report 3</a>.</p>
 
 <!-- ============================== PART D ============================== -->
@@ -417,7 +422,7 @@ qualification. A convenience <code>is_wire_value_v&lt;V&gt;</code> variable temp
 <p><span class="tag">ir/session/session.h</span> <span class="tag">ir/session/session_io.h</span></p>
 <p>The gate concept has no I/O; the session concept is its peer and owns the I/O boundary. The session layer is a
 <b>small family of concepts</b>, not one monolith — a session names <b>no</b> circuit value family, because values
-are context-bound (<code>UInt_T&lt;DirectCtx,N&gt;</code> etc.), so adding a value family needs no session edit
+are context-bound (<code>UInt_T&lt;ctx_t,N&gt;</code> etc.), so adding a value family needs no session edit
 (<code class="ref">session.h:4-18</code>).</p>
 <pre><code>// ir/session/session.h
 template &lt;class S&gt; concept Session =                         // the minimal protocol object
@@ -425,9 +430,9 @@ template &lt;class S&gt; concept Session =                         // the minima
 
 template &lt;class S&gt; concept DirectSession =                   // + a direct/user gate context
     Session&lt;S&gt; &amp;&amp; requires(S&amp; s) {
-        typename S::DirectCtx;
-        requires BooleanContext&lt;typename S::DirectCtx&gt;;
-        { s.direct_ctx() } -&gt; std::same_as&lt;typename S::DirectCtx&amp;&gt;;
+        typename S::ctx_t;
+        requires BooleanContext&lt;typename S::ctx_t&gt;;
+        { s.ctx() } -&gt; std::same_as&lt;typename S::ctx_t&amp;&gt;;
     };
 
 template &lt;class S&gt; concept CheckpointingSession =            // + a checkpoint() barrier
@@ -435,20 +440,20 @@ template &lt;class S&gt; concept CheckpointingSession =            // + a checkp
 <ul>
 <li><b><code>Session</code></b> (<code class="ref">session.h:26-28</code>) is the floor: it reports a
 <code>party()</code> convertible to <code>int</code>. Nothing else is mandatory.</li>
-<li><b><code>DirectSession</code></b> (<code class="ref">session.h:30-37</code>) adds a <code>DirectCtx</code> type
-(itself a <code>BooleanContext</code>) reachable via <code>direct_ctx()</code> — the gate context operator-mode
-circuits are built over. A multipass protocol may own many internal pass contexts; <code>DirectCtx</code> is only
+<li><b><code>DirectSession</code></b> (<code class="ref">session.h</code>) adds a <code>ctx_t</code> type
+(itself a <code>BooleanContext</code>) reachable via <code>ctx()</code> — the gate context operator-mode
+circuits are built over. A multipass protocol may own many internal pass contexts; <code>ctx_t</code> is only
 the direct one.</li>
 <li><b><code>CheckpointingSession</code></b> (<code class="ref">session.h:39-42</code>) is an <b>optional</b>
 refinement for sessions carrying cross-call materialized state (direct / multi-pass protocols where wire labels
 must survive across invocations); it adds a <code>checkpoint()</code> barrier. A stateless session (e.g.
 <code>ClearSession</code>) has no such barrier and does not model this concept.</li>
 </ul>
-<p>A spelling helper <code>direct_ctx_t&lt;S&gt; = S::DirectCtx</code> (<code class="ref">session.h:47-48</code>) lets
+<p>A spelling helper <code>ctx_t&lt;S&gt; = S::ctx_t</code> (<code class="ref">session.h</code>) lets
 tests/docs name a session's direct context without a session value alias.</p>
 <p>The <b>reveal contract</b> is a separate, generic concept <code>SessionIO&lt;S,V&gt;</code>
-(<code class="ref">session_io.h:18-29</code>), parameterized over <em>any</em> <code>WireValue V</code> whose
-<code>context_type</code> is <code>S::DirectCtx</code>:</p>
+(<code class="ref">session_io.h</code>), parameterized over <em>any</em> <code>WireValue V</code> whose
+<code>context_type</code> is <code>S::ctx_t</code>:</p>
 <pre><code>// ir/session/session_io.h — recipient-explicit, uniform over any WireValue
 S::reveal_t&lt;V&gt; == std::optional&lt;typename V::clear_t&gt;   // required equality
 s.input&lt;V&gt;(party, x) -&gt; V                              // feed a clear value as `party`'s input
@@ -459,21 +464,21 @@ present only on a party that learns it (every party for <code>PUBLIC</code>, the
 <code>std::nullopt</code> elsewhere.</p>
 <div class="callout c-note"><span class="lbl">Why the session names no value family</span>
 <p>Responsibilities are split so a session is value-family-agnostic: <code>Session</code> requires only
-<code>party()</code>; the gate context is named once as <code>DirectSession::DirectCtx</code>; and I/O is the
+<code>party()</code>; the gate context is named once as <code>DirectSession::ctx_t</code>; and I/O is the
 orthogonal, value-generic <code>SessionIO&lt;S,V&gt;</code> over any <code>WireValue</code>. A new value family is
 usable through any session with <b>no session edit</b>, and <code>CheckpointingSession</code> is an opt-in
 refinement rather than part of the base contract.</p></div>
 
 <h2 id="clearsession">D.2 · <code>ClearSession</code> — the plaintext reference</h2>
 <p><span class="tag">ir/session/clear_session.h</span></p>
-<p><code>ClearSession</code> (<code class="ref">clear_session.h:39-101</code>) is the trivial realization of the
-session contracts. It owns a pure <code>ClearCtx</code> (<code class="ref">clear_session.h:100</code>) and declares
-<code>DirectCtx == ClearCtx</code> (<code class="ref">clear_session.h:41</code>). Since there are no secrets in the
+<p><code>ClearSession</code> (<code class="ref">clear_session.h</code>) is the trivial realization of the
+session contracts. It owns a pure <code>ClearCtx</code> and declares
+<code>ctx_t == ClearCtx</code> (<code class="ref">clear_session.h</code>). Since there are no secrets in the
 clear, <code>input</code> becomes public wires and <code>reveal</code> reads wire values back into an
 always-populated optional.</p>
 <ul>
-<li><b><code>direct_ctx()</code></b> returns <code>DirectCtx&amp;</code>
-(<code class="ref">clear_session.h:52</code>) — the gate context for value construction that is not I/O (public
+<li><b><code>ctx()</code></b> returns <code>ctx_t&amp;</code>
+(<code class="ref">clear_session.h</code>) — the gate context for value construction that is not I/O (public
 constants, crypto kernels).</li>
 <li><b><code>party()</code></b> reports <code>PUBLIC</code> (<code class="ref">clear_session.h:48</code>) — plaintext
 has no private party, so <code>PUBLIC</code> is the universal-knowledge convention.</li>
@@ -483,21 +488,20 @@ populated, for every recipient.</li>
 </ul>
 <p><b>Owner / recipient validation.</b> <code>input(owner, value)</code> and <code>reveal(value, recipient)</code>
 accept and then <b>ignore</b> the party for routing (correct for plaintext — there are no secrets) — but only after
-<b>validating it is a real party id</b>: both <code>error()</code> unless the party is <code>ALICE</code>,
-<code>BOB</code>, or <code>PUBLIC</code> (<code class="ref">clear_session.h:62-63</code> and
-<code class="ref">clear_session.h:83-84</code>; the enum is <code>{XOR=-1, PUBLIC=0, ALICE=1, BOB=2}</code> in
-<code>runtime/core/constants.h</code>). So ClearSession ignores <em>routing</em> but does not silently accept a
-garbage party id — a real protocol session (SH2PC / AG2PC) would additionally <em>route</em> by it, and an auditor
-should confirm those do not ignore it.</p>
+<b>validating it is a real party id</b>: both <code>error()</code> only when the party id is <em>below</em>
+<code>PUBLIC</code> (the <code>XOR=-1</code> share sentinel), so any <code>PUBLIC</code> or party id ≥ 1 is accepted
+— the plaintext oracle serves n-party protocols too (<code class="ref">clear_session.h</code>; the enum is
+<code>{XOR=-1, PUBLIC=0, ALICE=1, BOB=2}</code> in <code>runtime/core/constants.h</code>). So ClearSession ignores
+<em>routing</em> but does not silently accept the share sentinel — a real protocol session (SH2PC / AG2PC) would
+additionally <em>route</em> by the id, and an auditor should confirm those do not ignore it.</p>
 <div class="callout c-ok"><span class="lbl">Codec-width check is always-on</span>
-<p><code>input</code> requires <code>V::encode(value)</code> to produce exactly <code>V::width()</code> bits — a
-mismatch <code>error()</code>s (<code class="ref">clear_session.h:64-69</code>), <b>not</b> a debug-only condition,
-because a codec that emits the wrong count would silently out-of-bounds the wire fill that follows. A
-<code>static_assert</code> additionally pins <code>V::context_type == DirectCtx</code> at both
-<code>input</code> and <code>reveal</code> (<code class="ref">clear_session.h:60-61</code>,
-<code class="ref">clear_session.h:81-82</code>). The bottom of the file
+<p><code>input</code> encodes through <code>V::encode(value)</code> into a <code>std::array&lt;bool, V::width()&gt;</code>
+whose size is fixed by the type, so a codec emitting the wrong bit count is a <b>compile-time</b> error
+(<code class="ref">clear_session.h</code>) — stronger than always-on, and impossible to out-of-bounds the wire fill
+that follows. A <code>static_assert</code> additionally pins <code>V::context_type == ctx_t</code> at both
+<code>input</code> and <code>reveal</code> (<code class="ref">clear_session.h</code>). The bottom of the file
 <code>static_assert</code>s <code>Session&lt;ClearSession&gt;</code> and <code>DirectSession&lt;ClearSession&gt;</code>
-(<code class="ref">clear_session.h:103-104</code>); <code>SessionIO&lt;ClearSession,V&gt;</code> for a concrete value
+(<code class="ref">clear_session.h</code>); <code>SessionIO&lt;ClearSession,V&gt;</code> for a concrete value
 type is asserted in the emp-tool tests, since naming a value family in the header would make <code>ir</code> depend
 on <code>circuits/</code>.</p></div>
 
@@ -517,7 +521,7 @@ on <code>circuits/</code>.</p></div>
 </main>
 <footer>
 emp-tool implementation audit · IR (Boolean IR, contexts &amp; sessions) · runtime / ir / circuits three-layer architecture · working tree
-on <code>main</code> (uncommitted; HEAD <code>7f21adc</code>).
+on <code>main</code> (runtime/ir/circuits refactor, since committed).
 Reports: <a href="01-runtime.html">Runtime</a> · <a href="02-ir.html">IR</a> · <a href="03-circuits.html">Circuits</a>.
 </footer>
 </body>

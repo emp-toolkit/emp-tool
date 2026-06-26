@@ -109,7 +109,7 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
 <div class="meta">
 <table>
 <tr><td>Report</td><td>High-level overview — the on-ramp to the four detailed sub-reports below</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, uncommitted; HEAD <code>7f21adc</code>)</td></tr>
+<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
 <tr><td>License</td><td>Apache-2.0 (Copyright 2026 Xiao Wang)</td></tr>
 <tr><td>Versioning</td><td><b>Stable:</b> tag <code>0.3.0</code> / branch <code>v0.3.x</code> (backported fixes). <b>This tree:</b> a pre-alpha development branch — CMake metadata reads <code>1.0.0</code> but the API is <b>not frozen</b> (headers/names may still move).</td></tr>
 <tr><td>Namespaces</td><td><code>emp</code> (root) · <code>emp::circuit</code> (IR) · <code>emp::frontend</code> · <code>emp::kernel</code> · <code>emp::detail</code> · <code>emp::tcp</code> · <code>emp::rec</code></td></tr>
@@ -124,7 +124,7 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
   <div class="stat"><div class="n">4</div><div class="l">reusable contexts</div></div>
   <div class="stat"><div class="n">5</div><div class="l">typed value families</div></div>
   <div class="stat"><div class="n">63</div><div class="l">.empbc circuit assets</div></div>
-  <div class="stat"><div class="n">29</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
+  <div class="stat"><div class="n">34</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
   <div class="stat"><div class="n">12</div><div class="l">design docs</div></div>
 </div>
 
@@ -147,7 +147,7 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
 
 <!-- ===================================================================== -->
 <h2 id="what">1 · What emp-tool is</h2>
-<p>Mechanically the repo is small and almost entirely header-only: <b>65 first-party header files (~7,333 lines)</b>
+<p>Mechanically the repo is small and almost entirely header-only: <b>69 first-party header files (~7,333 lines)</b>
 plus exactly <b>three compiled translation units</b> — <code>runtime/crypto/ec.cpp</code>,
 <code>ir/assets.cpp</code>, <code>ir/builtins.cpp</code>. The only large file in the tree is the vendored <code>third_party/sse2neon.h</code>
 (~11,200 lines) that lets the entire <code>_mm_*</code> intrinsic surface run on arm64.</p>
@@ -212,7 +212,7 @@ because float ops are <em>replayed</em> from prebuilt <code>.empbc</code> artifa
 <tr><td><code>runtime/io/</code></td><td>1,052</td><td>IOChannel interface, TCP NetIO, TLS-1.3 channel, tracing wrapper</td><td><a href="01-runtime.html">Report 1</a></td></tr>
 <tr><td><code>runtime/execution/</code></td><td>94</td><td>half_gate + privacy_free garbled-circuit leaf primitives</td><td><a href="01-runtime.html">Report 1</a></td></tr>
 <tr><td><code>ir/</code></td><td>991 + assets</td><td>BooleanProgram model, validate/visit/schedule/passes, execute replayer, <code>.empbc</code> serializer, asset loader, builtins; <code>ir/files/</code> holds 63 committed <code>.empbc</code> assets</td><td><a href="02-ir.html">Report 2</a></td></tr>
-<tr><td><code>ir/wire_value.h</code></td><td>~50</td><td>The generic <code>WireValue</code> concept — the structural typed-value contract (fixed-width)</td><td><a href="02-ir.html">Report 2</a></td></tr>
+<tr><td><code>ir/wire_value.h</code></td><td>~110</td><td>The generic <code>WireBundle</code> concept (structural typed-value contract) + <code>WireValue</code> (adds the clear codec); fixed-width</td><td><a href="02-ir.html">Report 2</a></td></tr>
 <tr><td><code>ir/context/</code></td><td>305</td><td>The <code>BooleanContext</code> concept + four reusable contexts (Clear/Count/Digest/Record) + cross-context checks</td><td><a href="02-ir.html">Report 2</a></td></tr>
 <tr><td><code>ir/session/</code></td><td>~175</td><td><code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> / <code>CheckpointingSession</code> + <code>ClearSession</code>; the optional reveal contract</td><td><a href="02-ir.html">Report 2</a></td></tr>
 <tr><td><code>circuits/</code></td><td>~1,120</td><td>The typed <code>*_T&lt;Ctx&gt;</code> value family, numeric_kernels, oblivious sort, value_traits, umbrellas</td><td><a href="03-circuits.html">Report 3</a></td></tr>
@@ -226,7 +226,7 @@ because float ops are <em>replayed</em> from prebuilt <code>.empbc</code> artifa
 <p>This is the architectural heart of the repo. There is <b>no global gate backend</b>: every typed value carries
 a pointer to its <code>Ctx</code> and forwards each gate to it. The C++20 concept requires just four value-return
 operations over a cheap, copyable wire handle:</p>
-<pre><code>concept BooleanContext = std::regular&lt;Ctx::Wire&gt; &amp;&amp; requires {
+<pre><code>concept BooleanContext = std::semiregular&lt;Ctx::Wire&gt; &amp;&amp; requires {
     c.public_bit(bool) -&gt; Wire;   // the only "input": a public constant
     c.and_gate(a,b)    -&gt; Wire;   // the only COSTED gate
     c.xor_gate(a,b)    -&gt; Wire;   // free
@@ -248,7 +248,7 @@ context-free <code>Circuit</code> (a validated program + signature), then <code>
 the same replay path the shipped <code>.empbc</code> builtins use. A value type satisfies the generic
 <code>WireValue</code> concept (<code>ir/wire_value.h</code>) — context-free, fixed-width, with a clear codec — so
 circuit code names no protocol. <b>I/O is a session concern, not a circuit concern</b>: a
-<code>DirectSession</code> exposes its gate context via <code>direct_ctx()</code> and feeds inputs / reveals
+<code>DirectSession</code> exposes its gate context via <code>ctx()</code> and feeds inputs / reveals
 outputs (<code>SessionIO&lt;S,V&gt;</code>, generic over any <code>WireValue</code>, so a session names <b>no</b>
 value family — adding a value family needs no session edit), with <code>reveal</code> returning
 <code>std::optional&lt;clear_t&gt;</code> (present on the party that learns it, <code>nullopt</code> otherwise).
@@ -326,12 +326,12 @@ this audit:</p>
 <tr><td><code>static_init.md</code></td><td>static-init-order safety</td><td><code>api_conventions.md</code></td><td>public API conventions</td></tr>
 <tr><td><code>test_conventions.md</code></td><td>test file layout</td><td><code>benchmark_conventions.md</code></td><td>benchmark layout</td></tr>
 </table>
-<p>The <code>test/</code> directory holds <b>30 <code>test_*.cpp</code> files</b> (one per primitive/layer header), each a
+<p>The <code>test/</code> directory holds <b>34 <code>test_*.cpp</code> files</b> (one per primitive/layer header, under <code>test/{circuits,ir,runtime}/</code>), each a
 tutorial <code>example()</code> + a <code>run_correctness()</code> against external ground truth (NIST/FIPS
 vectors, OpenSSL cross-checks, scalar references, boundary cases), plus one shared
 <code>circuit_fn_contract_probes.cpp</code>. Frontend contract enforcement is tested via <b>9 negative
 compile-failure targets</b> (<code>circuit_fn_contract_neg_1..9</code>, all <code>EXCLUDE_FROM_ALL</code>, built
-from that probes file) that must fail to compile with a specific expected diagnostic. <b>11 throughput
+from that probes file) that must fail to compile with a specific expected diagnostic. <b>12 throughput
 benchmarks</b> build only on demand. CI runs the matrix {ubuntu-latest, ubuntu-24.04-arm, macos-latest} ×
 {Debug, Release} with the portable ISA floor + ctest, plus a weekly CodeQL security scan.</p>
 
@@ -384,15 +384,12 @@ references, code excerpts, and a per-report risk register — one per architectu
 <!-- ===================================================================== -->
 <h2 id="caveats">11 · Repository caveats an auditor will notice</h2>
 <ul>
-<li><b>Root data dumps, not source.</b> The repo root holds <code>sort_file.h</code> (~17.6 MB, ~640k lines) and
-<code>sort.txt</code> (~18 MB) — generated data artifacts, not hand-written code. Don't mistake them for the
-~7.3K-line first-party source.</li>
 <li><b>Stale generated header.</b> <code>build/emp-tool/circuits/circuit_asset_dirs.h</code> is a leftover from an
 earlier branch layout (it references a non-existent <code>circuits/files</code> path); the <b>live</b> generated
 header is <code>build/emp-tool/ir/circuit_asset_dirs.h</code>.</li>
-<li><b>Working tree ahead of HEAD.</b> The runtime/ir/circuits three-layer refactor (and the session/WireValue
-redesign these reports describe) is currently <b>uncommitted</b> on <code>main</code> — HEAD is still
-<code>7f21adc</code>. The reports describe the working tree on disk, not the committed tree.</li>
+<li><b>Reports describe the three-layer refactor.</b> The runtime/ir/circuits three-layer refactor and the
+session/WireValue redesign these reports describe are now committed on <code>main</code>; the reports were
+written against that working tree.</li>
 <li><b>Pre-alpha API.</b> This development branch's CMake version reads <code>1.0.0</code> but names and headers may
 still move before the first tagged alpha; anything pinned to a release should track <code>v0.3.x</code> instead.</li>
 <li><b>One full public umbrella.</b> <code>#include &lt;emp-tool/emp-tool.h&gt;</code> pulls in all three layers
@@ -403,7 +400,7 @@ layer includes that layer's umbrella directly.</li>
 </main>
 <footer>
 emp-tool implementation audit · Repository overview · runtime / ir / circuits three-layer architecture · working
-tree on <code>main</code> (uncommitted; HEAD <code>7f21adc</code>).
+tree on <code>main</code> (runtime/ir/circuits refactor, since committed).
 Detailed reports: <a href="01-runtime.html">Runtime</a> ·
 <a href="02-ir.html">IR</a> ·
 <a href="03-circuits.html">Circuits</a>.

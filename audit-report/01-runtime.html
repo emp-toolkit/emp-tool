@@ -109,11 +109,11 @@ hardware vector registers, with <b>no protocol policy</b> above it.</p>
 <div class="meta">
 <table>
 <tr><td>Report</td><td>1 of 3 — Runtime substrate (<code>runtime/{core,crypto,io,execution}/</code>)</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer architecture, uncommitted; HEAD <code>7f21adc</code>)</td></tr>
+<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer architecture, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>runtime/core/{block,block_vector,simd_tier,constants,test_mode,utils}</code> · <code>runtime/crypto/{aes,prp,f2k,ccrh,mitccrh,prg,hash,ro,ec,session_id}</code> · <code>runtime/io/{io_channel,net_io_channel,tcp_socket,tls_io_channel,trace_io}</code> · <code>runtime/execution/{half_gate,privacy_free}</code></td></tr>
 <tr><td>Endianness</td><td><b>Little-endian only</b> — <code class="ref">runtime/runtime.h:14</code> <code>static_assert</code>s <code>__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__</code>; wire formats memcpy integers in host order and refuse to build on big-endian.</td></tr>
 <tr><td>Failure model</td><td><b>Fail-fast <code>_Exit(1)</code></b> throughout via <code>error()</code> or equivalent fatal helpers. No exceptions, no error recovery; a malformed wire message terminates the process.</td></tr>
-<tr><td>Method</td><td>Full read of every runtime header + its tests (<code>test/test_*.cpp</code>) and benchmarks; <code>file:line</code> references verified against the live tree.</td></tr>
+<tr><td>Method</td><td>Full read of every runtime header + its tests (<code>test/runtime/test_*.cpp</code>) and benchmarks; <code>file:line</code> references verified against the live tree.</td></tr>
 <tr><td>Crypto scope note</td><td>This is the <b>raw-block / AES-NI / VAES kernel</b> — AES as a hardware instruction over <code>block</code> registers. The <b>in-circuit</b> AES-128 (Boyar–Peralta 32-AND S-box over <code>Bit</code> values) is a different thing entirely and lives in <a href="03-circuits.html">Report 3</a>; do not conflate the two.</td></tr>
 </table>
 </div>
@@ -205,10 +205,9 @@ zero_block, all_one_block, select_mask[2] = {zero_block, all_one_block}   // bra
 evaluate into <code>.rodata</code> (see <code>docs/static_init.md</code> for why that matters to static-init
 order).</p>
 <div class="callout c-note"><span class="lbl">Byte-order trap when reading traces by eye</span>
-<p><code>makeBlock(hi, lo)</code> stores <code>lo</code> first in memory, but <code>operator&lt;&lt;</code> prints
-<code>data[1]</code> (high) then <code>data[0]</code> (low) — i.e. <b>big-endian display of a little-endian
-memory layout</b> (<code class="ref">block.hpp:52-62</code>). A known source of confusion when diffing wire
-traces. The stream operator correctly saves/restores flags and fill.</p></div>
+<p><code>makeBlock(hi, lo)</code> stores <code>lo</code> first in memory; <code>operator&lt;&lt;</code> renders the
+block as its <b>16 bytes in memory (little-endian) order</b> via <code>to_hex(&amp;blk, sizeof(block))</code>
+(<code class="ref">block.hpp</code>) — no lane reordering. A known source of confusion when diffing wire traces.</p></div>
 
 <h3>Bit accessors &amp; σ</h3>
 <ul>
@@ -223,8 +222,9 @@ correlation-robustness argument of every fixed-key-AES caller.</li>
 </ul>
 
 <h3>Bulk XOR / compare / transpose</h3>
-<p>The <code>xorBlocks_arr</code> family is <code>__restrict__</code> loops — <b>non-overlap is load-bearing</b>
-(<code class="ref">block.h:30-42</code>); aliasing is UB except via the dedicated <code>xorBlocksTo_arr</code>.
+<p>The <code>xorBlocks_arr</code> / <code>xorBlocksTo_arr</code> family are all <code>__restrict__</code> loops —
+<b>non-overlap is load-bearing</b> (<code class="ref">block.h</code>); every variant requires non-overlapping
+pointers, with no aliasing-safe overload.
 <code>cmpBlock</code> is deliberately <b>not early-exit</b> (accumulator-OR for ILP on the equal path,
 <code class="ref">block.hpp:88-94</code>):</p>
 <pre><code>acc = OR over (x[i] ^ y[i]);  return _mm_testz_si128(acc, acc);</code></pre>
@@ -290,7 +290,7 @@ declared <code class="ref">utils.h:22-24</code>). The whole library's failure mo
 nonzero byte as 1 and <b>reads a full 32 bytes</b> via an unaligned load — callers must ensure 32 bytes are
 readable.</li>
 <li><code>bools_to_bits(out, bools, len)</code> has <b>tail-preserve semantics</b>: the final partial byte is
-read-modify-written, <b>preserving its high bits</b> (<code class="ref">utils.h:41-46</code>,
+read-modify-written, <b>preserving its high bits</b> (<code class="ref">utils.h</code>,
 <code class="ref">utils.hpp:69-80</code>). Every caller that emits/hashes the packed bytes must zero the tail
 byte first or use only <code>⌈len/8⌉</code> bytes where the tail bits are don't-cares. <code>bool_to_block</code>
 is safe (128 is a multiple of 32 → whole block overwritten).</li>
@@ -452,7 +452,7 @@ per bool — 8× less AES work, <code class="ref">prg.h:105-133</code>), and <co
 backtracking resistance</b>: recovering the AES key + counter reproduces all past and future output — by design
 (it is a PRG, not a prediction-resistant DRBG), so <b>seed compromise is total</b>. Verified: counter
 continuity for N ∈ {1,7,16,17,64,65,257}, fork/seek reproduction, unaligned == aligned byte-and-counter parity
-(<code>test_prg.cpp</code>).</p></div>
+(<code>test/runtime/test_prg.cpp</code>).</p></div>
 
 <h2 id="f2k">7 · B · F2K — GF(2¹²⁸) arithmetic</h2>
 <p><span class="tag">crypto/f2k.h</span> <span class="tag">crypto/f2k.hpp</span></p>
@@ -547,37 +547,45 @@ overlap is UB (<code class="ref">ccrh.h:26-27,33</code>). Large <code>n</code> i
 <h2 id="mitccrh">9 · B · MITCCRH — tweakable multi-instance CCRH</h2>
 <p><span class="tag">crypto/mitccrh.h</span></p>
 
-<p><code>MITCCRH&lt;BatchSize&gt;</code> (default <code>BatchSize=8</code>) implements the tweakable circular-CR hash
-of Guo–Katz–Wang–Yang (eprint 2019/1168, <code class="ref">mitccrh.h:8-11</code>). Half-gates hashes each gate
-under a fresh tweak (the gate id); MITCCRH amortizes this by batch-scheduling <code>BatchSize</code> AES keys at
-once (one per tweak), then consuming them. This is the TMMO construction:
-<code>H = σ(x) ⊕ AES_{K(tweak)}(σ(x))</code> — the <b>tweak enters via the key</b>, not the input.</p>
+<p><code>MITCCRH&lt;BatchSize=8, ReuseShift=3&gt;</code> implements the tweakable circular-CR hash
+of Guo–Katz–Wang–Yang (eprint 2019/1168, <code class="ref">mitccrh.h</code>). Half-gates hashes each gate
+under a fresh tweak (the gate id); MITCCRH amortizes this by batch-scheduling AES keys, then consuming them.
+This is the TMMO construction:
+<code>H = σ(x) ⊕ AES_{K(tweak)}(σ(x))</code> — the <b>tweak enters via the key</b>, not the input.
+<code>ReuseShift</code> trades concrete security for key-schedule amortization: the AES key is taken from the
+<em>bucket</em> <code>gid &gt;&gt; ReuseShift</code>, so 2<sup>ReuseShift</sup> consecutive gids hash under one key
+(the default <code>ReuseShift=3</code> costs 3 multi-instance bits and schedules once per 8 gids;
+<code>ReuseShift=0</code> selects the one-key-per-gid construction). Both parties must use the same
+<code>ReuseShift</code> — it changes the keys, hence the transcript.</p>
 
-<h3>State (<code class="ref">mitccrh.h:15-19</code>)</h3>
-<pre><code>AES_KEY scheduled_key[BatchSize];   // pre-scheduled per-tweak keys
-block   keys[BatchSize];            // raw per-tweak user keys (start_point ^ tweak)
-int     key_used = BatchSize;       // cursor; == BatchSize means "exhausted, re-key"
-block   start_point;                // the per-instance base S
-uint64_t gid = 0;                   // running gate-id counter</code></pre>
-<p><code>setS(s)</code> resets <code>start_point</code>, <code>gid=0</code>, and <code>key_used=BatchSize</code>
-(forces a re-key, dropping stale keys, <code class="ref">mitccrh.h:21-25</code>). <code>renew_ks()</code> derives
-<code>keys[i] = start_point ⊕ makeBlock(gid++, 0)</code>, batch-schedules with
-<code>AES_opt_key_schedule&lt;BatchSize&gt;</code>, and resets the cursor (<code class="ref">mitccrh.h:32-37</code>).
-<code>hash&lt;K,H&gt;</code> (<code class="ref">mitccrh.h:73-81</code>) consumes K scheduled keys via
-<code>ParaEncXorInput_impl</code>; <code>hash_cir&lt;K,H&gt;</code> applies σ first, giving the full half-gates
-form (<code class="ref">mitccrh.h:54-59</code>).</p>
+<h3>State (<code class="ref">mitccrh.h</code>)</h3>
+<pre><code>AES_KEY  scheduled_key[BatchSize];  // pre-scheduled keys
+block    keys[BatchSize];           // raw user keys (start_point ^ tweak/bucket)
+int      key_used = BatchSize;      // cursor; == BatchSize means "exhausted, re-key"
+block    start_point;               // the per-instance base S
+uint64_t gid = 0;                   // running gate-id counter
+uint64_t scheduled_bucket = ~0ull;  // bucket the current schedule covers (ReuseShift>0); ~0 = none</code></pre>
+<p><code>setS(s)</code> resets <code>start_point</code>, <code>gid=0</code>, <code>key_used=BatchSize</code>, and
+<code>scheduled_bucket=~0</code> (forces a re-key, dropping stale keys, <code class="ref">mitccrh.h</code>).
+<code>renew_ks()</code> derives the batch keys from the gid: with <code>ReuseShift=0</code> it sets
+<code>keys[i] = start_point ⊕ makeBlock(gid++, 0)</code> and batch-schedules <code>AES_opt_key_schedule&lt;BatchSize&gt;</code>;
+with the default <code>ReuseShift&gt;0</code> it buckets by <code>gid &gt;&gt; ReuseShift</code> — an aligned batch in one
+bucket schedules only <code>scheduled_key[0]</code> (cached via <code>scheduled_bucket</code>), a straddling batch
+falls back to per-gid bucket keys. <code>hash&lt;K,H&gt;</code> (<code class="ref">mitccrh.h</code>) consumes K scheduled
+keys via <code>ParaEncXorInput_impl</code> (a uniform bucket reuses key 0); <code>hash_cir&lt;K,H&gt;</code> applies σ
+via the fused <code>AesMemXorSigmaTile</code>, giving the full half-gates form (<code class="ref">mitccrh.h</code>).</p>
 
 <div class="callout c-warn"><span class="lbl">Tweak-uniqueness is an unenforced caller obligation</span>
 <p>The explicit-tweak <code>renew_ks(tweaks)</code> must <b>not</b> be mixed with the gid-based
 <code>renew_ks()</code> on the same instance — a <code>tweak == makeBlock(g,0)</code> for some gid <code>g</code>
-collides the AES key and breaks the security argument (<code class="ref">mitccrh.h:44-46</code>). The code does
+collides the AES key and breaks the security argument (<code class="ref">mitccrh.h</code>). The code does
 <b>not</b> enforce this. Likewise the caller must ensure gids never repeat within a <code>start_point</code>;
 re-<code>setS</code> resets <code>gid</code> to 0, so reusing the same <code>S</code> replays gids — safe only if
 <code>S</code> changed. This is the single most security-relevant misuse, and it is unchecked.</p></div>
 <div class="callout c-audit"><span class="lbl">Auditor scrutiny</span>
 <p><code>hash&lt;K,H&gt;</code> <code>static_assert</code>s <code>K ≤ BatchSize &amp;&amp; BatchSize % K == 0</code>
-(<code class="ref">mitccrh.h:75-76</code>). Out-of-place forms allocate a stack array <code>block tmp[K*H]</code>
-(<code class="ref">mitccrh.h:67</code>) — very large K·H risks stack overflow (half-gates uses ≤8). Pinned
+(<code class="ref">mitccrh.h</code>). The out-of-place forms feed <code>in</code> directly through the two-pointer
+Davies–Meyer / fused-σ helper — <b>no scratch buffer</b> (<code class="ref">mitccrh.h</code>). Pinned
 against the explicit reference key derivation and <code>hash_cir == hash(σ(·))</code> (<code>test_mitccrh.cpp</code>).</p></div>
 
 <h2 id="hash">10 · B · Hash (SHA-256) &amp; the random oracle</h2>
@@ -847,7 +855,7 @@ OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equ
 <tr><td>5</td><td>Uninitialized-memory-to-wire surface (<code>BlockVec</code>/default-init)</td><td><code class="ref">block_vector.h:15-44</code></td><td>Non-determinism / potential leak; sweep send/hash paths</td></tr>
 <tr><td>6</td><td>No channel-layer peer auth (NetIO); no hostname check (TLSIO)</td><td><code class="ref">tcp_socket.h:22-47</code>, <code class="ref">tls_io_channel.h:241-279</code></td><td>Load-bearing trust-model assumptions to document</td></tr>
 <tr><td>7</td><td>σ is security-load-bearing; raw <code>ParaEncXorInput_impl</code> (no σ) exposed in <code>detail::</code></td><td>CCRH/MITCCRH, <code class="ref">aes.hpp:220-224</code></td><td>Misuse breaks correlation-robustness</td></tr>
-<tr><td>8</td><td>MITCCRH tweak-uniqueness / gid-monotonicity unenforced; garbling <code>idx</code>/gate-id sync is a caller obligation</td><td><code class="ref">mitccrh.h:44-46</code>, <code class="ref">privacy_free.h:15</code></td><td>Caller obligation; security-critical, unchecked in the primitive</td></tr>
+<tr><td>8</td><td>MITCCRH tweak-uniqueness / gid-monotonicity unenforced; garbling <code>idx</code>/gate-id sync is a caller obligation</td><td><code class="ref">mitccrh.h</code>, <code class="ref">privacy_free.h:15</code></td><td>Caller obligation; security-critical, unchecked in the primitive</td></tr>
 <tr><td>9</td><td><code>reduce</code> vs <code>reduce_reflect</code> silently mismatchable (no type guard)</td><td><code class="ref">f2k.hpp:31-91</code></td><td>Wrong field elements if mixed</td></tr>
 <tr><td>10</td><td>Non-constant-time EC <code>hash_to_point</code> (<code>BN_mod_sqrt</code> / square-ness branches)</td><td><code class="ref">ec.cpp:99-181</code></td><td>Safe only if hashed inputs are public</td></tr>
 <tr><td>11</td><td>Subgroup safety assumes cofactor-1 (P-256 only)</td><td><code class="ref">ec.cpp:339-342</code></td><td>Latent if the curve NID is ever changed</td></tr>
@@ -866,7 +874,7 @@ gap: <code>sse_trans</code> is tested only transpose-twice-is-identity, not agai
 </main>
 <footer>
 emp-tool implementation audit · Runtime substrate · runtime / ir / circuits three-layer architecture · working tree
-on <code>main</code> (uncommitted; HEAD <code>7f21adc</code>).
+on <code>main</code> (runtime/ir/circuits refactor, since committed).
 Reports: <a href="01-runtime.html">Runtime</a> · <a href="02-ir.html">IR</a> · <a href="03-circuits.html">Circuits</a>.
 </footer>
 </body>

@@ -25,7 +25,7 @@ flush first. Applies to function boundaries, phase boundaries within
 a function, and any blocking wait (thread join, barrier, recv on a
 *different* NetIO).
 
-`test/test_netio.cpp` runs the correctness + send-only-regression coverage.
+`test/runtime/test_netio.cpp` runs the correctness + send-only-regression coverage.
 Throughput lives separately in `bench/bench_netio.cpp`.
 
 ## Thread-safety
@@ -38,11 +38,11 @@ unsafe to call from a thread other than the one currently sending.
 
 ## Debug build assertion
 
-Under `!NDEBUG`, NetIO carries an `_in_use` atomic
-counter and `touch_guard` that wraps `send_data_internal` /
+Under `!NDEBUG`, the shared `IOChannel` base carries an `_in_use` atomic
+counter and a `touch_guard` that wraps `send_data_internal` /
 `recv_data_internal` / `flush`. If two threads enter any of those on
-the same instance simultaneously, the build aborts with `NetIO race:
-concurrent <op> on the same NetIO`. Zero cost under `-DNDEBUG`.
+the same instance simultaneously, the build aborts with `IO-channel race:
+concurrent <op> on the same channel`. Zero cost under `-DNDEBUG`.
 
 Use this when a multi-party protocol behaves flakily — race or no
 race, the answer falls out of a Debug build.

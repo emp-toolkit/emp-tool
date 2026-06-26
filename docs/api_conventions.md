@@ -33,7 +33,7 @@ Consequences for code and tests:
   straight-line code with `error()` calls is the idiom.
 - A "rejects bad input" test asserts child-process death, not a caught
   exception — fork, silence stderr, expect nonzero exit (see
-  `test/test_boolean_program.cpp`'s `dies()` helper).
+  `test/ir/test_boolean_program.cpp`'s `dies()` helper).
 
 ## Bit buffer contract
 

@@ -36,11 +36,11 @@ I/O stays the session's job, around the circuit:
 
 ```cpp
 ClearSession sess;                                    // session owns the I/O boundary
-using Ctx = ClearSession::DirectCtx;                  // a protocol session (SH2PCSession, AG2PCSession) exposes the same surface
+using Ctx = ClearSession::ctx_t;                      // a protocol session (SH2PCSession, AG2PCSession) exposes the same surface
 using UInt32 = UInt_T<Ctx, 32>;
 auto a = sess.input<UInt32>(ALICE, av);               // session feeds inputs
 auto b = sess.input<UInt32>(BOB,   bv);
-auto c = frontend::run(sess.direct_ctx(), circuit, a, b);    // pure replay over the context
+auto c = frontend::run(sess.ctx(), circuit, a, b);          // pure replay over the context
 uint32_t r = sess.reveal<uint32_t>(c, PUBLIC).value(); // session reveals -> std::optional<uint32_t>
 ```
 
@@ -77,16 +77,20 @@ non-circuit argument, or being callable in **both** context forms are all
 compile-time errors with a precise message — in `compile<ArgVs...>` and live
 `run` alike.
 
-A circuit value is anything satisfying the `WireValue` concept
-(`ir/wire_value.h`): it exposes `Wire`, `context_type`, `clear_t`, `width()`,
-`context()`, `pack_wires` / `from_wires`, `encode` / `decode`, and a
-`rebind<Ctx>` that maps the same value family onto another context. The four
-built-in families (`Bit_T`, `UInt_T`, `Int_T`, `Float_T` in `circuits/typed.h`)
-satisfy it at fixed width. The runtime-width forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>`
-(width chosen at construction) intentionally do **not** — they have no static
-`width()` or clear codec — so they stay inside a circuit body and never cross the
-`input` / `compile` / `run` boundary; convert to a fixed `UInt_T<Ctx,N>`
-(`to_fixed<N>()`) first if a runtime-width result must leave.
+A circuit value is anything satisfying the `WireBundle` concept
+(`ir/wire_value.h`): it exposes `Wire`, `context_type`, a static `width()`,
+`context()`, `pack_wires` / `from_wires`, and a `rebind<Ctx>` that maps the same
+value family onto another context. Adding the clear codec (`clear_t` /
+`encode` / `decode`) makes it the stronger `WireValue` — the form session I/O
+needs; the frontend itself requires only `WireBundle` (a clear codec is not
+needed to compile/run). The four built-in families (`Bit_T`, `UInt_T`, `Int_T`,
+`Float_T` in `circuits/typed.h`) satisfy both at fixed width. The runtime-width
+forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>` (width chosen at construction)
+intentionally do **not** model `WireBundle` — they have no *static* `width()` —
+so they cannot be a `compile` / `run` argument; convert to a fixed
+`UInt_T<Ctx,N>` (`to_fixed<N>()`) first if a runtime-width result must enter the
+frontend. (They remain session-I/O eligible through the runtime-width
+`input` / `reveal` overloads — they model `RuntimeWidthValue`.)
 
 ## Recording value types — context-free signatures
 
@@ -167,14 +171,15 @@ schedule are free functions over the program (`ir/passes.h`,
   (width, clear codec, `rebind<Ctx>`) over a circuit value's own static members.
 - `circuits/frontend/rec.h` — `rec::Bit`/`rec::BitVec<N>`/`rec::UInt<N>`/`rec::Int<N>`/`rec::Float<W>`,
   the value types over `RecordCtx` used as `compile` arguments.
-- `ir/wire_value.h` — the generic `WireValue` concept (the structural value contract).
+- `ir/wire_value.h` — the generic `WireBundle` concept (the structural value
+  contract) and `WireValue` (`WireBundle` + the clear codec).
 - `ir/context/context.h` — the `BooleanContext` concept and the contexts
   `ClearCtx` (plaintext) and `RecordCtx` (records a `BooleanProgram`), plus the
   `CountCtx` / `DigestCtx` analysis helpers, `execute_program(ctx, prog, inputs,
   ws)` (value-return replay over any `BooleanContext`), and `ProgramWorkspace`.
 - `ir/artifact.h` — `CircuitArtifact` (program + signature) +
   `validate_artifact`.
-- `circuits/frontend/circuit_fn.h` — the `RecordValue` concept (refining `WireValue`),
+- `circuits/frontend/circuit_fn.h` — the `RecordValue` concept (refining `WireBundle`),
   `circuit_fn_traits` / `circuit_contract`, `Circuit<RetV,ArgVs...>`, `compile`,
   `run`.
 - `ir/passes.h` — analyses over the IR (`count`, `liveness`, `schedule`,
@@ -182,7 +187,7 @@ schedule are free functions over the program (`ir/passes.h`,
 
 ## Adding a new backend
 
-Define a type satisfying the `BooleanContext` concept (a `std::regular` `Wire`
+Define a type satisfying the `BooleanContext` concept (a `std::semiregular` `Wire`
 plus value-return `public_bit`/`and_gate`/`xor_gate`/`not_gate`). Every compiled
 circuit then replays on it via `run(ctx, circ, …)` with no frontend changes — the
 generic replay walks the gate list issuing the context's gate ops. A
@@ -192,10 +197,10 @@ scalar replay.
 
 ## Tests
 
-- `test/test_circuit_fn.cpp` — compile-once / run-on-any-context on
+- `test/circuits/test_circuit_fn.cpp` — compile-once / run-on-any-context on
   `ClearCtx` (incl. both body forms, a nullary circuit, `.constant()`, fp32),
   plus the size-optimal 31-AND adder and deterministic recording.
-- `test/circuit_fn_contract_probes.cpp` — the contract's positive case +
+- `test/circuits/circuit_fn_contract_probes.cpp` — the contract's positive case +
   the negative cases that must fail to compile with the expected message.
 - `emp-sh2pc/test/test_circuit_fn_sh2pc.cpp` — the same compiled `Circuit` run
   two-party over the garbled `SH2PCCtx` (uint32 + fp32).
