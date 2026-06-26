@@ -6,11 +6,20 @@
 #include "emp-tool/runtime/crypto/ec.h"
 #include <openssl/evp.h>
 #include <stdio.h>
+#include <cstring>
 
 namespace emp {
 class Hash { public:
 	EVP_MD_CTX *mdctx;
 	static const int DIGEST_SIZE = 32;
+	// Application-side coalescing buffer. A tiny put() (e.g. streaming Fiat-Shamir
+	// absorbing the wire byte-stream a few bytes at a time) otherwise pays
+	// EVP_DigestUpdate's per-call cost, which on small inputs dwarfs the SHA work
+	// (~70% pure call overhead at 6 B/put). Accumulate small puts here and hand EVP
+	// one large block; flushed before any finalize so the digest is byte-identical.
+	static const int BUF_BYTES = 8192;
+	unsigned char buf_[BUF_BYTES];
+	int buf_len_ = 0;
 	Hash() {
 		if((mdctx = EVP_MD_CTX_create()) == NULL)
 			error("Hash function setup error!");
@@ -24,8 +33,24 @@ class Hash { public:
 	Hash(const Hash&) = delete;
 	Hash& operator=(const Hash&) = delete;
 	void put(const void * data, int64_t nbyte) {
-		if (1 != EVP_DigestUpdate(mdctx, data, nbyte))
-			error("Hash::put: EVP_DigestUpdate");
+		if (nbyte <= 0) return;
+		if (buf_len_ + nbyte > BUF_BYTES) flush_buf_();   // pending can't coalesce -> commit it
+		if (nbyte >= BUF_BYTES) {                          // large input: straight to EVP
+			if (1 != EVP_DigestUpdate(mdctx, data, nbyte))
+				error("Hash::put: EVP_DigestUpdate");
+		} else {                                           // small input: accumulate
+			memcpy(buf_ + buf_len_, data, (size_t)nbyte);
+			buf_len_ += (int)nbyte;
+		}
+	}
+	// Commit any buffered bytes to the EVP context. Must run before every finalize
+	// (digest) and is harmless to call repeatedly.
+	void flush_buf_() {
+		if (buf_len_) {
+			if (1 != EVP_DigestUpdate(mdctx, buf_, buf_len_))
+				error("Hash::flush_buf_: EVP_DigestUpdate");
+			buf_len_ = 0;
+		}
 	}
 	void put_block(const block* blk, int64_t nblock=1){
 		put(blk, sizeof(block)*nblock);
@@ -35,6 +60,7 @@ class Hash { public:
 	// original mdctx is untouched, so subsequent put()s continue to extend
 	// the same transcript. Used for streaming Fiat-Shamir.
 	void digest(void * a, bool reset_after = true) {
+		flush_buf_();   // commit accumulated puts before finalizing
 		if (reset_after) {
 			uint32_t len = 0;
 			if (1 != EVP_DigestFinal_ex(mdctx, (unsigned char *)a, &len))
@@ -53,6 +79,7 @@ class Hash { public:
 		}
 	}
 	void reset() {
+		buf_len_ = 0;   // discard any uncommitted puts along with the EVP state
 		if (1 != EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL))
 			error("Hash::reset: EVP_DigestInit_ex");
 	}
