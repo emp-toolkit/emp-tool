@@ -62,6 +62,8 @@ add_test_case(runtime test_halfgate)         # half-gate garble/eval free functi
 # ---- ir/ : context, session, passes, program, builtins ----
 add_test_case(ir test_boolean_program)
 add_test_case_cxx20(ir test_passes)              # ir/passes.h: count/liveness/schedule/layout
+add_test_case_cxx20(ir test_transform)           # ir/transform.h: make_compact/uncompact (wire-id reuse)
+add_test_case_cxx20(ir test_compose)             # frontend/compose.h: invoke + ComposePlan + flatten
 add_test_case_cxx20(ir test_context)             # BooleanContext concept + contexts cross-check
 add_test_case_cxx20(ir test_session_concepts)    # Session/DirectSession/SessionIO + WireValue
 add_test_case_cxx20(ir test_chunk_recorder)        # shared chunk recorder: RAII wire + plan_flush

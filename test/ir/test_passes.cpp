@@ -9,11 +9,25 @@
 #include "emp-tool/ir/passes.h"
 #include "emp-tool/ir/validate.h"
 #include "emp-tool/ir/context/record.h"
+#include "emp-tool/ir/transform.h"     // make_compact (for the wire_reuse guard test)
 #include <cstdio>
 #include <vector>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 using namespace emp;
 using namespace emp::circuit;
+
+// error() is fatal (_Exit), so "this pass refused the input" shows up as child
+// death. Run f in a fork with stderr silenced and report whether it died.
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) { int dn = open("/dev/null", O_WRONLY); if (dn >= 0) dup2(dn, 2); f(); _exit(0); }
+	int st = 0; waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 // 3 inputs a,b,c (wires 0..2); a live cone and a dead AND:
 //   g0: w3 = a AND b
@@ -168,6 +182,17 @@ int main() {
 				++bucketed;
 			}
 		check(bucketed == count_pass(q).num_and, "schedule property: AND bucket count");
+	}
+
+	// ---- the dense-only passes refuse a wire_reuse program ----
+	// (they index per-wire arrays last-writer-wins; on a reused id they would
+	// silently miscompute, so the guard turns that into a loud failure).
+	{
+		BooleanProgram lin = make_compact(sample(), WireReuse::Linear).prog;
+		check(lin.wire_reuse != WireReuse::None, "make_compact should produce a reuse program");
+		check(dies([&] { liveness_pass(lin); }), "liveness_pass accepted a reuse program");
+		check(dies([&] { schedule_pass(lin); }), "schedule_pass accepted a reuse program");
+		check(dies([&] { layout_pass(lin, LivenessStats{}); }), "layout_pass accepted a reuse program");
 	}
 
 	if (ok) printf("test_passes: all checks passed\n");

@@ -15,12 +15,22 @@
 // w < num_inputs (it has no producing gate).
 
 #include "emp-tool/ir/program.h"
+#include "emp-tool/runtime/core/utils.h"   // error()
 #include <algorithm>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace emp {
 namespace circuit {
+
+// liveness/schedule/layout index per-wire arrays last-writer-wins; on a reused
+// id they would silently collapse distinct lifetimes and misorder the replay.
+// They are defined only for dense (WireReuse::None) programs — compaction
+// (ir/transform.h) runs them on its dense input, never on its reuse output.
+inline void require_dense(const BooleanProgram& p, const char* who) {
+	if (p.wire_reuse != WireReuse::None) error((std::string(who) + ": requires a dense (WireReuse::None) program").c_str());
+}
 
 // AND-depth scheduling metadata (filled by schedule_pass). Useful to protocols
 // whose latency/round count depends on minimizing AND-depth; unused by
@@ -60,6 +70,7 @@ struct LivenessStats {
 };
 
 inline LivenessStats liveness_pass(const BooleanProgram& p) {
+	require_dense(p, "liveness_pass");
 	LivenessStats s;
 	s.last_use.assign(p.num_wires, -1);
 	s.first_def.assign(p.num_wires, -1);
@@ -80,6 +91,7 @@ struct ScheduleStats {
 };
 
 inline ScheduleStats schedule_pass(const BooleanProgram& p) {
+	require_dense(p, "schedule_pass");
 	ScheduleStats s;
 	s.wire_level.assign(p.num_wires, 0);
 	const uint32_t G = p.num_gate();
@@ -119,6 +131,7 @@ struct LayoutStats {
 };
 
 inline LayoutStats layout_pass(const BooleanProgram& p, const LivenessStats& live) {
+	require_dense(p, "layout_pass");
 	LayoutStats s;
 	// Output wires are roots: they must survive to output assembly, so they are
 	// never freed — even if an internal gate also read them earlier (e.g. a body

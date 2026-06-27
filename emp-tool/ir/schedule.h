@@ -60,6 +60,7 @@ inline const std::vector<typename Ctx::Wire>& scheduled_execute_program(
     std::span<const typename Ctx::Wire> inputs,
     ProgramWorkspace<typename Ctx::Wire>& ws) {
     using W = typename Ctx::Wire;
+    circuit::require_dense(p, "scheduled_execute_program");
     if (inputs.size() != p.num_inputs)
         error("scheduled_execute_program: input count != program num_inputs");
     if (plan.num_inputs != p.num_inputs || plan.num_wires != p.num_wires ||

@@ -18,7 +18,8 @@
 //   magic   : 4 bytes = 'E','M','P','B'
 //   version : u16
 //   index_width : u8  (2 or 4)
-//   flags   : u8  (reserved, must be 0)
+//   flags   : u8  (bits 0-1 = WireReuse {None=0,Linear=1,Full=2}; value 3 and
+//                  bits 2-7 reserved, must be 0)
 //   num_wires   : u32
 //   num_inputs  : u32
 //   num_outputs : u32
@@ -94,7 +95,7 @@ inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 	for (uint8_t m : MAGIC) put_u8(b, m);
 	put_u16(b, VERSION);
 	put_u8(b, (uint8_t)iw);
-	put_u8(b, 0);                       // flags
+	put_u8(b, (uint8_t)p.wire_reuse);   // flags: bits 0-1 = wire_reuse
 	put_u32(b, p.num_wires);
 	put_u32(b, p.num_inputs);
 	put_u32(b, (uint32_t)p.outputs.size());
@@ -123,9 +124,12 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 	if (version != VERSION) error("empbc: unsupported version");
 	int iw = r.u8();
 	if (iw != 2 && iw != 4) error("empbc: bad index_width");
-	if (r.u8() != 0) error("empbc: nonzero reserved flags");
+	uint8_t flags = r.u8();
+	if (flags & ~0x3u) error("empbc: unknown flags bits set");
+	if ((flags & 0x3u) == 3) error("empbc: reserved wire_reuse value");
 
 	BooleanProgram p;
+	p.wire_reuse           = (WireReuse)(flags & 0x3u);
 	p.num_wires            = r.u32();
 	p.num_inputs           = r.u32();
 	uint32_t num_outputs   = r.u32();

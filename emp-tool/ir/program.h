@@ -37,9 +37,24 @@ struct Gate {
 	bool is_linear() const { return op == Op::Xor  || op == Op::Not; }
 };
 
+// How wire ids relate to gates. The dividing line is whether a consumer that
+// makes several passes over the program *stores* a gate's value across passes:
+// linear gates (Xor/Not/Const) are recomputed every pass, so their output ids
+// are always safe to recycle; a non-linear (And) output may hold stored state
+// (e.g. a fresh authenticated mask in a garbling backend), so recycling an And
+// id can clobber a value a later pass still needs.
+//   None   : dense/SSA — every non-input wire is the output of exactly one gate,
+//            ids monotonic in emission order (num_wires == num_inputs+num_gates).
+//   Linear : ids are reused once dead, but And outputs are never recycled. Safe
+//            for every consumer, including multi-pass backends.
+//   Full   : any wire id may be reused once dead, And outputs included. Maximal
+//            compaction; correct only for single-/recompute-pass execution.
+enum class WireReuse : uint8_t { None = 0, Linear = 1, Full = 2 };
+
 struct BooleanProgram {
 	uint32_t num_wires  = 0;   // total wire ids; valid ids are [0, num_wires)
 	uint32_t num_inputs = 0;   // input wires are [0, num_inputs)
+	WireReuse wire_reuse = WireReuse::None;   // None = dense/SSA (the default contract)
 
 	std::vector<Gate>     gates;     // topological (emission) order
 	std::vector<uint32_t> outputs;   // wire ids of the return value (flattened)

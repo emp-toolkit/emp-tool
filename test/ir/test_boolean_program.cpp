@@ -147,6 +147,75 @@ int main() {
 			0,0,0,0               // num_gates
 		};
 		check(rejects(huge), "huge sparse header not rejected before allocation");
+
+		// The reuse (flags=1) validation path must apply the SAME anti-DoS
+		// discipline as the dense path. Two hostile reuse headers:
+		// (a) num_inputs=0, huge num_wires, no gates: rejected up front by the
+		//     reuse bound num_wires <= num_inputs + num_gates.
+		std::vector<uint8_t> huge_reuse_a = {
+			'E','M','P','B',
+			1,0,        // version
+			4,1,        // u32 indices, flags=1 (Linear)
+			0xff,0xff,0xff,0xff,  // num_wires
+			0,0,0,0,              // num_inputs
+			0,0,0,0,              // num_outputs
+			0,0,0,0               // num_gates
+		};
+		check(rejects(huge_reuse_a), "huge reuse header (0 inputs) not rejected before allocation");
+		// (b) num_inputs == num_wires == 0xFFFFFFFF, no gates: passes the bound
+		//     (NW == num_inputs + 0), so validation must NOT size written[] to
+		//     num_wires nor loop over num_inputs — that was a ~4 GB alloc + 4e9-
+		//     iteration DoS. It must load cheaply as a no-op program (sizing only
+		//     the non-input slots, here zero).
+		std::vector<uint8_t> huge_reuse_b = {
+			'E','M','P','B',
+			1,0,        // version
+			4,1,        // u32 indices, flags=1 (Linear)
+			0xff,0xff,0xff,0xff,  // num_wires
+			0xff,0xff,0xff,0xff,  // num_inputs == num_wires
+			0,0,0,0,              // num_outputs
+			0,0,0,0               // num_gates
+		};
+		check(!dies([&]{ load_empbc(huge_reuse_b); }),
+		      "huge reuse header (inputs==wires) must load cheaply, not allocate per-wire");
+	}
+
+	// ---- wire_reuse (compact) programs: validation + .empbc roundtrip ----
+	{
+		// Linear: recycle a fabric (Xor/Not) wire id; the And output stays distinct.
+		// wires: 0,1 inputs; 2 = 0^1; 2 = NOT 2 (reuse); 3 = 0 & 2. out = {3}.
+		BooleanProgram c;
+		c.num_inputs = 2; c.num_wires = 4; c.wire_reuse = WireReuse::Linear;
+		c.gates = { Gate{0,1,2,Op::Xor}, Gate{2,0,2,Op::Not}, Gate{0,2,3,Op::And} };
+		c.outputs = {3};
+		check(!dies([&]{ validate_program(c); }), "valid Linear reuse program rejected");
+		// The SAME structure must FAIL dense validation (wire 2 defined twice).
+		{ BooleanProgram d = c; d.wire_reuse = WireReuse::None;
+		  check(throws(validate_program, d), "reuse structure wrongly accepted as dense"); }
+		// Roundtrip preserves the level; the flags byte (offset 7) carries it.
+		std::vector<uint8_t> bytes = save_empbc(c);
+		check(bytes[7] == 1, "Linear flags byte should be 1");
+		BooleanProgram q = load_empbc(bytes);
+		check(q.wire_reuse == WireReuse::Linear, "Linear level not roundtripped");
+		check(q.num_wires == 4 && q.gates.size() == 3 && q.outputs == c.outputs, "Linear reuse roundtrip body");
+
+		// Full: recycle an And output id (correct for single-pass value execution).
+		BooleanProgram f;
+		f.num_inputs = 2; f.num_wires = 3; f.wire_reuse = WireReuse::Full;
+		f.gates = { Gate{0,1,2,Op::And}, Gate{0,2,2,Op::Xor} };
+		f.outputs = {2};
+		check(!dies([&]{ validate_program(f); }), "valid Full reuse program rejected");
+		check(save_empbc(f)[7] == 2, "Full flags byte should be 2");
+		check(load_empbc(save_empbc(f)).wire_reuse == WireReuse::Full, "Full level not roundtripped");
+
+		// Malformed reuse / flags.
+		auto rejects = [&](std::vector<uint8_t> b){ return dies([&]{ load_empbc(b); }); };
+		{ auto b = bytes; b[7] = 3; check(rejects(b), "reserved wire_reuse value 3 not rejected"); }
+		{ auto b = bytes; b[7] = 4; check(rejects(b), "unknown flags bit (2) not rejected"); }
+		{ BooleanProgram b = c; b.gates[0].in0 = 3;  check(throws(validate_program, b), "reuse read-before-written not enforced"); }
+		{ BooleanProgram b = c; b.gates[2].out = 0;  check(throws(validate_program, b), "reuse write-to-input not enforced"); }
+		{ BooleanProgram b = c; b.gates[2].out = 99; check(throws(validate_program, b), "reuse out-of-range not enforced"); }
+		{ BooleanProgram b = c; b.num_wires = 100;   check(throws(validate_program, b), "reuse num_wires over dense bound not enforced"); }
 	}
 
 	if (ok) printf("test_boolean_program: all checks passed\n");

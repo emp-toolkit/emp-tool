@@ -12,6 +12,10 @@ pollute `emp`). Header-only over emp-tool; **C++20**. Pull it in with
 `#include "emp-tool/circuits/frontend/frontend.h"` (or directly
 `#include "emp-tool/circuits/frontend/circuit_fn.h"`).
 
+To **reuse** a compiled circuit across many calls without materializing each copy
+(replay one unit by reference instead of inlining it), see
+[composition.md](composition.md) — the `run` / `run_compose` inline-vs-reuse pattern.
+
 This is the BooleanContext frontend: it compiles and replays over the typed
 context-bound values (`Bit_T<Ctx>` / `UInt_T<Ctx,N>` / …), with the context
 passed explicitly and no global backend.

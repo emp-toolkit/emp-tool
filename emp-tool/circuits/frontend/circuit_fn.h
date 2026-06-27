@@ -26,7 +26,9 @@
 
 #include "emp-tool/ir/context/concept.h"
 #include "emp-tool/ir/context/record.h"      // RecordCtx
+#include "emp-tool/ir/context/compose.h"     // ComposeCtx (run() records opaque instances on it)
 #include "emp-tool/ir/execute.h"          // execute_program, ProgramWorkspace
+#include "emp-tool/ir/transform.h"        // make_compact, WireReuse
 #include "emp-tool/ir/artifact.h" // CircuitArtifact, CircuitSignature, validate_artifact
 #include "emp-tool/ir/wire_value.h"             // WireBundle (the structural value concept this frontend speaks)
 #include "emp-tool/circuits/value_traits.h"     // value_traits (metadata accessor)
@@ -223,10 +225,36 @@ detail::compiled_ret_t<Tr, ArgVs...> compile(F&& body) {
     }
 }
 
+// compile_at_<Level, ArgVs...>(body): like compile(), but the recorded program is
+// run through make_compact at the given WireReuse level, so the resulting Circuit
+// replays with a smaller wire array. Shared implementation behind compile_linear.
+template <circuit::WireReuse Level, class... ArgVs, class F,
+          class Tr = circuit_fn_traits<RecordCtx, std::decay_t<F>, ArgVs...>>
+detail::compiled_ret_t<Tr, ArgVs...> compile_at_(F&& body) {
+    auto dense = compile<ArgVs...>(std::forward<F>(body));   // dense Circuit (diagnostics fire here)
+    if constexpr ((RecordValue<ArgVs> && ...) && Tr::ok) {
+        circuit::CircuitArtifact art;
+        art.program   = circuit::make_compact(dense.program(), Level).prog;
+        art.signature = dense.signature();
+        return detail::compiled_ret_t<Tr, ArgVs...>(std::move(art));   // ctor validates
+    } else {
+        return {};
+    }
+}
+
+// compile_linear<ArgVs...>(body): WireReuse::Linear (AND outputs pinned). This is
+// the form to use for a UNIT that will be composed (called via run() inside a
+// run_compose body) on a multi-pass backend (ag2pc): Linear is what its trust path consumes.
+template <class... ArgVs, class F>
+auto compile_linear(F&& body) { return compile_at_<circuit::WireReuse::Linear, ArgVs...>(std::forward<F>(body)); }
+
 // ---------------------------------------------------------------------------
-// run(ctx, circuit, args...): replay a compiled circuit on a live context.
-// Args by const-ref (replay only packs wires); ctx is explicit (no global
-// backend).
+// run(ctx, circuit, args...): use a compiled circuit on a live context. On most
+// contexts it INLINES (replays the gates here). On a ComposeCtx it instead records
+// the circuit as an OPAQUE instance (its wiring only) — so the SAME body composes
+// units when recorded for a flattening backend (ag2pc run_compose) and inlines
+// everywhere else. There is no separate "invoke": run IS the verb, opaque or inline
+// by context, exactly like every other context-polymorphic op. Args by const-ref.
 // ---------------------------------------------------------------------------
 namespace detail {
 template <class Wire, class V>
@@ -245,20 +273,26 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
     const circuit::BooleanProgram& p = c.program();
     if (c.signature().arg_widths.size() != sizeof...(ArgVs))
         error("frontend::run: argument count != circuit arity (stale artifact?)");
-#if EMP_CONTEXT_CHECKS
-    // Every argument must belong to the context it is being replayed on.
-    { bool ok = true; ((ok = ok && args.context() == &ctx), ...);
-      if (!ok) error("frontend::run: an argument belongs to a different context"); }
-#endif
     std::vector<Wire> inputs;
     inputs.reserve(p.num_inputs);
     (detail::append_wires(inputs, args), ...);
     if ((uint32_t)inputs.size() != p.num_inputs)
         error("frontend::run: total argument width != circuit input count");
-    ProgramWorkspace<Wire> ws;
-    const std::vector<Wire>& ow =
-        execute_program(ctx, p, std::span<const Wire>(inputs.data(), inputs.size()), ws);
-    return RetV::template rebind<Ctx>::from_wires(ctx, ow.data());
+    if constexpr (std::same_as<std::remove_cvref_t<Ctx>, ComposeCtx>) {
+        // Composition: record one opaque instance (wiring only), don't inline.
+        std::vector<Wire> out = ctx.call_unit(p, inputs.data(), inputs.size());
+        return RetV::template rebind<Ctx>::from_wires(ctx, out.data());
+    } else {
+#if EMP_CONTEXT_CHECKS
+        // Every argument must belong to the context it is being replayed on.
+        { bool ok = true; ((ok = ok && args.context() == &ctx), ...);
+          if (!ok) error("frontend::run: an argument belongs to a different context"); }
+#endif
+        ProgramWorkspace<Wire> ws;
+        const std::vector<Wire>& ow =
+            execute_program(ctx, p, std::span<const Wire>(inputs.data(), inputs.size()), ws);
+        return RetV::template rebind<Ctx>::from_wires(ctx, ow.data());
+    }
 }
 
 // ---------------------------------------------------------------------------
