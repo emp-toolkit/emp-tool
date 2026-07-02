@@ -116,6 +116,22 @@ class MITCCRH { public:
 		key_used += K;
 	}
 
+	// Hash under the keys from the last renew_ks(tweaks) WITHOUT advancing to a new
+	// key batch or re-scheduling. The caller owns the reuse policy: call
+	// renew_ks(tweaks) once, then hash_cir_fixed<K,H>() for every instance that
+	// should hash under those K keys -- e.g. a bucket of gates whose tweak differs
+	// only below a reuse shift, giving the ReuseShift amortization to an EXPLICIT
+	// multi-dimensional tweak the gid path cannot express. Uses keys[0..K) every
+	// call; never touches key_used / gid / scheduled_bucket. Pair only with
+	// renew_ks(tweaks), never the gid-based renew_ks().
+	template<int K, int H>
+	void hash_cir_fixed(block * blks) {
+		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
+		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		detail::ParaEnc_mem_tiles_impl<detail::AesMemXorSigmaTile, K, H>(
+			blks, blks, scheduled_key);
+	}
+
 	// Out-of-place: out[i] = sigma(in[i]) ^ AES(sigma(in[i])). out and in
 	// must not overlap. Same fused-sigma tile; no scratch buffer.
 	template<int K, int H>
