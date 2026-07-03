@@ -32,7 +32,7 @@
 // AVX-512BW (byte/word) — separate ISA extension from AVX-512F. Required for
 // _mm512_movepi8_mask, _mm512_unpacklo_epi8/16, _mm512_slli_epi64. Shipped on
 // Skylake-X and later Intel server parts, all current AMD Zen 4+. Used by the
-// wide sse_trans_n128 fast path in core/block.hpp.
+// wide sse_trans_n128 fast path in core/transpose.hpp.
 #if defined(__x86_64__) && defined(__AVX512BW__)
   #define EMP_HAS_AVX512BW 1
 #else
@@ -41,7 +41,7 @@
 
 // GFNI + AVX-512VBMI (+BW) — the bit-matrix affine (vgf2p8affineqb) and
 // byte-permute (vpermi2b) pair used by the GFNI sse_trans_n128 fast path in
-// core/block.hpp. The three extensions ship together on Icelake+ Intel and
+// core/transpose.hpp. The three extensions ship together on Icelake+ Intel and
 // all AMD Zen 4+.
 #if defined(__x86_64__) && defined(__GFNI__) && defined(__AVX512VBMI__) && \
     defined(__AVX512BW__)
@@ -52,7 +52,7 @@
 
 // VEX-encoded GFNI at 256-bit — vgf2p8affineqb on ymm without any AVX-512.
 // This is the consumer-Intel shape (Alder/Raptor/Arrow Lake ship GFNI but
-// have AVX-512 fused off); used by the sse_trans_n128 GFNI256 tier when the
+// have AVX-512 fused off); used by transpose.hpp's GFNI256 tier when the
 // full GFNI512 tier is unavailable.
 #if defined(__x86_64__) && defined(__GFNI__) && defined(__AVX2__)
   #define EMP_HAS_GFNI256 1
