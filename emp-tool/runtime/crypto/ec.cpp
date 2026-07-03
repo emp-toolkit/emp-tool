@@ -2,6 +2,7 @@
 #include "emp-tool/runtime/core/test_mode.h"
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/prg.h"
+#include "emp-tool/runtime/crypto/hash.h"   // for the hash-ABI build-consistency marker
 
 #include <openssl/evp.h>
 #include <algorithm>
@@ -499,5 +500,13 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 	BN_free(x0); BN_free(y0); BN_free(x1); BN_free(y1);
 	return out;
 }
+
+#ifdef EMP_WITH_BLAKE3
+// Hash-ABI build-consistency marker (see runtime/crypto/hash.h): define the
+// symbol for the EMP_HASH_DEFAULT this emp-tool was built with. A consumer built
+// with a different default references a marker this build did not define and
+// fails to link, instead of silently mismatching Hash's layout.
+template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym = 0;
+#endif
 
 }  // namespace emp

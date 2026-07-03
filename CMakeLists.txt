@@ -25,6 +25,14 @@ option(EMP_TOOL_BUILD_BENCHMARKS  "Build emp-tool benchmarks"          OFF)
 option(EMP_TOOL_INSTALL           "Generate install / export rules"    ${PROJECT_IS_TOP_LEVEL})
 option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so compile-time SIMD tiers such as VAES, VPCLMULQDQ, and AVX-512 are enabled when available. Default ON for performance; turn OFF to produce a portable binary that runs on any AES-NI + PCLMUL + SSE4.2 CPU." ON)
 
+# Hash backend for emp::Hash (runtime/crypto/hash.h). sha256 = OpenSSL (default);
+# blake3 = vendored BLAKE3 (third_party/blake3), ~3-4x faster per byte. Selecting
+# blake3 changes the Fiat-Shamir / commitment transcript, so it is a protocol-wide
+# choice inherited by every consumer that links this emp-tool build.
+set(EMP_HASH_BACKEND "sha256" CACHE STRING "Default emp::Hash backend: sha256 or blake3")
+set_property(CACHE EMP_HASH_BACKEND PROPERTY STRINGS sha256 blake3)
+option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so emp::Blake3Backend is available (auto-on when EMP_HASH_BACKEND=blake3)." OFF)
+
 # ---------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------
@@ -132,6 +140,46 @@ if(EMP_TOOL_HAS_RDSEED)
 endif()
 
 # ---------------------------------------------------------------------
+# Optional BLAKE3 hash backend (vendored, third_party/blake3). Compiled straight
+# into libemp-tool with per-file ISA flags, so the objects plus the PUBLIC
+# include dir + EMP_WITH_BLAKE3 define propagate through emp-tool's exported
+# target — emp-ot / emp-ag inherit BLAKE3 with no extra dependency to resolve.
+# Vendored C is built with -w (its warnings are not ours to fix).
+# ---------------------------------------------------------------------
+if(EMP_HASH_BACKEND STREQUAL "blake3")
+    set(EMP_WITH_BLAKE3 ON)
+endif()
+if(EMP_WITH_BLAKE3)
+    set(_b3 ${CMAKE_CURRENT_SOURCE_DIR}/third_party/blake3)
+    set(_b3_core ${_b3}/blake3.c ${_b3}/blake3_dispatch.c ${_b3}/blake3_portable.c)
+    target_sources(emp-tool PRIVATE ${_b3_core})
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i.86)")
+        target_sources(emp-tool PRIVATE
+            ${_b3}/blake3_sse2.c ${_b3}/blake3_sse41.c ${_b3}/blake3_avx2.c ${_b3}/blake3_avx512.c)
+        set_source_files_properties(${_b3}/blake3_sse2.c   PROPERTIES COMPILE_OPTIONS "-msse2;-w")
+        set_source_files_properties(${_b3}/blake3_sse41.c  PROPERTIES COMPILE_OPTIONS "-msse4.1;-w")
+        set_source_files_properties(${_b3}/blake3_avx2.c   PROPERTIES COMPILE_OPTIONS "-mavx2;-w")
+        set_source_files_properties(${_b3}/blake3_avx512.c PROPERTIES COMPILE_OPTIONS "-mavx512f;-mavx512vl;-w")
+        set_source_files_properties(${_b3_core}            PROPERTIES COMPILE_OPTIONS "-w")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64)")
+        target_sources(emp-tool PRIVATE ${_b3}/blake3_neon.c)
+        set_source_files_properties(${_b3_core} ${_b3}/blake3_neon.c PROPERTIES COMPILE_OPTIONS "-w")
+        target_compile_definitions(emp-tool PRIVATE BLAKE3_USE_NEON=1)
+    else()
+        set_source_files_properties(${_b3_core} PROPERTIES COMPILE_OPTIONS "-w")
+        target_compile_definitions(emp-tool PRIVATE
+            BLAKE3_NO_SSE2 BLAKE3_NO_SSE41 BLAKE3_NO_AVX2 BLAKE3_NO_AVX512)
+    endif()
+    target_include_directories(emp-tool PUBLIC
+        $<BUILD_INTERFACE:${_b3}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/third_party/blake3>)
+    target_compile_definitions(emp-tool PUBLIC EMP_WITH_BLAKE3)
+    if(EMP_HASH_BACKEND STREQUAL "blake3")
+        target_compile_definitions(emp-tool PUBLIC EMP_HASH_DEFAULT=::emp::HashOption::blake3)
+    endif()
+endif()
+
+# ---------------------------------------------------------------------
 # Install + export
 # ---------------------------------------------------------------------
 set(_cmake_install_dir ${CMAKE_INSTALL_LIBDIR}/cmake/emp-tool)
@@ -167,6 +215,13 @@ if(EMP_TOOL_INSTALL)
 
     install(FILES emp-tool/ir/files/README.md
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/ir/files)
+
+    # Vendored BLAKE3 public header (only its API is needed by consumers; the
+    # .c backends are already compiled into libemp-tool).
+    if(EMP_WITH_BLAKE3)
+        install(FILES third_party/blake3/blake3.h
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/third_party/blake3)
+    endif()
 
     install(EXPORT emp-toolTargets
         NAMESPACE   emp-tool::
