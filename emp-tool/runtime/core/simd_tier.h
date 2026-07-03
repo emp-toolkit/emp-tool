@@ -50,6 +50,16 @@
   #define EMP_HAS_GFNI512 0
 #endif
 
+// VEX-encoded GFNI at 256-bit — vgf2p8affineqb on ymm without any AVX-512.
+// This is the consumer-Intel shape (Alder/Raptor/Arrow Lake ship GFNI but
+// have AVX-512 fused off); used by the sse_trans_n128 GFNI256 tier when the
+// full GFNI512 tier is unavailable.
+#if defined(__x86_64__) && defined(__GFNI__) && defined(__AVX2__)
+  #define EMP_HAS_GFNI256 1
+#else
+  #define EMP_HAS_GFNI256 0
+#endif
+
 #if defined(__x86_64__) && defined(__VAES__)
   #define EMP_HAS_VAES 1
 #else
