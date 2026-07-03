@@ -39,6 +39,17 @@
   #define EMP_HAS_AVX512BW 0
 #endif
 
+// GFNI + AVX-512VBMI (+BW) — the bit-matrix affine (vgf2p8affineqb) and
+// byte-permute (vpermi2b) pair used by the GFNI sse_trans_n128 fast path in
+// core/block.hpp. The three extensions ship together on Icelake+ Intel and
+// all AMD Zen 4+.
+#if defined(__x86_64__) && defined(__GFNI__) && defined(__AVX512VBMI__) && \
+    defined(__AVX512BW__)
+  #define EMP_HAS_GFNI512 1
+#else
+  #define EMP_HAS_GFNI512 0
+#endif
+
 #if defined(__x86_64__) && defined(__VAES__)
   #define EMP_HAS_VAES 1
 #else

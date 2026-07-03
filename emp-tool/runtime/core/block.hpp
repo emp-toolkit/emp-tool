@@ -466,6 +466,125 @@ inline void sse_trans_n128_avx512bw(block *out, const block *inp,
 }
 #endif  // EMP_HAS_AVX512BW
 
+#if EMP_HAS_GFNI512
+// GFNI tier: one full 128x128 tile per iteration, entirely in-register, with
+// each output block written exactly once (contiguous zmm stores). This removes
+// both costs of the unpack tiers' movemask ladder: the scattered 2-byte stores
+// AND the 8 sparse read-modify-write passes over the whole output.
+//
+// Decomposition: bit-transpose(128x128) = byte-transpose of the 16x16 grid of
+// 8x8-bit blocks + a bit-transpose inside each block.
+//   stage B  per 8-row slab s, one vpermi2b gathers qword u = block(s,u) with
+//            row k placed at byte (7-k)
+//   stage C  vgf2p8affineqb(I, blocks, 0) with the DATA in the matrix operand
+//            and I = 0x8040201008040201 broadcast as the data operand. That
+//            form maps x.byte[i].bit[j] -> dst.byte[j].bit[7-i]; stage B's row
+//            reversal (i = 7-k) cancels the 7-i, leaving
+//            dst.byte[b].bit[k] = row_k.bit[b] -- the transposed block, no
+//            fixups left over.
+//   stage D  8x8 qword transpose across each 8-register group (unpack64 +
+//            shuffle_i64x2 network; it lands result u in register perm(u),
+//            perm = {0,2,1,3,4,6,5,7}, self-inverse, lanes in slab order),
+//            then one vpermi2b per output zmm gathers the 16 per-slab bytes
+//            of 4 output blocks.
+// Any bpr >= 1 is handled uniformly (no tail path).
+namespace gfni_trans {
+struct Patterns {
+  alignas(64) uint8_t patA[64];  // stage B: qwords u=0..7  (low  row bytes)
+  alignas(64) uint8_t patB[64];  // stage B: qwords u=8..15 (high row bytes)
+  alignas(64) uint8_t p0[64];    // stage D: output rows 8u+0..3
+  alignas(64) uint8_t p1[64];    // stage D: output rows 8u+4..7
+};
+constexpr Patterns make_patterns() {
+  Patterns P{};
+  for (int u = 0; u < 8; ++u)
+    for (int k = 0; k < 8; ++k) {
+      P.patA[8 * u + (7 - k)] = (uint8_t)(k * 16 + u);
+      P.patB[8 * u + (7 - k)] = (uint8_t)(k * 16 + 8 + u);
+    }
+  // out zmm byte 16*b + s = G(s,u).byte[b]; G(s,u) sits at lane s%8 (byte
+  // 8*(s%8)+b) of the first vpermi2b operand for s < 8, of the second for
+  // s >= 8.
+  for (int b = 0; b < 4; ++b)
+    for (int s = 0; s < 16; ++s) {
+      P.p0[16 * b + s] = (uint8_t)((s >= 8 ? 64 : 0) + 8 * (s % 8) + b);
+      P.p1[16 * b + s] = (uint8_t)((s >= 8 ? 64 : 0) + 8 * (s % 8) + b + 4);
+    }
+  return P;
+}
+inline constexpr Patterns kPat = make_patterns();
+}  // namespace gfni_trans
+
+// The stage-D 8x8 qword transpose across one 8-register group; result u is
+// written back to R[perm(u)] (perm self-inverse), so on return
+// R[u].lane[s] = old R[s].qword[u].
+__attribute__((target("gfni,avx512vbmi,avx512bw,avx512f,avx2,sse2")))
+static inline void gfni_trans_qword8(__m512i *R) {
+  __m512i t0[8], t1[8], F[8];
+  for (int i = 0; i < 4; ++i) {
+    t0[2*i]   = _mm512_unpacklo_epi64(R[2*i], R[2*i+1]);
+    t0[2*i+1] = _mm512_unpackhi_epi64(R[2*i], R[2*i+1]);
+  }
+  for (int i = 0; i < 2; ++i)
+    for (int k = 0; k < 2; ++k) {
+      t1[4*i+2*k]   = _mm512_shuffle_i64x2(t0[4*i+k], t0[4*i+k+2], 0x88);
+      t1[4*i+2*k+1] = _mm512_shuffle_i64x2(t0[4*i+k], t0[4*i+k+2], 0xdd);
+    }
+  for (int k = 0; k < 4; ++k) {
+    F[k]   = _mm512_shuffle_i64x2(t1[k], t1[k+4], 0x88);
+    F[k+4] = _mm512_shuffle_i64x2(t1[k], t1[k+4], 0xdd);
+  }
+  constexpr int perm[8] = {0, 2, 1, 3, 4, 6, 5, 7};
+  for (int r = 0; r < 8; ++r) R[perm[r]] = F[r];
+}
+
+__attribute__((target("gfni,avx512vbmi,avx512bw,avx512f,avx2,sse2")))
+inline void sse_trans_n128_gfni(block *out, const block *inp, uint64_t ncols) {
+  const uint64_t bpr = ncols / 128;   // input row stride in 16-byte blocks
+  const uint8_t *in_b = reinterpret_cast<const uint8_t *>(inp);
+  uint8_t *out_b = reinterpret_cast<uint8_t *>(out);
+  const __m512i patA = _mm512_load_si512((const void *)gfni_trans::kPat.patA);
+  const __m512i patB = _mm512_load_si512((const void *)gfni_trans::kPat.patB);
+  const __m512i p0   = _mm512_load_si512((const void *)gfni_trans::kPat.p0);
+  const __m512i p1   = _mm512_load_si512((const void *)gfni_trans::kPat.p1);
+  const __m512i I    = _mm512_set1_epi64((long long)0x8040201008040201ULL);
+
+  for (uint64_t t = 0; t < bpr; ++t) {
+    __m512i A[16], Bq[16];
+    for (int s = 0; s < 16; ++s) {
+      const uint8_t *base = in_b + (uint64_t)(8 * s) * bpr * 16 + t * 16;
+      __m512i r0 = _mm512_castsi128_si512(_mm_loadu_si128((const __m128i *)(base + 0 * bpr * 16)));
+      r0 = _mm512_inserti32x4(r0, _mm_loadu_si128((const __m128i *)(base + 1 * bpr * 16)), 1);
+      r0 = _mm512_inserti32x4(r0, _mm_loadu_si128((const __m128i *)(base + 2 * bpr * 16)), 2);
+      r0 = _mm512_inserti32x4(r0, _mm_loadu_si128((const __m128i *)(base + 3 * bpr * 16)), 3);
+      __m512i r1 = _mm512_castsi128_si512(_mm_loadu_si128((const __m128i *)(base + 4 * bpr * 16)));
+      r1 = _mm512_inserti32x4(r1, _mm_loadu_si128((const __m128i *)(base + 5 * bpr * 16)), 1);
+      r1 = _mm512_inserti32x4(r1, _mm_loadu_si128((const __m128i *)(base + 6 * bpr * 16)), 2);
+      r1 = _mm512_inserti32x4(r1, _mm_loadu_si128((const __m128i *)(base + 7 * bpr * 16)), 3);
+      A[s]  = _mm512_gf2p8affine_epi64_epi8(I, _mm512_permutex2var_epi8(r0, patA, r1), 0);
+      Bq[s] = _mm512_gf2p8affine_epi64_epi8(I, _mm512_permutex2var_epi8(r0, patB, r1), 0);
+    }
+    gfni_trans_qword8(A);        // A[u].lane[s]   = G(s,     u)   s in 0..7
+    gfni_trans_qword8(A + 8);    // A[8+u].lane[s] = G(8 + s, u)
+    gfni_trans_qword8(Bq);       // Bq[u].lane[s]  = G(s,     8+u)
+    gfni_trans_qword8(Bq + 8);   // Bq[8+u].lane[s]= G(8 + s, 8+u)
+    uint8_t *dst = out_b + t * 128 * 16;
+    for (int u = 0; u < 8; ++u) {
+      _mm512_storeu_si512((void *)(dst + (uint64_t)(8*u + 0) * 16),
+                          _mm512_permutex2var_epi8(A[u], p0, A[u + 8]));
+      _mm512_storeu_si512((void *)(dst + (uint64_t)(8*u + 4) * 16),
+                          _mm512_permutex2var_epi8(A[u], p1, A[u + 8]));
+    }
+    for (int u = 0; u < 8; ++u) {
+      _mm512_storeu_si512((void *)(dst + (uint64_t)(8*(u + 8) + 0) * 16),
+                          _mm512_permutex2var_epi8(Bq[u], p0, Bq[u + 8]));
+      _mm512_storeu_si512((void *)(dst + (uint64_t)(8*(u + 8) + 4) * 16),
+                          _mm512_permutex2var_epi8(Bq[u], p1, Bq[u + 8]));
+    }
+  }
+}
+#endif  // EMP_HAS_GFNI512
+
 }  // namespace detail
 
 inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
@@ -475,7 +594,9 @@ inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
             /*nrows=*/128, ncols);
 #else
   assert((ncols % 128) == 0);
-  #if EMP_HAS_AVX512BW
+  #if EMP_HAS_GFNI512
+    detail::sse_trans_n128_gfni(out, inp, ncols);
+  #elif EMP_HAS_AVX512BW
     detail::sse_trans_n128_avx512bw(out, inp, ncols);
   #elif EMP_HAS_AVX2
     detail::sse_trans_n128_avx2(out, inp, ncols);
