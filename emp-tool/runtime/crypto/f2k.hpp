@@ -265,6 +265,68 @@ inline void uni_hash_coeff_gen(block* coeff, block seed) {
 	uni_hash_coeff_gen(coeff, seed, N);
 }
 
+#if EMP_HAS_AVX512BW
+namespace detail {
+
+// AVX-512 pack group: blocks 8*OFF..8*OFF+7 shifted by their bit index k =
+// 8*OFF + j via VARIABLE-count shifts (vpsllvq/vpsrlvq, 4 blocks per zmm with
+// per-64-lane counts; a count >= 64 zeroes the lane, which makes the j = 0
+// carry vanish naturally). The cross-64 carry and the byte shift OFF are both
+// per-128-bit-lane ops, so the whole accumulation stays lane-parallel; the
+// caller folds the 4 lanes once at the end.
+template<int OFF>
+__attribute__((target("avx512bw,avx512f,avx2,sse2")))
+static inline void gf_pack_group_avx512(const block *data, __m512i &acc_lo,
+                                        __m512i &acc_hi) {
+	const __m512i cnt_lo = _mm512_set_epi64(3, 3, 2, 2, 1, 1, 0, 0);
+	const __m512i cnt_hi = _mm512_set_epi64(7, 7, 6, 6, 5, 5, 4, 4);
+	const __m512i inv_lo = _mm512_set_epi64(61, 61, 62, 62, 63, 63, 64, 64);
+	const __m512i inv_hi = _mm512_set_epi64(57, 57, 58, 58, 59, 59, 60, 60);
+	const __m512i d0 = _mm512_loadu_si512((const void *)(data + OFF * 8));
+	const __m512i d1 = _mm512_loadu_si512((const void *)(data + OFF * 8 + 4));
+	__m512i s0 = _mm512_sllv_epi64(d0, cnt_lo);
+	__m512i c0 = _mm512_srlv_epi64(d0, inv_lo);
+	__m512i s1 = _mm512_sllv_epi64(d1, cnt_hi);
+	__m512i c1 = _mm512_srlv_epi64(d1, inv_hi);
+	__m512i lo = s0 ^ _mm512_bslli_epi128(c0, 8) ^ s1 ^ _mm512_bslli_epi128(c1, 8);
+	__m512i hi = _mm512_bsrli_epi128(c0, 8) ^ _mm512_bsrli_epi128(c1, 8);
+	if constexpr (OFF == 0) {
+		acc_lo ^= lo;
+		acc_hi ^= hi;
+	} else {
+		acc_lo ^= _mm512_bslli_epi128(lo, OFF);
+		acc_hi ^= _mm512_bsrli_epi128(lo, 16 - OFF) ^ _mm512_bslli_epi128(hi, OFF);
+	}
+}
+
+}  // namespace detail
+
+__attribute__((target("avx512bw,avx512f,avx2,sse2,pclmul")))
+inline void GaloisFieldPacking::packing(block *res, const block *data) {
+	__m512i acc_lo = _mm512_setzero_si512(), acc_hi = _mm512_setzero_si512();
+	detail::gf_pack_group_avx512< 0>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 1>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 2>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 3>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 4>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 5>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 6>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 7>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 8>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512< 9>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<10>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<11>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<12>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<13>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<14>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx512<15>(data, acc_lo, acc_hi);
+	__m256i lo256 = _mm512_castsi512_si256(acc_lo) ^ _mm512_extracti64x4_epi64(acc_lo, 1);
+	__m256i hi256 = _mm512_castsi512_si256(acc_hi) ^ _mm512_extracti64x4_epi64(acc_hi, 1);
+	block lo = _mm256_castsi256_si128(lo256) ^ _mm256_extracti128_si256(lo256, 1);
+	block hi = _mm256_castsi256_si128(hi256) ^ _mm256_extracti128_si256(hi256, 1);
+	*res = reduce(lo, hi);
+}
+#else
 #ifdef __x86_64__
 __attribute__((target("sse2,pclmul")))
 #endif
@@ -288,6 +350,7 @@ inline void GaloisFieldPacking::packing(block *res, const block *data) {
 	detail::gf_pack_byte<15>(data, lo, hi);
 	*res = reduce(lo, hi);
 }
+#endif  // EMP_HAS_AVX512BW
 
 inline void GaloisFieldPacking::packing(block *res, const bool *data) {
 	bools_to_bits(res, data, 128);
