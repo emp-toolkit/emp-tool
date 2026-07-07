@@ -101,7 +101,8 @@ footer{max-width:64rem;margin:0 auto;padding:1.5rem 1.2rem 3rem;color:var(--mute
 <h1>emp-tool — runtime substrate</h1>
 <p class="lead">The bottom layer of the stack: the SIMD <code>block</code> type and core helpers, the
 AES-NI / VAES symmetric kernels (AES-128, fixed-key PRP, AES-CTR PRG, the CCRH and MITCCRH
-correlation-robust hashes), GF(2¹²⁸) field arithmetic, SHA-256, the random-oracle front-end,
+correlation-robust hashes), GF(2¹²⁸) field arithmetic, the hash front-end (SHA-256 by default,
+optional vendored BLAKE3) and random oracle,
 OpenSSL P-256 elliptic curves and session identifiers, the NetIO / TLSIO / TraceIO channels, and the
 half-gate / privacy-free garbled-circuit leaf primitives — everything written directly against
 hardware vector registers, with <b>no protocol policy</b> above it.</p>
@@ -110,7 +111,7 @@ hardware vector registers, with <b>no protocol policy</b> above it.</p>
 <table>
 <tr><td>Report</td><td>1 of 3 — Runtime substrate (<code>runtime/{core,crypto,io,execution}/</code>)</td></tr>
 <tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer architecture, since committed)</td></tr>
-<tr><td>Files in scope</td><td><code>runtime/core/{block,block_vector,simd_tier,constants,test_mode,utils}</code> · <code>runtime/crypto/{aes,prp,f2k,ccrh,mitccrh,prg,hash,ro,ec,session_id}</code> · <code>runtime/io/{io_channel,net_io_channel,tcp_socket,tls_io_channel,trace_io}</code> · <code>runtime/execution/{half_gate,privacy_free}</code></td></tr>
+<tr><td>Files in scope</td><td><code>runtime/core/{block,transpose,block_vector,simd_tier,constants,test_mode,utils}</code> · <code>runtime/crypto/{aes,prp,f2k,ccrh,mitccrh,prg,hash,ro,ec,session_id}</code> · <code>runtime/io/{io_channel,net_io_channel,tcp_socket,tls_io_channel,trace_io}</code> · <code>runtime/execution/{half_gate,privacy_free}</code></td></tr>
 <tr><td>Endianness</td><td><b>Little-endian only</b> — <code class="ref">runtime/runtime.h:14</code> <code>static_assert</code>s <code>__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__</code>; wire formats memcpy integers in host order and refuse to build on big-endian.</td></tr>
 <tr><td>Failure model</td><td><b>Fail-fast <code>_Exit(1)</code></b> throughout via <code>error()</code> or equivalent fatal helpers. No exceptions, no error recovery; a malformed wire message terminates the process.</td></tr>
 <tr><td>Method</td><td>Full read of every runtime header + its tests (<code>test/runtime/test_*.cpp</code>) and benchmarks; <code>file:line</code> references verified against the live tree.</td></tr>
@@ -119,8 +120,8 @@ hardware vector registers, with <b>no protocol policy</b> above it.</p>
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="n">~4.3K</div><div class="l">runtime LOC (headers + ec.cpp)</div></div>
-  <div class="stat"><div class="n">6</div><div class="l">core headers</div></div>
+  <div class="stat"><div class="n">~5.4K</div><div class="l">runtime LOC (headers + ec.cpp)</div></div>
+  <div class="stat"><div class="n">7</div><div class="l">core headers</div></div>
   <div class="stat"><div class="n">10</div><div class="l">crypto primitives</div></div>
   <div class="stat"><div class="n">5</div><div class="l">io channels / sockets</div></div>
   <div class="stat"><div class="n">2</div><div class="l">garbling leaf primitives</div></div>
@@ -139,7 +140,7 @@ hardware vector registers, with <b>no protocol policy</b> above it.</p>
 <li><a href="#f2k">B · F2K — GF(2¹²⁸) arithmetic</a></li>
 <li><a href="#ccrh">B · CCRH — circular CR hash</a></li>
 <li><a href="#mitccrh">B · MITCCRH — tweakable multi-instance CCRH</a></li>
-<li><a href="#hash">B · Hash (SHA-256) &amp; RO</a></li>
+<li><a href="#hash">B · Hash (SHA-256 / BLAKE3) &amp; RO</a></li>
 <li><a href="#ec">B · EC (P-256) &amp; SessionID</a></li>
 <li><a href="#io">C · IOChannel · NetIO · TLSIO · TraceIO</a></li>
 <li><a href="#exec">D · Half-gate &amp; privacy-free garbling</a></li>
@@ -162,8 +163,8 @@ include path. This report is the first one only.</p>
   <div class="pane">
     <h3><span class="tag">runtime/crypto/</span> raw-block crypto (this report)</h3>
     <p>Primitives over 128-bit <code>block</code> registers: AES-NI / VAES, fixed-key PRP, AES-CTR PRG,
-    CCRH &amp; MITCCRH correlation-robust hashes, GF(2¹²⁸) arithmetic, OpenSSL SHA-256 &amp; P-256. These
-    power the PRG, OT extension, and garbling backends.</p>
+    CCRH &amp; MITCCRH correlation-robust hashes, GF(2¹²⁸) arithmetic, OpenSSL SHA-256 (default; optional
+    vendored BLAKE3) &amp; P-256. These power the PRG, OT extension, and garbling backends.</p>
   </div>
   <div class="pane">
     <h3><span class="tag">circuits/crypto/</span> in-circuit crypto (Report 3)</h3>
@@ -174,7 +175,7 @@ include path. This report is the first one only.</p>
 </div>
 
 <p>Every primitive in Part B operates directly on the 128-bit SIMD register type <code>block</code>. It is
-<em>not</em> an opaque struct — it is the hardware vector (<code class="ref">core/block.h:16</code>
+<em>not</em> an opaque struct — it is the hardware vector (<code class="ref">core/block.h:17</code>
 <code>using block = __m128i;</code>). On aarch64 the bundled <code>sse2neon.h</code> shim
 (<code class="ref">block.h:4-8</code>) maps the whole <code>_mm_*</code> surface to NEON. There is no
 abstraction boundary between "a value" and "a vector register."</p>
@@ -187,58 +188,82 @@ abstraction boundary between "a value" and "a vector register."</p>
 <tr><td>F2K</td><td>GF(2¹²⁸) multiply / inner products / packing</td><td>unconditional correctness; security from callers</td></tr>
 <tr><td>CCRH</td><td>Davies–Meyer over the σ orthomorphism</td><td>circular-correlation-robust under free-XOR (eprint 2019/074)</td></tr>
 <tr><td>MITCCRH</td><td>tweakable CCRH, batched keys per gate-id</td><td>multi-instance ideal cipher (eprint 2019/1168)</td></tr>
-<tr><td>SHA-256 / RO</td><td>OpenSSL EVP digest + framed random oracle</td><td>collision/PRF security of SHA-256; RFC 9380 for hash-to-curve</td></tr>
+<tr><td>Hash / RO</td><td>OpenSSL EVP SHA-256 (default) or vendored BLAKE3, enum-selected at build time + framed random oracle</td><td>collision/PRF security of the selected hash; RFC 9380 for hash-to-curve</td></tr>
 <tr><td>EC (P-256)</td><td>OpenSSL <code>EC_*</code>/<code>BN_*</code>; RFC 9380 hash-to-curve</td><td>P-256 (cofactor 1); OpenSSL RAND for production scalars</td></tr>
 </table>
 
 <!-- ============================== PART A ============================== -->
 <h2 id="block">2 · A · <code>block</code> — the 128-bit value type</h2>
-<p><span class="tag">core/block.h</span> <span class="tag">core/block.hpp</span></p>
+<p><span class="tag">core/block.h</span> <span class="tag">core/block.hpp</span> <span class="tag">core/transpose.hpp</span></p>
 <p><code>block</code> is the universal 128-bit word: PRG output, AES blocks, GC labels, OT messages, hash
 truncations, bit-matrix rows. <b>No <code>block256</code>/<code>block512</code> type exists</b> — wider SIMD
 appears only as internal <code>vec_t</code> members of the Lane traits; everything public is 128 bits.</p>
 
-<h3>Construction &amp; constants (<code class="ref">block.hpp:25-42</code>)</h3>
+<h3>Construction &amp; constants (<code class="ref">block.hpp:27-58</code>)</h3>
 <pre><code>makeBlock(high, low) → block{(long long)low, (long long)high}   // low = lane 0, constexpr
-zero_block, all_one_block, select_mask[2] = {zero_block, all_one_block}   // branch-free 0 / all-ones mux mask</code></pre>
+zero_block, all_one_block, select_mask[2] = {zero_block, all_one_block}   // branch-free 0 / all-ones mux mask
+bit0_mask, bit1_mask = makeBlock(0,1), makeBlock(0,2)            // single-low-bit isolation constants  (:57-58)</code></pre>
 <p><code>makeBlock</code> is <code>inline constexpr</code> so file-scope <code>block</code> constants compile-time
 evaluate into <code>.rodata</code> (see <code>docs/static_init.md</code> for why that matters to static-init
 order).</p>
 <div class="callout c-note"><span class="lbl">Byte-order trap when reading traces by eye</span>
 <p><code>makeBlock(hi, lo)</code> stores <code>lo</code> first in memory; <code>operator&lt;&lt;</code> renders the
 block as its <b>16 bytes in memory (little-endian) order</b> via <code>to_hex(&amp;blk, sizeof(block))</code>
-(<code class="ref">block.hpp</code>) — no lane reordering. A known source of confusion when diffing wire traces.</p></div>
+(<code class="ref">block.hpp:68-83</code>) — no lane reordering. A known source of confusion when diffing wire traces.</p></div>
 
 <h3>Bit accessors &amp; σ</h3>
 <ul>
 <li><code>getLSB(x)</code> reads bit 0 of lane 0 — the GC/OT point-and-permute "color" bit
-(<code class="ref">block.hpp:13-15</code>).</li>
+(<code class="ref">block.hpp:16-18</code>); <code>getBit(x,i)</code> is the generic accessor
+(<code class="ref">block.hpp:22-25</code>).</li>
 <li><code>set_bit(a,i)</code> is <b>set-only (OR)</b>, not assign — it cannot clear a bit; the name suggests
-"write bit i" but means "force bit i to 1" (<code class="ref">block.hpp:44-50</code>).</li>
+"write bit i" but means "force bit i to 1" (<code class="ref">block.hpp:60-66</code>).</li>
 <li><code>sigma(a)</code> = the linear orthomorphism σ((H,L)) = (H⊕L, H) of eprint 2019/074
-(<code class="ref">block.hpp:36-38</code>: <code>_mm_shuffle_epi32(a, 78) ^ (a &amp; makeBlock(~0,0))</code>).
+(<code class="ref">block.hpp:43-48</code>: <code>_mm_shuffle_epi32(a, 78) ^ (a &amp; makeBlock(~0,0))</code>).
 Purely linear (no secret), so not itself a security boundary, but a bug here would break the
 correlation-robustness argument of every fixed-key-AES caller.</li>
 </ul>
 
-<h3>Bulk XOR / compare / transpose</h3>
+<h3>Bulk XOR / compare</h3>
 <p>The <code>xorBlocks_arr</code> / <code>xorBlocksTo_arr</code> family are all <code>__restrict__</code> loops —
-<b>non-overlap is load-bearing</b> (<code class="ref">block.h</code>); every variant requires non-overlapping
+<b>non-overlap is load-bearing</b> (<code class="ref">block.h:38-49</code>); every variant requires non-overlapping
 pointers, with no aliasing-safe overload.
 <code>cmpBlock</code> is deliberately <b>not early-exit</b> (accumulator-OR for ILP on the equal path,
-<code class="ref">block.hpp:88-94</code>):</p>
+<code class="ref">block.hpp:109-115</code>):</p>
 <pre><code>acc = OR over (x[i] ^ y[i]);  return _mm_testz_si128(acc, acc);</code></pre>
 <div class="callout c-warn"><span class="lbl">cmpBlock is "constant-ish", not constant-time</span>
 <p>It is data-independent in iteration count, but it is <b>not</b> a side-channel-hardened compare in the
 cryptographic sense. The toolkit does not claim it is safe for comparing secrets against attacker-chosen
 values under a timing adversary; it is used where both operands are typically known to one party.</p></div>
-<p><code>sse_trans</code> / <code>sse_trans_n128</code> (<code class="ref">block.hpp:104-277</code>) is the
-IKNP/OT-extension bit-matrix transpose (<code>nrows,ncols</code> multiples of 8, with a 16×128 in-register
-fast path). Pure data movement, but intricate pointer arithmetic.</p>
-<div class="callout c-audit"><span class="lbl">Test gap worth noting</span>
-<p><code>sse_trans</code> is tested only <b>transpose-twice-is-identity</b> (<code>test_block.cpp</code>),
-<em>not</em> against an independent reference transpose — a transpose bug that is its own inverse would pass.
-Worth a closer look if OT-extension correctness is in scope.</p></div>
+<h3>Bit-matrix transpose — <code>core/transpose.hpp</code> (six tiers)</h3>
+<p>The entire transpose kernel family has moved out of <code>block.hpp</code> into its own 772-line header
+<code class="ref">core/transpose.hpp</code>, still included via <code>block.h</code>
+(<code class="ref">block.h:74-75</code> pulls in <code>block.hpp</code> then <code>transpose.hpp</code>), so
+every external include path is unchanged. <code>block.hpp</code> itself is now 119 lines of block basics.
+Two entry points (declared <code class="ref">block.h:55-70</code>): the generic byte-oriented
+<code>sse_trans(out, inp, nrows, ncols)</code> (<code>nrows,ncols</code> multiples of 8) and the
+<code>nrows=128</code> hot path <code>sse_trans_n128(out, inp, ncols)</code> (<code>ncols</code> multiple of 128)
+that every OT extension drives. Pure data movement, but intricate pointer arithmetic.</p>
+<p><code>sse_trans_n128</code> now dispatches at compile time over <b>six kernels</b>
+(<code class="ref">transpose.hpp:748-772</code>): on x86_64,
+<code>sse_trans_n128_gfni</code> (GFNI + AVX512VBMI + AVX512BW, in-register
+<code>vgf2p8affineqb</code>/<code>vpermi2b</code>) &gt; <code>sse_trans_n128_gfni256</code> (VEX-only GFNI on ymm —
+the consumer-Intel shape with AVX-512 fused off) &gt; <code>sse_trans_n128_avx512bw</code> &gt;
+<code>sse_trans_n128_avx2</code> &gt; <code>sse_trans_n128_sse2</code>; on aarch64 a <b>native NEON tier</b>
+<code>sse_trans_n128_neon</code> (previously aarch64 fell through to the generic byte-level
+<code>sse_trans</code>, pathological under sse2neon's multi-instruction <code>_mm_movemask_epi8</code>
+emulation); any other target still falls back to the untouched generic <code>sse_trans</code>. The GFNI/NEON
+tiers are gated by the new <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code> macros in
+<code>simd_tier.h</code> (§14) — the same compile-time-only, no-runtime-CPUID dispatch class as VAES.</p>
+<div class="callout c-audit"><span class="lbl">Test gap — partially closed, root still open</span>
+<p>The tier-dispatched <code>sse_trans_n128</code> <em>is</em> parity-checked byte-for-byte against the generic
+SSE2 <code>sse_trans</code> across a ncols sweep plus a round-trip check
+(<code>test_block.cpp</code> <code>check_sse_trans_n128_parity</code>), so whichever tier a given build selects
+is anchored to that one reference (each tier needs a build on matching hardware to be exercised). But the
+generic <code>sse_trans</code> itself is still tested only
+<b>transpose-twice-is-identity</b> (<code>check_sse_trans_roundtrip</code>), <em>not</em> against an independent
+reference transpose — a bug in the shared reference that is its own inverse would pass every tier. Worth a
+closer look if OT-extension correctness is in scope.</p></div>
 
 <h2 id="core2">3 · A · block_vector, simd_tier, constants, test_mode, utils</h2>
 <p><span class="tag">core/block_vector.h</span> <span class="tag">core/constants.h</span> <span class="tag">core/test_mode.h</span> <span class="tag">core/utils.{h,hpp}</span></p>
@@ -256,13 +281,13 @@ reach the wire. Auditors should flag any <code>BlockVec</code>/<code>default_ini
 can be sent or hashed without being fully written first. (The <code>send_bool</code> tail-byte handling — §C —
 shows the team is aware of this bug class.)</p></div>
 
-<h3>constants (<code class="ref">constants.h:8-24</code>)</h3>
+<h3>constants (<code class="ref">constants.h:8-33</code>)</h3>
 <pre><code>constexpr int64_t AES_BATCH_SIZE = 64;                       // :8
 const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;      // :9  (32 KiB)
 const static int NETWORK_STREAM_BUFFER_SIZE  = 1024*1024;    // :10 (1 MiB)
 const static size_t IO_BOOL_CHUNK_SIZE = 8*1024;             // :14
-enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };  // :20
-const static uint32_t MAX_POINT_BYTES = 2048;                // :24</code></pre>
+enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };  // :29
+const static uint32_t MAX_POINT_BYTES = 2048;                // :33</code></pre>
 <p>The <code>Party</code> sign matters: <code>XOR = -1</code> means "return/leave the value as per-party XOR
 shares rather than the clear value" (each party keeps its own share — <em>not</em> the same thing as a
 <code>nullopt</code> reveal), versus <code>PUBLIC = 0</code> ("reveal to both"). Mixing them up is a
@@ -283,15 +308,15 @@ in release).</p></div>
 <h3>utils — bit/byte packing (the footgun-rich part)</h3>
 <ul>
 <li><code>error(s)</code> is <code>[[noreturn]]</code>, prints to stderr and <code>std::_Exit(1)</code>, capturing the
-call site via <code>__builtin_LINE/FILE</code> default arguments (<code class="ref">utils.hpp:9-12</code>,
-declared <code class="ref">utils.h:22-24</code>). The whole library's failure model is fail-fast.</li>
+call site via <code>__builtin_LINE/FILE</code> default arguments (<code class="ref">utils.hpp:33-42</code>,
+declared <code class="ref">utils.h:25-27</code>). The whole library's failure model is fail-fast.</li>
 <li><code>bytes_to_bits32</code> / <code>bits32_to_bytes</code> (SSE/AVX2 paths,
-<code class="ref">utils.hpp:19-67</code>) pack/unpack 32 bools↔bits; <code>bytes_to_bits32</code> treats any
+<code class="ref">utils.hpp:64-112</code>) pack/unpack 32 bools↔bits; <code>bytes_to_bits32</code> treats any
 nonzero byte as 1 and <b>reads a full 32 bytes</b> via an unaligned load — callers must ensure 32 bytes are
 readable.</li>
 <li><code>bools_to_bits(out, bools, len)</code> has <b>tail-preserve semantics</b>: the final partial byte is
-read-modify-written, <b>preserving its high bits</b> (<code class="ref">utils.h</code>,
-<code class="ref">utils.hpp:69-80</code>). Every caller that emits/hashes the packed bytes must zero the tail
+read-modify-written, <b>preserving its high bits</b> (<code class="ref">utils.h:46-52</code>,
+<code class="ref">utils.hpp:114-125</code>). Every caller that emits/hashes the packed bytes must zero the tail
 byte first or use only <code>⌈len/8⌉</code> bytes where the tail bits are don't-cares. <code>bool_to_block</code>
 is safe (128 is a multiple of 32 → whole block overwritten).</li>
 </ul>
@@ -316,7 +341,7 @@ schedule</b> — emp only ever encrypts (ECB / CTR / Davies–Meyer).</p>
 <p><code>EMP_AES_ASSERT_ALIGNED(p)</code> (<code class="ref">aes.h:12-14</code>) asserts 16-byte alignment of
 round-key / block pointers at the public entry points. It is an <code>assert</code>, so it is <b>compiled out
 under <code>NDEBUG</code></b>. In practice the lane loads/stores use <em>unaligned</em> intrinsics
-(<code>_mm_loadu_si128</code> / <code>storeu</code>, <code class="ref">simd_tier.h:89-90</code>), so a misaligned
+(<code>_mm_loadu_si128</code> / <code>storeu</code>, <code class="ref">simd_tier.h:120-121</code>), so a misaligned
 pointer still works on x86 — but the stated contract is not guaranteed in release.</p></div>
 
 <h3>Key-schedule algorithm (<code class="ref">aes.hpp:352-371</code>)</h3>
@@ -475,7 +500,7 @@ p01 = clmul_lo_hi(a,b)   // imm=0x01
 mid = p10 ^ p01
 res1(lo) = p00 ^ (mid << 64)   // bslli_8(mid)
 res2(hi) = p11 ^ (mid >> 64)   // bsrli_8(mid)</code></pre>
-<p>On aarch64 these map to <code>vmull_p64</code> (<code class="ref">simd_tier.h:286-312</code>).</p>
+<p>On aarch64 these map to <code>vmull_p64</code> (<code class="ref">simd_tier.h:317-347</code>).</p>
 <div class="callout c-note"><span class="lbl">Documentation imprecision (and a measured non-result)</span>
 <p>The function name historically referenced "Karatsuba", but the implementation is the <b>4-CLMUL
 schoolbook</b> (Karatsuba would use 3 multiplies). This is the right choice: on hardware with ≥1/cycle
@@ -509,14 +534,33 @@ XOR (<code class="ref">f2k.hpp:211-223</code>). The header advertises <b>stable 
 This is the one timing guarantee directly relevant if <code>b</code> is secret. (<code>a</code> is still read
 in index order.)</p></div>
 <p>Other routines: <code>uni_hash_coeff_gen</code> generates powers <code>seed^(i+1)</code> for polynomial
-hashing (<code class="ref">f2k.hpp:230-261</code>); <code>GaloisFieldPacking::packing</code> computes
-<code>Σ data[i]·Xⁱ</code> (single-bit polynomials ⇒ shift-and-accumulate,
-<code class="ref">f2k.hpp:271-290</code>), with a bool overload degenerating to LSB-first bit-packing
-(<code class="ref">f2k.hpp:292-294</code>); <code>vector_self_xor</code> is a 4-way XOR-reduction (GF sum,
-<code class="ref">f2k.hpp:296-318</code>).</p>
+hashing (<code class="ref">f2k.hpp:230-261</code>); <code>vector_self_xor</code> is a 4-way XOR-reduction (GF sum,
+<code class="ref">f2k.hpp:359-381</code>).</p>
+
+<h3>GaloisFieldPacking — now two bodies (SSE2+PCLMUL fallback / AVX-512BW)</h3>
+<p><code>GaloisFieldPacking::packing</code> computes <code>Σ data[i]·Xⁱ</code> over 128 blocks (single-bit
+polynomials ⇒ shift-and-accumulate) and now has <b>two implementations selected by
+<code>#if EMP_HAS_AVX512BW</code></b>. The pre-existing SSE2+PCLMUL body
+(<code class="ref">f2k.hpp:333-352</code>, byte-at-a-time via <code>detail::gf_pack_byte&lt;OFF&gt;</code> for
+OFF=0..15, <code class="ref">f2k.hpp:146-171</code>) is unchanged and remains the only path on
+non-AVX512BW x86 and on aarch64 (where it compiles generically — its x86 target attribute is
+<code>#ifdef __x86_64__</code>-guarded). The new AVX-512 body (<code class="ref">f2k.hpp:305-328</code>) packs
+4 blocks per zmm and uses per-64-bit-lane <b>variable</b> shift counts
+(<code>_mm512_sllv_epi64</code>/<code>_mm512_srlv_epi64</code> with precomputed count vectors,
+<code>detail::gf_pack_group_avx512&lt;OFF&gt;</code> at <code class="ref">f2k.hpp:277-300</code>, 8 byte-offsets
+per call): a count ≥ 64 zeroes the lane, so the j=0 carry vanishes with no special case; the cross-64 carry
+and the byte shift stay per-128-bit-lane ops (<code>_mm512_bslli/bsrli_epi128</code>), so all 4 packed lanes
+accumulate in parallel and are folded to one (lo,hi) pair only at the end
+(<code class="ref">f2k.hpp:323-326</code>). <b>Both bodies funnel into the identical <code>reduce(lo,hi)</code>
+call</b> — a pure SIMD-width change; the reduction logic and the public signature are untouched. The bool
+overload degenerates to LSB-first bit-packing via <code>bools_to_bits</code>
+(<code class="ref">f2k.hpp:355-357</code>).</p>
 <div class="callout c-ok"><span class="lbl">Verified</span>
 <p><code>gfmul</code> is validated against a bit-level scalar reference and the field axioms (a·0=0, a·1=a,
-commutativity, distributivity); coeff-gen and packing against the gfmul reference (<code>test_f2k.cpp</code>).</p></div>
+commutativity, distributivity); coeff-gen and packing against the gfmul reference (<code>test_f2k.cpp</code>).
+<code>test_f2k</code> exercises whichever packing body the build selects; the AVX-512 body was additionally
+differentially checked against the SSE body over 2000 random vectors per its commit
+(<code>d0c4df2</code> — a commit-message claim, not re-derived here).</p></div>
 
 <h2 id="ccrh">8 · B · CCRH — circular correlation-robust hash</h2>
 <p><span class="tag">crypto/ccrh.h</span></p>
@@ -571,9 +615,30 @@ uint64_t scheduled_bucket = ~0ull;  // bucket the current schedule covers (Reuse
 <code>keys[i] = start_point ⊕ makeBlock(gid++, 0)</code> and batch-schedules <code>AES_opt_key_schedule&lt;BatchSize&gt;</code>;
 with the default <code>ReuseShift&gt;0</code> it buckets by <code>gid &gt;&gt; ReuseShift</code> — an aligned batch in one
 bucket schedules only <code>scheduled_key[0]</code> (cached via <code>scheduled_bucket</code>), a straddling batch
-falls back to per-gid bucket keys. <code>hash&lt;K,H&gt;</code> (<code class="ref">mitccrh.h</code>) consumes K scheduled
+falls back to per-gid bucket keys. <code>hash&lt;K,H&gt;</code> (<code class="ref">mitccrh.h:155-190</code>) consumes K scheduled
 keys via <code>ParaEncXorInput_impl</code> (a uniform bucket reuses key 0); <code>hash_cir&lt;K,H&gt;</code> applies σ
-via the fused <code>AesMemXorSigmaTile</code>, giving the full half-gates form (<code class="ref">mitccrh.h</code>).</p>
+via the fused <code>AesMemXorSigmaTile</code>, giving the full half-gates form (<code class="ref">mitccrh.h:101-153</code>).</p>
+
+<h3>hash_cir_fixed — explicit-tweak schedule reuse (<code class="ref">mitccrh.h:119-133</code>)</h3>
+<p>Added in commit <code>4af78dd</code>: <code>hash_cir_fixed&lt;K,H&gt;(blks)</code>
+(<code class="ref">mitccrh.h:127-133</code>) hashes under <code>scheduled_key[0..K)</code> through the same
+fused-σ <code>ParaEnc_mem_tiles_impl&lt;AesMemXorSigmaTile,K,H&gt;</code> path as <code>hash_cir</code>, but does
+<b>not</b> call <code>renew_ks()</code> and never touches <code>key_used</code>/<code>gid</code>/<code>scheduled_bucket</code>
+— every call reads from the <em>start</em> of the current schedule. Intended pattern (documented in the
+contract comment, <code class="ref">mitccrh.h:119-126</code>): one <code>renew_ks(tweaks)</code> per bucket of K
+keys, then <code>hash_cir_fixed&lt;K,H&gt;</code> per bucket member — the ReuseShift-style key-schedule
+amortization, driven by an <b>explicit multi-dimensional tweak</b> a scalar gid counter cannot express. It is
+in-place only (no out-of-place overload, unlike <code>hash</code>/<code>hash_cir</code>) and carries the same
+<code>static_assert</code>s (<code class="ref">mitccrh.h:129-130</code>). Contract: pair <b>only</b> with the
+explicit-tweak <code>renew_ks(tweaks)</code>, never the gid-based <code>renew_ks()</code>, on the same instance
+— unenforced, same class of obligation as the tweak-uniqueness callout below.</p>
+<div class="callout c-audit"><span class="lbl">Test gap — hash_cir_fixed is untested</span>
+<p><code>hash_cir_fixed</code> has <b>no test coverage anywhere in the tree</b>: a grep across all
+<code>.cpp/.h/.hpp</code> finds only its definition and its own contract comment.
+<code>test_mitccrh.cpp</code> (unmodified by the commit that added it) pins <code>renew_ks(tweaks)</code> and
+<code>hash_cir&lt;K,H&gt;</code> against the explicit reference key derivation, but never calls
+<code>hash_cir_fixed</code> — the "pinned against the reference" guarantee below does <em>not</em> extend to
+this method.</p></div>
 
 <div class="callout c-warn"><span class="lbl">Tweak-uniqueness is an unenforced caller obligation</span>
 <p>The explicit-tweak <code>renew_ks(tweaks)</code> must <b>not</b> be mixed with the gid-based
@@ -588,22 +653,63 @@ re-<code>setS</code> resets <code>gid</code> to 0, so reusing the same <code>S</
 Davies–Meyer / fused-σ helper — <b>no scratch buffer</b> (<code class="ref">mitccrh.h</code>). Pinned
 against the explicit reference key derivation and <code>hash_cir == hash(σ(·))</code> (<code>test_mitccrh.cpp</code>).</p></div>
 
-<h2 id="hash">10 · B · Hash (SHA-256) &amp; the random oracle</h2>
-<p><span class="tag">crypto/hash.h</span> <span class="tag">crypto/ro.h</span></p>
-<p>A thin RAII wrapper over OpenSSL's <code>EVP_MD_CTX</code> running SHA-256; <code>DIGEST_SIZE = 32</code>
-(<code class="ref">hash.h:11-13</code>). <b>Copy is deleted</b> (raw <code>EVP_MD_CTX*</code> would double-free,
-<code class="ref">hash.h:24-25</code>); used via <code>std::optional&lt;Hash&gt;</code> (emplace-only). Streaming:
-<code>put</code>/<code>put_block</code> → <code>EVP_DigestUpdate</code>; <code>digest(out, reset_after)</code>
-finalizes, where <code>reset_after=false</code> <b>snapshots</b> via <code>EVP_MD_CTX_copy_ex</code> and leaves
-the running transcript intact (<code class="ref">hash.h:37-54</code>) — the streaming Fiat–Shamir primitive. A
-<code>thread_local</code> persistent context backs the one-shot <code>hash_once</code>
-(<code class="ref">hash.h:59-78</code>).</p>
+<h2 id="hash">10 · B · Hash (SHA-256 default / optional BLAKE3) &amp; the random oracle</h2>
+<p><span class="tag">crypto/hash.h</span> <span class="tag">crypto/ro.h</span> <span class="tag">third_party/blake3/</span></p>
+<p><code>emp::Hash</code> is no longer SHA-256-only: it is the alias <code>using Hash = HashT&lt;&gt;</code>
+(<code class="ref">hash.h:180</code>) over <code>template&lt;HashOption opt = EMP_HASH_DEFAULT&gt; class HashT</code>
+(<code class="ref">hash.h:46-47</code>), where <code>enum class HashOption { sha256, blake3 }</code>
+(<code class="ref">hash.h:23</code>) and <code>EMP_HASH_DEFAULT</code> macro-defaults to
+<code>::emp::HashOption::sha256</code> unless the build overrides it (<code class="ref">hash.h:25-27</code>).
+The SHA-256 instantiation is the RAII wrapper over OpenSSL's <code>EVP_MD_CTX</code>; the BLAKE3 instantiation
+holds a <code>blake3_hasher</code> by value (<code>state_t</code>, <code class="ref">hash.h:48-54</code>).
+<code>DIGEST_SIZE = 32</code> either way (<code class="ref">hash.h:55</code>). <b>Copy is deleted</b> (owning
+hash context, <code class="ref">hash.h:78-80</code>); used via <code>std::optional&lt;Hash&gt;</code>
+(emplace-only). Streaming: <code>put</code>/<code>put_block</code> coalesce small inputs through an 8 KiB
+app-side buffer (<code>BUF_BYTES</code>, <code class="ref">hash.h:56-90</code>) that is flushed before every
+finalize — byte-identical digest to an unbuffered absorb; <code>digest(out, reset_after)</code> finalizes, where
+<code>reset_after=false</code> <b>snapshots</b> via <code>EVP_MD_CTX_copy_ex</code> (BLAKE3's finalize is already
+non-destructive, no copy needed) and leaves the running transcript intact
+(<code class="ref">hash.h:94-122</code>) — the streaming Fiat–Shamir primitive. A <code>thread_local</code>
+persistent context backs the one-shot <code>hash_once</code> (<code class="ref">hash.h:133-157</code>).</p>
+
+<h3>Backend selection &amp; the HashAbiMarker link guard</h3>
+<p>The backend is a <b>build-time, protocol-wide choice</b>: CMake cache var <code>EMP_HASH_BACKEND</code>
+(STRINGS <code>sha256|blake3</code>, default <code>sha256</code>, <code class="ref">CMakeLists.txt:32-34</code>).
+Selecting <code>blake3</code> compiles the vendored BLAKE3 v1.8.5 (<code>third_party/blake3/</code>, ~5.4K LOC,
+dual CC0-1.0/Apache-2.0, see <code>VENDOR.md</code>) straight into <code>libemp-tool</code> with per-file ISA
+flags (sse2/sse4.1/avx2/avx512 sources on x86_64, NEON on aarch64, portable-only elsewhere;
+<code class="ref">CMakeLists.txt:149-172</code>) and exports <b>PUBLIC</b> definitions
+<code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT=::emp::HashOption::blake3</code>
+(<code class="ref">CMakeLists.txt:176-180</code>), so downstream consumers (emp-ot, emp-ag) inherit the choice
+with no source change. Note BLAKE3's own <code>blake3_dispatch.c</code> does <em>runtime</em> cpuid dispatch
+among its compiled-in kernels — unlike every emp-tool kernel (§14). Switching backends changes every
+Fiat–Shamir / commitment transcript, so both parties must build identically.</p>
+<div class="callout c-ok"><span class="lbl">HashAbiMarker — ODR/link guard for mismatched defaults</span>
+<p><code>Hash</code>'s layout differs by backend (<code>EVP_MD_CTX*</code> vs an inline
+<code>blake3_hasher</code>), and Hash objects cross the emp-tool/emp-ot/emp-ag boundary (the IOChannel FS
+transcripts). When BLAKE3 is compiled in, every TU statically references
+<code>&amp;HashAbiMarker&lt;EMP_HASH_DEFAULT&gt;::sym</code> for <em>its own</em> default
+(<code class="ref">hash.h:29-44</code>); <code>libemp-tool</code> defines the symbol only for the default it was
+built with (<code class="ref">ec.cpp:504-509</code> — one of the compiled TUs). A consumer built with a
+mismatched <code>EMP_HASH_DEFAULT</code> (e.g. a stale prebuilt <code>libemp-tool.a</code>) gets an
+undefined-reference <b>link error</b> instead of silent Hash-layout memory corruption at runtime.</p></div>
+<div class="callout c-audit"><span class="lbl">Test gap — test_hash pins SHA-256 unconditionally</span>
+<p><code>test_hash.cpp</code> has <b>zero conditional compilation</b> (no <code>EMP_WITH_BLAKE3</code>
+anywhere) and is registered unconditionally (<code>test/CMakeLists.txt:51</code>). Its
+<code>check_known_vectors()</code> (FIPS 180-4 SHA-256 answers) and <code>check_against_openssl()</code>
+(byte-compares <code>Hash::hash_once</code> vs OpenSSL <code>SHA256()</code>) call the bare <code>Hash</code>
+alias — under a <code>-DEMP_HASH_BACKEND=blake3</code> build these compare BLAKE3 output against SHA-256
+reference values and must fail. The introducing commit's "35/35 ctest incl. the cheat/abort suite pass under
+BLAKE3" claim cannot have included this test passing (the phrasing suggests a downstream suite — emp-tool has
+no cheat/abort tests); either way, <code>test_hash</code> was not green under the BLAKE3 configuration. There
+is also no BLAKE3 known-answer vector anywhere in the test tree.</p></div>
 <div class="callout c-note"><span class="lbl">hash_for_block — 128-bit truncation</span>
-<p><code>hash_for_block</code> returns the <b>first 16 bytes</b> of SHA-256 as a <code>block</code>
-(<code class="ref">hash.h:82-86</code>). Standard for a 128-bit label/key (pre-image/PRF target), but
+<p><code>hash_for_block</code> returns the <b>first 16 bytes</b> of the 32-byte digest as a <code>block</code>
+(<code class="ref">hash.h:158-165</code>; SHA-256 by default, BLAKE3 under that build — the truncation
+reasoning is backend-independent). Standard for a 128-bit label/key (pre-image/PRF target), but
 <b>collision resistance drops to 64 bits</b> (birthday). Any caller relying on 128-bit <em>collision</em>
-resistance would be under-protected — worth confirming none do. Cross-checked vs OpenSSL <code>SHA256()</code>
-and FIPS 180-4 KATs; snapshot non-disturbance verified (<code>test_hash.cpp</code>).</p></div>
+resistance would be under-protected — worth confirming none do. SHA-256 default cross-checked vs OpenSSL
+<code>SHA256()</code> and FIPS 180-4 KATs; snapshot non-disturbance verified (<code>test_hash.cpp</code>).</p></div>
 
 <h3>RO — random-oracle / Fiat–Shamir front-end</h3>
 <p><code>RO</code> accumulates a typed, length-framed message <code>M</code> and squeezes a block, a 32-byte
@@ -631,18 +737,18 @@ context.</p></div>
 <p><span class="tag">crypto/ec.h</span> <span class="tag">crypto/ec.cpp</span> <span class="tag">crypto/session_id.h</span></p>
 <p>OpenSSL <code>EC_*</code>/<code>BN_*</code>. Default curve <b>P-256</b> (<code>NID_X9_62_prime256v1</code>,
 <code class="ref">ec.h:85</code>); curve NID is constructor-selectable, but <b>hash-to-curve only supports
-P-256</b> (others error, <code class="ref">ec.cpp:185-193</code>). Three classes: <code>Scalar</code> (owns a
+P-256</b> (others error, <code class="ref">ec.cpp:186-195</code>). Three classes: <code>Scalar</code> (owns a
 <code>BIGNUM</code>; copy-and-swap assignment), <code>Point</code> (owns an <code>EC_POINT</code>; uncompressed
 65-byte encoding), <code>ECGroup</code> (owns <code>EC_GROUP</code> + <code>BN_CTX</code> + cached order + a
 grow-only scratch buffer; non-copyable, non-movable, <code class="ref">ec.h:83-124</code>).</p>
 
-<h4>Point::from_bin — external-input validation (security-critical, <code class="ref">ec.cpp:319-346</code>)</h4>
+<h4>Point::from_bin — external-input validation (security-critical, <code class="ref">ec.cpp:321-349</code>)</h4>
 <pre><code>EC_POINT_oct2point(...);                                  // rejects off-curve encodings
-if (EC_POINT_is_on_curve(...) != 1) error("not on curve"); // explicit re-check  (ec.cpp:343)
-if (EC_POINT_is_at_infinity(...)) error("point at infinity");   // ec.cpp:345</code></pre>
+if (EC_POINT_is_on_curve(...) != 1) error("not on curve"); // explicit re-check  (ec.cpp:345-346)
+if (EC_POINT_is_at_infinity(...)) error("point at infinity");   // ec.cpp:347-348</code></pre>
 <div class="callout c-warn"><span class="lbl">Subgroup safety is curve-dependent (cofactor-1 only)</span>
 <p>The code reasons that on P-256 (cofactor 1), on-curve + non-identity ⇒ prime-order subgroup, so no separate
-subgroup check is needed (<code class="ref">ec.cpp:339-342</code>). <b>This reasoning holds for cofactor-1 curves
+subgroup check is needed (<code class="ref">ec.cpp:342-344</code>). <b>This reasoning holds for cofactor-1 curves
 only.</b> If the curve NID is ever changed to a cofactor-h&gt;1 curve, <code>from_bin</code> would accept
 small-subgroup points — a real invalid-curve / small-subgroup attack surface. The guard is a comment, not an
 assert. Safe today because only P-256 is wired up.</p></div>
@@ -650,14 +756,15 @@ assert. Safe today because only P-256 is wired up.</p></div>
 <h4>Randomness &amp; hash-to-curve</h4>
 <p><code>rand_scalar</code> uses OpenSSL <code>BN_rand_range</code> in normal mode (the comment calls it "the only
 OpenSSL-randomness leak in the toolkit") and a PRG rejection sampler in test mode
-(<code class="ref">ec.cpp:411-437</code>). <b>Production EC scalars depend on OpenSSL's RAND being properly
+(<code class="ref">ec.cpp:413-448</code>; the test-mode PRG is epoch-aware, re-seeding when
+<code>reset_test_seed_counter()</code> advances the determinism epoch). <b>Production EC scalars depend on OpenSSL's RAND being properly
 seeded</b>, independent of <code>emp::PRG</code> seeding. <code>hash_to_point</code> is a from-scratch <b>RFC
 9380 P256_XMD:SHA-256_SSWU_RO_</b> implementation (<code>expand_message_xmd</code> with length guards,
 count=2/L=48, SSWU with A=−3/Z=−10, <code class="ref">ec.cpp:15-194</code>), validated against the RFC 9380
 §J.1.1 vectors (<code>test_ecc.cpp</code>).</p>
 <div class="callout c-audit"><span class="lbl">Non-constant-time hash_to_point</span>
 <p>The SSWU map uses <code>BN_mod_sqrt</code> (Tonelli–Shanks, not constant-time; fast path for P-256 since
-<code>p ≡ 3 mod 4</code>, <code class="ref">ec.cpp:99-100,157</code>) and branches on square-ness, plus
+<code>p ≡ 3 mod 4</code>, <code class="ref">ec.cpp:101,159-171</code>) and branches on square-ness, plus
 <code>BN_mod_inverse</code>. Safe <b>only if the hashed input is public</b>. For the typical use (hash a public
 transcript to a CRS generator) inputs are public. <b>Confirm no secret-dependent input ever reaches
 <code>hash_to_point</code> / <code>RO::squeeze_point</code>.</b> On <code>error()</code> paths in-flight
@@ -682,13 +789,13 @@ the same (data-independent) order.</p></div>
 
 <h3>IOChannel — abstract base</h3>
 <p>A classic <b>virtual-dispatch abstract base</b> (not CRTP). Subclasses override two pure virtuals
-(<code>send_data_internal</code> / <code>recv_data_internal</code>, <code class="ref">io_channel.h:80-81</code>)
+(<code>send_data_internal</code> / <code>recv_data_internal</code>, <code class="ref">io_channel.h:105-106</code>)
 plus optional <code>flush</code>/<code>sync</code>. All typed helpers (block/point/bool), counters, and
 Fiat–Shamir live in the base. Counters (<code>send_counter</code>, <code>recv_counter</code>, <code>rounds</code>
 = direction-change count, <code>flushes_count</code>) are advisory diagnostics
-(<code class="ref">io_channel.h:37-51</code>).</p>
+(<code class="ref">io_channel.h:62-76</code>).</p>
 
-<h4>Point I/O wire format (<code class="ref">io_channel.h:167-191</code>)</h4>
+<h4>Point I/O wire format (<code class="ref">io_channel.h:192-217</code>)</h4>
 <pre><code>send_pt: u32 length (host-endian) || uncompressed-point-bytes   // local len <= MAX_POINT_BYTES (assert)
 recv_pt: u32 length || bytes ; hard len cap, then from_bin validates on-curve, rejects ∞</code></pre>
 <div class="callout c-ok"><span class="lbl">Peer length cap is always-on</span>
@@ -697,40 +804,48 @@ recv_pt: u32 length || bytes ; hard len cap, then from_bin validates on-curve, r
 remain debug assertions; the peer-controlled memory/DoS amplification path is not compiled out under
 <code>NDEBUG</code>.</p></div>
 
-<h4>Packed-bool I/O — the uninitialized-stack defense (<code class="ref">io_channel.h:206-218</code>)</h4>
-<pre><code>if (batch % 8 != 0) buf[bytes - 1] = 0;   // zero the partial tail byte FIRST  (:212)
-bools_to_bits(buf, data, batch);           // :213</code></pre>
+<h4>Packed-bool I/O — the uninitialized-stack defense (<code class="ref">io_channel.h:232-244</code>)</h4>
+<pre><code>if (batch % 8 != 0) buf[bytes - 1] = 0;   // zero the partial tail byte FIRST  (:238)
+bools_to_bits(buf, data, batch);           // :239</code></pre>
 <div class="callout c-ok"><span class="lbl">Leak correctly closed</span>
 <p>Because <code>bools_to_bits</code> preserves the high bits of the final partial byte (§A), an uninitialized
 stack <code>buf</code> would leak stack contents onto the wire and break FS determinism for non-multiple-of-8
 lengths. The pre-zero closes that exact leak (whole bytes are fully overwritten). Tested with 1 MiB at offset
 +7 (<code>test_netio.cpp</code>).</p></div>
 
-<h4>Fiat–Shamir transcript (<code class="ref">io_channel.h:95-143</code>)</h4>
-<p><code>enable_fs(send_first)</code> turns on two SHA-256 transcripts (<code>fs_send_</code> absorbs sent bytes,
-<code>fs_recv_</code> received). Exactly one party passes <code>send_first=true</code>. <code>get_digest()</code>
+<h4>Fiat–Shamir transcript (<code class="ref">io_channel.h:116-168</code>)</h4>
+<p><code>enable_fs(send_first)</code> turns on two <code>Hash</code> transcripts (SHA-256 by default, the
+build-selected backend in general — §10; <code>fs_send_</code> absorbs sent bytes, <code>fs_recv_</code>
+received). Exactly one party passes <code>send_first=true</code>. <code>get_digest()</code>
 returns the first 16 B of <code>H(d_AB ‖ d_BA)</code> with the two parties ordering their digests oppositely so
 both compute the same value, using non-destructive snapshots so the transcripts keep absorbing (callable
-repeatedly for sub-challenges). FS is off by default; <code>enable_fs</code> double-call is asserted
-(<code class="ref">io_channel.h:96</code> — a release double-enable silently re-emplaces fresh transcripts).</p>
+repeatedly for sub-challenges); per-direction snapshots <code>get_send_digest</code>/<code>get_recv_digest</code>
+serve diagnostics (<code class="ref">io_channel.h:134-149</code>). FS is off by default; <code>enable_fs</code>
+double-call is asserted
+(<code class="ref">io_channel.h:121</code> — a release double-enable silently re-emplaces fresh transcripts).</p>
 
 <h3>NetIO &amp; TCP</h3>
-<p>One TCP fd, full duplex (<code class="ref">net_io_channel.h:37-152</code>). Send side: a stdio <code>"wb"</code>
+<p>One TCP fd, full duplex (<code class="ref">net_io_channel.h:38-239</code>). Send side: a stdio <code>"wb"</code>
 <code>FILE*</code> with a 1 MiB stream buffer fronted by a 32 KiB coalescing buffer. Recv side: raw
 <code>::read()</code> into a separate 32 KiB buffer, bypassing stdio. <code>TCP_NODELAY</code> is set (Nagle
-off). The recv path <b>flushes pending sends first</b> (<code class="ref">net_io_channel.h:192</code>) —
+off). The recv path <b>flushes pending sends first</b> (<code class="ref">net_io_channel.h:190</code>) —
 critical, else a send-then-recv would deadlock with bytes still staged. The constructor <b>fatal-errors</b> on a bad
-port or <code>fdopen</code> failure (<code class="ref">net_io_channel.h:82-83,139-150</code>), consistent with the
-stack-wide <code>error()</code> model.</p>
+port or <code>fdopen</code> failure (<code class="ref">net_io_channel.h:68-69,146-148</code>), consistent with the
+stack-wide <code>error()</code> model; owning <code>listen(port)</code>/<code>connect(addr, port)</code>
+factories wrap the nullptr-means-server constructor (<code class="ref">net_io_channel.h:82-87</code>).</p>
 <div class="callout c-audit"><span class="lbl">Thread-safety, make_sibling, no timeouts</span>
 <p>NetIO is <b>not thread-safe</b> (unlocked coalescing) and non-copyable/non-movable. A debug-only
 <code>touch_guard</code> aborts on concurrent <code>send</code>/<code>recv</code>/<code>flush</code>
-(<code class="ref">net_io_channel.h:58-79</code>); <b>in release the guard compiles away</b> → silent wire
+(the shared guard struct lives in <code class="ref">io_channel.h:25-39</code>; the per-instance counter at
+<code class="ref">net_io_channel.h:59-65</code>); <b>in release the guard compiles away</b> → silent wire
 corruption on misuse. <code>make_sibling</code> reconnects on the same role/port
-(<code class="ref">net_io_channel.h:97-99</code>) and has a documented ~1/5 same-port re-listen race (fixed
-downstream by a <code>sync()</code> before re-listen) — the burden is on the caller. <b>No read timeouts</b>: a
-peer that connects then goes silent hangs the process indefinitely (DoS vector). All transport errors →
-<code>std::_Exit(1)</code> (<code class="ref">net_io_channel.h:202,228</code>).</p></div>
+(<code class="ref">net_io_channel.h:94-107</code>); the same-port re-listen pairing race is now mitigated
+<em>in the primitive</em> by a 0.1 s settle pause (<code>usleep(100000)</code>,
+<code class="ref">net_io_channel.h:104</code>) before the sibling listen/connect — a probabilistic drain, not a
+handshake; the comment documents it as low-probability and RTT-sensitive. <b>No read timeouts</b>: a
+peer that connects then goes silent hangs the process indefinitely (DoS vector); <code>client_connect</code>
+alone is capped (~60 s of 1 ms-backoff retries, <code class="ref">tcp_socket.h:58-72</code>). All transport
+errors → <code>std::_Exit(1)</code> (<code class="ref">net_io_channel.h:207,235</code>).</p></div>
 <div class="callout c-warn"><span class="lbl">No peer authentication in plaintext NetIO</span>
 <p><code>tcp::server_listen</code> binds <code>INADDR_ANY</code> (all interfaces, IPv4-only) and accepts whoever
 connects — <b>no peer authentication at the TCP layer</b> (<code class="ref">tcp_socket.h:22-47</code>).
@@ -741,13 +856,13 @@ authenticated channel.</p></div>
 
 <h3>TLSIO — TLS 1.3 over TCP</h3>
 <p>Mirrors NetIO but the wire primitives are <code>SSL_write_ex</code>/<code>SSL_read_ex</code>
-(<code class="ref">tls_io_channel.h:348-385</code>). <b>TLS version pinned to 1.3</b> (min and max,
-<code class="ref">tls_io_channel.h:214-217</code>) — no downgrade. Per-channel <code>SSL_CTX</code> (no global
+(<code class="ref">tls_io_channel.h:347-385</code>). <b>TLS version pinned to 1.3</b> (min and max,
+<code class="ref">tls_io_channel.h:213-216</code>) — no downgrade. Per-channel <code>SSL_CTX</code> (no global
 state). Config is caller-supplied PEM paths; <code>require_peer_cert</code> defaults <b>true</b> (mTLS,
-<code class="ref">tls_io_channel.h:59</code>), <code>insecure_skip_verify</code> defaults false
-(<code class="ref">tls_io_channel.h:63</code>). Verification loads the CA as trust anchor, sets
+<code class="ref">tls_io_channel.h:60</code>), <code>insecure_skip_verify</code> defaults false
+(<code class="ref">tls_io_channel.h:64</code>). Verification loads the CA as trust anchor, sets
 <code>SSL_VERIFY_PEER</code> (+ <code>FAIL_IF_NO_PEER_CERT</code> for server mTLS,
-<code class="ref">tls_io_channel.h:252-254</code>), and re-checks
+<code class="ref">tls_io_channel.h:251-253</code>), and re-checks
 <code>SSL_get_verify_result() == X509_V_OK</code> and peer-cert presence post-handshake
 (<code class="ref">tls_io_channel.h:272-279</code>). No custom verify callback (avoiding the "<code>return 1</code>
 disables verification" footgun).</p>
@@ -758,7 +873,7 @@ is accepted as the peer. Fine for a private 2-party CA that only ever signs the 
 <b>confused-deputy risk if the CA signs other entities</b>. Document this as an assumption.
 <code>insecure_skip_verify</code> is an explicit dev escape hatch that must never be used in production.
 Constructing any TLSIO installs a process-global <code>SIGPIPE</code> ignore
-(<code class="ref">tls_io_channel.h:71-79</code>).</p></div>
+(<code class="ref">tls_io_channel.h:72-80</code>).</p></div>
 
 <h3>TraceIO — wire-byte record adapter</h3>
 <p>A wrapping <code>IOChannel</code> that <b>tees every wire byte</b> to <code>&lt;prefix&gt;.send</code> /
@@ -783,11 +898,13 @@ label (eval); <b>XOR and NOT are free</b> (a label XOR with the global <code>del
 caller. Both assume the <b>Free-XOR</b> invariant: a wire's two labels differ by a global secret
 <code>delta</code> with LSB 1.</p>
 
-<h3>Half-gate (<code class="ref">half_gate.h:14-43</code>)</h3>
-<p>The hash is <b>MITCCRH</b> (§9): <code>setS(delta)</code> seeds it, <code>hash_cir&lt;K,H&gt;</code> applies σ
-then a batched Davies–Meyer AES fold. <code>halfgates_garble</code> (<code class="ref">half_gate.h:14-29</code>)
+<h3>Half-gate (<code class="ref">half_gate.h:16-47</code>)</h3>
+<p>The hash is <b>MITCCRH</b> (§9), passed as a template parameter so the protocol picks
+BatchSize/ReuseShift (<code class="ref">half_gate.h:12-16</code>): <code>setS(delta)</code> seeds it,
+<code>hash_cir&lt;K,H&gt;</code> applies σ
+then a batched Davies–Meyer AES fold. <code>halfgates_garble</code> (<code class="ref">half_gate.h:17-32</code>)
 emits a <b>2-ciphertext table</b> from 4 hashes (<code>hash_cir&lt;2,2&gt;</code>); <code>halfgates_eval</code>
-(<code class="ref">half_gate.h:31-43</code>) recovers the output label from 2 hashes
+(<code class="ref">half_gate.h:35-47</code>) recovers the output label from 2 hashes
 (<code>hash_cir&lt;2,1&gt;</code>). Branching is only on the <em>public</em> point-and-permute LSBs via the
 branch-free <code>select_mask[pa]</code>; the citation is Zahur–Rosulek–Evans 2014 (eprint 2014/756,
 <code class="ref">half_gate.h:9</code>).</p>
@@ -815,61 +932,78 @@ where that leakage is acceptable.</p></div>
 <h2 id="simd">14 · SIMD-tier dispatch (cross-cutting)</h2>
 <p><span class="tag">core/simd_tier.h</span></p>
 
-<p>Routing is centralized here. ISA tier macros are derived from compiler predefines
-(<code class="ref">simd_tier.h:20-47</code>):</p>
-<pre><code>EMP_HAS_AVX2    = __x86_64__ && __AVX2__        // simd_tier.h:20-24
-EMP_HAS_AVX512F = __x86_64__ && __AVX512F__     //            :26-30
-EMP_HAS_VAES    = __x86_64__ && __VAES__        //            :32-36
-EMP_HAS_VAES512   = EMP_HAS_VAES && EMP_HAS_AVX512F          //  :45
-EMP_HAS_VPCLMUL512/256  analogously                         //  :46-47</code></pre>
+<p>Routing is centralized here, with two consumers: the AES/F2K Lane traits below, and the
+<code>core/transpose.hpp</code> dispatcher (§2), which is gated on the same macro family. ISA tier macros are
+derived from compiler predefines (<code class="ref">simd_tier.h:20-78</code>):</p>
+<pre><code>EMP_HAS_AVX2      = __x86_64__ && __AVX2__      // simd_tier.h:20-24
+EMP_HAS_AVX512F   = __x86_64__ && __AVX512F__   //            :26-30
+EMP_HAS_AVX512BW  = __x86_64__ && __AVX512BW__  //            :36-40  (transpose AVX-512 tier + f2k packing)
+EMP_HAS_GFNI512   = gfni && avx512vbmi && avx512bw           //  :46-51  (Icelake+/Zen4+; transpose GFNI tier)
+EMP_HAS_GFNI256   = gfni && avx2 (VEX-only)                  //  :57-61  (Alder/Raptor/Arrow Lake shape)
+EMP_HAS_VAES      = __x86_64__ && __VAES__      //            :63-67
+EMP_HAS_VAES512   = EMP_HAS_VAES && EMP_HAS_AVX512F          //  :76
+EMP_HAS_VPCLMUL512/256  analogously                          //  :77-78</code></pre>
 <p>and assembled into per-module <code>__attribute__((target(...)))</code> packs
-(<code>EMP_AES_TARGET_ATTR</code>, <code>EMP_F2K_TARGET_ATTR</code>, <code class="ref">simd_tier.h:49-66</code>).
+(<code>EMP_AES_TARGET_ATTR</code>, <code>EMP_F2K_TARGET_ATTR</code>, <code class="ref">simd_tier.h:80-98</code>).
+The new <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code> macros are consumed <em>only</em> by the
+transpose dispatcher — they do not affect <code>AesLane</code>/<code>ClmulLane</code>.
 <code>AesLane&lt;N&gt;</code> and <code>ClmulLane&lt;N&gt;</code> wrap AES-round / carryless-multiply primitives over
-N=1 (xmm), 2 (ymm, VAES+AVX2), 4 (zmm, VAES+AVX512) blocks (<code class="ref">simd_tier.h:82-235</code>);
-aarch64 has only N=1 (<code class="ref">simd_tier.h:236-320</code>). <code>ctr_xor_tweak</code> confirms the
+N=1 (xmm), 2 (ymm, VAES+AVX2), 4 (zmm, VAES+AVX512) blocks (<code class="ref">simd_tier.h:104-265</code>);
+aarch64 has only N=1 (<code class="ref">simd_tier.h:267-351</code>). <code>ctr_xor_tweak</code> confirms the
 <b>CTR counter is a 64-bit little-endian integer in the low 8 bytes</b> of the block
-(<code class="ref">simd_tier.h:94-96</code>), relevant to PRG counter-collision reasoning.</p>
+(<code class="ref">simd_tier.h:125-127</code>), relevant to PRG counter-collision reasoning.</p>
 
 <div class="callout c-warn"><span class="lbl">Compile-time-only dispatch — no runtime CPUID</span>
 <p>This is <b>build-time</b> dispatch via <code>target</code> attributes, <em>not</em> runtime CPU detection.
 <b>No <code>cpuid</code> dispatch anywhere.</b> A binary compiled with <code>-mvaes -mavx512f</code> executes
 VAES-512 unconditionally and will <b>SIGILL on a CPU lacking those features</b> — there is no fallback.
-Deployment hardware must match the build's <code>-march</code>. (The default build uses <code>-march=native</code>;
-pass <code>-DEMP_TOOL_NATIVE_ARCH=OFF</code> for a portable binary.)</p></div>
+The same applies to the new GFNI512 / GFNI256 / NEON transpose tiers: a GFNI-built binary SIGILLs on a
+GFNI-less CPU. Deployment hardware must match the build's <code>-march</code>. (The default build uses
+<code>-march=native</code>; pass <code>-DEMP_TOOL_NATIVE_ARCH=OFF</code> for a portable binary. The one
+exception to "no runtime CPUID anywhere" is <em>vendored</em> code: BLAKE3's <code>blake3_dispatch.c</code>
+picks among its compiled-in kernels at runtime — §10.)</p></div>
 <div class="callout c-note"><span class="lbl">aarch64 semantic adaptation</span>
 <p>NEON's <code>AESE</code> XORs the round key <em>before</em> SubBytes (key-first), whereas AES-NI's
 <code>aesenc</code> XORs after (key-last). To stay x86-compatible the aarch64 path computes
 <code>vaeseq_u8(s, zero)</code> then XORs the real key separately, deliberately breaking the AESE/AESMC fusion
-the silicon wants (<code class="ref">simd_tier.h:242-264</code>). CLMUL maps to <code>vmull_p64</code>
-(<code class="ref">simd_tier.h:294-311</code>). Cross-platform byte-identity rests entirely on the test suite's
+the silicon wants (<code class="ref">simd_tier.h:271-306</code>; the hot AES kernel sidesteps this with a
+NEON-native loop, <code class="ref">aes.hpp:49-58</code>). CLMUL maps to <code>vmull_p64</code>
+(<code class="ref">simd_tier.h:317-347</code>). Cross-platform byte-identity rests entirely on the test suite's
 OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equality beyond those tests.</p></div>
 
 <!-- ===================================================================== -->
 <h2 id="risk">15 · Auditor risk register</h2>
 <table class="grid">
 <tr><th>#</th><th>Item</th><th>Where</th><th>Severity / note</th></tr>
-<tr><td>1</td><td>Compile-time-only ISA dispatch; SIGILL (no runtime fallback) on a mismatched CPU</td><td><code class="ref">simd_tier.h:20-66</code></td><td>Deployment hazard — match <code>-march</code> (mitigate with <code>EMP_TOOL_NATIVE_ARCH=OFF</code>)</td></tr>
+<tr><td>1</td><td>Compile-time-only ISA dispatch; SIGILL (no runtime fallback) on a mismatched CPU — now also covers the GFNI512/GFNI256/NEON transpose tiers</td><td><code class="ref">simd_tier.h:20-98</code>, <code class="ref">transpose.hpp:748-772</code></td><td>Deployment hazard — match <code>-march</code> (mitigate with <code>EMP_TOOL_NATIVE_ARCH=OFF</code>)</td></tr>
 <tr><td>2</td><td>Test mode = one-env-var randomness kill switch (seed <code>0xC0FFEE12345</code>)</td><td><code class="ref">test_mode.h:24-39</code></td><td>Catastrophic if ever set in production</td></tr>
-<tr><td>3</td><td>Fail-fast <code>error()</code> → <code>std::_Exit(1)</code>; no read timeouts</td><td><code class="ref">utils.hpp:9-12</code>, library-wide</td><td>Hostile peer can reliably crash/hang the process</td></tr>
-<tr><td>4</td><td><code>assert</code>-based developer-misuse checks in release (FS double-enable, alignment, local send-point length)</td><td><code class="ref">io_channel.h:96,170</code>, AES/PRP/PRG</td><td>Intentional debug-only class; peer-controlled point recv length is now always-on</td></tr>
+<tr><td>3</td><td>Fail-fast <code>error()</code> → <code>std::_Exit(1)</code>; no read timeouts</td><td><code class="ref">utils.hpp:33-42</code>, library-wide</td><td>Hostile peer can reliably crash/hang the process</td></tr>
+<tr><td>4</td><td><code>assert</code>-based developer-misuse checks in release (FS double-enable, alignment, local send-point length)</td><td><code class="ref">io_channel.h:121,195</code>, AES/PRP/PRG</td><td>Intentional debug-only class; peer-controlled point recv length is now always-on</td></tr>
 <tr><td>5</td><td>Uninitialized-memory-to-wire surface (<code>BlockVec</code>/default-init)</td><td><code class="ref">block_vector.h:15-44</code></td><td>Non-determinism / potential leak; sweep send/hash paths</td></tr>
 <tr><td>6</td><td>No channel-layer peer auth (NetIO); no hostname check (TLSIO)</td><td><code class="ref">tcp_socket.h:22-47</code>, <code class="ref">tls_io_channel.h:241-279</code></td><td>Load-bearing trust-model assumptions to document</td></tr>
 <tr><td>7</td><td>σ is security-load-bearing; raw <code>ParaEncXorInput_impl</code> (no σ) exposed in <code>detail::</code></td><td>CCRH/MITCCRH, <code class="ref">aes.hpp:220-224</code></td><td>Misuse breaks correlation-robustness</td></tr>
-<tr><td>8</td><td>MITCCRH tweak-uniqueness / gid-monotonicity unenforced; garbling <code>idx</code>/gate-id sync is a caller obligation</td><td><code class="ref">mitccrh.h</code>, <code class="ref">privacy_free.h:15</code></td><td>Caller obligation; security-critical, unchecked in the primitive</td></tr>
+<tr><td>8</td><td>MITCCRH tweak-uniqueness / gid-monotonicity unenforced; garbling <code>idx</code>/gate-id sync is a caller obligation; <code>hash_cir_fixed</code> must pair only with <code>renew_ks(tweaks)</code> (mode-mixing unchecked)</td><td><code class="ref">mitccrh.h:86-94,119-133</code>, <code class="ref">privacy_free.h:15</code></td><td>Caller obligation; security-critical, unchecked in the primitive</td></tr>
 <tr><td>9</td><td><code>reduce</code> vs <code>reduce_reflect</code> silently mismatchable (no type guard)</td><td><code class="ref">f2k.hpp:31-91</code></td><td>Wrong field elements if mixed</td></tr>
-<tr><td>10</td><td>Non-constant-time EC <code>hash_to_point</code> (<code>BN_mod_sqrt</code> / square-ness branches)</td><td><code class="ref">ec.cpp:99-181</code></td><td>Safe only if hashed inputs are public</td></tr>
-<tr><td>11</td><td>Subgroup safety assumes cofactor-1 (P-256 only)</td><td><code class="ref">ec.cpp:339-342</code></td><td>Latent if the curve NID is ever changed</td></tr>
+<tr><td>10</td><td>Non-constant-time EC <code>hash_to_point</code> (<code>BN_mod_sqrt</code> / square-ness branches)</td><td><code class="ref">ec.cpp:101-179</code></td><td>Safe only if hashed inputs are public</td></tr>
+<tr><td>11</td><td>Subgroup safety assumes cofactor-1 (P-256 only)</td><td><code class="ref">ec.cpp:342-344</code></td><td>Latent if the curve NID is ever changed</td></tr>
 <tr><td>12</td><td>Fixed zero default keys (PRP/CCRH); predictable SessionID children if seed low-entropy</td><td><code class="ref">prp.h:19</code>, <code class="ref">ccrh.h:12</code>, <code class="ref">session_id.h:44</code></td><td>Deterministic across deployments — sound only in the RPM / domain-separation use</td></tr>
 <tr><td>13</td><td>PRG CTR two-time-pad if forks reuse overlapping counter ranges</td><td><code class="ref">prg.h:84-88</code></td><td>Misuse hazard; non-overlapping forks are independent</td></tr>
+<tr><td>14</td><td>Second hash backend (<code>EMP_HASH_BACKEND=blake3</code>) is a protocol-wide transcript change; <code>HashAbiMarker</code> link guard covers the mixed-default ODR hazard, but only when BLAKE3 is compiled in</td><td><code class="ref">hash.h:23-54</code>, <code class="ref">ec.cpp:504-509</code>, <code class="ref">CMakeLists.txt:149-180</code></td><td>Both parties must build identically; SHA-256 stays the default — no transcript change unless opted in</td></tr>
+<tr><td>15</td><td><code>test_hash.cpp</code> pins SHA-256 KATs against the bare <code>Hash</code> alias with no BLAKE3 variant — a blake3-default build fails it; no BLAKE3 known-answer vector in-tree</td><td><code>test/runtime/test_hash.cpp</code>, <code class="ref">test/CMakeLists.txt:51</code></td><td>Test gap; the introducing commit's "35/35 under BLAKE3" claim did not cover it</td></tr>
+<tr><td>16</td><td><code>MITCCRH::hash_cir_fixed</code> has zero test coverage (only its own definition and comment reference it)</td><td><code class="ref">mitccrh.h:119-133</code></td><td>New primitive shipped untested; the MITCCRH reference-derivation pinning does not cover it</td></tr>
+<tr><td>17</td><td>Six-kernel transpose family anchored only to the generic SSE2 <code>sse_trans</code> (parity test); the generic reference itself is round-trip-tested only, never against an independent transpose</td><td><code class="ref">transpose.hpp:748-772</code>, <code>test_block.cpp</code></td><td>A self-inverse bug in the shared reference would pass every tier</td></tr>
 </table>
 
 <div class="callout c-ok"><span class="lbl">Strong correctness baseline</span>
 <p>AES vs FIPS-197 KAT + OpenSSL; <code>gfmul</code> vs a bit-level scalar reference + field axioms; CCRH/MITCCRH
 vs their exact mathematical definitions; PRP vs OpenSSL ECB across batch-boundary sizes; SHA-256 vs FIPS 180-4 +
 OpenSSL; hash-to-curve vs RFC 9380 §J vectors; RO framing vs an independent frame-builder; PRG counter/fork/seek
-invariants; IO round-trips at unaligned offsets; half-gate over all four input combinations. The tests are the
-most precise available specification of intended behavior and should be read as part of the audit. The one noted
-gap: <code>sse_trans</code> is tested only transpose-twice-is-identity, not against an independent transpose.</p></div>
+invariants; IO round-trips at unaligned offsets; half-gate over all four input combinations; the transpose
+tiers parity-checked against the generic <code>sse_trans</code>. The tests are the
+most precise available specification of intended behavior and should be read as part of the audit. The noted
+gaps: the generic <code>sse_trans</code> reference is round-trip-tested only, not against an independent
+transpose (#17); <code>hash_cir_fixed</code> is untested (#16); <code>test_hash</code> has no BLAKE3 variant
+(#15).</p></div>
 
 </main>
 <footer>

@@ -110,7 +110,7 @@ recorder, or a real MPC backend.</p>
 <table>
 <tr><td>Report</td><td>3 of 3 — Circuit value objects &amp; frontend</td></tr>
 <tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
-<tr><td>Files in scope</td><td><code>circuits/{bit,bitvec,unsigned_int,signed_int,float,float_traits,numeric_kernels,sort,value_traits,typed}.h</code>; <code>circuits/crypto/{aes128,sha256,keccak,crypto}.h</code>; <code>circuits/frontend/{circuit_fn,rec,frontend}.h</code>. The <code>WireValue</code> concept it satisfies lives in <code>ir/wire_value.h</code> (Report 2).</td></tr>
+<tr><td>Files in scope</td><td><code>circuits/{bit,bitvec,unsigned_int,signed_int,float,float_traits,numeric_kernels,sort,value_traits,typed}.h</code>; <code>circuits/crypto/{aes128,sha256,keccak,crypto}.h</code>; <code>circuits/frontend/{circuit_fn,rec,frontend,compose}.h</code>. The <code>WireBundle</code>/<code>WireValue</code> concepts it satisfies live in <code>ir/wire_value.h</code>, and the composition recorder <code>ComposeCtx</code> in <code>ir/context/compose.h</code> (Report 2).</td></tr>
 <tr><td>Conventions</td><td><b>LSB at index 0</b> everywhere; gate cost = AND count (XOR/NOT free); tests cross-validate over <code>ClearCtx</code> against host references and FIPS/NIST vectors.</td></tr>
 </table>
 </div>
@@ -139,7 +139,8 @@ recorder, or a real MPC backend.</p>
 <li><a href="#aes128">E · AES-128 circuit</a></li>
 <li><a href="#sha256">E · SHA-256 circuit</a></li>
 <li><a href="#keccak">E · Keccak circuit</a></li>
-<li><a href="#frontend">F · Frontend (compile/run, <code>RecordValue</code>)</a></li>
+<li><a href="#frontend">F.1 · Frontend (compile/run, <code>RecordValue</code>)</a></li>
+<li><a href="#compose">F.2 · Composition (<code>ComposeCtx</code>, <code>compile_linear</code>)</a></li>
 <li><a href="#risk">Audit checklist</a></li>
 </ol>
 </div>
@@ -157,7 +158,7 @@ template &lt;BooleanContext Ctx, int N&gt; class BitVec_T;      // bitvec.h:20</
 <p>Each exports a uniform contract: <code>Wire</code>/<code>context_type</code>/<code>clear_t</code>; an identity
 <code>rebind&lt;C2&gt;</code>; a <code>static width()</code> (fixed-width forms); <code>pack_wires</code>/<code>from_wires</code>
 (flatten / unflatten the wire layout); a <code>context()</code> accessor; and the clear codec
-<code>encode</code>/<code>decode</code>. <code>value_traits&lt;T&gt;</code> (<code class="ref">value_traits.h:9-16</code>)
+<code>encode</code>/<code>decode</code>. <code>value_traits&lt;T&gt;</code> (<code class="ref">value_traits.h:12-19</code>)
 is a thin trait that <em>forwards</em> to these statics — the source of truth is the value type itself. This is
 exactly the metadata the <code>compile()</code>/<code>run()</code>/session machinery reads to learn a value's width
 and codec generically.</p>
@@ -172,7 +173,9 @@ are constrained <code>requires (N&nbsp;&gt;&nbsp;0&nbsp;&amp;&amp;&nbsp;N&nbsp;�
 (<code class="ref">unsigned_int.h</code> / <code class="ref">signed_int.h</code> <code>encode</code>/<code>decode</code>) because their host <code>clear_t</code> is
 <code>uint64_t</code>/<code>int64_t</code>. This is <b>not</b> a general width limit —
 <code>BitVec_T&lt;N&gt;</code>'s <code>clear_t</code> is <code>std::array&lt;bool,N&gt;</code> and round-trips at
-<em>any</em> width; for &gt;64-bit values use <code>BitVec_T</code> for bit I/O, or convert through fixed widths.</p></div>
+<em>any</em> width, and a &gt;64-bit <code>UInt_T</code>/<code>Int_T</code> is still a <code>WireBundle</code>
+(a valid circuit argument/return; <code class="ref">unsigned_int.h:220-223</code>) — it just cannot do typed
+session I/O; use <code>BitVec_T</code> for that, or convert through fixed widths.</p></div>
 
 <h2 id="wirevalue">A.2 · <code>WireValue</code> — the contract the families satisfy</h2>
 <p><span class="tag">ir/wire_value.h</span></p>
@@ -273,8 +276,8 @@ Gate cost is measured in ANDs (XOR/NOT free).</p>
 <div class="callout c-warn"><span class="lbl">Division by zero saturates — not C semantics, not a trap</span>
 <p>With <code>op2 == 0</code> every trial subtraction "succeeds", so <b><code>x / 0 = all-ones</code> (UINT_MAX)
 and <code>x % 0 = x</code></b> (<code class="ref">numeric_kernels.h:148-149</code>). Pinned exactly:
-<code>12345/0 → UINT32_MAX</code>, <code>12345%0 → 12345</code> (<code class="ref">test_uint.cpp:97</code> and
-<code class="ref">test_uint.cpp:99</code>). Any caller relying on UB-on-div-zero gets this silently instead.</p></div>
+<code>12345/0 → UINT32_MAX</code>, <code>12345%0 → 12345</code> (<code class="ref">test_uint.cpp:98</code> and
+<code class="ref">test_uint.cpp:100</code>). Any caller relying on UB-on-div-zero gets this silently instead.</p></div>
 
 <h2 id="uint">B.2 · <code>UInt_T</code> — unsigned integer</h2>
 <p><span class="tag">unsigned_int.h</span></p>
@@ -414,9 +417,9 @@ gates. <code>xtime</code> (GF(2⁸) ·x with poly <code>x⁸+x⁴+x³+x+1</code>
 <code class="ref">aes128.h:211-213</code>). State is column-major 4×4.</p>
 <table class="grid">
 <tr><th>Component</th><th>S-box calls</th><th>Total ANDs</th></tr>
-<tr><td>S-box (Boyar–Peralta)</td><td>—</td><td><b>32</b> (asserted, <code class="ref">test_crypto_aes.cpp:376</code>)</td></tr>
+<tr><td>S-box (Boyar–Peralta)</td><td>—</td><td><b>32</b> (asserted, <code class="ref">test_crypto_aes.cpp:377</code>)</td></tr>
 <tr><td>Key schedule</td><td>40 (4×10)</td><td>1280</td></tr>
-<tr><td>Block encrypt (10 rounds)</td><td>160 (16×10)</td><td><b>6400</b> = 200 S-boxes × 32 (<code class="ref">test_crypto_aes.cpp:377</code>)</td></tr>
+<tr><td>Block encrypt (10 rounds)</td><td>160 (16×10)</td><td><b>6400</b> = 200 S-boxes × 32 (<code class="ref">test_crypto_aes.cpp:378</code>)</td></tr>
 </table>
 <p>CTR mode (NIST SP 800-38A) adds a public <code>delta</code> to the big-endian 64-bit counter in bytes 8–15
 via a <code>UInt_T&lt;Ctx,64&gt;</code> add (carry past byte 8 dropped, <code class="ref">aes128.h:310-323</code>),
@@ -451,70 +454,77 @@ crux; an off-by-one transposes bytes within a word — guarded by OpenSSL cross-
 <p>State is 25 lanes of 64 bits as <code>UInt_T&lt;Ctx,64&gt; A[25]</code> (FIPS-202 layout, lane (x,y) =
 <code>A[5y+x]</code>, <code class="ref">keccak.h:45</code>). Keccak-f[1600] runs 24 rounds of θ → ρ/π → χ → ι
 (<code class="ref">keccak.h:56-87</code>). θ (column parities), ρ/π (lane rotate + index permutation), and ι
-(public-constant XOR = NOT gates) are <b>AND-free</b>; <b>χ is the only nonlinear step</b> —
+(XOR of a public 64-bit round constant into lane <code>A[0]</code>, <code class="ref">keccak.h:84-85</code>) are
+<b>AND-free</b>; <b>χ is the only nonlinear step</b> —
 <code>A[x,y] = row[x] ^ ((~row[x+1]) &amp; row[x+2])</code>, <b>1 AND per bit</b>, computed row-by-row so the five
 lanes are snapshotted before update (<code class="ref">keccak.h:77-82</code>). SHA3-256 sponge: rate 1088,
-capacity 512, domain separator 0x06, pad10*1 (<code class="ref">keccak.h:113-125</code>); length <code>N</code> is
-compile-time public.</p>
+capacity 512, domain separator 0x06, pad10*1 (the padding bits are flipped in with <code>not_gate</code>,
+<code class="ref">keccak.h:113-125</code>); length <code>N</code> is compile-time public.</p>
 <div class="callout c-audit"><span class="lbl">Transposition traps</span>
 <p>The χ row snapshot is essential (overwriting in place would corrupt the <code>x+1</code>/<code>x+2</code> reads
 — verified present, <code class="ref">keccak.h:78-81</code>). The ρ/π combined index map
 <code>B[lane(y,(2x+3y)%5)]</code> and <code>RHO[y][x]</code> (note <code>[y][x]</code>,
 <code class="ref">keccak.h:71-73</code>) are the easy places to transpose; the lane-by-lane permutation test is the
 guard. The fixed <code>sha3_256(BitVec&lt;256&gt;)</code> wrapper is <b>38400 ANDs</b> = 24 rounds × 25 lanes × 64
-bits (one AND per χ output bit per round, <code class="ref">test_crypto_keccak.cpp:238</code>). Like SHA-256,
+bits (one AND per χ output bit per round, <code class="ref">test_crypto_keccak.cpp:239</code>). Like SHA-256,
 message length is public — the AND count reveals the block count (expected for a public-shape circuit).</p></div>
 
 <!-- ============================== PART F ============================== -->
-<h2 id="frontend">F · The portable circuit-function frontend</h2>
+<h2 id="frontend">F.1 · The portable circuit-function frontend</h2>
 <p><span class="tag">circuits/frontend/circuit_fn.h</span> <span class="tag">circuits/frontend/frontend.h</span> <span class="tag">circuits/frontend/rec.h</span></p>
 <p>A user writes a <b>pure</b> circuit body once and runs it on any context. "Pure" means <b>no input/reveal/OT
 inside a body</b> — structurally impossible because the body is recorded through a <code>RecordCtx</code>, which
-has no I/O (<code class="ref">circuit_fn.h:11-13</code>). I/O is a <b>session</b> concern, <em>around</em>
+has no I/O (<code class="ref">circuit_fn.h:12-13</code>). I/O is a <b>session</b> concern, <em>around</em>
 <code>run()</code>. Body forms: implicit-context (<code>[](auto a, auto b){ return a+b; }</code>) or
 explicit-context (<code>[](auto&amp; ctx, …){…}</code>, required for nullary circuits and for making a constant with
 no anchor arg); a body callable in <b>both</b> forms is a contract error
 (<code class="ref">circuit_fn.h:18-24</code>).</p>
-<h3>RecordValue — the frontend's refinement of WireValue</h3>
-<p>The frontend speaks <code>emp::WireValue</code> generically and refines it for compilation. A
-<code>RecordValue</code> is simply a <code>WireValue</code> whose <code>context_type</code> is <code>RecordCtx</code>
-(<code class="ref">circuit_fn.h:51-54</code>):</p>
+<h3>RecordValue — the frontend's refinement of WireBundle</h3>
+<p>The frontend speaks <code>emp::WireBundle</code> generically — execution only packs/unpacks wires, so a clear
+codec is <b>not</b> required of a circuit argument or return (sessions, the codec consumers, constrain on
+<code>WireValue</code>; <code class="ref">circuit_fn.h:48-54</code>). A <code>RecordValue</code> is simply a
+<code>WireBundle</code> whose <code>context_type</code> is <code>RecordCtx</code>
+(<code class="ref">circuit_fn.h:55-58</code>):</p>
 <pre><code>template &lt;class V_&gt;
 concept RecordValue =
-    WireValue&lt;V_&gt; &&
+    WireBundle&lt;V_&gt; &&
     std::same_as&lt;typename std::decay_t&lt;V_&gt;::context_type, RecordCtx&gt;;</code></pre>
 <p>It is the only valid argument type to <code>compile()</code> (the body is recorded through a
 <code>RecordCtx</code>). The compiled <code>Circuit&lt;RetV, ArgVs...&gt;</code> class itself constrains its type
-parameters with <code>RecordValue</code> (<code class="ref">circuit_fn.h:124-125</code>), so only
+parameters with <code>RecordValue</code> (<code class="ref">circuit_fn.h:128</code>), so only
 <code>compile()</code> / load helpers that normalize to <code>rec::</code> types can name a <code>Circuit</code>.
 <code>circuit_fn_traits</code> + <code>circuit_contract</code> fire a specific <code>static_assert</code> per failure
 mode (non-circuit args, ambiguous body, reference/void/non-circuit return) at
-<code class="ref">circuit_fn.h:95-113</code>, each exercised by
+<code class="ref">circuit_fn.h:99-117</code>, each exercised by
 <code class="ref">circuit_fn_contract_probes.cpp</code>.</p>
 <h3>compile / run</h3>
-<pre><code>compile&lt;rec::UInt&lt;32&gt;, rec::UInt&lt;32&gt;&gt;(body)                       // circuit_fn.h:190-222
+<pre><code>compile&lt;rec::UInt&lt;32&gt;, rec::UInt&lt;32&gt;&gt;(body)                       // circuit_fn.h:194-226
    RecordCtx rc; args built left-to-right (braced-init) BEFORE any gate; // all external_input up front
    run body → gates; rc.finish(...) validates; wrap as CircuitArtifact (+signature);
-   Circuit&lt;RetV,ArgVs...&gt; ctor validates AGAIN (arity + per-arg width + return width)  // circuit_fn.h:134-145
-run(ctx, circuit, args...)                                          // circuit_fn.h:238-260
-   [EMP_CONTEXT_CHECKS] verify each arg.context() == &amp;ctx          // circuit_fn.h:246-250
-   flatten arg wires → inputs; check inputs.size()==num_inputs;
-   execute_program(ctx,p,inputs,ws); reconstruct RetV::rebind&lt;Ctx&gt;::from_wires(...)</code></pre>
+   Circuit&lt;RetV,ArgVs...&gt; ctor validates AGAIN (arity + per-arg width + return width)  // circuit_fn.h:138-149
+compile_linear&lt;ArgVs...&gt;(body) = compile(...) → make_compact(·, WireReuse::Linear)     // circuit_fn.h:231-249
+run(ctx, circuit, args...)                                          // circuit_fn.h:268-296
+   check arity vs signature; flatten arg wires → inputs; check inputs.size()==num_inputs // circuit_fn.h:274-280
+   Ctx == ComposeCtx → ctx.call_unit(p, inputs, n): ONE opaque instance, gates not walked // circuit_fn.h:281-284
+   else (inline)     → [EMP_CONTEXT_CHECKS] verify each arg.context() == &amp;ctx           // circuit_fn.h:286-290
+                       execute_program(ctx,p,inputs,ws); reconstruct RetV::rebind&lt;Ctx&gt;::from_wires(...)</code></pre>
 <div class="callout c-audit"><span class="lbl">Two positional-argument footguns</span>
 <p><b>(1) Cross-context guards at <code>run</code> are debug-only</b> (<code>EMP_CONTEXT_CHECKS</code>,
-<code class="ref">circuit_fn.h:246-250</code>): in release, passing an arg from a different context is unchecked —
-benign for value-only <code>ClearCtx</code>, the dominant correctness footgun for id-based/stateful contexts.
+<code class="ref">circuit_fn.h:286-290</code>): in release, passing an arg from a different context is unchecked —
+benign for value-only <code>ClearCtx</code>, the dominant correctness footgun for id-based/stateful contexts. Since
+67642c2 the check lives only in the <em>inline</em> (non-<code>ComposeCtx</code>) branch of <code>run</code>; on the
+<code>ComposeCtx</code> path it is skipped even in debug builds (see §F composition).
 <b>(2) <code>run</code> validates total input width, not per-argument identity</b>
-(<code class="ref">circuit_fn.h:254-255</code>): swapping two equal-width arguments produces a valid-but-wrong
+(<code class="ref">circuit_fn.h:279-280</code>): swapping two equal-width arguments produces a valid-but-wrong
 replay. Inherent to positional passing; mitigated because compile and run share the same <code>ArgVs…</code> order
 by construction. The argument-wire order depends on <b>braced-init left-to-right evaluation</b>
-(<code class="ref">circuit_fn.h:202</code>) — a refactor to a call-style aggregate would silently permute input
+(<code class="ref">circuit_fn.h:206</code>) — a refactor to a call-style aggregate would silently permute input
 wires.</p></div>
 <p><code>rec.h</code> provides recording aliases (<code>rec::Bit</code>, <code>rec::UInt&lt;N&gt;</code>,
 <code>rec::Int&lt;N&gt;</code>, <code>rec::Float&lt;W&gt;</code>, <code>rec::BitVec&lt;N&gt;</code>) =
 <code>*_T&lt;RecordCtx,…&gt;</code> (<code class="ref">rec.h:7-11</code>). There is also a no-compile
 <code>frontend::run(body, args...)</code> that evaluates a body directly on already-live typed values, recovering
-the context from the first argument (<code class="ref">circuit_fn.h:267-288</code>).
+the context from the first argument (<code class="ref">circuit_fn.h:303-324</code>).
 <code class="ref">test_circuit_fn.cpp</code> compiles a 32-bit adder once, checks it is the size-optimal <b>31-AND</b>
 adder, checks recording is deterministic via <code>digest_program</code>, and exercises
 explicit-context / nullary / fp32-replay / live-run / BitVec paths.</p>
@@ -526,9 +536,64 @@ context via <code>ctx()</code> and feeds/opens values via <code>SessionIO&lt;S,V
 (<code>ir/session/clear_session.h</code>) is the plaintext reference: <code>ctx_t == ClearCtx</code>,
 <code>party() == PUBLIC</code>, and its <code>input</code>/<code>reveal</code> validate that the owner/recipient is
 <code>PUBLIC</code> or a party id ≥ 1 (the plaintext oracle serves n-party protocols too) before (correctly) ignoring routing in the clear; its
-<code>reveal_t&lt;V&gt;</code> is <code>std::optional&lt;clear_t&gt;</code>, always populated. The always-on codec-width
-check (<code>V::encode</code> must produce <code>V::width()</code> bits) is a codec bug guard, not a debug-only
-condition.</p></div>
+<code>reveal_t&lt;V&gt;</code> is <code>std::optional&lt;clear_t&gt;</code>, always populated. The codec-width guarantee
+(<code>V::encode</code> produces exactly <code>V::width()</code> bits) is enforced by the <em>type</em> —
+<code>encode</code> must return <code>std::array&lt;bool, V::width()&gt;</code> per the <code>WireValue</code> concept
+(<code class="ref">ir/wire_value.h:67-75</code>, <code class="ref">session_io.h:25-26</code>) — a compile-time property,
+independent of <code>NDEBUG</code>.</p></div>
+
+<h2 id="compose">F.2 · Composition — <code>run()</code> is opaque on a <code>ComposeCtx</code></h2>
+<p><span class="tag">circuits/frontend/compose.h</span> <span class="tag">ir/context/compose.h</span> <span class="tag">circuit_fn.h</span></p>
+<p>Since 67642c2, <code>run(ctx, circuit, args...)</code> is no longer unconditionally an inline replay. It branches
+<code>if constexpr (std::same_as&lt;remove_cvref_t&lt;Ctx&gt;, ComposeCtx&gt;)</code>
+(<code class="ref">circuit_fn.h:281-284</code>): on a <code>ComposeCtx</code> it calls
+<code>ctx.call_unit(p, inputs.data(), inputs.size())</code> and records <b>one opaque instance</b> — wiring only, the
+unit's gates are never walked; on every other context it takes the inline path documented above. There is
+deliberately no separate "invoke" verb — <code>run</code> is opaque-or-inline purely by the type of <code>ctx</code>
+(<code class="ref">circuit_fn.h:251-257</code>).</p>
+<p><code>ComposeCtx</code> (<code class="ref">ir/context/compose.h</code>) satisfies <code>BooleanContext</code>
+(<code>static_assert</code>, <code class="ref">compose.h:103</code>) with <code>Wire = uint32_t</code> and records a
+<b>hierarchical</b> circuit: glue gates interleaved with opaque unit calls, in emission order, as a
+<code>ComposePlan{num_inputs, num_wires, events[], instances[], outputs[]}</code>
+(<code class="ref">compose.h:44-50</code>). Each <code>ComposeInstance</code> holds a
+<code>const BooleanProgram*</code> <b>reference</b> (not a copy) plus its wiring (<code>in_ids</code>/<code>out_ids</code>,
+<code class="ref">compose.h:28-32</code>) — recording a call costs O(width), never O(unit gate count). Like
+<code>RecordCtx</code>: <code>external_input()</code> must precede any gate/call (<code>inputs_closed</code>,
+<code class="ref">compose.h:59-69</code>) and the two constants are deduplicated (<code>c0</code>/<code>c1</code>,
+<code class="ref">compose.h:56,72-76</code>).</p>
+<ul>
+<li><b><code>compose&lt;ArgVs...&gt;(body)</code></b> (<code class="ref">circuits/frontend/compose.h:37-50</code>)
+records an explicit-context body over a fresh <code>ComposeCtx</code> (one <code>external_input</code> window per
+<code>ArgV</code> via <code>make_compose_arg</code>) and returns the <code>ComposePlan</code>. <code>ArgVs</code>
+must satisfy <code>RecordValue</code> — the same constraint <code>compile()</code> imposes. The header is
+<b>opt-in</b>: <code>frontend.h</code>'s umbrella does not include it (<code>ComposeCtx</code> itself does ride in,
+via <code>circuit_fn.h</code>'s own include).</li>
+<li><b><code>compile_linear&lt;ArgVs...&gt;(body)</code></b> (<code class="ref">circuit_fn.h:248-249</code>, over
+<code>compile_at_</code>, <code class="ref">circuit_fn.h:231-243</code>) = <code>compile()</code> — so every existing
+diagnostic fires on the dense form — then <code>make_compact(·, WireReuse::Linear)</code> (Report 2,
+<code>ir/transform.h</code>). This is the form for a <b>unit</b> meant to be composed on a multi-pass backend.</li>
+<li><b><code>flatten_compose(plan)</code></b> (<code class="ref">ir/context/compose.h:111-146</code>) materializes
+the full dense program by inlining every instance (O(total gates)) and validates it — the test oracle and the
+fallback for a backend with no on-the-fly flattener, not the intended fast path.</li>
+</ul>
+<p><code class="ref">test/ir/test_compose.cpp</code> pins the O(#instances) claim (<code>plan.events.size() == 3</code>
+for a 3-call chain, not the unit's gate count, <code class="ref">test_compose.cpp:52-53</code>) and checks
+<code>flatten_compose</code> against ordinary inlining <code>compile()</code> over random inputs for both a chain
+and a SIMD/glue shape (<code class="ref">test_compose.cpp:56-59,72-78</code>). Per
+<code class="ref">docs/composition.md</code>, the compose path currently lowers only on the emp-ag2pc backend (the
+mechanism lives here; no in-tree emp-tool backend consumes it), nested composition is unsupported (a unit whose
+body itself called <code>run(ctx, subunit)</code> had the subunit inlined at compile time), and a 100M-AND SHA
+chain measured ≈ −11% wall / +12% throughput for <code>run_compose</code> vs the inline baseline.</p>
+<div class="callout c-audit"><span class="lbl">Composition-path caller obligations</span>
+<p><b>(1) Lifetime</b>: a <code>ComposeInstance</code> aliases the unit's <code>BooleanProgram</code> by raw pointer
+(<code class="ref">compose.h:28-32</code>) — every composed unit must outlive the plan through flattening/replay;
+nothing owns or copies it. <b>(2) Reuse level</b>: units should be <code>WireReuse::Linear</code>
+(<code>compile_linear</code>) for a multi-pass backend's trust path; <code>call_unit</code> checks only input width
+(<code class="ref">compose.h:84-93</code>), not the reuse level — a dense or Full unit records silently.
+<b>(3) No arg-context check</b>: the <code>EMP_CONTEXT_CHECKS</code> guard is in the inline branch only
+(<code class="ref">circuit_fn.h:286-290</code>); on the <code>ComposeCtx</code> branch an argument bound to a
+<em>different</em> <code>ComposeCtx</code> instance is not detected even in debug — only the always-on total-width
+check (<code class="ref">circuit_fn.h:279-280</code>) runs before <code>call_unit</code>.</p></div>
 
 <!-- ============================== RISK ============================== -->
 <h2 id="risk">Audit checklist</h2>
@@ -542,14 +607,18 @@ condition.</p></div>
 <tr><td>6</td><td>Float arithmetic replayed from committed generated <code>.empbc</code> assets</td><td>Trust extends to assets + <code>execute_program</code>; <code>sqrt/recip/rsqrt</code> approximate; <code>fma</code> = two roundings</td></tr>
 <tr><td>7</td><td>Crypto message lengths compile-time public</td><td>Gate counts (sbox 32, block 6400, sha256 24744, sha3 38400) asserted in tests — good change-detectors</td></tr>
 <tr><td>8</td><td>Sort is oblivious but <b>unstable</b>; NaN float keys unordered</td><td>—</td></tr>
-<tr><td>9</td><td><b>Scalar</b> UInt/Int host codecs cap at 64 bits (<code>static_assert N≤64</code>)</td><td>Not a general limit — <code>BitVec_T&lt;N&gt;</code> (<code>std::array&lt;bool,N&gt;</code>) round-trips at any width; use BitVec or fixed-width conversion for &gt;64-bit I/O</td></tr>
+<tr><td>9</td><td><b>Scalar</b> UInt/Int host codecs cap at 64 bits (<code>encode</code>/<code>decode</code> constrained <code>requires (N &gt; 0 &amp;&amp; N ≤ 64)</code>)</td><td>Not a general limit — a wider UInt/Int stays a <code>WireBundle</code> (circuit-argument eligible, <code class="ref">unsigned_int.h:220-223</code>), and <code>BitVec_T&lt;N&gt;</code> (<code>std::array&lt;bool,N&gt;</code>) round-trips at any width; use BitVec or fixed-width conversion for &gt;64-bit I/O</td></tr>
 <tr><td>10</td><td>Runtime-width <code>UInt_T</code>/<code>Int_T</code> (<code>N==0</code>) model <b><code>RuntimeWidthValue</code>, not <code>WireValue</code></b></td><td>No static <code>width()</code>, so never <code>compile()</code>d; but session-I/O eligible via the runtime-width <code>input</code>/<code>reveal</code> overloads — cross to a fixed width via <code>to_fixed&lt;M&gt;()</code> for the frontend</td></tr>
-<tr><td>11</td><td>Frontend <code>run</code> validates total input width, not per-arg identity</td><td>Swapping equal-width args = valid-but-wrong replay; cross-context guards at <code>run</code> are debug-only</td></tr>
+<tr><td>11</td><td>Frontend <code>run</code> validates total input width, not per-arg identity</td><td>Swapping equal-width args = valid-but-wrong replay; cross-context guards at <code>run</code> are debug-only — and since 67642c2 live only in the inline branch (skipped entirely on the <code>ComposeCtx</code> path, <code class="ref">circuit_fn.h:281-290</code>)</td></tr>
+<tr><td>12</td><td>Composition records units <b>by reference</b> (new in 67642c2)</td><td><code>ComposeInstance</code> holds a raw <code>const BooleanProgram*</code> (<code class="ref">ir/context/compose.h:28-32</code>); every composed unit must outlive its <code>ComposePlan</code> through flatten/replay — nothing owns or copies it</td></tr>
+<tr><td>13</td><td>Linear-unit obligation for composition is unenforced (new in 67642c2)</td><td><code>compile_linear</code> produces <code>WireReuse::Linear</code> (<code class="ref">circuit_fn.h:248-249</code>); <code>ComposeCtx::call_unit</code> checks input width only (<code class="ref">compose.h:84-93</code>) — a dense/Full unit records silently and misbehaves only on a multi-pass backend's trust path</td></tr>
 </table>
 <div class="callout c-ok"><span class="lbl">Strong test suite</span>
 <p>Every value type has an <code>example()</code> plus randomized host cross-checks; every crypto primitive is
 checked against FIPS/NIST vectors and OpenSSL; <code class="ref">test_builtin_circuits.cpp</code> proves the
-native kernels and the recorded IR builtins agree bit-for-bit. The main residual audit surface is (a) the
+native kernels and the recorded IR builtins agree bit-for-bit; 67642c2's
+<code class="ref">test/ir/test_compose.cpp</code> pins <code>flatten_compose</code> against ordinary inlining
+(§F.2). The main residual audit surface is (a) the
 committed <code>.empbc</code> float assets plus their off-tree generation provenance, (b) the <code>NDEBUG</code> behavior of the context/width guards, and
 (c) the documented UB preconditions (div-by-zero saturation, <code>INT_MIN/−1</code>, default-constructed values).</p></div>
 

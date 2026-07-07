@@ -99,8 +99,8 @@ recording, or a cryptographic backend — with the gate stream guaranteed identi
 <table>
 <tr><td>Report</td><td>2 of 3 — Boolean IR, contexts &amp; sessions</td></tr>
 <tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (runtime/ir/circuits refactor, since committed)</td></tr>
-<tr><td>Files in scope</td><td><code>ir/{program,validate,visit,passes,schedule,execute,artifact,empbc,assets,builtins}.h</code> · <code>ir/{assets,builtins}.cpp</code> · <code>ir/wire_value.h</code> · <code>ir/context/{concept,checks,clear,count,digest,record}.h</code> · <code>ir/session/{session,session_io,clear_session}.h</code></td></tr>
-<tr><td>Wire value</td><td>A context names its own <code>Wire</code> type: <code>uint8_t</code> (Clear/Count), <code>uint32_t</code> (Record/Digest wire ids), or <code>block</code> (a downstream garbling backend label).</td></tr>
+<tr><td>Files in scope</td><td><code>ir/{program,validate,visit,passes,schedule,execute,transform,artifact,empbc,assets,builtins}.h</code> · <code>ir/{assets,builtins}.cpp</code> · <code>ir/wire_value.h</code> · <code>ir/context/{concept,checks,clear,count,digest,record,compose}.h</code> · <code>ir/session/{session,session_io,clear_session}.h</code></td></tr>
+<tr><td>Wire value</td><td>A context names its own <code>Wire</code> type: <code>uint8_t</code> (Clear/Count), <code>uint32_t</code> (Record/Digest/Compose wire ids), or <code>block</code> (a downstream garbling backend label).</td></tr>
 <tr><td>Layering</td><td><code>ir/program.h</code> (the <code>BooleanProgram</code> IR) and <code>ir/context/concept.h</code> (the <code>BooleanContext</code> concept) are the two pure design roots — zero internal includes, usable without any backend. Everything else here is built on them.</td></tr>
 </table>
 </div>
@@ -109,6 +109,7 @@ recording, or a cryptographic backend — with the gate stream guaranteed identi
 <h2>Contents</h2>
 <ol>
 <li><a href="#program">A · IR data model (program)</a></li>
+<li><a href="#wirereuse">A · <code>WireReuse</code> &amp; compaction</a></li>
 <li><a href="#validate">A · Validation invariants</a></li>
 <li><a href="#empbc">A · <code>.empbc</code> format</a></li>
 <li><a href="#passes">A · Analysis passes</a></li>
@@ -117,6 +118,7 @@ recording, or a cryptographic backend — with the gate stream guaranteed identi
 <li><a href="#assets">A · Artifacts / assets / builtins</a></li>
 <li><a href="#concept">B · The <code>BooleanContext</code> concept</a></li>
 <li><a href="#taxonomy">B · Context taxonomy</a></li>
+<li><a href="#composectx">B · <code>ComposeCtx</code> &amp; composition</a></li>
 <li><a href="#checks">B · Cross-context checks &amp; digest duality</a></li>
 <li><a href="#wirevalue">C · The <code>WireValue</code> concept</a></li>
 <li><a href="#session">D · Session layer &amp; reveal</a></li>
@@ -138,40 +140,108 @@ execution as a <code>BooleanProgram</code> unless they are loading, saving, comp
 realizes a known 0/1 wire however its protocol prescribes. The IR records all Boolean operations explicitly;
 backend cost models are deliberately outside the data model. A <code>Gate</code> is
 <code>{in0,in1,out,op}</code> with <code>in1</code> normalized to <code>0</code> for <code>Not</code>/<code>Const*</code>
-(<code class="ref">program.h:30-38</code>). A <code>BooleanProgram</code> is a dense, SSA-like form
-(<code class="ref">program.h:40-50</code>):</p>
-<pre><code>uint32_t num_wires;     // total wire ids; valid ids [0, num_wires)
-uint32_t num_inputs;    // input wires [0, num_inputs)
+(<code class="ref">program.h:30-38</code>). A <code>BooleanProgram</code>
+(<code class="ref">program.h:54-65</code>):</p>
+<pre><code>uint32_t  num_wires;      // total wire ids; valid ids [0, num_wires)
+uint32_t  num_inputs;     // input wires [0, num_inputs)
+WireReuse wire_reuse;     // None = dense/SSA (the default contract)
 std::vector&lt;Gate&gt;     gates;     // topological (emission) order
 std::vector&lt;uint32_t&gt; outputs;   // wire ids of the return value (may name inputs = passthrough)</code></pre>
-<p>Inputs are wires <code>[0,num_inputs)</code>; every other wire is produced by <b>exactly one</b> gate in
-topological order; wire id == position, no holes.</p>
+<p>Inputs are wires <code>[0,num_inputs)</code> in every mode. Under the default
+<code>WireReuse::None</code> the program is <b>dense/SSA-like</b>: every other wire is produced by
+<b>exactly one</b> gate in topological order; wire id == position, no holes
+(<code>num_wires == num_inputs + num_gates</code>). Since <code class="ref">67642c2</code> that dense
+contract is <b>one of three wire-id modes</b>, not the sole contract — see the next section.</p>
+
+<h2 id="wirereuse">A.1a · <code>WireReuse</code> &amp; the compaction transform</h2>
+<p><span class="tag">ir/program.h</span> <span class="tag">ir/transform.h</span></p>
+<p><code>enum class WireReuse : uint8_t { None=0, Linear=1, Full=2 }</code>
+(<code class="ref">program.h:52</code>) is carried on the program as
+<code>wire_reuse = WireReuse::None</code> by default (<code class="ref">program.h:57</code>). The design
+comment (<code class="ref">program.h:40-51</code>) draws the dividing line at <em>stored per-gate state</em>:
+a multi-pass consumer recomputes linear (Xor/Not/Const) gates every pass, so their output ids are always
+safe to recycle, but an And output may hold stored state across passes (e.g. a fresh authenticated mask in a
+garbling backend).</p>
+<ul>
+<li><b><code>None</code></b> — the dense/SSA contract above, unchanged; the only mode the analysis passes
+and the scheduler accept (§A.4/§A.5).</li>
+<li><b><code>Linear</code></b> — ids of dead linear-gate outputs are recycled; <b>And outputs are never
+recycled</b>. Safe for every consumer, including a multi-pass garbling backend.</li>
+<li><b><code>Full</code></b> — any id may be reused once dead, And outputs included. Maximal compaction;
+correct only for single-pass / recompute execution.</li>
+</ul>
+<p>The symmetric transform pair lives in <code>ir/transform.h</code>:
+<code>make_compact(dense, target)</code> (<code class="ref">transform.h:39-86</code>) is a
+liveness-driven wire-id compaction — it runs <code>liveness_pass</code> on the <b>dense input</b>
+(<code class="ref">transform.h:45</code>, never on a reuse program), pins inputs/outputs (and, for Linear,
+every And output, <code class="ref">transform.h:51-52</code>), and assigns ids via a LIFO freelist that
+recycles a slot only <em>after</em> the gate that last reads it (<code class="ref">transform.h:73-80</code>).
+It returns a <code>CompactResult{prog, nid[]}</code> (<code class="ref">transform.h:29-32</code>;
+<code>nid[dense_id] = compact_id</code>). Preconditions are unconditional fatal <code>error()</code>s, not
+asserts: <code>target == WireReuse::None</code> and a non-dense input are both rejected
+(<code class="ref">transform.h:40-43</code>). Compaction never changes the gate sequence or the function —
+only the wire ids. <code>uncompact(src)</code> (<code class="ref">transform.h:92-113</code>) is the inverse:
+one forward walk relabels any reuse level back to dense (no liveness needed), validating on entry and exit.
+The frontend exposes this as <code>compile_linear&lt;ArgVs...&gt;(body)</code>
+(<code class="ref">circuit_fn.h:248-249</code>, over the shared <code>compile_at_</code> at
+<code class="ref">circuit_fn.h:231-243</code>): compile dense first — so every existing diagnostic fires on
+the dense path — then compact; the documented form for a <em>unit</em> composed on a multi-pass backend
+(<code class="ref">docs/composition.md</code>).</p>
+<div class="callout c-ok"><span class="lbl">Compaction is execute-compare + digest tested</span>
+<p><code class="ref">test_transform.cpp:69-85</code> checks, over random dense circuits, that Linear/Full
+compaction and <code>uncompact(Linear)</code> all compute identical outputs to the dense original and that
+<code>Full ≤ Linear &lt; dense</code> in wire count; <code class="ref">test_transform.cpp:98-106</code>
+forks-and-checks both fatal preconditions; <code class="ref">test_transform.cpp:108-121</code> repeats the
+execute-compare on the real <code>sha256_256</code> builtin.</p></div>
 
 <h2 id="validate">A.2 · Validation invariants</h2>
 <p><span class="tag">ir/validate.h</span></p>
-<p><code>validate_program</code> (<code class="ref">validate.h:19-79</code>) is the single structural validation path — run at
+<p><code>validate_program</code> (<code class="ref">validate.h:41-132</code>) is the single structural validation path — run at
 IR construction / file load / artifact validation boundaries, not during trusted replay. It calls the
 stack-wide fatal <code>error()</code> path on the first violation; rejection is always-on in Release but not
-catchable in-process. Invariants:</p>
+catchable in-process. Since <code class="ref">67642c2</code> it is a <b>two-mode function</b>: after the shared
+<code>num_inputs ≤ num_wires</code> check (<code class="ref">validate.h:43-44</code>) it branches on
+<code>p.wire_reuse != WireReuse::None</code> (<code class="ref">validate.h:50</code>). The dense
+(<code>None</code>) branch enforces:</p>
 <ol>
-<li><code>num_inputs ≤ num_wires</code> (<code class="ref">validate.h:20-22</code>).</li>
+<li><code>num_inputs ≤ num_wires</code> (<code class="ref">validate.h:43-44</code>, shared by both branches).</li>
 <li><b>Density</b>: <code>num_gates == num_wires − num_inputs</code> — every non-input wire produced exactly once,
-no holes (<code class="ref">validate.h:24-27</code>). This is what lets <code>num_wires</code> size the scratch
+no holes (<code class="ref">validate.h:95-98</code>). This is what lets <code>num_wires</code> size the scratch
 buffer exactly.</li>
-<li><b>Read-before-define / in-range reads</b> in topological order (<code class="ref">validate.h:39-43</code>).</li>
-<li><b>Canonical operands</b>: <code>Not</code> has <code>in1==0</code> (<code class="ref">validate.h:54-55</code>);
-<code>Const*</code> have <code>in0==in1==0</code> (<code class="ref">validate.h:58-59</code>).</li>
+<li><b>Read-before-define / in-range reads</b> in topological order (<code class="ref">validate.h:107-116</code>).</li>
+<li><b>Canonical operands</b>, shared helper <code>validate_gate_operands</code>
+(<code class="ref">validate.h:20-39</code>): <code>Not</code> has <code>in1==0</code>
+(<code class="ref">validate.h:26-27</code>); <code>Const*</code> have <code>in0==in1==0</code>
+(<code class="ref">validate.h:29-31</code>).</li>
 <li><b>Output validity</b>: each gate's <code>out</code> is in range, is not an input wire, and is defined exactly
-once (<code class="ref">validate.h:64-71</code>).</li>
-<li>Every output wire is in range and defined (<code class="ref">validate.h:74-78</code>).</li>
+once (<code class="ref">validate.h:117-124</code>).</li>
+<li>Every output wire is in range and defined (<code class="ref">validate.h:127-131</code>).</li>
 </ol>
-<div class="callout c-ok"><span class="lbl">Hardened against malformed headers</span>
-<p>The <code>defined_non_input</code> bitmap is sized to <code>num_wires − num_inputs</code> (not
+<p>The <b>reuse branch</b> (<code class="ref">validate.h:50-93</code>) deliberately <b>drops</b> the dense-count
+and single-definition checks — a reuse program rewrites the same wire id on purpose — and <b>keeps</b>
+in-range reads, written-before-read (<code class="ref">validate.h:73-76</code>),
+<code>out ≥ num_inputs</code> / <code>out &lt; num_wires</code> (<code class="ref">validate.h:82-85</code>),
+canonical operands, and written outputs (<code class="ref">validate.h:88-91</code>). It proves the program is
+<em>executable</em>, <b>not</b> that it is behaviorally equivalent to any dense source: Linear and Full are
+structurally identical here — the And-pinning distinction is a <em>producer</em> property this check cannot
+verify (comment, <code class="ref">validate.h:51-57</code>). Liveness-safety of a given reuse is the
+producer's contract (<code>ir/transform.h</code>), covered by execute-compare + digest tests, not by the
+validator.</p>
+<div class="callout c-ok"><span class="lbl">Hardened against malformed headers — both branches</span>
+<p>Dense branch: the <code>defined_non_input</code> bitmap is sized to <code>num_wires − num_inputs</code> (not
 <code>num_wires</code>), so a malformed file declaring a huge <code>num_inputs</code> cannot force a giant
-allocation during validation (<code class="ref">validate.h:30-33</code>). The dense-count check at
-<code class="ref">validate.h:24-27</code> runs <em>before</em> that allocation. Each invariant is independently
-exercised in <code class="ref">test_boolean_program.cpp:54-67</code>, and the huge-sparse-header guard at
-<code class="ref">test_boolean_program.cpp:121-130</code>.</p></div>
+allocation during validation (<code class="ref">validate.h:100-104</code>), and the dense-count check at
+<code class="ref">validate.h:95-98</code> runs <em>before</em> that allocation. Reuse branch, same discipline:
+an always-on bound <code>num_wires ≤ num_inputs + num_gates</code> (a reuse program never has <em>more</em>
+distinct ids than its dense equivalent) is rejected before any allocation
+(<code class="ref">validate.h:62-63</code>), and the <code>written[]</code> scratch tracks only non-input
+slots (<code class="ref">validate.h:64-68</code>). Each dense invariant is independently exercised in
+<code class="ref">test_boolean_program.cpp:76-86</code>, the huge-sparse-header guard at
+<code class="ref">test_boolean_program.cpp:140-149</code>, and the two reuse-path hostile headers (huge
+<code>num_wires</code> with zero inputs rejected up front; <code>num_inputs == num_wires ==
+0xFFFFFFFF</code> with no gates must load <em>cheaply</em> as a no-op, zero-sized <code>written[]</code>) at
+<code class="ref">test_boolean_program.cpp:151-180</code>. Reuse validation and its negative cases:
+<code class="ref">test_boolean_program.cpp:183-219</code>.</p></div>
 <div class="callout c-warn"><span class="lbl"><code>validate_program</code> is fatal even in Release</span>
 <p>The IR validator is unconditional — it is not guarded by <code>NDEBUG</code> — but it follows the same
 fail-fast model as the rest of emp-tool: <code>error()</code> prints the call site and terminates with
@@ -182,76 +252,105 @@ exception.</p></div>
 
 <h2 id="empbc">A.3 · The <code>.empbc</code> serialization format</h2>
 <p><span class="tag">ir/empbc.h</span></p>
-<p>The one native persisted format. Layout (<code class="ref">empbc.h:17-29</code>): magic <code>EMPB</code>,
-<code>version u16</code> (currently <code>1</code>), <code>index_width u8</code> (2 or 4), <code>flags u8</code>
-(reserved, must be 0), then <code>num_wires/num_inputs/num_outputs/num_gates</code> as u32, then gate records, then
-outputs. Indices are stored 16- or 32-bit on disk (the writer auto-selects u16 when <code>num_wires ≤ 0xFFFF</code>,
-<code class="ref">empbc.h:89</code>) but always decode into a uint32_t <code>BooleanProgram</code> — the compact width
-is a disk detail, never a second in-memory IR.</p>
+<p>The one native persisted format. Layout (<code class="ref">empbc.h:17-30</code>): magic <code>EMPB</code>,
+<code>version u16</code> (currently <code>1</code>), <code>index_width u8</code> (2 or 4), <code>flags u8</code>,
+then <code>num_wires/num_inputs/num_outputs/num_gates</code> as u32, then gate records, then
+outputs. Since <code class="ref">67642c2</code> the <code>flags</code> byte is no longer purely
+reserved-must-be-zero: <b>bits 0-1 carry the <code>WireReuse</code> mode</b> (0=None, 1=Linear, 2=Full;
+<code class="ref">empbc.h:21-22</code>, written at <code class="ref">empbc.h:98</code>); value 3 and bits 2-7
+remain reserved. Indices are stored 16- or 32-bit on disk (the writer auto-selects u16 when
+<code>num_wires ≤ 0xFFFF</code>, <code class="ref">empbc.h:90</code>) but always decode into a uint32_t
+<code>BooleanProgram</code> — the compact width is a disk detail, never a second in-memory IR.</p>
 <div class="callout c-ok"><span class="lbl">Hostile-input-safe parser</span>
-<p>A bounds-checked <code>Reader</code> (<code class="ref">empbc.h:59-75</code>) does fixed little-endian field reads
+<p>A bounds-checked <code>Reader</code> (<code class="ref">empbc.h:60-76</code>) does fixed little-endian field reads
 (never a struct overlay / <code>reinterpret_cast</code>, so it is endian- and layout-independent).
-<code>load_empbc</code> (<code class="ref">empbc.h:116-161</code>) checks magic / version / index_width /
-reserved-flags, performs an <b>overflow-checked exact size</b> equation in 64-bit
-(<code class="ref">empbc.h:137-141</code>, rejecting both truncation and trailing bytes), range-checks each op code
-(<code class="ref">empbc.h:150</code>), and runs a final <code>validate_program</code>
-(<code class="ref">empbc.h:159</code>). The writer <code>save_empbc</code> validates <em>first</em>
-(<code class="ref">empbc.h:88</code>) so a malformed program can't be silently truncated by the u16 writer. The
-malformed/truncated/trailing/bad-magic/bad-op cases are all exercised in
-<code class="ref">test_boolean_program.cpp:107-130</code>.</p></div>
+<code>load_empbc</code> (<code class="ref">empbc.h:117-165</code>) checks magic / version / index_width, rejects
+any unknown flags bits (<code>flags &amp; ~0x3u</code>) and the reserved <code>wire_reuse</code> value 3
+(<code class="ref">empbc.h:127-129</code>), performs an <b>overflow-checked exact size</b> equation in 64-bit
+(<code class="ref">empbc.h:141-145</code>, rejecting both truncation and trailing bytes), range-checks each op code
+(<code class="ref">empbc.h:154</code>), and runs a final <code>validate_program</code>
+(<code class="ref">empbc.h:163</code>). The flags check is fail-closed in both directions: a pre-67642c2 reader
+rejected <em>any</em> nonzero flags byte, so an old binary handed a Linear/Full-flagged file errors out rather
+than silently misinterpreting it. The writer <code>save_empbc</code> validates <em>first</em>
+(<code class="ref">empbc.h:89</code>) — for both dense and reuse programs — so a malformed program can't be
+silently truncated by the u16 writer. The malformed/truncated/trailing/bad-magic/bad-op cases are exercised in
+<code class="ref">test_boolean_program.cpp:125-149</code>; the reuse-mode roundtrip (flags byte preserves
+Linear/Full, bad flags rejected) at <code class="ref">test_boolean_program.cpp:183-219</code>; and a
+compact-program roundtrip <code>load_empbc(save_empbc(lin))</code> that preserves
+<code>wire_reuse == Linear</code> <em>and</em> execution behavior at
+<code class="ref">test_transform.cpp:87-96</code>.</p></div>
 <div class="callout c-audit"><span class="lbl">Minor forward-compat ambiguity</span>
-<p>The header <code>flags</code> byte must be 0 on read (<code class="ref">empbc.h:126</code>), but per-gate
-<b>reserved padding bytes are read without value-checking</b> (<code class="ref">empbc.h:152-153</code>) — a nonzero
+<p>The header <code>flags</code> byte is value-checked on read (unknown bits and the reserved mode value 3 are
+fatal, <code class="ref">empbc.h:127-129</code>), but per-gate
+<b>reserved padding bytes are read without value-checking</b> (<code class="ref">empbc.h:156-157</code>) — a nonzero
 gate-record reserved byte is silently accepted. <code>load_empbc_file</code> reads the whole file into memory via
-<code>ftell</code> before the exact-size check (<code class="ref">empbc.h:167-182</code>).</p></div>
+<code>ftell</code> before the exact-size check (<code class="ref">empbc.h:173-185</code>).</p></div>
 
 <h2 id="passes">A.4 · Analysis passes</h2>
 <p><span class="tag">ir/passes.h</span></p>
 <p>Protocol-neutral pure-function analyses over a materialized <code>BooleanProgram</code>, each computed once and optionally
 cached on the frontend <code>Circuit</code>. Per-wire scratch (first-def / last-use / level) uses signed vectors
 with a <code>−1</code> "none" sentinel — local analysis state, never serialized
-(<code class="ref">passes.h:8-12</code>).</p>
+(<code class="ref">passes.h:11-15</code>).</p>
 <ul>
-<li><b><code>count_pass</code></b> (<code class="ref">passes.h:36-52</code>) → AND/XOR/NOT/CONST tallies plus
-wire/gate/input/output counts (the stored-program analogue of <code>CountCtx</code>).</li>
-<li><b><code>liveness_pass</code></b> (<code class="ref">passes.h:59-72</code>) → per-wire <code>last_use</code> +
+<li><b><code>count_pass</code></b> (<code class="ref">passes.h:49-65</code>) → AND/XOR/NOT/CONST tallies plus
+wire/gate/input/output counts (the stored-program analogue of <code>CountCtx</code>). The one pass with no
+per-wire array — it tallies only, so it accepts any <code>WireReuse</code> mode.</li>
+<li><b><code>liveness_pass</code></b> (<code class="ref">passes.h:72-86</code>) → per-wire <code>last_use</code> +
 <code>first_def</code>.</li>
-<li><b><code>schedule_pass</code></b> (<code class="ref">passes.h:79-104</code>) → <b>AND-depth</b> of each wire
+<li><b><code>schedule_pass</code></b> (<code class="ref">passes.h:93-119</code>) → <b>AND-depth</b> of each wire
 (<code>Const=0</code>; <code>Not</code> inherits its input level; <code>Xor</code> inherits the max input level;
-<code>And = 1 + max(level(in0),level(in1))</code>, <code class="ref">passes.h:86-93</code>) and AND gates grouped by
+<code>And = 1 + max(level(in0),level(in1))</code>, <code class="ref">passes.h:101-108</code>) and AND gates grouped by
 level — metadata the scheduled replay path can use for bulk <code>and_many</code> batching.</li>
-<li><b><code>layout_pass</code></b> (<code class="ref">passes.h:118-148</code>) → <code>frees[gi]</code> (slots
+<li><b><code>layout_pass</code></b> (<code class="ref">passes.h:133-164</code>) → <code>frees[gi]</code> (slots
 recyclable after gate <code>gi</code>, with output wires excluded as roots) plus an <b>output-rooted dead-code-
 elimination sizing</b> (backward reachability counting <code>reachable_wire</code> / <code>reachable_and</code>,
-<code class="ref">passes.h:130-146</code>). Note this <em>reports</em> DCE sizes but does <b>not</b> rewrite the
+<code class="ref">passes.h:146-162</code>). Note this <em>reports</em> DCE sizes but does <b>not</b> rewrite the
 program — execution still walks all gates.</li>
 </ul>
+<div class="callout c-ok"><span class="lbl">Dense-only passes now refuse a reuse program (67642c2)</span>
+<p><code>require_dense(p, who)</code> (<code class="ref">passes.h:31-33</code>) is a fatal, always-on
+<code>error()</code> if <code>p.wire_reuse != WireReuse::None</code>, called at the top of
+<code>liveness_pass</code> (<code class="ref">passes.h:73</code>), <code>schedule_pass</code>
+(<code class="ref">passes.h:94</code>), and <code>layout_pass</code> (<code class="ref">passes.h:134</code>).
+Rationale (<code class="ref">passes.h:27-30</code>): these passes index per-wire arrays last-writer-wins; on a
+reused id they would silently collapse distinct lifetimes and misorder replay — the guard converts that
+correctness bug into a loud rejection. Exercised (fork-based <code>dies()</code>) by feeding
+<code>make_compact(sample(), Linear)</code> to all three passes,
+<code class="ref">test_passes.cpp:191-195</code>. Compaction itself computes liveness on its <em>dense</em>
+input, never its reuse output (<code class="ref">transform.h:45</code>).</p></div>
 
 <h2 id="schedule">A.5 · Scheduled bulk replay</h2>
 <p><span class="tag">ir/schedule.h</span></p>
 <p>Round-sensitive bulk replay for protocols whose latency depends on minimizing AND-depth: bucket all gates by
 their output wire's AND-depth, then batch each level's ready AND gates into one <code>and_many</code> call and run
-that same level's non-AND gates in emission order (<code class="ref">schedule.h:77-99</code>). <b>Correctness is
+that same level's non-AND gates in emission order (<code class="ref">schedule.h:78-100</code>). <b>Correctness is
 identical to the scalar <code>execute_program</code></b>; only batching changes. A <code>ScheduledPlan</code>
 (<code class="ref">schedule.h:28-39</code>) caches gate indices per AND-depth plus the program's identity
 (<code>num_inputs/num_wires/num_gates/digest</code>) for staleness checking. Per level: collect the level's AND
 operands/outputs → one <code>and_many</code> → run the level's <code>Const</code>/<code>Xor</code>/<code>Not</code>
-gates in emission order.</p>
+gates in emission order. Since <code class="ref">67642c2</code> the first check in
+<code>scheduled_execute_program</code> is <code>circuit::require_dense(p, ...)</code>
+(<code class="ref">schedule.h:63</code>) — an always-on fatal rejection of a
+<code>WireReuse::Linear/Full</code> program handed to the scheduler.</p>
 <div class="callout c-warn"><span class="lbl">Schedule digest guard is debug-only</span>
 <p>Three staleness guards: the input count and the plan dimensions
 (<code>num_inputs/num_wires/num_gates</code>) are <b>always-on</b> <code>error()</code> checks
-(<code class="ref">schedule.h:63-67</code>), but the strong "same shape, different gate stream" guard
+(<code class="ref">schedule.h:64-68</code>), but the strong "same shape, different gate stream" guard
 <code>plan.digest == digest_program(p)</code> is wrapped in <code><b>#ifndef NDEBUG</b></code>
-(<code class="ref">schedule.h:68-71</code>). In a Release build, a <code>ScheduledPlan</code> whose dimensions match a
+(<code class="ref">schedule.h:69-72</code>). In a Release build, a <code>ScheduledPlan</code> whose dimensions match a
 <em>different but same-shaped</em> program would silently misexecute. Whether reachable depends on the backend's
 plan-caching discipline. (Scheduled == scalar replay is cross-checked on real AES/SHA/SHA3 circuits,
-<code class="ref">test_builtin_circuits.cpp:48-55</code>.)</p></div>
+<code class="ref">test_builtin_circuits.cpp:48-52</code>.)</p></div>
 
 <h2 id="visit-exec">A.6 · The single gate-walk &amp; execution</h2>
 <p><span class="tag">ir/visit.h</span> <span class="tag">ir/execute.h</span></p>
 <p><code>for_each_gate(p, visitor)</code> (<code class="ref">visit.h</code>) is <b>one of several</b> defaultless
-op-switches (the others in <code>validate.h</code> / <code>schedule.h</code> / <code>passes.h</code> / <code>digest.h</code>) — adding a new <code>Op</code> is a <code>-Werror=switch</code> compile error at every site, never a silent fallthrough.
-Execution has two layers:</p>
+op-switches (the others in <code>schedule.h</code> / <code>passes.h</code> / <code>digest.h</code>) — adding a new <code>Op</code> is a <code>-Werror=switch</code> compile error at every site, never a silent fallthrough.
+The one <b>sanctioned</b> <code>default:</code> lives in <code>validate_gate_operands</code>
+(<code class="ref">validate.h:33-37</code>): there the op may be a raw byte from a loaded file, so an
+out-of-range value is a runtime condition (fatal <code>error()</code>), not a missed enum case
+(<code class="ref">visit.h:5-10</code>). Execution has two layers:</p>
 <ul>
 <li><b>Low level</b> <code>circuit::execute_program&lt;Wire,Dispatcher&gt;</code>
 (<code class="ref">execute.h:44-70</code>) — seed input slots, walk once via <code>for_each_gate</code> through a
@@ -282,11 +381,11 @@ runs <code>validate_program</code> and checks <code>sum(arg_widths) == num_input
 <code>return_width == outputs.size()</code> in 64-bit. Big circuits (AES-128, SHA-256, SHA3-256, and the per-width
 float ops) ship as <code>&lt;name&gt;.empbc</code> under <code>ir/files/</code> (63 committed assets) and are
 loaded/validated/cached once behind a mutex-guarded <code>std::map</code>
-(<code class="ref">builtins.cpp:16-34</code>, and <code>float_circuit</code> at
-<code class="ref">builtins.cpp:36-56</code>) then replayed through any context. The <code>aes128</code> builtin has
+(<code class="ref">builtins.cpp:15-30</code>, and <code>float_circuit</code> at
+<code class="ref">builtins.cpp:32-47</code>) then replayed through any context. The <code>aes128</code> builtin has
 256 inputs (<code>pt ‖ key</code>) and 128 outputs (<code class="ref">test_builtin_circuits.cpp:63-64</code>).</p>
 <div class="callout c-warn"><span class="lbl">Asset loading: structurally safe, not authenticated — and <code>EMP_CIRCUIT_DIR</code> is honored first</span>
-<p>Asset resolution searches, in order (<code class="ref">assets.cpp:34-44</code>): <code>EMP_CIRCUIT_DIR</code> (env
+<p>Asset resolution searches, in order (<code class="ref">assets.cpp:35-45</code>): <code>EMP_CIRCUIT_DIR</code> (env
 var) → build-tree dir → install-tree dir. In a deployment where the environment is attacker-influenced, this allows
 <b>redirecting builtin-circuit loads to an attacker-chosen directory</b>. The <code>.empbc</code> loader's
 hostile-input safety is the only mitigation: a substituted file is still structurally validated, but it could be a
@@ -295,7 +394,7 @@ hostile-input safety is the only mitigation: a substituted file is still structu
 <div class="callout c-ok"><span class="lbl">IR-replay path proven faithful</span>
 <p>Each shipped builtin, replayed through <code>ClearCtx</code> (scalar and scheduled), is compared
 <b>bit-for-bit</b> against the context-native crypto kernel on random input
-(<code class="ref">test_builtin_circuits.cpp:24-89</code>): the test cross-checks <code>aes128</code>,
+(<code class="ref">test_builtin_circuits.cpp:26-91</code>): the test cross-checks <code>aes128</code>,
 <code>sha256_256</code>, and <code>sha3_256_256</code> against the in-circuit kernels and asserts
 scalar-replay == kernel and scheduled-replay == scalar.</p></div>
 
@@ -324,12 +423,15 @@ concept BooleanContext =
 (e.g. <code>a|b = a^b^(a&amp;b)</code>).</li>
 </ul>
 <p>A refinement <code>BulkBooleanContext</code> adds <code>and_many(o, a, b, n)</code> to evaluate a whole AND
-layer at once (<code class="ref">concept.h:32-37</code>); the scheduler needs only this, and the win materializes
+layer at once (<code class="ref">concept.h:32-40</code>); the scheduler needs only this, and the win materializes
 only when a backend overrides the default scalar loop.</p>
 
 <h2 id="taxonomy">B.2 · The context taxonomy</h2>
 <p>Four reusable in-tree realizations, each a tiny struct <code>static_assert</code>-ed to satisfy
-<code>BooleanContext</code>, each giving a <em>different interpretation</em> of the same kernel — plus the
+<code>BooleanContext</code>, each giving a <em>different interpretation</em> of the same kernel — plus an
+opt-in fifth, <code>ComposeCtx</code> (<a href="#composectx">§B.2a</a>, added by
+<code class="ref">67642c2</code> and deliberately <em>not</em> pulled in by the
+<code>ir/context/context.h</code> umbrella) — plus the
 <code>block</code>-valued garbling backends downstream protocol repos supply.</p>
 <table class="grid">
 <tr><th>Context</th><th><code>Wire</code></th><th>Purpose</th><th>Gate semantics</th></tr>
@@ -337,6 +439,7 @@ only when a backend overrides the default scalar loop.</p>
 <tr><td><code>CountCtx</code> <span class="tag">count.h</span></td><td><code>uint8_t</code></td><td>Gate counting</td><td>increment counters; dedups the two constants to match Record</td></tr>
 <tr><td><code>DigestCtx</code> <span class="tag">digest.h</span></td><td><code>uint32_t</code> id</td><td>Fingerprint / determinism hash</td><td>FNV-1a fold of <code>(op,in0,in1,out)</code></td></tr>
 <tr><td><code>RecordCtx</code> <span class="tag">record.h</span></td><td><code>uint32_t</code> id</td><td>Emit an IR <code>BooleanProgram</code></td><td>append a <code>Gate</code></td></tr>
+<tr><td><code>ComposeCtx</code> <span class="tag">compose.h</span> (opt-in)</td><td><code>uint32_t</code> id</td><td>Record a hierarchical <code>ComposePlan</code> (§B.2a)</td><td>append a glue <code>Gate</code>, or one opaque <code>call_unit</code> instance</td></tr>
 <tr><td>garbling backend</td><td><code>block</code></td><td>Real 2PC/ZK protocol (downstream)</td><td>half-gate / privacy-free garble/eval (see <a href="01-runtime.html">Report 1</a>)</td></tr>
 </table>
 <p><b>ClearCtx</b> (<code class="ref">clear.h:16-26</code>): <code>not_gate</code> XORs only the low bit
@@ -352,6 +455,64 @@ reserved <em>before</em> any gate — <code>external_input(n)</code> reserves <c
 recorder cannot hand out malformed IR. <b>DigestCtx</b> (<code class="ref">digest.h:20-51</code>) mirrors RecordCtx's
 wire numbering and const-dedup precisely so the two digests agree.</p>
 
+<h2 id="composectx">B.2a · <code>ComposeCtx</code> — recording a hierarchical composition</h2>
+<p><span class="tag">ir/context/compose.h</span> <span class="tag">circuits/frontend/compose.h</span></p>
+<p>Added by <code class="ref">67642c2</code>. <code>ComposeCtx</code> satisfies <code>BooleanContext</code>
+(<code>static_assert</code>, <code class="ref">compose.h:103</code>) with <code>Wire = uint32_t</code>, but
+unlike the four contexts above it records a <b>two-level, hierarchical</b> circuit: ordinary "glue" gates
+interleaved with <b>opaque unit calls</b>, in emission order, as a
+<code>ComposePlan{num_inputs, num_wires, events[], instances[], outputs[]}</code>
+(<code class="ref">compose.h:44-50</code>). Each <code>ComposeInstance</code>
+(<code class="ref">compose.h:28-32</code>) is a <b>reference</b> — a <code>const BooleanProgram*</code>, not a
+copy — plus its wiring (<code>in_ids</code>/<code>out_ids</code>); <code>call_unit(unit, in, n)</code>
+(<code class="ref">compose.h:84-93</code>) records a call in O(width), never O(unit gate count). Both headers
+are <b>opt-in</b>: <code>ir/context/context.h</code> still lists only concept/clear/count/digest/record, and
+<code>circuits/frontend/frontend.h</code> includes only <code>circuit_fn.h</code> + <code>rec.h</code>.</p>
+<ul>
+<li><b>RecordCtx discipline shared.</b> <code>external_input(n)</code> must run before any gate <em>or
+call</em> (<code>inputs_closed</code> flips on the first <code>alloc_()</code>/<code>call_unit</code>,
+<code class="ref">compose.h:59-69</code>, <code class="ref">compose.h:85</code>; always-on <code>error()</code>), and the two constants are deduped
+via cached <code>c0</code>/<code>c1</code> ids (<code class="ref">compose.h:56</code>,
+<code class="ref">compose.h:72-76</code>).</li>
+<li><b>No new call verb.</b> The frontend's <code>run(ctx, circuit, args...)</code> is now opaque-or-inline
+purely by the type of <code>ctx</code>: <code>if constexpr
+(std::same_as&lt;remove_cvref_t&lt;Ctx&gt;, ComposeCtx&gt;)</code> it records one opaque instance via
+<code>call_unit</code> (<code class="ref">circuit_fn.h:281-284</code>); on every other context it takes the
+previously documented inline path (<code>execute_program</code> + <code>ProgramWorkspace</code>). The
+<code>EMP_CONTEXT_CHECKS</code> argument-context check that used to run unconditionally before replay now
+runs only inside the inline (else) branch (<code class="ref">circuit_fn.h:286-290</code>) — functionally
+unchanged for existing callers.</li>
+<li><b>Recording a composition.</b> <code>compose&lt;ArgVs...&gt;(body)</code>
+(<code class="ref">frontend/compose.h:37-50</code>) records an explicit-ctx body over a fresh
+<code>ComposeCtx</code> (one external-input window per <code>ArgV</code> via
+<code>make_compose_arg</code>, <code class="ref">frontend/compose.h:25-31</code>) and returns the
+<code>ComposePlan</code>. <code>ArgVs</code> must satisfy <code>RecordValue</code> — the same constraint
+<code>compile()</code> imposes.</li>
+<li><b>Fallback / oracle.</b> <code>flatten_compose(plan)</code> (<code class="ref">compose.h:111-146</code>)
+materializes the full dense <code>BooleanProgram</code> by inlining every instance's referenced unit
+(O(total flattened gates)) and validates the result — the generic fallback for a backend with no
+on-the-fly flattener and the oracle the fast path is checked against. The intended fast path (a multi-pass
+backend, per <code class="ref">docs/composition.md</code> currently only emp-ag2pc's
+<code>run_compose</code>) replays each instance's gate stream on the fly and never materializes the
+flattened program; no in-tree emp-tool backend consumes plans yet.</li>
+<li><b>Caller obligations.</b> Units should be <code>WireReuse::Linear</code> for a multi-pass-backend
+lowering (<code class="ref">frontend/compose.h:12</code>) — <code>ComposeCtx</code> does not check this
+structurally beyond <code>validate_program</code>'s generic reuse checks. Nested / multi-level composition
+is not yet supported: a unit whose body itself called <code>run(ctx, subunit)</code> had the subunit
+inlined at <em>compile</em> time (<code class="ref">docs/composition.md:120-131</code>).</li>
+</ul>
+<div class="callout c-ok"><span class="lbl">Hierarchy + function equality tested</span>
+<p><code class="ref">test_compose.cpp:43-80</code> checks two shapes — a 3-call chain and a 2-call SIMD+glue
+body: the plan records exactly N instances (<code>plan.events.size() == 3</code> for the chain, i.e.
+O(#instances), not flattened gates), and <code>flatten_compose(plan)</code> computes the identical function
+to compiling the same body with ordinary <code>compile()</code> (which inlines) over random inputs.</p></div>
+<div class="callout c-audit"><span class="lbl">Non-owning unit references</span>
+<p>A <code>ComposeInstance</code> holds a raw <code>const BooleanProgram*</code>
+(<code class="ref">compose.h:29</code>): a <code>ComposePlan</code> is only valid while every referenced unit
+outlives it. Nothing pins or copies the unit — a plan that outlives its <code>Circuit</code> objects dangles.
+An auditor of a consuming backend should confirm unit lifetime is anchored for the plan's whole replay
+window.</p></div>
+
 <h2 id="checks">B.3 · Cross-context checks &amp; the digest duality</h2>
 <p><span class="tag">ir/context/checks.h</span> <span class="tag">ir/context/digest.h</span></p>
 <div class="callout c-warn"><span class="lbl">Cross-context checks are debug-only by default</span>
@@ -364,11 +525,12 @@ with <code>-DEMP_CONTEXT_CHECKS=0</code>. In a Release build with no opt-in, <b>
 different contexts is unchecked</b> — most dangerous for id-based wires (two <code>RecordCtx</code>es both start ids
 at 0 and silently alias).</p></div>
 <div class="callout c-audit"><span class="lbl">Digest encoder duality</span>
-<p><code>DigestCtx</code> and the standalone <code>digest_program</code> (<code class="ref">digest.h:59-69</code>) map
-ops to integers independently (the gate stream is hashed as <code>And=0…Const1=4</code>, with the same const-dedup
+<p><code>DigestCtx</code> and the standalone <code>digest_program</code> (<code class="ref">digest.h:59-78</code>) map
+ops to integers independently (the gate stream is hashed as <code>And=0…Const1=4</code> in a defaultless switch at
+<code class="ref">digest.h:67-74</code>, with the same const-dedup
 and the same <code>external_input(num_inputs)</code> prefix mix at <code class="ref">digest.h:62</code>) — they
-<b>MUST stay in sync</b> (the header comment flags this at <code class="ref">digest.h:8-9</code>). Divergence would
-silently break determinism/staleness checks. <code>digest_source</code> (<code class="ref">digest.h:75-83</code>)
+<b>MUST stay in sync</b> (the header comment flags this at <code class="ref">digest.h:4-9</code>). Divergence would
+silently break determinism/staleness checks. <code>digest_source</code> (<code class="ref">digest.h:84-92</code>)
 streams a body through a <code>DigestCtx</code> and equals <code>digest_program</code> of the program the body
 records — the basis for the frontend's "recording is deterministic" test
 (<code class="ref">test/circuits/test_circuit_fn.cpp</code>). The digest is also the staleness guard on cached schedules
@@ -382,7 +544,7 @@ records — the basis for the frontend's "recording is deterministic" test
 from raw <code>Ctx::Wire</code>, rebindable to another context, and reporting its own context pointer. It is the
 context-free vocabulary the IR execution and session layers speak; it names <b>no</b> concrete value family
 (<code>Bit</code>/<code>UInt</code>/<code>Int</code>/<code>Float</code>/<code>BitVec</code>) and no protocol
-(<code class="ref">wire_value.h:4-12</code>). The contract is split into a structural <code>WireBundle</code> and the codec-adding <code>WireValue</code> (<code class="ref">wire_value.h</code>):</p>
+(<code class="ref">wire_value.h:4-31</code>). The contract is split into a structural <code>WireBundle</code> and the codec-adding <code>WireValue</code> (<code class="ref">wire_value.h</code>):</p>
 <pre><code>template &lt;class V_&gt;
 concept WireBundle =                                                    // what EXECUTION needs (no codec)
     requires { typename V::Wire; typename V::context_type; } &amp;&amp;
@@ -412,7 +574,7 @@ through the runtime-width <code>input</code>/<code>reveal</code> overloads — o
 </ul>
 <p>Every requirement is spelled through <code>std::decay_t&lt;V_&gt;</code> so the concept is stable under reference
 qualification. A convenience <code>is_wire_value_v&lt;V&gt;</code> variable template
-(<code class="ref">wire_value.h:54</code>) gives the boolean form. The frontend keeps a stricter
+(<code class="ref">wire_value.h:77</code>) gives the boolean form. The frontend keeps a stricter
 <code>RecordValue</code> concept (<code class="ref">circuit_fn.h</code>) that <b>refines</b>
 <code>WireBundle</code> by additionally requiring <code>context_type == RecordCtx</code> (no clear codec is needed) — see
 <a href="03-circuits.html">Report 3</a>.</p>
@@ -438,13 +600,13 @@ template &lt;class S&gt; concept DirectSession =                   // + a direct
 template &lt;class S&gt; concept CheckpointingSession =            // + a checkpoint() barrier
     Session&lt;S&gt; &amp;&amp; requires(S&amp; s) { s.checkpoint(); };</code></pre>
 <ul>
-<li><b><code>Session</code></b> (<code class="ref">session.h:26-28</code>) is the floor: it reports a
+<li><b><code>Session</code></b> (<code class="ref">session.h:36-38</code>) is the floor: it reports a
 <code>party()</code> convertible to <code>int</code>. Nothing else is mandatory.</li>
 <li><b><code>DirectSession</code></b> (<code class="ref">session.h</code>) adds a <code>ctx_t</code> type
 (itself a <code>BooleanContext</code>) reachable via <code>ctx()</code> — the gate context operator-mode
 circuits are built over. A multipass protocol may own many internal pass contexts; <code>ctx_t</code> is only
 the direct one.</li>
-<li><b><code>CheckpointingSession</code></b> (<code class="ref">session.h:39-42</code>) is an <b>optional</b>
+<li><b><code>CheckpointingSession</code></b> (<code class="ref">session.h:49-52</code>) is an <b>optional</b>
 refinement for sessions carrying cross-call materialized state (direct / multi-pass protocols where wire labels
 must survive across invocations); it adds a <code>checkpoint()</code> barrier. A stateless session (e.g.
 <code>ClearSession</code>) has no such barrier and does not model this concept.</li>
@@ -480,10 +642,10 @@ always-populated optional.</p>
 <li><b><code>ctx()</code></b> returns <code>ctx_t&amp;</code>
 (<code class="ref">clear_session.h</code>) — the gate context for value construction that is not I/O (public
 constants, crypto kernels).</li>
-<li><b><code>party()</code></b> reports <code>PUBLIC</code> (<code class="ref">clear_session.h:48</code>) — plaintext
+<li><b><code>party()</code></b> reports <code>PUBLIC</code> (<code class="ref">clear_session.h:49</code>) — plaintext
 has no private party, so <code>PUBLIC</code> is the universal-knowledge convention.</li>
 <li><b><code>reveal_t&lt;V&gt;</code></b> is <code>std::optional&lt;typename V::clear_t&gt;</code>
-(<code class="ref">clear_session.h:45</code>); ClearSession always knows the value, so its optional is always
+(<code class="ref">clear_session.h:46</code>); ClearSession always knows the value, so its optional is always
 populated, for every recipient.</li>
 </ul>
 <p><b>Owner / recipient validation.</b> <code>input(owner, value)</code> and <code>reveal(value, recipient)</code>
@@ -510,12 +672,15 @@ on <code>circuits/</code>.</p></div>
 <table class="grid">
 <tr><th>#</th><th>Item</th><th>Where</th><th>Note</th></tr>
 <tr><td>1</td><td>Cross-context checks debug-only by default</td><td><code class="ref">checks.h:15-21</code></td><td>Silent corruption in Release for id-based/stateful contexts; opt back in with <code>-DEMP_CONTEXT_CHECKS=1</code></td></tr>
-<tr><td>2</td><td>Schedule digest guard debug-only</td><td><code class="ref">schedule.h:68-71</code></td><td>Same-shaped stale plan can misexecute in Release; dimension/count guards stay always-on</td></tr>
-<tr><td>3</td><td><code>EMP_CIRCUIT_DIR</code> honored first; no content authentication on <code>.empbc</code></td><td><code class="ref">assets.cpp:37-44</code></td><td>Attacker-controlled env can redirect builtin loads to a different valid circuit; structural validation is the only mitigation</td></tr>
-<tr><td>4</td><td>Digest encoder duality must stay in lockstep</td><td><code class="ref">digest.h:8-9</code>, <code class="ref">digest.h:59-69</code></td><td>Divergence silently breaks determinism / schedule-staleness checks</td></tr>
-<tr><td>5</td><td><code>.empbc</code> gate-record reserved bytes read but not value-checked</td><td><code class="ref">empbc.h:152-153</code></td><td>Minor forward-compat ambiguity (header <code>flags</code> <em>is</em> checked)</td></tr>
+<tr><td>2</td><td>Schedule digest guard debug-only</td><td><code class="ref">schedule.h:69-72</code></td><td>Same-shaped stale plan can misexecute in Release; dimension/count guards stay always-on, and since <code class="ref">67642c2</code> so does <code>require_dense</code> (<code class="ref">schedule.h:63</code>)</td></tr>
+<tr><td>3</td><td><code>EMP_CIRCUIT_DIR</code> honored first; no content authentication on <code>.empbc</code></td><td><code class="ref">assets.cpp:35-45</code></td><td>Attacker-controlled env can redirect builtin loads to a different valid circuit; structural validation is the only mitigation</td></tr>
+<tr><td>4</td><td>Digest encoder duality must stay in lockstep</td><td><code class="ref">digest.h:4-9</code>, <code class="ref">digest.h:59-78</code></td><td>Divergence silently breaks determinism / schedule-staleness checks</td></tr>
+<tr><td>5</td><td><code>.empbc</code> gate-record reserved bytes read but not value-checked</td><td><code class="ref">empbc.h:156-157</code></td><td>Minor forward-compat ambiguity. The header <code>flags</code> byte <em>is</em> checked — since <code class="ref">67642c2</code> it is a real two-bit <code>WireReuse</code> mode field (unknown bits and value 3 fatal, <code class="ref">empbc.h:127-129</code>), no longer reserved-must-be-zero</td></tr>
 <tr><td>6</td><td><code>execute_program</code> trusts prior validation</td><td><code class="ref">execute.h:102-122</code></td><td>Re-checks only I/O counts; an unvalidated program reaching it reads out-of-range slots</td></tr>
-<tr><td>7</td><td><code>validate_program</code> is fatal in Release (informational)</td><td><code class="ref">validate.h:19-79</code></td><td>Structural validation survives <code>NDEBUG</code> and aborts through <code>error()</code> — the safety baseline, not a risk per se</td></tr>
+<tr><td>7</td><td><code>validate_program</code> is fatal in Release (informational)</td><td><code class="ref">validate.h:41-132</code></td><td>Structural validation survives <code>NDEBUG</code> and aborts through <code>error()</code> — the safety baseline, not a risk per se</td></tr>
+<tr><td>8</td><td>Reuse validation proves executability, not equivalence — and cannot verify And-pinning</td><td><code class="ref">validate.h:50-57</code></td><td>New with <code class="ref">67642c2</code>: Linear and Full are structurally identical to the validator; a loaded file flagged Linear that in fact recycles And-output ids passes <code>validate_program</code>, and a multi-pass backend trusting the flag would read clobbered stored state. Liveness-safety is the producer's contract (<code class="ref">transform.h:39-86</code>); consumers of third-party compact <code>.empbc</code> should <code>uncompact</code>+recompact or execute-compare</td></tr>
+<tr><td>9</td><td><code>ComposePlan</code> holds non-owning unit pointers</td><td><code class="ref">compose.h:28-32</code></td><td>New with <code class="ref">67642c2</code>: each instance is a raw <code>const BooleanProgram*</code>; a plan outliving a referenced unit dangles. Unit-lifetime anchoring is the composing caller's / consuming backend's obligation</td></tr>
+<tr><td>10</td><td>Dense-only passes guarded against reuse programs (informational, resolves a 67642c2-introduced hazard)</td><td><code class="ref">passes.h:31-33</code>, <code class="ref">schedule.h:63</code></td><td><code>require_dense</code> makes liveness/schedule/layout and the scheduler reject a <code>WireReuse</code> program always-on and fatally, instead of silently collapsing reused lifetimes; exercised at <code class="ref">test_passes.cpp:191-195</code></td></tr>
 </table>
 
 </main>

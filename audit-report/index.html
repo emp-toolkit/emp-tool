@@ -60,25 +60,30 @@ flagged inline (security · footgun · auditor-scrutiny · contract).
   <a class="card" href="01-runtime.html">
     <div class="num">Report 1 · runtime</div>
     <h2>Runtime substrate</h2>
-    <p>The SIMD <code>block</code> type &amp; helpers; AES-128 key schedule / ECB, the fixed-key PRP, AES-CTR PRG,
-    CCRH / MITCCRH, GF(2¹²⁸) f2k, SHA-256 &amp; P-256 (OpenSSL), the random oracle; the NetIO / TLSIO / TraceIO
-    channels; and the half-gate / privacy-free garbling leaf primitives.</p>
+    <p>The SIMD <code>block</code> type &amp; helpers plus the six-tier 128×128 bit-transpose family
+    (<code>transpose.hpp</code>); AES-128 key schedule / ECB, the fixed-key PRP, AES-CTR PRG, CCRH / MITCCRH
+    (incl. <code>hash_cir_fixed</code>), GF(2¹²⁸) f2k (SSE2/PCLMUL + AVX-512 packing), hash
+    (<code>HashT</code>: SHA-256 default / optional BLAKE3) &amp; P-256 (OpenSSL), the random oracle; the
+    NetIO / TLSIO / TraceIO channels; and the half-gate / privacy-free garbling leaf primitives.</p>
   </a>
   <a class="card" href="02-ir.html">
     <div class="num">Report 2 · ir</div>
     <h2>Boolean IR, contexts &amp; sessions</h2>
-    <p>The C++20 <code>BooleanContext</code> concept and the reusable contexts (Clear / Count / Digest / Record),
-    the flat <code>.empbc</code> IR (program / validate / visit / passes / schedule / execute / artifact / assets),
-    the generic <code>WireValue</code> concept, and the <code>Session</code> / <code>DirectSession</code> /
-    <code>SessionIO</code> / <code>CheckpointingSession</code> contracts + <code>ClearSession</code>.</p>
+    <p>The C++20 <code>BooleanContext</code> concept and the reusable contexts (Clear / Count / Digest / Record,
+    plus the opt-in <code>ComposeCtx</code>), the flat <code>.empbc</code> IR (program / validate / visit / passes /
+    schedule / execute / artifact / assets), the <code>WireReuse</code> wire-id-reuse model and
+    <code>make_compact</code>/<code>uncompact</code> compaction transform, the generic <code>WireValue</code>
+    concept, and the <code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> /
+    <code>CheckpointingSession</code> contracts + <code>ClearSession</code>.</p>
   </a>
   <a class="card" href="03-circuits.html">
     <div class="num">Report 3 · circuits</div>
     <h2>Circuit value objects &amp; frontend</h2>
     <p>The context-bound typed values <code>Bit</code> / <code>BitVec</code> / <code>UInt</code> / <code>Int</code>
     / IEEE <code>Float</code>, the numeric kernels and oblivious sort, the in-circuit AES-128 / SHA-256 / Keccak,
-    and the compile-once / run-on-any-context frontend (<code>compile</code> / <code>run</code> /
-    <code>RecordValue</code> / <code>rec::</code>).</p>
+    and the compile-once / run-on-any-context frontend (<code>compile</code> / <code>compile_linear</code> /
+    <code>run</code> / <code>RecordValue</code> / <code>rec::</code>) including by-reference composition
+    (<code>run</code> is opaque on a <code>ComposeCtx</code>).</p>
   </a>
 </div>
 

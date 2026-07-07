@@ -108,7 +108,7 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
 
 <div class="meta">
 <table>
-<tr><td>Report</td><td>High-level overview — the on-ramp to the four detailed sub-reports below</td></tr>
+<tr><td>Report</td><td>High-level overview — the on-ramp to the three detailed sub-reports below</td></tr>
 <tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
 <tr><td>License</td><td>Apache-2.0 (Copyright 2026 Xiao Wang)</td></tr>
 <tr><td>Versioning</td><td><b>Stable:</b> tag <code>0.3.0</code> / branch <code>v0.3.x</code> (backported fixes). <b>This tree:</b> a pre-alpha development branch — CMake metadata reads <code>1.0.0</code> but the API is <b>not frozen</b> (headers/names may still move).</td></tr>
@@ -118,14 +118,14 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="n">~70</div><div class="l">first-party headers (~7.4K LOC)</div></div>
+  <div class="stat"><div class="n">77</div><div class="l">first-party headers (~9.7K LOC)</div></div>
   <div class="stat"><div class="n">3</div><div class="l">compiled .cpp units</div></div>
   <div class="stat"><div class="n">3</div><div class="l">architectural layers</div></div>
-  <div class="stat"><div class="n">4</div><div class="l">reusable contexts</div></div>
+  <div class="stat"><div class="n">4+1</div><div class="l">reusable contexts (+ComposeCtx)</div></div>
   <div class="stat"><div class="n">5</div><div class="l">typed value families</div></div>
   <div class="stat"><div class="n">63</div><div class="l">.empbc circuit assets</div></div>
-  <div class="stat"><div class="n">34</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
-  <div class="stat"><div class="n">12</div><div class="l">design docs</div></div>
+  <div class="stat"><div class="n">36</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
+  <div class="stat"><div class="n">13</div><div class="l">design docs</div></div>
 </div>
 
 <div class="toc">
@@ -140,17 +140,21 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
 <li><a href="#docs">Docs &amp; tests</a></li>
 <li><a href="#ecosystem">Ecosystem &amp; downstream</a></li>
 <li><a href="#security">Security posture at a glance</a></li>
-<li><a href="#reports">The four detailed reports</a></li>
+<li><a href="#reports">The three detailed reports</a></li>
 <li><a href="#caveats">Repository caveats</a></li>
 </ol>
 </div>
 
 <!-- ===================================================================== -->
 <h2 id="what">1 · What emp-tool is</h2>
-<p>Mechanically the repo is small and almost entirely header-only: <b>69 first-party header files (~7,333 lines)</b>
+<p>Mechanically the repo is small and almost entirely header-only: <b>77 first-party header files (~9,700 lines)</b>
 plus exactly <b>three compiled translation units</b> — <code>runtime/crypto/ec.cpp</code>,
-<code>ir/assets.cpp</code>, <code>ir/builtins.cpp</code>. The only large file in the tree is the vendored <code>third_party/sse2neon.h</code>
-(~11,200 lines) that lets the entire <code>_mm_*</code> intrinsic surface run on arm64.</p>
+<code>ir/assets.cpp</code>, <code>ir/builtins.cpp</code>. The bulk lives in the vendored subtrees: <code>emp-tool/third_party/sse2neon.h</code>
+(~11,222 lines), which lets the entire <code>_mm_*</code> intrinsic surface run on arm64, and — new since commit
+<code>b1f4efd</code> — repo-root <code>third_party/blake3/</code> (~4,769 lines of C, vendored BLAKE3 v1.8.5 per its
+<code>VENDOR.md</code>), compiled into <code>libemp-tool</code> only when the build opts into the BLAKE3 hash backend.
+The largest single first-party header is now <code>runtime/core/transpose.hpp</code> (772 lines, the bit-matrix
+transpose family split out of <code>block.hpp</code> in <code>d836db5</code>).</p>
 <p>Conceptually it is <b>three layers</b> with a strict dependency order <b>circuits → ir → runtime</b>, each
 with its own umbrella header. <code>#include &lt;emp-tool/emp-tool.h&gt;</code> is the full public umbrella over
 all three; code that needs one layer includes that layer's umbrella:</p>
@@ -160,13 +164,17 @@ the SIMD block type, the symmetric/asymmetric crypto kernels, the network channe
 leaf primitives (<code>half_gate</code> / <code>privacy_free</code>).</li>
 <li><b>ir</b> — the context-free Boolean IR plus <code>ir/context/</code>, <code>ir/session/</code>, and the new
 <code>ir/wire_value.h</code> (umbrella <code>ir/ir.h</code>): the C++20 <code>BooleanContext</code> concept and
-the reusable contexts, a protocol-neutral circuit IR with a native <code>.empbc</code> format, the generic
+the reusable contexts, a protocol-neutral circuit IR with a native <code>.empbc</code> format — since
+<code>67642c2</code> carrying a three-mode <code>WireReuse</code> wire-id-reuse contract with
+<code>make_compact</code>/<code>uncompact</code> transforms (<code>ir/transform.h</code>) and an opt-in
+<code>ComposeCtx</code> for by-reference composition (<code>ir/context/compose.h</code>) — the generic
 <code>WireValue</code> concept, and the <code>Session</code> / <code>DirectSession</code> /
 <code>SessionIO</code> contracts.</li>
 <li><b>circuits</b> — the typed value families, <code>circuits/crypto/</code>, and
 <code>circuits/frontend/</code> (umbrella <code>circuits/circuits.h</code>): the <code>*_T&lt;Ctx&gt;</code> value
 family written against <code>BooleanContext</code>, the in-circuit crypto, and the compile-once / run-anywhere
-frontend.</li>
+frontend (now including <code>compile_linear</code> and the opt-in <code>compose&lt;&gt;()</code> helper of
+<code>circuits/frontend/compose.h</code>).</li>
 </ul>
 
 <!-- ===================================================================== -->
@@ -178,19 +186,19 @@ are pure leaves with <b>zero internal includes</b>, deliberately usable without 
 written against them.</p>
 
 <div class="stack">
-  <div class="layer t-sub"><span class="lv">L1</span><span class="nm">runtime/core</span><span class="md"><code>block</code> (<code>__m128i</code>), block_vector, simd_tier, constants, test_mode, utils — the universal hub (<code>utils.h</code> supplies <code>error()</code>/randomness to nearly everything)</span></div>
-  <div class="layer t-sub"><span class="lv">L2</span><span class="nm">runtime/crypto</span><span class="md">AES · PRP · PRG · CCRH · MITCCRH · GF(2¹²⁸) f2k · SHA-256 (OpenSSL) · random oracle · EC · session_id</span></div>
+  <div class="layer t-sub"><span class="lv">L1</span><span class="nm">runtime/core</span><span class="md"><code>block</code> (<code>__m128i</code>), transpose (six-tier 128×128 bit-transpose, <code>transpose.hpp</code>), block_vector, simd_tier, constants, test_mode, utils — the universal hub (<code>utils.h</code> supplies <code>error()</code>/randomness to nearly everything)</span></div>
+  <div class="layer t-sub"><span class="lv">L2</span><span class="nm">runtime/crypto</span><span class="md">AES · PRP · PRG · CCRH · MITCCRH · GF(2¹²⁸) f2k · hash (<code>HashT</code>: OpenSSL SHA-256 default, optional vendored BLAKE3) · random oracle · EC · session_id</span></div>
   <div class="layer t-sub"><span class="lv">L3</span><span class="nm">runtime/io</span><span class="md">IOChannel · NetIO (TCP) · TLSIO (TLS 1.3) · TraceIO — sits <em>above</em> crypto (channels embed hash/PRG/EC)</span></div>
   <div class="layer t-sub"><span class="lv">L4</span><span class="nm">runtime/execution</span><span class="md">half_gate · privacy_free — raw-block garbled-circuit leaf primitives (core+crypto only)</span></div>
-  <div class="layer t-root"><span class="lv">L5</span><span class="nm">ir/program (root)</span><span class="md">program · visit · validate · passes · artifact · assets · empbc — the protocol-neutral circuit model</span></div>
+  <div class="layer t-root"><span class="lv">L5</span><span class="nm">ir/program (root)</span><span class="md">program (incl. <code>WireReuse</code>) · visit · validate · passes · transform (<code>make_compact</code>/<code>uncompact</code>) · artifact · assets · empbc — the protocol-neutral circuit model</span></div>
   <div class="layer t-root"><span class="lv">L6</span><span class="nm">ir/context/concept (root)</span><span class="md">the C++20 <code>BooleanContext</code> concept — a pure leaf, the other design root</span></div>
   <div class="layer t-ctx"><span class="lv">L7</span><span class="nm">ir/wire_value</span><span class="md"><code>WireValue</code> — the generic structural value concept (fixed-width; requires <code>BooleanContext&lt;context_type&gt;</code> and <code>Wire==context_type::Wire</code>)</span></div>
   <div class="layer t-ctx"><span class="lv">L8</span><span class="nm">ir/execute · schedule</span><span class="md">the single bridge coupling the IR to any context for replay</span></div>
-  <div class="layer t-ctx"><span class="lv">L9</span><span class="nm">ir/context</span><span class="md">checks + the four reusable contexts: ClearCtx · CountCtx · DigestCtx · RecordCtx (+ umbrella)</span></div>
-  <div class="layer t-ctx"><span class="lv">L10</span><span class="nm">ir/session</span><span class="md"><code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> / <code>CheckpointingSession</code> + <code>ClearSession</code> — the I/O boundary</span></div>
+  <div class="layer t-ctx"><span class="lv">L9</span><span class="nm">ir/context</span><span class="md">checks + the four reusable contexts: ClearCtx · CountCtx · DigestCtx · RecordCtx (+ umbrella); ComposeCtx (<code>compose.h</code>) sits alongside them, outside the <code>context.h</code> umbrella</span></div>
+  <div class="layer t-ctx"><span class="lv">L10</span><span class="nm">ir/session</span><span class="md"><code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> / <code>CheckpointingSession</code> + <code>ClearSession</code> — the I/O boundary; the dir also holds the opt-in <code>ChunkedSession</code>/<code>ChunkRecorderCtx</code>/flush-plan machinery (not in the <code>ir.h</code> umbrella)</span></div>
   <div class="layer t-val"><span class="lv">L11</span><span class="nm">circuits (values)</span><span class="md">numeric_kernels · Bit · UInt · Int · BitVec · Float · sort · value_traits (+ typed.h)</span></div>
   <div class="layer t-val"><span class="lv">L12</span><span class="nm">circuits/crypto</span><span class="md">in-circuit AES-128 · SHA-256 · Keccak over Bit/BitVec values</span></div>
-  <div class="layer t-front"><span class="lv">L13</span><span class="nm">circuits/frontend</span><span class="md">rec aliases · circuit_fn (compile/run) · <code>RecordValue</code> — converges context + ir + circuits</span></div>
+  <div class="layer t-front"><span class="lv">L13</span><span class="nm">circuits/frontend</span><span class="md">rec aliases · circuit_fn (compile/<code>compile_linear</code>/run) · <code>RecordValue</code> · opt-in <code>compose&lt;&gt;()</code> — converges context + ir + circuits</span></div>
   <div class="layer t-sub"><span class="lv">L14</span><span class="nm">emp-tool.h</span><span class="md">the full public umbrella: <code>runtime/runtime.h</code> + <code>ir/ir.h</code> + <code>circuits/circuits.h</code></span></div>
 </div>
 
@@ -207,18 +215,19 @@ because float ops are <em>replayed</em> from prebuilt <code>.empbc</code> artifa
 <h2 id="map">3 · Module map</h2>
 <table class="grid">
 <tr><th>Layer · directory</th><th>~LOC</th><th>Role</th><th>Report</th></tr>
-<tr><td><code>runtime/core/</code></td><td>981</td><td>128-bit <code>block</code> (<code>__m128i</code> alias), block_vector, SIMD-tier detection, constants, test_mode, bit/byte utils</td><td><a href="01-runtime.html">Report 1</a></td></tr>
-<tr><td><code>runtime/crypto/</code></td><td>~2,140</td><td>Raw-block runtime crypto: AES-128, PRP, PRG, CCRH, MITCCRH, GF(2¹²⁸), SHA-256 (OpenSSL EVP), random oracle, EC (P-256), session id</td><td><a href="01-runtime.html">Report 1</a></td></tr>
-<tr><td><code>runtime/io/</code></td><td>1,052</td><td>IOChannel interface, TCP NetIO, TLS-1.3 channel, tracing wrapper</td><td><a href="01-runtime.html">Report 1</a></td></tr>
-<tr><td><code>runtime/execution/</code></td><td>94</td><td>half_gate + privacy_free garbled-circuit leaf primitives</td><td><a href="01-runtime.html">Report 1</a></td></tr>
-<tr><td><code>ir/</code></td><td>991 + assets</td><td>BooleanProgram model, validate/visit/schedule/passes, execute replayer, <code>.empbc</code> serializer, asset loader, builtins; <code>ir/files/</code> holds 63 committed <code>.empbc</code> assets</td><td><a href="02-ir.html">Report 2</a></td></tr>
-<tr><td><code>ir/wire_value.h</code></td><td>~110</td><td>The generic <code>WireBundle</code> concept (structural typed-value contract) + <code>WireValue</code> (adds the clear codec); fixed-width</td><td><a href="02-ir.html">Report 2</a></td></tr>
-<tr><td><code>ir/context/</code></td><td>305</td><td>The <code>BooleanContext</code> concept + four reusable contexts (Clear/Count/Digest/Record) + cross-context checks</td><td><a href="02-ir.html">Report 2</a></td></tr>
-<tr><td><code>ir/session/</code></td><td>~175</td><td><code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> / <code>CheckpointingSession</code> + <code>ClearSession</code>; the optional reveal contract</td><td><a href="02-ir.html">Report 2</a></td></tr>
-<tr><td><code>circuits/</code></td><td>~1,120</td><td>The typed <code>*_T&lt;Ctx&gt;</code> value family, numeric_kernels, oblivious sort, value_traits, umbrellas</td><td><a href="03-circuits.html">Report 3</a></td></tr>
+<tr><td><code>runtime/core/</code></td><td>~1,715</td><td>128-bit <code>block</code> (<code>__m128i</code> alias), the six-tier 128×128 bit-transpose family (<code>transpose.hpp</code>, 772 LOC, split out of <code>block.hpp</code> in <code>d836db5</code>), block_vector, SIMD-tier detection, constants, test_mode, bit/byte utils</td><td><a href="01-runtime.html">Report 1</a></td></tr>
+<tr><td><code>runtime/crypto/</code></td><td>~1,900 + <code>ec.cpp</code> (512)</td><td>Raw-block runtime crypto: AES-128, PRP, PRG, CCRH, MITCCRH (incl. <code>hash_cir_fixed</code>), GF(2¹²⁸) f2k (<code>GaloisFieldPacking::packing</code> with an added AVX-512BW variable-shift body in <code>d0c4df2</code>), hash (<code>HashT</code>: SHA-256 via OpenSSL EVP by default, optional vendored BLAKE3), random oracle, EC (P-256), session id</td><td><a href="01-runtime.html">Report 1</a></td></tr>
+<tr><td><code>runtime/io/</code></td><td>~1,084</td><td>IOChannel interface, TCP NetIO, TLS-1.3 channel, tracing wrapper</td><td><a href="01-runtime.html">Report 1</a></td></tr>
+<tr><td><code>runtime/execution/</code></td><td>98</td><td>half_gate + privacy_free garbled-circuit leaf primitives</td><td><a href="01-runtime.html">Report 1</a></td></tr>
+<tr><td><code>ir/</code></td><td>~1,295 + assets</td><td>BooleanProgram model (with the three-mode <code>WireReuse</code> contract), validate/visit/schedule/passes, wire-id compaction (<code>transform.h</code>: <code>make_compact</code>/<code>uncompact</code>), execute replayer, <code>.empbc</code> serializer, asset loader, builtins; <code>ir/files/</code> holds 63 committed <code>.empbc</code> assets</td><td><a href="02-ir.html">Report 2</a></td></tr>
+<tr><td><code>ir/wire_value.h</code></td><td>~113</td><td>The generic <code>WireBundle</code> concept (structural typed-value contract) + <code>WireValue</code> (adds the clear codec); fixed-width</td><td><a href="02-ir.html">Report 2</a></td></tr>
+<tr><td><code>ir/context/</code></td><td>~466</td><td>The <code>BooleanContext</code> concept + four reusable contexts (Clear/Count/Digest/Record) + cross-context checks + the opt-in <code>ComposeCtx</code>/<code>ComposePlan</code>/<code>flatten_compose</code> (<code>compose.h</code>, 149 LOC, outside the <code>context.h</code> umbrella)</td><td><a href="02-ir.html">Report 2</a></td></tr>
+<tr><td><code>ir/session/</code></td><td>~813</td><td><code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> / <code>CheckpointingSession</code> + <code>ClearSession</code> (the umbrella-exported contracts; the optional reveal contract), plus the opt-in <code>ChunkedSession</code> / <code>ChunkRecorderCtx</code> / flush-plan machinery — not in the <code>ir.h</code> umbrella</td><td><a href="02-ir.html">Report 2</a></td></tr>
+<tr><td><code>circuits/</code></td><td>~1,169</td><td>The typed <code>*_T&lt;Ctx&gt;</code> value family, numeric_kernels, oblivious sort, value_traits, umbrellas</td><td><a href="03-circuits.html">Report 3</a></td></tr>
 <tr><td><code>circuits/crypto/</code></td><td>~710</td><td>In-MPC AES-128 / SHA-256 / Keccak over Bit/BitVec values</td><td><a href="03-circuits.html">Report 3</a></td></tr>
-<tr><td><code>circuits/frontend/</code></td><td>349</td><td>circuit_fn compile/replay + rec aliases + <code>RecordValue</code></td><td><a href="03-circuits.html">Report 3</a></td></tr>
-<tr><td><code>third_party/</code></td><td>11,334</td><td>ThreadPool.h (~112) + sse2neon.h (~11,222, arm64 intrinsic shim) — vendored, excluded from first-party LOC</td><td>—</td></tr>
+<tr><td><code>circuits/frontend/</code></td><td>~412</td><td>circuit_fn compile/<code>compile_linear</code>/replay + rec aliases + <code>RecordValue</code>; opt-in <code>compose&lt;&gt;()</code> (<code>compose.h</code>, 54 LOC, outside the <code>frontend.h</code> umbrella)</td><td><a href="03-circuits.html">Report 3</a></td></tr>
+<tr><td><code>third_party/</code> (in <code>emp-tool/</code>)</td><td>11,334</td><td>ThreadPool.h (~112) + sse2neon.h (~11,222, arm64 intrinsic shim) — vendored, excluded from first-party LOC</td><td>—</td></tr>
+<tr><td><code>third_party/blake3/</code> (repo root)</td><td>~4,769</td><td>Vendored BLAKE3 v1.8.5 (10 .c/.h files + per-ISA compiled sources; see its <code>VENDOR.md</code>, dual CC0-1.0/Apache-2.0) — compiled into <code>libemp-tool</code> only when <code>EMP_HASH_BACKEND=blake3</code> / <code>EMP_WITH_BLAKE3</code>; added in <code>b1f4efd</code></td><td><a href="01-runtime.html">Report 1</a></td></tr>
 </table>
 
 <!-- ===================================================================== -->
@@ -232,16 +241,31 @@ operations over a cheap, copyable wire handle:</p>
     c.xor_gate(a,b)    -&gt; Wire;   // free
     c.not_gate(a)      -&gt; Wire;   // free
 };   // OR, equality, mux, arithmetic, crypto, float are all built on these four</code></pre>
-<p>The same source therefore runs unchanged over five realizations of the concept, plus any downstream protocol
-context:</p>
+<p>The same source therefore runs unchanged over the in-tree realizations of the concept — the four reusable
+contexts, plus the qualitatively different <code>ComposeCtx</code> — and any downstream protocol context:</p>
 <table class="grid">
 <tr><th>Context</th><th>Wire</th><th>Meaning</th></tr>
 <tr><td><code>ClearCtx</code></td><td><code>uint8_t</code></td><td>plaintext evaluation (gate counts match a protocol run exactly)</td></tr>
 <tr><td><code>CountCtx</code></td><td><code>uint8_t</code></td><td>gate counting</td></tr>
 <tr><td><code>DigestCtx</code></td><td><code>uint32_t</code></td><td>deterministic fingerprint of the gate stream</td></tr>
 <tr><td><code>RecordCtx</code></td><td><code>uint32_t</code></td><td>records an IR <code>BooleanProgram</code></td></tr>
+<tr><td><code>ComposeCtx</code></td><td><code>uint32_t</code></td><td>records a two-level hierarchical <code>ComposePlan</code> — glue gates + opaque <code>call_unit</code> references to pre-compiled units (<code>ir/context/compose.h</code>, satisfies <code>BooleanContext</code> by <code>static_assert</code> at compose.h:103; new in <code>67642c2</code>)</td></tr>
 <tr><td>downstream backend</td><td><code>block</code></td><td>SH2PCCtx (garbled 2PC), ZK, malicious 2PC, …</td></tr>
 </table>
+<div class="callout c-note"><span class="lbl">New since the first audit pass — WireReuse &amp; composition (67642c2)</span>
+<p><code>BooleanProgram</code> now carries a <code>WireReuse</code> mode (<code>None</code>/<code>Linear</code>/<code>Full</code>,
+<code>ir/program.h:52-57</code>): <code>None</code> is the dense/SSA contract these reports originally described;
+<code>Linear</code> recycles fabric (Xor/Not/Const) wire ids but never AND outputs (safe for multi-pass backends);
+<code>Full</code> recycles anything once dead (single-pass execution only). <code>ir/transform.h</code> provides the
+liveness-driven <code>make_compact</code> / inverse <code>uncompact</code>; the mode rides in the <code>.empbc</code>
+flags byte, and the dense-only analysis passes plus <code>scheduled_execute_program</code> refuse reuse programs via
+<code>require_dense</code> (<code>ir/passes.h:31</code>, <code>ir/schedule.h:63</code>). On the frontend,
+<code>compile_linear&lt;&gt;()</code> (<code>circuits/frontend/circuit_fn.h:249</code>) compiles a unit for composition, and
+<code>run(ctx, unit, args…)</code> is now opaque-or-inline purely by context type: on a <code>ComposeCtx</code> it records
+one O(width) <code>call_unit</code> instance instead of replaying the unit's gates; <code>flatten_compose</code> is the
+inlining oracle. Per <code>docs/composition.md</code>, the reuse path currently lowers only on the emp-ag2pc backend, and
+nested composition is not yet supported. Full detail in <a href="02-ir.html">Report 2</a> (IR/validation) and
+<a href="03-circuits.html">Report 3</a> (frontend).</p></div>
 <p>A user writes a <b>pure</b> circuit body (inputs are arguments, the output is the return value — structurally
 incapable of I/O because it is recorded through <code>RecordCtx</code>), <code>compile()</code>s it once into a
 context-free <code>Circuit</code> (a validated program + signature), then <code>run()</code>s it on any context —
@@ -270,7 +294,8 @@ include path. Keeping them apart is essential when reading the code.</p>
   <div class="pane">
     <h3><span class="tag">runtime/crypto/</span> raw-block crypto</h3>
     <p>The runtime primitives that operate on 128-bit <code>block</code> registers: AES-NI / VAES, fixed-key PRP,
-    AES-CTR PRG, CCRH &amp; MITCCRH correlation-robust hashes, GF(2¹²⁸) arithmetic, OpenSSL SHA-256 &amp; P-256.
+    AES-CTR PRG, CCRH &amp; MITCCRH correlation-robust hashes, GF(2¹²⁸) arithmetic, SHA-256 (OpenSSL, the default) or
+    the optional vendored BLAKE3 backend (build-selected via <code>EMP_HASH_BACKEND</code>), &amp; P-256.
     These power the PRG, OT extension, and garbling backends.</p>
     <p><b>Report:</b> <a href="01-runtime.html">1 (Runtime)</a></p>
   </div>
@@ -292,9 +317,9 @@ include path. Keeping them apart is essential when reading the code.</p>
 <tr><td>Compiler</td><td>C++20 (exported <code>PUBLIC cxx_std_20</code> — consumers including these headers must build C++20; concepts / <code>std::regular</code> / <code>std::span</code>); <code>CXX_EXTENSIONS OFF</code></td></tr>
 <tr><td>OpenSSL</td><td><code>find_package(OpenSSL REQUIRED)</code> (SSL + Crypto); no minimum pinned. macOS CI sets <code>OPENSSL_ROOT_DIR</code> to <code>brew --prefix openssl@3</code></td></tr>
 <tr><td>Threads</td><td><code>find_package(Threads REQUIRED)</code> (pthreads)</td></tr>
-<tr><td>ISA (x86_64)</td><td>floor = AES-NI + PCLMUL + SSSE3 + SSE4.2; SIMD tiers (VAES, VPCLMULQDQ, AVX-512) selected at <b>compile time</b> from feature macros, available only with <code>-march=native</code></td></tr>
+<tr><td>ISA (x86_64)</td><td>floor = AES-NI + PCLMUL + SSSE3 + SSE4.2; SIMD tiers (VAES, VPCLMULQDQ, AVX-512, and — since <code>c57538b</code>/<code>0b07d67</code> — the GFNI transpose tiers <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code>) selected at <b>compile time</b> from feature macros, available only with <code>-march=native</code></td></tr>
 <tr><td>ISA (arm64)</td><td>always <code>-march=armv8-a+crypto+crc</code> (not gated by the native-arch option)</td></tr>
-<tr><td>Endianness</td><td><b>Little-endian only</b> — <code>emp-tool.h</code> <code>static_assert</code>s and refuses to build on big-endian</td></tr>
+<tr><td>Endianness</td><td><b>Little-endian only</b> — <code>runtime/runtime.h</code> (pulled in by <code>emp-tool.h</code>) <code>static_assert</code>s and refuses to build on big-endian</td></tr>
 </table>
 <h3>CMake options</h3>
 <table class="grid">
@@ -304,6 +329,7 @@ include path. Keeping them apart is essential when reading the code.</p>
 <tr><td><code>EMP_TOOL_BUILD_TESTS</code></td><td>ON at top level</td><td>builds <code>test_*</code> + registers ctest (incl. 9 negative compile-failure contract probes)</td></tr>
 <tr><td><code>EMP_TOOL_BUILD_BENCHMARKS</code></td><td>OFF</td><td>builds <code>bench_*</code> (not registered with ctest)</td></tr>
 <tr><td><code>EMP_TOOL_INSTALL</code></td><td>ON at top level</td><td>install + export rules; <code>find_package(emp-tool)</code> works in install- and build-tree modes</td></tr>
+<tr><td><code>EMP_HASH_BACKEND</code></td><td><code>sha256</code> (cache STRING: <code>sha256</code>|<code>blake3</code>)</td><td>selects the algorithm behind <code>emp::Hash</code> (<code>HashT&lt;EMP_HASH_DEFAULT&gt;</code>). <code>blake3</code> auto-enables <code>EMP_WITH_BLAKE3</code>, compiles repo-root <code>third_party/blake3/</code> into <code>libemp-tool</code> (per-file ISA-tiered sources: SSE2/SSE4.1/AVX2/AVX-512 on x86_64, NEON on aarch64), and PUBLIC-defines <code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT</code> so downstream consumers (emp-ot, emp-ag) inherit the choice with no source change (CMakeLists.txt:32-34, 149-179). A separate <code>EMP_WITH_BLAKE3</code> option (default OFF, auto-on when the backend is <code>blake3</code>; CMakeLists.txt:34) compiles the vendored backend so a site can name <code>HashT&lt;HashOption::blake3&gt;</code> explicitly while the process default stays <code>sha256</code> — instantiating it without that flag is a <code>static_assert</code> failure (hash.h:52). A <code>HashAbiMarker</code> link-time guard (hash.h:39-44, symbol defined in <code>ec.cpp:509</code>) turns a mixed-default link into an undefined-reference error. New in <code>b1f4efd</code></td></tr>
 </table>
 <div class="callout c-note"><span class="lbl">Circuit assets are committed, not generated</span>
 <p>The 63 <code>.empbc</code> files are pre-generated and git-tracked under <code>emp-tool/ir/files/</code> — the
@@ -316,7 +342,7 @@ runtime ABI, but <b>does not</b> claim a complete reproducible generation harnes
 
 <!-- ===================================================================== -->
 <h2 id="docs">7 · Docs &amp; tests</h2>
-<p>The repo is unusually well documented. <b>12 design docs</b> under <code>docs/</code> are the best companion to
+<p>The repo is unusually well documented. <b>13 design docs</b> under <code>docs/</code> are the best companion to
 this audit:</p>
 <table class="grid">
 <tr><td><code>EMP_TRANSLATION.md</code></td><td>translating C++/Python to EMP circuits</td><td><code>backend.md</code></td><td>the execution layer (GC backends)</td></tr>
@@ -325,11 +351,15 @@ this audit:</p>
 <tr><td><code>floating_point_circuits.md</code></td><td>.empbc ABI/provenance</td><td><code>test_mode.md</code></td><td>wire-byte determinism</td></tr>
 <tr><td><code>static_init.md</code></td><td>static-init-order safety</td><td><code>api_conventions.md</code></td><td>public API conventions</td></tr>
 <tr><td><code>test_conventions.md</code></td><td>test file layout</td><td><code>benchmark_conventions.md</code></td><td>benchmark layout</td></tr>
+<tr><td><code>composition.md</code></td><td>the <code>run</code>/<code>run_compose</code> inline-vs-reuse composition model (new with <code>67642c2</code>; linked from <code>frontend.md</code>)</td><td></td><td></td></tr>
 </table>
-<p>The <code>test/</code> directory holds <b>34 <code>test_*.cpp</code> files</b> (one per primitive/layer header, under <code>test/{circuits,ir,runtime}/</code>), each a
-tutorial <code>example()</code> + a <code>run_correctness()</code> against external ground truth (NIST/FIPS
-vectors, OpenSSL cross-checks, scalar references, boundary cases), plus one shared
-<code>circuit_fn_contract_probes.cpp</code>. Frontend contract enforcement is tested via <b>9 negative
+<p>The <code>test/</code> directory holds <b>36 <code>test_*.cpp</code> files</b> (one per primitive/layer header, under <code>test/{circuits,ir,runtime}/</code>;
+<code>test/ir/test_transform.cpp</code> and <code>test/ir/test_compose.cpp</code> joined in <code>67642c2</code>).
+The primitive/value tests are each a tutorial <code>example()</code> + a <code>run_correctness()</code> against
+external ground truth (NIST/FIPS vectors, OpenSSL cross-checks, scalar references, boundary cases); the IR-layer
+tests are structural checks, several using fork-based child-process probes to assert fatal rejection
+(<code>test_boolean_program.cpp</code>, <code>test_passes.cpp</code>, <code>test_transform.cpp</code>). One shared
+<code>circuit_fn_contract_probes.cpp</code> backs the contract probes. Frontend contract enforcement is tested via <b>9 negative
 compile-failure targets</b> (<code>circuit_fn_contract_neg_1..9</code>, all <code>EXCLUDE_FROM_ALL</code>, built
 from that probes file) that must fail to compile with a specific expected diagnostic. <b>12 throughput
 benchmarks</b> build only on demand. CI runs the matrix {ubuntu-latest, ubuntu-24.04-arm, macos-latest} ×
@@ -355,7 +385,9 @@ responsibility. The cross-cutting items below recur across the detailed reports 
 should internalize.</p>
 <table class="grid">
 <tr><th>Posture item</th><th>What to know</th></tr>
-<tr><td><b>Compile-time-only ISA dispatch</b></td><td>The SIMD tier (VAES/VPCLMULQDQ/AVX-512) is chosen from feature macros at build time — there is <b>no runtime CPUID fallback</b>. A <code>-march=native</code> binary is host-CPU-locked and will SIGILL on an older CPU. Mitigation: <code>EMP_TOOL_NATIVE_ARCH=OFF</code>.</td></tr>
+<tr><td><b>Compile-time-only ISA dispatch</b></td><td>The SIMD tier (VAES/VPCLMULQDQ/AVX-512) is chosen from feature macros at build time — there is <b>no runtime CPUID fallback</b>. A <code>-march=native</code> binary is host-CPU-locked and will SIGILL on an older CPU. Mitigation: <code>EMP_TOOL_NATIVE_ARCH=OFF</code>. Commits <code>c57538b</code>/<code>0b07d67</code> widened this surface: the six-tier bit-transpose dispatcher (<code>runtime/core/transpose.hpp:748</code>) adds <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code> x86 tiers plus a native NEON tier, all under the same compile-time-only scheme; the BLAKE3 option's per-file ISA sources are likewise build-time-selected.</td></tr>
+<tr><td><b>Hash backend is a build-time ABI axis</b> <span class="tag">new · b1f4efd</span></td><td><code>emp::Hash</code> is now <code>HashT&lt;EMP_HASH_DEFAULT&gt;</code> (<code>runtime/crypto/hash.h:46</code>); <code>EMP_HASH_BACKEND=blake3</code> flips the digest algorithm for the whole process <em>and</em>, via PUBLIC CMake definitions, every downstream consumer. Two builds that disagree cannot interoperate (transcripts, RO/FS hashes) and their <code>Hash</code> layouts differ (<code>state_t</code> = <code>EVP_MD_CTX*</code> vs <code>blake3_hasher</code>) — the <code>HashAbiMarker</code> guard (hash.h:39-44, defined in <code>ec.cpp:509</code>) converts a mixed-default link into an undefined-reference error rather than silent ODR corruption. Test gap: <code>test/runtime/test_hash.cpp</code> unconditionally pins FIPS 180-4 SHA-256 answers against the bare <code>Hash</code> alias (no <code>#ifdef EMP_WITH_BLAKE3</code> anywhere), so it must fail under a blake3-configured build — there is <b>no in-tree BLAKE3 KAT</b>. The default <code>sha256</code> build is byte-identical to before.</td></tr>
+<tr><td><b>WireReuse relaxes the IR's single-writer invariant</b> <span class="tag">new · 67642c2</span></td><td>A <code>WireReuse::Linear/Full</code> program deliberately rewrites wire ids, so <code>validate_program</code>'s reuse branch (<code>ir/validate.h:50-93</code>) proves only <em>executability</em> (in-range, written-before-read, no input writes, bounded <code>num_wires ≤ num_inputs + num_gates</code>) — liveness-safety of a given reuse is the <em>producer's</em> contract (<code>ir/transform.h</code>), checked by execute-compare/digest tests, not the validator. The mode rides in <code>.empbc</code> flags bits 0-1; unknown bits and reserved value 3 are rejected (<code>ir/empbc.h:127-132</code>), and pre-67642c2 readers fail closed on any nonzero flags byte. The dense-only analyses (<code>liveness/schedule/layout_pass</code>) and <code>scheduled_execute_program</code> refuse reuse programs via always-on <code>require_dense</code> (<code>ir/passes.h:31,73,94,134</code>; <code>ir/schedule.h:63</code>), turning silent lifetime-aliasing miscomputation into a fatal rejection.</td></tr>
 <tr><td><b>Validation that survives NDEBUG — and that doesn't</b></td><td><code>.empbc</code> structural validation (<code>validate_program</code>) is always-on in Release and reports through the stack-wide fatal <code>error()</code> path. Developer-misuse guards remain <b>debug-only</b> by default: the cross-context guard (<code>check_same_context</code>, opt back in with <code>-DEMP_CONTEXT_CHECKS=1</code>) and the schedule-plan digest staleness check. Peer-controlled EC point lengths are now hard-checked in <code>recv_pt</code>; local misuse checks such as FS double-enable and alignment remain assertions.</td></tr>
 <tr><td><b>Test-mode randomness kill switch</b></td><td><code>EMP_TEST_MODE=1</code> (or <code>set_test_mode(true)</code>) swaps PRG seeding and EC scalar generation for a deterministic counter stream (seed <code>0xC0FFEE12345</code>). Intended for wire-byte equivalence testing; an accidentally-set env var makes production randomness fully deterministic.</td></tr>
 <tr><td><b>Asset loading: structurally safe, not authenticated</b></td><td>The <code>.empbc</code> parser is hostile-input safe (fixed little-endian reads, overflow-checked size math, <code>validate_program</code>) — but there is <b>no signature/MAC</b>. A well-formed-but-malicious circuit at an attacker-controlled <code>$EMP_CIRCUIT_DIR</code> (first in the search order) would load and replay.</td></tr>
@@ -367,18 +399,20 @@ should internalize.</p>
 and field axioms; hash-to-curve against RFC 9380 vectors; in-circuit AES/SHA/Keccak against FIPS/NIST KAT; and
 <code>test_builtin_circuits.cpp</code> proves the native kernels and the recorded IR builtins agree bit-for-bit.
 The residual audit surface is the committed <code>.empbc</code> float assets and their off-tree generation provenance,
-the <code>NDEBUG</code> behaviour of the debug-only developer guards, and the documented UB preconditions
-(div-by-zero saturation, <code>INT_MIN/−1</code>,
-default-constructed values).</p></div>
+the <code>NDEBUG</code> behaviour of the debug-only developer guards, the documented UB preconditions
+(div-by-zero saturation, <code>INT_MIN/−1</code>, default-constructed values), and two post-refactor test gaps:
+<code>MITCCRH::hash_cir_fixed</code> (<code>runtime/crypto/mitccrh.h:128</code>, added in <code>4af78dd</code>) has no caller
+anywhere under <code>test/</code>, and the BLAKE3 build configuration has no in-tree known-answer coverage (see the
+posture row above).</p></div>
 
 <!-- ===================================================================== -->
 <h2 id="reports">10 · The three detailed reports</h2>
 <p>This overview is the on-ramp; each report below is a full implementation walkthrough with <code>file:line</code>
 references, code excerpts, and a per-report risk register — one per architectural layer.</p>
 <div class="reportcards">
-  <a class="rc" href="01-runtime.html"><div class="num">Report 1 · runtime</div><h3>Runtime substrate</h3><p>SIMD <code>block</code> + helpers, AES-128 / PRP / PRG / CCRH / MITCCRH / GF(2¹²⁸) / SHA-256 / P-256, the random oracle, the NetIO / TLSIO / TraceIO channels, and the half-gate / privacy-free garbling primitives.</p></a>
-  <a class="rc" href="02-ir.html"><div class="num">Report 2 · ir</div><h3>Boolean IR, contexts &amp; sessions</h3><p>The <code>BooleanContext</code> concept and the reusable contexts, the <code>.empbc</code> IR (program / validate / passes / schedule / execute / artifact), the <code>WireValue</code> concept, and the <code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> contracts.</p></a>
-  <a class="rc" href="03-circuits.html"><div class="num">Report 3 · circuits</div><h3>Circuit value objects &amp; frontend</h3><p>The context-bound typed values <code>Bit</code> / <code>BitVec</code> / <code>UInt</code> / <code>Int</code> / IEEE <code>Float</code>, the oblivious sort, in-circuit AES-128 / SHA-256 / Keccak, and the compile-once / run-anywhere frontend.</p></a>
+  <a class="rc" href="01-runtime.html"><div class="num">Report 1 · runtime</div><h3>Runtime substrate</h3><p>SIMD <code>block</code> + the six-tier bit-transpose family, AES-128 / PRP / PRG / CCRH / MITCCRH / GF(2¹²⁸) / hash (SHA-256 default, optional BLAKE3) / P-256, the random oracle, the NetIO / TLSIO / TraceIO channels, and the half-gate / privacy-free garbling primitives.</p></a>
+  <a class="rc" href="02-ir.html"><div class="num">Report 2 · ir</div><h3>Boolean IR, contexts &amp; sessions</h3><p>The <code>BooleanContext</code> concept and the reusable contexts, the <code>.empbc</code> IR (program / validate / passes / schedule / execute / artifact), the <code>WireReuse</code> compaction model and <code>ComposeCtx</code>/<code>ComposePlan</code>, the <code>WireValue</code> concept, and the <code>Session</code> / <code>DirectSession</code> / <code>SessionIO</code> contracts.</p></a>
+  <a class="rc" href="03-circuits.html"><div class="num">Report 3 · circuits</div><h3>Circuit value objects &amp; frontend</h3><p>The context-bound typed values <code>Bit</code> / <code>BitVec</code> / <code>UInt</code> / <code>Int</code> / IEEE <code>Float</code>, the oblivious sort, in-circuit AES-128 / SHA-256 / Keccak, and the compile-once / run-anywhere frontend (inline replay, <code>compile_linear</code>, and by-reference composition).</p></a>
 </div>
 
 <!-- ===================================================================== -->
@@ -390,6 +424,10 @@ header is <code>build/emp-tool/ir/circuit_asset_dirs.h</code>.</li>
 <li><b>Reports describe the three-layer refactor.</b> The runtime/ir/circuits three-layer refactor and the
 session/WireValue redesign these reports describe are now committed on <code>main</code>; the reports were
 written against that working tree.</li>
+<li><b>Two vendored-code locations.</b> Vendored code lives in two different <code>third_party/</code> directories:
+<code>emp-tool/third_party/</code> (ThreadPool.h + sse2neon.h, header shims inside the installed include tree) and
+repo-root <code>third_party/blake3/</code> (the opt-in BLAKE3 backend added in <code>b1f4efd</code>, compiled — not
+header-only — and pulled in via CMake). Do not assume a single vendored subtree when scoping a diff.</li>
 <li><b>Pre-alpha API.</b> This development branch's CMake version reads <code>1.0.0</code> but names and headers may
 still move before the first tagged alpha; anything pinned to a release should track <code>v0.3.x</code> instead.</li>
 <li><b>One full public umbrella.</b> <code>#include &lt;emp-tool/emp-tool.h&gt;</code> pulls in all three layers
