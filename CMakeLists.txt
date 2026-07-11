@@ -31,7 +31,19 @@ option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so com
 # choice inherited by every consumer that links this emp-tool build.
 set(EMP_HASH_BACKEND "sha256" CACHE STRING "Default emp::Hash backend: sha256 or blake3")
 set_property(CACHE EMP_HASH_BACKEND PROPERTY STRINGS sha256 blake3)
-option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so emp::Blake3Backend is available (auto-on when EMP_HASH_BACKEND=blake3)." OFF)
+option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so emp::Blake3Backend is available (auto-on when EMP_HASH_BACKEND=blake3 or EMP_FS_HASH=blake3)." OFF)
+
+# Fiat-Shamir transcript hash (io_channel.h enable_fs default), selectable
+# independently of EMP_HASH_BACKEND: "default" follows it; "sha256"/"blake3"
+# pin the FS transcript while commitments/RO/garbling keep using emp::Hash.
+# Propagates PUBLIC to every consumer (emp-ot, emp-ag) — an AGREEMENT-class
+# choice: both parties' stacks must be built with the same value.
+set(EMP_FS_HASH "default" CACHE STRING
+    "Fiat-Shamir transcript hash: default (= EMP_HASH_BACKEND), sha256, or blake3")
+set_property(CACHE EMP_FS_HASH PROPERTY STRINGS default sha256 blake3)
+if(NOT EMP_FS_HASH MATCHES "^(default|sha256|blake3)$")
+    message(FATAL_ERROR "EMP_FS_HASH must be default, sha256, or blake3 (got '${EMP_FS_HASH}')")
+endif()
 
 # ---------------------------------------------------------------------
 # Dependencies
@@ -146,7 +158,7 @@ endif()
 # target — emp-ot / emp-ag inherit BLAKE3 with no extra dependency to resolve.
 # Vendored C is built with -w (its warnings are not ours to fix).
 # ---------------------------------------------------------------------
-if(EMP_HASH_BACKEND STREQUAL "blake3")
+if(EMP_HASH_BACKEND STREQUAL "blake3" OR EMP_FS_HASH STREQUAL "blake3")
     set(EMP_WITH_BLAKE3 ON)
 endif()
 if(EMP_WITH_BLAKE3)
@@ -177,6 +189,13 @@ if(EMP_WITH_BLAKE3)
     if(EMP_HASH_BACKEND STREQUAL "blake3")
         target_compile_definitions(emp-tool PUBLIC EMP_HASH_DEFAULT=::emp::HashOption::blake3)
     endif()
+endif()
+if(EMP_FS_HASH STREQUAL "blake3")
+    target_compile_definitions(emp-tool PUBLIC EMP_FS_HASH_DEFAULT=::emp::HashOption::blake3)
+elseif(EMP_FS_HASH STREQUAL "sha256")
+    # Explicit pin (only meaningful when EMP_HASH_BACKEND=blake3 would
+    # otherwise drag the FS default along with it).
+    target_compile_definitions(emp-tool PUBLIC EMP_FS_HASH_DEFAULT=::emp::HashOption::sha256)
 endif()
 
 # ---------------------------------------------------------------------

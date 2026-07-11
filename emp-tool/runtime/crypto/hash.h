@@ -26,6 +26,34 @@ enum class HashOption { sha256, blake3 };
 #define EMP_HASH_DEFAULT ::emp::HashOption::sha256
 #endif
 
+// Default backend for the IOChannel Fiat-Shamir transcript (enable_fs's
+// template default), selectable per build independently of the global
+// Hash: CMake's EMP_FS_HASH sets this PUBLIC on emp-tool, so emp-ot /
+// emp-ag inherit it with no code change. Falls back to the global
+// default. Both parties of a protocol must agree (it changes every FS
+// challenge); commitments / RO / garbling under Hash are unaffected.
+#ifndef EMP_FS_HASH_DEFAULT
+#define EMP_FS_HASH_DEFAULT EMP_HASH_DEFAULT
+#endif
+
+// The FS transcript state in io_channel.h is a variant whose set of
+// alternatives — hence IOChannel's layout — depends on EMP_WITH_BLAKE3.
+// Guard that layout the same way HashAbiMarker guards Hash's: libraries
+// linked together must agree on whether BLAKE3 is compiled in, or the
+// build fails with an undefined-marker link error instead of silently
+// corrupting channel objects passed across the boundary.
+#ifdef EMP_WITH_BLAKE3
+#define EMP_FS_VARIANT_HAS_BLAKE3 true
+#else
+#define EMP_FS_VARIANT_HAS_BLAKE3 false
+#endif
+template <bool> struct FsVariantAbiMarker { static const char sym; };
+template <> const char FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym;
+namespace detail {
+[[maybe_unused, gnu::used]] static const char *const emp_fs_variant_abi_guard =
+    &FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym;
+}
+
 #ifdef EMP_WITH_BLAKE3
 // Build-consistency backstop. With both algorithms compiled in, every library
 // linked together MUST agree on EMP_HASH_DEFAULT: the default Hash's layout
@@ -37,6 +65,13 @@ enum class HashOption { sha256, blake3 };
 // instead of a silent Hash-layout corruption. libemp-tool defines the marker for
 // the option it was built with; every TU references the marker for its own.
 template <HashOption> struct HashAbiMarker { static const char sym; };
+// Declare (not define) the built default's specialization before the guard
+// below takes its address: without this declaration, the explicit
+// specialization *definition* in ec.cpp comes after implicit instantiation
+// and Clang rejects the build. The symbol stays undefined for any other
+// option, which is exactly what turns a mismatched-default link into an
+// "undefined reference to HashAbiMarker<...>::sym" error.
+template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym;
 namespace detail {
 [[maybe_unused, gnu::used]] static const char *const emp_hash_abi_guard =
     &HashAbiMarker<EMP_HASH_DEFAULT>::sym;

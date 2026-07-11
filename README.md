@@ -60,6 +60,8 @@ binary that runs on any AES-NI + PCLMUL + SSE4.2 (x86_64) or
 | `EMP_TOOL_BUILD_TESTS` | `ON` when top-level | Build the test suite under `test/`. |
 | `EMP_TOOL_BUILD_BENCHMARKS` | `OFF` | Build throughput benchmarks under `bench/`; not registered with `ctest`. |
 | `EMP_TOOL_INSTALL` | `ON` when top-level | Generate install + export rules. |
+| `EMP_HASH_BACKEND` | `sha256` | Default `emp::Hash` backend (`sha256` or `blake3`); changes every hash use, transcript-wide. Inherited by consumers. |
+| `EMP_FS_HASH` | `default` | Fiat–Shamir transcript hash only (`default` = follow `EMP_HASH_BACKEND`, `sha256`, `blake3`); commitments/RO keep `emp::Hash`. Inherited by consumers (emp-ot, emp-ag); both parties must build with the same value. |
 
 ## Consuming from another CMake project
 

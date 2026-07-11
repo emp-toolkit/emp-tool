@@ -509,4 +509,10 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym = 0;
 #endif
 
+// FS-variant layout marker (see hash.h): define the symbol for whether this
+// emp-tool build compiled the BLAKE3 alternative into the IOChannel FS state.
+// A consumer whose EMP_WITH_BLAKE3 disagrees references the other marker and
+// fails to link.
+template <> const char FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym = 0;
+
 }  // namespace emp

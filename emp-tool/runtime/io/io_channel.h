@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 
 namespace emp {
 
@@ -43,10 +44,11 @@ struct touch_guard {
 // / recv_data_internal; everything else (block / point / packed-bool helpers,
 // byte counters, optional Fiat-Shamir transcript) is inherited.
 //
-// Fiat-Shamir support: enable_fs(send_first) turns on TWO SHA-256
-// transcripts — one absorbing every byte sent (direction self→peer),
-// one absorbing every byte received (peer→self). Exactly one party
-// passes true.
+// Fiat-Shamir support: enable_fs<opt>(send_first) turns on two running
+// transcripts under the selected hash backend (default: the build's
+// Hash) — one absorbing every byte sent (direction self→peer), one
+// absorbing every byte received (peer→self). Exactly one party passes
+// true; both parties must select the same backend.
 //
 // get_digest() returns the first block of H(d_AB ‖ d_BA), where d_AB
 // is the A→B wire digest and d_BA is the B→A digest. Both parties
@@ -116,61 +118,74 @@ public:
 	// Turn on Fiat-Shamir transcript hashing. `send_first` selects which
 	// of the two H(_‖H(_)) formulas this side computes, so both parties
 	// produce the same digest value — exactly one party should pass true.
-	// Idempotent assert: calling twice is a bug.
+	// The hash backend is a template parameter (default = the build's
+	// EMP_FS_HASH_DEFAULT, settable stack-wide via CMake's EMP_FS_HASH
+	// and inherited by emp-ot / emp-ag): choosing it here is an
+	// AGREEMENT with the peer — both parties' transcripts must use the
+	// same backend or every derived challenge diverges. Idempotent
+	// assert: calling twice is a bug.
+	template <HashOption opt = EMP_FS_HASH_DEFAULT>
 	void enable_fs(bool send_first) {
-		assert(!fs_send_.has_value() && "enable_fs called twice");
+		assert(!fs_enabled() && "enable_fs called twice");
 		fs_send_first_ = send_first;
-		fs_send_.emplace();
-		fs_recv_.emplace();
+		fs_.template emplace<FsStateT<opt>>();
 	}
 
-	bool fs_enabled() const { return fs_send_.has_value(); }
+	bool fs_enabled() const {
+		return !std::holds_alternative<std::monostate>(fs_);
+	}
 
 	// Per-direction transcript snapshots, intended for diagnostics
 	// (e.g. dumping a per-protocol wire-bytes hash across a refactor).
-	// Each returns the first 16 B of the SHA-256 over all bytes that
+	// Each returns the first 16 B of the digest over all bytes that
 	// have crossed in that direction since enable_fs. Non-destructive;
 	// the running transcripts continue absorbing after the snapshot.
 	block get_send_digest() {
-		assert(fs_send_.has_value() && "get_send_digest: enable_fs first");
-		char buf[Hash::DIGEST_SIZE];
-		fs_send_->digest(buf, /*reset_after=*/false);
-		block out;
-		std::memcpy(&out, buf, sizeof(block));
-		return out;
+		assert(fs_enabled() && "get_send_digest: enable_fs first");
+		return fs_digest_([](auto& st, char* buf) {
+			st.send.digest(buf, /*reset_after=*/false);
+		});
 	}
 	block get_recv_digest() {
-		assert(fs_recv_.has_value() && "get_recv_digest: enable_fs first");
-		char buf[Hash::DIGEST_SIZE];
-		fs_recv_->digest(buf, /*reset_after=*/false);
-		block out;
-		std::memcpy(&out, buf, sizeof(block));
-		return out;
+		assert(fs_enabled() && "get_recv_digest: enable_fs first");
+		return fs_digest_([](auto& st, char* buf) {
+			st.recv.digest(buf, /*reset_after=*/false);
+		});
 	}
 
 	// Snapshot the running transcripts as one block (first 16 B of a
-	// 32-B SHA-256 digest). Does not reset — call repeatedly across
-	// protocol stages to derive sub-challenges. Asserts FS is on.
+	// 32-B digest under the enable_fs-selected backend). Does not reset
+	// — call repeatedly across protocol stages to derive sub-challenges.
+	// Asserts FS is on.
 	//
 	// Output: H(d_AB ‖ d_BA)[0..16). Send-first side concatenates
 	// my_send first, the other side concatenates my_recv first.
 	block get_digest() {
-		assert(fs_send_.has_value() && "get_digest: enable_fs first");
-		constexpr int N = Hash::DIGEST_SIZE;        // 32
-		char buf[2 * N];
-		fs_send_->digest(buf + (fs_send_first_ ? 0 : N), /*reset_after=*/false);
-		fs_recv_->digest(buf + (fs_send_first_ ? N : 0), /*reset_after=*/false);
-		alignas(block) char out_buf[N];
-		Hash::hash_once(out_buf, buf, sizeof(buf));
-		block out;
-		std::memcpy(&out, out_buf, sizeof(block));
+		assert(fs_enabled() && "get_digest: enable_fs first");
+		block out = zero_block;   // asserts guard FS-off; keep release defined
+		std::visit([&](auto& st) {
+			using St = std::decay_t<decltype(st)>;
+			if constexpr (!std::is_same_v<St, std::monostate>) {
+				constexpr int N = HashT<St::kOpt>::DIGEST_SIZE;   // 32
+				char buf[2 * N];
+				st.send.digest(buf + (fs_send_first_ ? 0 : N), /*reset_after=*/false);
+				st.recv.digest(buf + (fs_send_first_ ? N : 0), /*reset_after=*/false);
+				alignas(block) char out_buf[N];
+				HashT<St::kOpt>::hash_once(out_buf, buf, sizeof(buf));
+				std::memcpy(&out, out_buf, sizeof(block));
+			}
+		}, fs_);
 		return out;
 	}
 
 	void send_data(const void *data, int64_t nbyte) {
 		send_counter += nbyte;
 		if (last_dir_ != Dir::SEND) { ++rounds; last_dir_ = Dir::SEND; }
-		if (fs_send_) fs_send_->put(data, nbyte);
+		std::visit([&](auto& st) {
+			using St = std::decay_t<decltype(st)>;
+			if constexpr (!std::is_same_v<St, std::monostate>)
+				st.send.put(data, nbyte);
+		}, fs_);
 		send_data_internal(data, nbyte);
 	}
 
@@ -178,7 +193,11 @@ public:
 		recv_counter += nbyte;
 		if (last_dir_ != Dir::RECV) { ++rounds; last_dir_ = Dir::RECV; }
 		recv_data_internal(data, nbyte);
-		if (fs_recv_) fs_recv_->put(data, nbyte);
+		std::visit([&](auto& st) {
+			using St = std::decay_t<decltype(st)>;
+			if constexpr (!std::is_same_v<St, std::monostate>)
+				st.recv.put(data, nbyte);
+		}, fs_);
 	}
 
 	void send_block(const block *data, int64_t nblock) {
@@ -262,14 +281,47 @@ private:
 	enum class Dir { NONE, SEND, RECV };
 	Dir last_dir_ = Dir::NONE;
 
-	// Per-direction FS transcripts. Both nullopt = off (default).
-	// fs_send_ absorbs my outgoing wire bytes, fs_recv_ my incoming
-	// ones. Hash is non-copyable but std::optional only requires
-	// emplace-construction. fs_send_first_ records the role-bool
-	// passed to enable_fs so get_digest produces a value matching
-	// the peer.
-	std::optional<Hash> fs_send_;
-	std::optional<Hash> fs_recv_;
+	// Per-direction FS transcripts, statically parameterized on the hash
+	// backend chosen at enable_fs<opt>() time. Storage is a variant over
+	// the closed HashOption set — every absorb/digest goes through an
+	// inlined std::visit branch, never a virtual call, so the pattern
+	// stays cheap enough to reuse for per-call hashing hot paths. The
+	// monostate alternative = FS off (default). `send` absorbs my
+	// outgoing wire bytes, `recv` my incoming ones. HashT is
+	// non-copyable; the variant only requires emplace-construction.
+	// fs_send_first_ records the role-bool passed to enable_fs so
+	// get_digest produces a value matching the peer.
+	// Shared body for the per-direction snapshot getters: run `fn` on the
+	// active FS state to fill a 32-B digest, return its first 16 B.
+	template <class Fn>
+	block fs_digest_(Fn&& fn) {
+		block out = zero_block;   // asserts guard FS-off; keep release defined
+		std::visit([&](auto& st) {
+			using St = std::decay_t<decltype(st)>;
+			if constexpr (!std::is_same_v<St, std::monostate>) {
+				char buf[HashT<St::kOpt>::DIGEST_SIZE];
+				fn(st, buf);
+				std::memcpy(&out, buf, sizeof(block));
+			}
+		}, fs_);
+		return out;
+	}
+
+	template <HashOption opt>
+	struct FsStateT {
+		static constexpr HashOption kOpt = opt;
+		HashT<opt> send;
+		HashT<opt> recv;
+	};
+#ifdef EMP_WITH_BLAKE3
+	using FsState = std::variant<std::monostate,
+	                             FsStateT<HashOption::sha256>,
+	                             FsStateT<HashOption::blake3>>;
+#else
+	using FsState = std::variant<std::monostate,
+	                             FsStateT<HashOption::sha256>>;
+#endif
+	FsState fs_;
 	bool fs_send_first_ = false;
 };
 
