@@ -93,6 +93,9 @@ class HashT { public:
 	// per-call cost, which on small inputs dwarfs the hash work. Accumulate small
 	// puts here and hand the algorithm one large block; flushed before any
 	// finalize so the digest is byte-identical to an un-buffered absorb.
+	// Throughput is flat once the per-call cost is amortized, so the size is a
+	// footprint choice — the buffer is embedded in every HashT, including one
+	// per FS-enabled IOChannel — not a per-machine tunable.
 	static const int BUF_BYTES = 8192;
 	state_t st_;
 	unsigned char buf_[BUF_BYTES];

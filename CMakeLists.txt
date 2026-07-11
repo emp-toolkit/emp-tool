@@ -132,11 +132,16 @@ target_compile_options(emp-tool PUBLIC -Wno-ignored-attributes)
 # Architecture floor. SIMD tiers (VAES / VPCLMULQDQ / AVX-512 etc.) are
 # selected at compile time from compiler feature macros; source-level
 # target(...) attributes only make those selected implementations legal to
-# compile. Set EMP_TOOL_NATIVE_ARCH to bake -march=native into the build for
-# benchmarks or build-on-target deployments; do NOT ship those binaries to
-# older CPUs, since they may SIGILL.
+# compile. Set EMP_TOOL_NATIVE_ARCH to bake the host CPU's ISA into the build
+# (-march=native on x86, -mcpu=native on arm64) for benchmarks or
+# build-on-target deployments; do NOT ship those binaries to older CPUs,
+# since they may SIGILL.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64)")
-    target_compile_options(emp-tool PUBLIC -march=armv8-a+crypto+crc)
+    if(EMP_TOOL_NATIVE_ARCH)
+        target_compile_options(emp-tool PUBLIC -mcpu=native)
+    else()
+        target_compile_options(emp-tool PUBLIC -march=armv8-a+crypto+crc)
+    endif()
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i.86)")
     if(EMP_TOOL_NATIVE_ARCH)
         target_compile_options(emp-tool PUBLIC -march=native)

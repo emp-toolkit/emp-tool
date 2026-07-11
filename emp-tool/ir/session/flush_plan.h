@@ -37,7 +37,7 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
   FlushPlan plan;
   const int G = (int)chunk_gates.size();
   std::unordered_map<uint32_t, int> wire_to_gate;
-  wire_to_gate.reserve((size_t)G * 2);
+  wire_to_gate.reserve((size_t)G);   // holds exactly one entry per gate
   for (int gi = 0; gi < G; ++gi) wire_to_gate[chunk_gates[gi].out] = gi;
 
   // Reachability from the pending keep ids.

@@ -10,8 +10,11 @@ namespace emp {
 // garble / evaluate primitives over block labels and a shared MITCCRH. XOR and
 // NOT are free (label XOR with delta), handled by the caller; only AND needs a
 // ciphertext pair (`table`). Generic over the MITCCRH instantiation so the
-// protocol picks BatchSize / ReuseShift; both parties must use the same one
-// (the hash keys, hence the transcript, depend on it).
+// protocol picks BatchSize / ReuseShift. Only ReuseShift (together with the
+// start_point / gid schedule) must match across parties — it determines the
+// hash keys, hence the transcript. BatchSize only sets how many gids are
+// keyed per schedule refill; the outputs are BatchSize-invariant, so it is a
+// per-machine scheduling choice.
 
 template <class MITC>
 inline block halfgates_garble(block LA0, block A1, block LB0, block B1,

@@ -3,9 +3,17 @@
 #include <cstddef>
 #include <cstdint>
 namespace emp {
-// Counter-mode AES tile size in blocks. Tuned for L1d locality and to
-// amortize ParaEnc's per-call setup (round-key broadcasts).
+// Counter-mode AES chunk size in blocks: bounds the PRG refill working set
+// and amortizes drain_tiles' per-call ramp. Any multiple of the widest
+// ParaEnc tile drains through the same instruction stream, and throughput is
+// flat across a wide range of sizes, so the value is a footprint choice, not
+// a per-machine tunable.
 constexpr int64_t AES_BATCH_SIZE = 64;
+// NetIO staging: send-side coalescing buffer and recv-side read() target.
+// Sized so bulk transfers don't syscall too often while keeping the two
+// per-channel buffers small; per-flow TCP throughput is governed by the
+// kernel socket buffers, not by this. Enlarging it gains no throughput and
+// only makes consumption burstier, which stalls the peer's pipeline.
 const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;
 const static int NETWORK_STREAM_BUFFER_SIZE = 1024*1024;
 

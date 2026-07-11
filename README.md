@@ -33,7 +33,7 @@ emp-sh2pc's garbled `SH2PCCtx`.
 - A C++20 compiler (Clang ≥ 12, GCC ≥ 10, AppleClang 14+)
 - OpenSSL ≥ 3.0
 - pthreads
-- x86_64 with AES-NI + PCLMULQDQ + SSE4.2, **or** arm64 with `armv8-a+crypto+crc`. The default build uses `-march=native` and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
+- x86_64 with AES-NI + PCLMULQDQ + SSE4.2, **or** arm64 with `armv8-a+crypto+crc`. The default build targets the host CPU (`-march=native` on x86_64, `-mcpu=native` on arm64) and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
 
 ## Build and install
 
@@ -44,7 +44,8 @@ cmake --install build           # respects CMAKE_INSTALL_PREFIX
 ```
 
 The default build is tuned for performance: `Release`, `-O3
--funroll-loops`, and `-march=native` so VAES / VPCLMULQDQ / AVX-512 etc.
+-funroll-loops`, and the host CPU's ISA (`-march=native` on x86_64,
+`-mcpu=native` on arm64) so VAES / VPCLMULQDQ / AVX-512 etc.
 are used wherever the host CPU supports them. **Binaries built this way
 are tied to the build machine's CPU** — they will SIGILL on a CPU
 missing any instruction the build host had. To produce a portable
@@ -56,7 +57,7 @@ binary that runs on any AES-NI + PCLMUL + SSE4.2 (x86_64) or
 
 | Option | Default | Effect |
 |---|---|---|
-| `EMP_TOOL_NATIVE_ARCH` | `ON` | Build with `-march=native`. Best performance, host-CPU-locked binary. Set `OFF` for portable binaries. |
+| `EMP_TOOL_NATIVE_ARCH` | `ON` | Build for the host CPU (`-march=native` / arm64 `-mcpu=native`). Best performance, host-CPU-locked binary. Set `OFF` for portable binaries. |
 | `EMP_TOOL_BUILD_TESTS` | `ON` when top-level | Build the test suite under `test/`. |
 | `EMP_TOOL_BUILD_BENCHMARKS` | `OFF` | Build throughput benchmarks under `bench/`; not registered with `ctest`. |
 | `EMP_TOOL_INSTALL` | `ON` when top-level | Generate install + export rules. |
