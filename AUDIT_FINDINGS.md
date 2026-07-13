@@ -1,25 +1,17 @@
 # emp-tool — audit findings
 
 Surfaced by refreshing the implementation audit in [`audit-report/`](audit-report/)
-against HEAD `b1f4efd` (the report was last reconciled at `551edc7`; seven
+against HEAD `1e00838` (the report was last reconciled at `551edc7`; thirteen
 commits landed since). Full detail and anchors live in each page's *Auditor
 risk register*. This file is the action-facing subset — the new/changed
-risks the seven commits introduced.
+risks those commits introduced.
 
 Anchors are repo-relative. See also [`verdicts.txt`](verdicts.txt) (the
 2026-06-10 design review) for architecture-level verdicts.
 
 ## Test-coverage gaps (highest value)
 
-### T1 · BLAKE3 backend has no in-tree known-answer test
-`crypto/hash.h:23-54`; `test/.../test_hash.cpp`; `CMakeLists.txt:149-180` · commit `b1f4efd`
-
-`test_hash.cpp` pins SHA-256 answers against the bare `Hash` alias with **zero
-conditional compilation**, so (a) a `-DEMP_HASH_BACKEND=blake3` default build
-*fails* `test_hash`, and (b) there is no BLAKE3 known-answer coverage anywhere.
-The optional backend ships untested. Add a backend-parameterized KAT.
-
-### T2 · `MITCCRH::hash_cir_fixed` has zero test coverage
+### T1 · `MITCCRH::hash_cir_fixed` has zero test coverage
 `crypto/mitccrh.h:119-133` · commit `4af78dd`
 
 Grep-verified: only its definition and comment exist — no caller under
@@ -30,7 +22,7 @@ Grep-verified: only its definition and comment exist — no caller under
 ## New invariant / ABI surfaces
 
 ### R1 · WireReuse relaxes the IR single-writer invariant
-`ir/validate.h:50-93`; `ir/transform.h`; `ir/files/empbc.h:127-132`; `ir/passes.h:31,73,94,134`; `ir/schedule.h:63` · commit `67642c2`
+`ir/validate.h:50-93`; `ir/transform.h`; `ir/empbc.h:127-132`; `ir/passes.h:31,73,94,134`; `ir/schedule.h:63` · commit `67642c2`
 
 `BooleanProgram` is no longer solely dense/SSA — it carries a `WireReuse` mode
 (None/Linear/Full). `validate_program`'s reuse branch proves **executability
@@ -41,7 +33,7 @@ miscompute into a fatal rejection at the dense passes. Auditor takeaway: trust
 in a reused-wire program rests on the *producer*, not the validator.
 
 ### R2 · Hash backend is a build-time ABI axis
-`crypto/hash.h:23-54`; `crypto/ec.cpp:504-509`; `CMakeLists.txt:149-180` · commit `b1f4efd`
+`crypto/hash.h:23-54`; `crypto/ec.cpp:504-509`; `CMakeLists.txt:166-197` · commit `b1f4efd`
 
 `emp::Hash` is now `HashT<EMP_HASH_DEFAULT>` with the backend chosen at
 configure time and **PUBLIC-propagated** to consumers. A `HashAbiMarker`
@@ -54,6 +46,22 @@ transcript change** — any two peers must agree on the backend.
 
 `ComposePlan` stores `const BooleanProgram*` references to its unit programs;
 lifetime is the caller's obligation — a plan outliving its units dangles.
+
+### R4 · Deterministic test mode makes vendored `ThreadPool.h` a locally-patched file
+`third_party/ThreadPool.h:28-34,100-116`; `core/test_mode.h:125-179` · commit `1e00838`
+
+The `(lane, ordinal)` test-mode rework carries a **local patch into the vendored
+`ThreadPool.h`**: it now `#include`s `runtime/core/test_mode.h` and wraps every
+`enqueue`d task in a `test_lane_scope` (the lane derived on the enqueuing thread)
+so pool-parallel randomness reproduces across runs. Two auditor takeaways: (a) a
+file carried as pristine third-party code is no longer re-vendorable without
+re-applying the patch — a naive upstream refresh silently drops it and breaks
+pool-parallel test determinism (the header flags its own alteration at
+`ThreadPool.h:28-32`); and (b) it adds a `third_party` → `runtime/core` include
+edge. Related: `next_test_seed` installs an **always-on `abort()`** (survives
+NDEBUG — test mode routinely runs under Release) when a second thread draws
+lane-0 seeds, a fail-loud guard against silent stream replay; scoped to test
+mode, so production is unaffected.
 
 ## ISA dispatch
 

@@ -281,13 +281,13 @@ reach the wire. Auditors should flag any <code>BlockVec</code>/<code>default_ini
 can be sent or hashed without being fully written first. (The <code>send_bool</code> tail-byte handling — §C —
 shows the team is aware of this bug class.)</p></div>
 
-<h3>constants (<code class="ref">constants.h:8-33</code>)</h3>
-<pre><code>constexpr int64_t AES_BATCH_SIZE = 64;                       // :8
-const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;      // :9  (32 KiB)
-const static int NETWORK_STREAM_BUFFER_SIZE  = 1024*1024;    // :10 (1 MiB)
-const static size_t IO_BOOL_CHUNK_SIZE = 8*1024;             // :14
-enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };  // :29
-const static uint32_t MAX_POINT_BYTES = 2048;                // :33</code></pre>
+<h3>constants (<code class="ref">constants.h:11-41</code>)</h3>
+<pre><code>constexpr int64_t AES_BATCH_SIZE = 64;                       // :11
+const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;      // :17 (32 KiB)
+const static int NETWORK_STREAM_BUFFER_SIZE  = 1024*1024;    // :18 (1 MiB)
+const static size_t IO_BOOL_CHUNK_SIZE = 8*1024;             // :22
+enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };  // :37
+const static uint32_t MAX_POINT_BYTES = 2048;                // :41</code></pre>
 <p>The <code>Party</code> sign matters: <code>XOR = -1</code> means "return/leave the value as per-party XOR
 shares rather than the clear value" (each party keeps its own share — <em>not</em> the same thing as a
 <code>nullopt</code> reveal), versus <code>PUBLIC = 0</code> ("reveal to both"). Mixing them up is a
@@ -305,6 +305,21 @@ insecure</b> — seeds become the enumerable pairs <code>(lane, 0), (lane, 1), �
 (<code class="ref">test_mode.h:39-40</code>), so <code>=1</code> / <code>=10</code> trigger it; a single env var
 away from a catastrophic randomness downgrade. Deserves operational guardrails (or a build-time hard-disable
 in release).</p></div>
+<div class="callout c-note"><span class="lbl">The (lane, ordinal) machinery, by name</span>
+<p>Behind that toggle: a seed is a <code>TestSeed{lane, ordinal}</code> pair
+(<code class="ref">test_mode.h:118-121</code>); <code>next_test_seed()</code>
+(<code class="ref">test_mode.h:125-144</code>) hands the running thread its lane's next ordinal, and a
+default-constructed <code>PRG</code> packs the pair as <code>makeBlock(lane, ordinal)</code>. A creator assigns
+spawned work a lane <em>on its own thread</em> via <code>next_test_child_lane()</code> (a hierarchical
+splitmix64 mix, <code class="ref">test_mode.h:152-158</code>), and the worker installs it with the RAII
+<code>test_lane_scope</code> guard (<code class="ref">test_mode.h:164-179</code>). Lane 0 is single-owner: a
+second thread drawing main-lane randomness would replay identical streams, so it is caught by a CAS-based guard
+that <b>aborts always-on rather than via an <code>assert</code></b> — deliberately, since test mode usually runs
+under Release/NDEBUG (<code class="ref">test_mode.h:128-142</code>). This makes the vendored
+<code>ThreadPool</code> a <b>locally-modified</b> file rather than a pristine drop: <code>enqueue</code> now
+includes <code>test_mode.h</code> and, in test mode, derives a per-task lane on the enqueuing thread and wraps
+the task body in <code>test_lane_scope</code> (<code class="ref">ThreadPool.h:28-34,100-116</code>), so
+pool-parallel randomness reproduces regardless of which worker runs a task.</p></div>
 
 <h3>utils — bit/byte packing (the footgun-rich part)</h3>
 <ul>
@@ -437,42 +452,42 @@ Same alignment-assert caveat as AES (<code class="ref">prp.h:30-31</code>).</p><
 <p><code>PRG</code> is <b>AES-128 in counter mode with a secret key</b> — the standard CTR-PRG, <em>not</em> the
 fixed-key correlation-robust construction. <code>random_block</code> calls <code>detail::ParaCtrEnc</code> using
 <code>CtrStore::Plain</code>, i.e. <code>dst[i] = AES_key(counter+i)</code> with no Davies–Meyer XOR-back and a
-<em>secret</em> key (the seed, <code class="ref">prg.h:186-204</code>). Security reduces to PRP/PRF security of
+<em>secret</em> key (the seed, <code class="ref">prg.h:188-206</code>). Security reduces to PRP/PRF security of
 AES-128 — a clean, standard assumption.</p>
 
-<h3>Seeding (<code class="ref">prg.h:20-73</code>)</h3>
+<h3>Seeding (<code class="ref">prg.h:20-75</code>)</h3>
 <ol>
 <li>Given seed pointer → unaligned-safe <code>_mm_loadu_si128</code> (<code class="ref">prg.h:21-29</code>).</li>
-<li>Else if test mode → deterministic counter seed <b>(insecure by design,
-<code class="ref">prg.h:32-37</code>)</b>.</li>
+<li>Else if test mode → a deterministic <code>(lane, ordinal)</code> pair seed <b>(insecure by design,
+<code class="ref">prg.h:32-39</code>)</b>.</li>
 <li>Else with <code>ENABLE_RDSEED</code> → <code>_rdseed64_step</code> ×2, rejecting <code>0</code>/<code>all-ones</code>
 to dodge an AMD CPU bug (PR #156), up to 10 attempts, falling back to urandom
-(<code class="ref">prg.h:42-54</code>).</li>
-<li>Else → <code>/dev/urandom</code> via <code>std::random_device</code> (<code class="ref">prg.h:58-66</code>).</li>
+(<code class="ref">prg.h:44-56</code>).</li>
+<li>Else → <code>/dev/urandom</code> via <code>std::random_device</code> (<code class="ref">prg.h:60-68</code>).</li>
 </ol>
 <div class="callout c-audit"><span class="lbl">Seeding caveats</span>
 <p><code>rdseed</code> failure <b>silently</b> degrades to urandom (fine for security — urandom is trusted — but
 an operator can't tell which source was used). The <code>reseed(seed, id)</code> <code>id</code> parameter is
-XORed into the low 64 bits (<code class="ref">prg.h:67-73</code>): <code>PRG(seed, id)</code> equals
+XORed into the low 64 bits (<code class="ref">prg.h:69-75</code>): <code>PRG(seed, id)</code> equals
 <code>PRG(seed⊕id, 0)</code>, so <code>id</code> is a domain separator over a fixed seed, <b>not</b>
 independent entropy.</p></div>
 
 <h3>Streaming &amp; forking</h3>
 <p><code>position()</code>/<code>seek(c)</code>/<code>fork_at(c)</code> manage the 64-bit counter
-(<code class="ref">prg.h:79-88</code>). <code>fork_at</code> copies the PRG <b>sharing the AES key</b> (no
+(<code class="ref">prg.h:81-90</code>). <code>fork_at</code> copies the PRG <b>sharing the AES key</b> (no
 re-key) and seeks.</p>
 <div class="callout c-warn"><span class="lbl">CTR two-time-pad if forks overlap</span>
 <p>Two forks at non-overlapping counter ranges are independent, but <b>overlapping counter ranges across
 forks reuse keystream</b> — a classic CTR two-time-pad if misused. The 64-bit counter can wrap after 2⁶⁴ blocks
 (unchecked, not a practical concern).</p></div>
 <p>API surface: <code>random_block</code> (asserts 16-byte alignment, tiles in 64-block chunks,
-<code class="ref">prg.h:186-204</code>), <code>random_data</code> (requires 16-byte alignment,
-<code class="ref">prg.h:91-100</code>), <code>random_data_unaligned</code> (alignment-agnostic, uses
+<code class="ref">prg.h:188-206</code>), <code>random_data</code> (requires 16-byte alignment,
+<code class="ref">prg.h:93-102</code>), <code>random_data_unaligned</code> (alignment-agnostic, uses
 <code>memmove</code> because the aligned region overlaps the destination — a refactor to <code>memcpy</code>
-would silently corrupt output, <code class="ref">prg.h:135-184</code>), <code>random_bool</code> (1 random bit
-per bool — 8× less AES work, <code class="ref">prg.h:105-133</code>), and <code>operator()</code> as a C++
+would silently corrupt output, <code class="ref">prg.h:137-186</code>), <code>random_bool</code> (1 random bit
+per bool — 8× less AES work, <code class="ref">prg.h:107-135</code>), and <code>operator()</code> as a C++
 <code>UniformRandomBitGenerator</code> backed by an <code>alignas(block)</code> buffer so the
-<code>(block*)</code> reinterpret meets the alignment assert (<code class="ref">prg.h:206-225</code>).</p>
+<code>(block*)</code> reinterpret meets the alignment assert (<code class="ref">prg.h:208-227</code>).</p>
 <div class="callout c-note"><span class="lbl">Security summary</span>
 <p>Standard CTR-DRBG-style construction over secret-key AES-128. <b>No reseeding-on-output-volume and no
 backtracking resistance</b>: recovering the AES key + counter reproduces all past and future output — by design
@@ -657,8 +672,8 @@ against the explicit reference key derivation and <code>hash_cir == hash(σ(·))
 <h2 id="hash">10 · B · Hash (SHA-256 default / optional BLAKE3) &amp; the random oracle</h2>
 <p><span class="tag">crypto/hash.h</span> <span class="tag">crypto/ro.h</span> <span class="tag">third_party/blake3/</span></p>
 <p><code>emp::Hash</code> is no longer SHA-256-only: it is the alias <code>using Hash = HashT&lt;&gt;</code>
-(<code class="ref">hash.h:180</code>) over <code>template&lt;HashOption opt = EMP_HASH_DEFAULT&gt; class HashT</code>
-(<code class="ref">hash.h:46-47</code>), where <code>enum class HashOption { sha256, blake3 }</code>
+(<code class="ref">hash.h:218</code>) over <code>template&lt;HashOption opt = EMP_HASH_DEFAULT&gt; class HashT</code>
+(<code class="ref">hash.h:81-82</code>), where <code>enum class HashOption { sha256, blake3 }</code>
 (<code class="ref">hash.h:23</code>) and <code>EMP_HASH_DEFAULT</code> macro-defaults to
 <code>::emp::HashOption::sha256</code> unless the build overrides it (<code class="ref">hash.h:25-27</code>).
 The SHA-256 instantiation is the RAII wrapper over OpenSSL's <code>EVP_MD_CTX</code>; the BLAKE3 instantiation
@@ -679,9 +694,9 @@ persistent context backs the one-shot <code>hash_once</code> (<code class="ref">
 Selecting <code>blake3</code> compiles the vendored BLAKE3 v1.8.5 (<code>third_party/blake3/</code>, ~5.4K LOC,
 dual CC0-1.0/Apache-2.0, see <code>VENDOR.md</code>) straight into <code>libemp-tool</code> with per-file ISA
 flags (sse2/sse4.1/avx2/avx512 sources on x86_64, NEON on aarch64, portable-only elsewhere;
-<code class="ref">CMakeLists.txt:149-172</code>) and exports <b>PUBLIC</b> definitions
+<code class="ref">CMakeLists.txt:173-189</code>) and exports <b>PUBLIC</b> definitions
 <code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT=::emp::HashOption::blake3</code>
-(<code class="ref">CMakeLists.txt:176-180</code>), so downstream consumers inherit the choice
+(<code class="ref">CMakeLists.txt:193, 195</code>), so downstream consumers inherit the choice
 with no source change. Note BLAKE3's own <code>blake3_dispatch.c</code> does <em>runtime</em> cpuid dispatch
 among its compiled-in kernels — unlike every emp-tool kernel (§14). Switching backends changes every
 Fiat–Shamir / commitment transcript, so both parties must build identically.</p>
@@ -694,16 +709,18 @@ transcripts). When BLAKE3 is compiled in, every TU statically references
 built with (<code class="ref">ec.cpp:504-509</code> — one of the compiled TUs). A consumer built with a
 mismatched <code>EMP_HASH_DEFAULT</code> (e.g. a stale prebuilt <code>libemp-tool.a</code>) gets an
 undefined-reference <b>link error</b> instead of silent Hash-layout memory corruption at runtime.</p></div>
-<div class="callout c-audit"><span class="lbl">Test gap — test_hash pins SHA-256 unconditionally</span>
-<p><code>test_hash.cpp</code> has <b>zero conditional compilation</b> (no <code>EMP_WITH_BLAKE3</code>
-anywhere) and is registered unconditionally (<code>test/CMakeLists.txt:51</code>). Its
-<code>check_known_vectors()</code> (FIPS 180-4 SHA-256 answers) and <code>check_against_openssl()</code>
-(byte-compares <code>Hash::hash_once</code> vs OpenSSL <code>SHA256()</code>) call the bare <code>Hash</code>
-alias — under a <code>-DEMP_HASH_BACKEND=blake3</code> build these compare BLAKE3 output against SHA-256
-reference values and must fail. The introducing commit's "35/35 ctest incl. the cheat/abort suite pass under
-BLAKE3" claim cannot have included this test passing (the phrasing suggests a downstream suite — emp-tool has
-no cheat/abort tests); either way, <code>test_hash</code> was not green under the BLAKE3 configuration. There
-is also no BLAKE3 known-answer vector anywhere in the test tree.</p></div>
+<div class="callout c-ok"><span class="lbl">Resolved — test_hash is now backend-aware</span>
+<p>Earlier revisions pinned SHA-256 unconditionally against the bare <code>Hash</code> alias, so a
+<code>-DEMP_HASH_BACKEND=blake3</code> build compared BLAKE3 output against SHA-256 reference values and could
+not have been green. The current tree fixes this: the known-answer checks pin
+<code>HashT&lt;HashOption::sha256&gt;</code> explicitly (<code>check_sha256_known_vectors</code> /
+<code>check_sha256_against_openssl</code>, <code class="ref">test_hash.cpp:74-119</code>), so they hold whatever
+the build default is, and a new <code>check_blake3_known_vectors</code> under <code>#ifdef EMP_WITH_BLAKE3</code>
+(<code class="ref">test_hash.cpp:121-149</code>) pins the official BLAKE3 vectors (input byte
+<code>i mod 251</code>) at lengths 0/3/1024/4096 — the 4096 case crosses chunk boundaries into the tree/parent
+path. The BLAKE3 check is compiled in only when the backend is built in
+(<code class="ref">test_hash.cpp:203-205</code>); registration is still unconditional
+(<code>test/CMakeLists.txt:51</code>).</p></div>
 <div class="callout c-note"><span class="lbl">hash_for_block — 128-bit truncation</span>
 <p><code>hash_for_block</code> returns the <b>first 16 bytes</b> of the 32-byte digest as a <code>block</code>
 (<code class="ref">hash.h:158-165</code>; SHA-256 by default, BLAKE3 under that build — the truncation
@@ -879,15 +896,17 @@ Constructing any TLSIO installs a process-global <code>SIGPIPE</code> ignore
 <h3>TraceIO — wire-byte record adapter</h3>
 <p>A wrapping <code>IOChannel</code> that <b>tees every wire byte</b> to <code>&lt;prefix&gt;.send</code> /
 <code>&lt;prefix&gt;.recv</code> while delegating to an underlying transport (borrowed, not owned,
-<code class="ref">trace_io.h:28-83</code>). Send teeing writes to the trace file <em>before</em> delivering
-(<code class="ref">trace_io.h:56-66</code>); recv delivers first then tees (<code class="ref">trace_io.h:68-74</code>).
+<code class="ref">trace_io.h:33-88</code>). Send teeing writes to the trace file <em>before</em> delivering
+(<code class="ref">trace_io.h:61-71</code>); recv delivers first then tees (<code class="ref">trace_io.h:73-79</code>).
 It calls the inner channel's <code>*_internal</code> directly so counters don't double-count. Short
 <code>fwrite</code> → <code>abort()</code>.</p>
 <div class="callout c-audit"><span class="lbl">Dev/CI tool only — plaintext wire bytes to disk</span>
 <p>TraceIO writes <b>plaintext wire bytes to disk</b> (truncating <code>fopen(…, "wb")</code>, default umask, no
-encryption, <code class="ref">trace_io.h:37-48</code>). Protocol wire bytes are generally masked shares, but not
+encryption, <code class="ref">trace_io.h:42-53</code>). Protocol wire bytes are generally masked shares, but not
 always — this is an at-rest disclosure if sensitive. Its determinism contract ties correctness to the insecure
-test mode (§A). Never leave enabled in a deployment.</p></div>
+test mode (§A) and now requires <b>one lane per traced channel</b> — concurrent writers to a single channel
+interleave nondeterministically even under deterministic seeds (<code class="ref">trace_io.h:18-23</code>).
+Never leave enabled in a deployment.</p></div>
 
 <!-- ============================== PART D ============================== -->
 <h2 id="exec">13 · D · Half-gate &amp; privacy-free garbling</h2>
@@ -899,13 +918,13 @@ label (eval); <b>XOR and NOT are free</b> (a label XOR with the global <code>del
 caller. Both assume the <b>Free-XOR</b> invariant: a wire's two labels differ by a global secret
 <code>delta</code> with LSB 1.</p>
 
-<h3>Half-gate (<code class="ref">half_gate.h:16-47</code>)</h3>
+<h3>Half-gate (<code class="ref">half_gate.h:19-50</code>)</h3>
 <p>The hash is <b>MITCCRH</b> (§9), passed as a template parameter so the protocol picks
-BatchSize/ReuseShift (<code class="ref">half_gate.h:12-16</code>): <code>setS(delta)</code> seeds it,
+BatchSize/ReuseShift (<code class="ref">half_gate.h:13-17</code>): <code>setS(delta)</code> seeds it,
 <code>hash_cir&lt;K,H&gt;</code> applies σ
-then a batched Davies–Meyer AES fold. <code>halfgates_garble</code> (<code class="ref">half_gate.h:17-32</code>)
+then a batched Davies–Meyer AES fold. <code>halfgates_garble</code> (<code class="ref">half_gate.h:19-35</code>)
 emits a <b>2-ciphertext table</b> from 4 hashes (<code>hash_cir&lt;2,2&gt;</code>); <code>halfgates_eval</code>
-(<code class="ref">half_gate.h:35-47</code>) recovers the output label from 2 hashes
+(<code class="ref">half_gate.h:37-50</code>) recovers the output label from 2 hashes
 (<code>hash_cir&lt;2,1&gt;</code>). Branching is only on the <em>public</em> point-and-permute LSBs via the
 branch-free <code>select_mask[pa]</code>; the citation is Zahur–Rosulek–Evans 2014 (eprint 2014/756,
 <code class="ref">half_gate.h:9</code>).</p>
@@ -988,23 +1007,23 @@ OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equ
 <tr><td>10</td><td>Non-constant-time EC <code>hash_to_point</code> (<code>BN_mod_sqrt</code> / square-ness branches)</td><td><code class="ref">ec.cpp:101-179</code></td><td>Safe only if hashed inputs are public</td></tr>
 <tr><td>11</td><td>Subgroup safety assumes cofactor-1 (P-256 only)</td><td><code class="ref">ec.cpp:342-344</code></td><td>Latent if the curve NID is ever changed</td></tr>
 <tr><td>12</td><td>Fixed zero default keys (PRP/CCRH); predictable SessionID children if seed low-entropy</td><td><code class="ref">prp.h:19</code>, <code class="ref">ccrh.h:12</code>, <code class="ref">session_id.h:44</code></td><td>Deterministic across deployments — sound only in the RPM / domain-separation use</td></tr>
-<tr><td>13</td><td>PRG CTR two-time-pad if forks reuse overlapping counter ranges</td><td><code class="ref">prg.h:84-88</code></td><td>Misuse hazard; non-overlapping forks are independent</td></tr>
-<tr><td>14</td><td>Second hash backend (<code>EMP_HASH_BACKEND=blake3</code>) is a protocol-wide transcript change; <code>HashAbiMarker</code> link guard covers the mixed-default ODR hazard, but only when BLAKE3 is compiled in</td><td><code class="ref">hash.h:23-54</code>, <code class="ref">ec.cpp:504-509</code>, <code class="ref">CMakeLists.txt:149-180</code></td><td>Both parties must build identically; SHA-256 stays the default — no transcript change unless opted in</td></tr>
-<tr><td>15</td><td><code>test_hash.cpp</code> pins SHA-256 KATs against the bare <code>Hash</code> alias with no BLAKE3 variant — a blake3-default build fails it; no BLAKE3 known-answer vector in-tree</td><td><code>test/runtime/test_hash.cpp</code>, <code class="ref">test/CMakeLists.txt:51</code></td><td>Test gap; the introducing commit's "35/35 under BLAKE3" claim did not cover it</td></tr>
-<tr><td>16</td><td><code>MITCCRH::hash_cir_fixed</code> has zero test coverage (only its own definition and comment reference it)</td><td><code class="ref">mitccrh.h:119-133</code></td><td>New primitive shipped untested; the MITCCRH reference-derivation pinning does not cover it</td></tr>
-<tr><td>17</td><td>Six-kernel transpose family anchored only to the generic SSE2 <code>sse_trans</code> (parity test); the generic reference itself is round-trip-tested only, never against an independent transpose</td><td><code class="ref">transpose.hpp:748-772</code>, <code>test_block.cpp</code></td><td>A self-inverse bug in the shared reference would pass every tier</td></tr>
+<tr><td>13</td><td>PRG CTR two-time-pad if forks reuse overlapping counter ranges</td><td><code class="ref">prg.h:86-90</code></td><td>Misuse hazard; non-overlapping forks are independent</td></tr>
+<tr><td>14</td><td>Second hash backend (<code>EMP_HASH_BACKEND=blake3</code>) is a protocol-wide transcript change; <code>HashAbiMarker</code> link guard covers the mixed-default ODR hazard, but only when BLAKE3 is compiled in</td><td><code class="ref">hash.h:23-54</code>, <code class="ref">ec.cpp:504-509</code>, <code class="ref">CMakeLists.txt:166-196</code></td><td>Both parties must build identically; SHA-256 stays the default — no transcript change unless opted in</td></tr>
+<tr><td>15</td><td><code>MITCCRH::hash_cir_fixed</code> has zero test coverage (only its own definition and comment reference it)</td><td><code class="ref">mitccrh.h:119-133</code></td><td>New primitive shipped untested; the MITCCRH reference-derivation pinning does not cover it</td></tr>
+<tr><td>16</td><td>Six-kernel transpose family anchored only to the generic SSE2 <code>sse_trans</code> (parity test); the generic reference itself is round-trip-tested only, never against an independent transpose</td><td><code class="ref">transpose.hpp:748-772</code>, <code>test_block.cpp</code></td><td>A self-inverse bug in the shared reference would pass every tier</td></tr>
 </table>
 
 <div class="callout c-ok"><span class="lbl">Strong correctness baseline</span>
 <p>AES vs FIPS-197 KAT + OpenSSL; <code>gfmul</code> vs a bit-level scalar reference + field axioms; CCRH/MITCCRH
 vs their exact mathematical definitions; PRP vs OpenSSL ECB across batch-boundary sizes; SHA-256 vs FIPS 180-4 +
-OpenSSL; hash-to-curve vs RFC 9380 §J vectors; RO framing vs an independent frame-builder; PRG counter/fork/seek
-invariants; IO round-trips at unaligned offsets; half-gate over all four input combinations; the transpose
-tiers parity-checked against the generic <code>sse_trans</code>. The tests are the
-most precise available specification of intended behavior and should be read as part of the audit. The noted
-gaps: the generic <code>sse_trans</code> reference is round-trip-tested only, not against an independent
-transpose (#17); <code>hash_cir_fixed</code> is untested (#16); <code>test_hash</code> has no BLAKE3 variant
-(#15).</p></div>
+OpenSSL (and, under a BLAKE3 build, the official BLAKE3 known-answer vectors); hash-to-curve vs RFC 9380 §J
+vectors; RO framing vs an independent frame-builder; PRG counter/fork/seek invariants; test-mode
+<code>(lane, ordinal)</code> determinism — main-lane sequencing, <code>test_lane_scope</code> nesting, and pool
+reproducibility across fresh pools (<code>test_test_mode.cpp</code>); IO round-trips at unaligned offsets;
+half-gate over all four input combinations; the transpose tiers parity-checked against the generic
+<code>sse_trans</code>. The tests are the most precise available specification of intended behavior and should be
+read as part of the audit. The noted gaps: the generic <code>sse_trans</code> reference is round-trip-tested
+only, not against an independent transpose (#16); <code>hash_cir_fixed</code> is untested (#15).</p></div>
 
 </main>
 <footer>

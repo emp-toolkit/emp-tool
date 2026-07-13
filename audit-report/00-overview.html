@@ -124,7 +124,7 @@ downstream contexts (semi-honest 2PC, malicious 2PC, ZK) that build on it.</p>
   <div class="stat"><div class="n">4+1</div><div class="l">reusable contexts (+ComposeCtx)</div></div>
   <div class="stat"><div class="n">5</div><div class="l">typed value families</div></div>
   <div class="stat"><div class="n">63</div><div class="l">.empbc circuit assets</div></div>
-  <div class="stat"><div class="n">36</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
+  <div class="stat"><div class="n">37</div><div class="l">test_*.cpp (+probes, +9 neg)</div></div>
   <div class="stat"><div class="n">13</div><div class="l">design docs</div></div>
 </div>
 
@@ -226,7 +226,7 @@ because float ops are <em>replayed</em> from prebuilt <code>.empbc</code> artifa
 <tr><td><code>circuits/</code></td><td>~1,169</td><td>The typed <code>*_T&lt;Ctx&gt;</code> value family, numeric_kernels, oblivious sort, value_traits, umbrellas</td><td><a href="03-circuits.html">Report 3</a></td></tr>
 <tr><td><code>circuits/crypto/</code></td><td>~710</td><td>In-MPC AES-128 / SHA-256 / Keccak over Bit/BitVec values</td><td><a href="03-circuits.html">Report 3</a></td></tr>
 <tr><td><code>circuits/frontend/</code></td><td>~412</td><td>circuit_fn compile/<code>compile_linear</code>/replay + rec aliases + <code>RecordValue</code>; opt-in <code>compose&lt;&gt;()</code> (<code>compose.h</code>, 54 LOC, outside the <code>frontend.h</code> umbrella)</td><td><a href="03-circuits.html">Report 3</a></td></tr>
-<tr><td><code>third_party/</code> (in <code>emp-tool/</code>)</td><td>11,334</td><td>ThreadPool.h (~112) + sse2neon.h (~11,222, arm64 intrinsic shim) — vendored, excluded from first-party LOC</td><td>—</td></tr>
+<tr><td><code>third_party/</code> (in <code>emp-tool/</code>)</td><td>11,354</td><td>ThreadPool.h (~132, locally altered — <code>1e00838</code> couples it to <code>runtime/core/test_mode.h</code> so pool tasks run under a deterministic test-mode lane) + sse2neon.h (~11,222, pristine arm64 intrinsic shim) — vendored, excluded from first-party LOC</td><td>—</td></tr>
 <tr><td><code>third_party/blake3/</code> (repo root)</td><td>~4,769</td><td>Vendored BLAKE3 v1.8.5 (10 .c/.h files + per-ISA compiled sources; see its <code>VENDOR.md</code>, dual CC0-1.0/Apache-2.0) — compiled into <code>libemp-tool</code> only when <code>EMP_HASH_BACKEND=blake3</code> / <code>EMP_WITH_BLAKE3</code>; added in <code>b1f4efd</code></td><td><a href="01-runtime.html">Report 1</a></td></tr>
 </table>
 
@@ -315,21 +315,21 @@ include path. Keeping them apart is essential when reading the code.</p>
 <tr><th>Requirement</th><th>Detail</th></tr>
 <tr><td>CMake</td><td>≥ 3.25; out-of-source build enforced (configure fails otherwise)</td></tr>
 <tr><td>Compiler</td><td>C++20 (exported <code>PUBLIC cxx_std_20</code> — consumers including these headers must build C++20; concepts / <code>std::regular</code> / <code>std::span</code>); <code>CXX_EXTENSIONS OFF</code></td></tr>
-<tr><td>OpenSSL</td><td><code>find_package(OpenSSL REQUIRED)</code> (SSL + Crypto); no minimum pinned. macOS CI sets <code>OPENSSL_ROOT_DIR</code> to <code>brew --prefix openssl@3</code></td></tr>
+<tr><td>OpenSSL</td><td><code>find_package(OpenSSL 3.0 REQUIRED)</code> (SSL + Crypto); minimum version 3.0. macOS CI sets <code>OPENSSL_ROOT_DIR</code> to <code>brew --prefix openssl@3</code></td></tr>
 <tr><td>Threads</td><td><code>find_package(Threads REQUIRED)</code> (pthreads)</td></tr>
 <tr><td>ISA (x86_64)</td><td>floor = AES-NI + PCLMUL + SSSE3 + SSE4.2; SIMD tiers (VAES, VPCLMULQDQ, AVX-512, and — since <code>c57538b</code>/<code>0b07d67</code> — the GFNI transpose tiers <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code>) selected at <b>compile time</b> from feature macros, available only with <code>-march=native</code></td></tr>
-<tr><td>ISA (arm64)</td><td>always <code>-march=armv8-a+crypto+crc</code> (not gated by the native-arch option)</td></tr>
+<tr><td>ISA (arm64)</td><td>portable floor <code>-march=armv8-a+crypto+crc</code>; since <code>cd5ef1e</code> the native-arch option bakes <code>-mcpu=native</code> instead (arm64 is now gated by that option too, matching x86)</td></tr>
 <tr><td>Endianness</td><td><b>Little-endian only</b> — <code>runtime/runtime.h</code> (pulled in by <code>emp-tool.h</code>) <code>static_assert</code>s and refuses to build on big-endian</td></tr>
 </table>
 <h3>CMake options</h3>
 <table class="grid">
 <tr><th>Option</th><th>Default</th><th>Effect</th></tr>
 <tr><td><code>CMAKE_BUILD_TYPE</code></td><td>Release (forced if unset)</td><td>Release = <code>-O3 -funroll-loops</code>; Debug = <code>-O0 -g</code></td></tr>
-<tr><td><code>EMP_TOOL_NATIVE_ARCH</code></td><td>ON</td><td>x86: bakes <code>-march=native</code> (host-locked, may SIGILL on older CPUs). OFF = portable floor. No effect on arm64</td></tr>
+<tr><td><code>EMP_TOOL_NATIVE_ARCH</code></td><td>ON</td><td>bakes the host CPU's ISA — <code>-march=native</code> on x86, <code>-mcpu=native</code> on arm64 (host-locked, may SIGILL on older CPUs). OFF = portable floor (x86: AES-NI + PCLMUL + SSSE3 + SSE4.2; arm64: <code>-march=armv8-a+crypto+crc</code>). arm64 gating added in <code>cd5ef1e</code></td></tr>
 <tr><td><code>EMP_TOOL_BUILD_TESTS</code></td><td>ON at top level</td><td>builds <code>test_*</code> + registers ctest (incl. 9 negative compile-failure contract probes)</td></tr>
 <tr><td><code>EMP_TOOL_BUILD_BENCHMARKS</code></td><td>OFF</td><td>builds <code>bench_*</code> (not registered with ctest)</td></tr>
 <tr><td><code>EMP_TOOL_INSTALL</code></td><td>ON at top level</td><td>install + export rules; <code>find_package(emp-tool)</code> works in install- and build-tree modes</td></tr>
-<tr><td><code>EMP_HASH_BACKEND</code></td><td><code>sha256</code> (cache STRING: <code>sha256</code>|<code>blake3</code>)</td><td>selects the algorithm behind <code>emp::Hash</code> (<code>HashT&lt;EMP_HASH_DEFAULT&gt;</code>). <code>blake3</code> auto-enables <code>EMP_WITH_BLAKE3</code>, compiles repo-root <code>third_party/blake3/</code> into <code>libemp-tool</code> (per-file ISA-tiered sources: SSE2/SSE4.1/AVX2/AVX-512 on x86_64, NEON on aarch64), and PUBLIC-defines <code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT</code> so downstream consumers inherit the choice with no source change (CMakeLists.txt:32-34, 149-179). A separate <code>EMP_WITH_BLAKE3</code> option (default OFF, auto-on when the backend is <code>blake3</code>; CMakeLists.txt:34) compiles the vendored backend so a site can name <code>HashT&lt;HashOption::blake3&gt;</code> explicitly while the process default stays <code>sha256</code> — instantiating it without that flag is a <code>static_assert</code> failure (hash.h:52). A <code>HashAbiMarker</code> link-time guard (hash.h:39-44, symbol defined in <code>ec.cpp:509</code>) turns a mixed-default link into an undefined-reference error. New in <code>b1f4efd</code></td></tr>
+<tr><td><code>EMP_HASH_BACKEND</code></td><td><code>sha256</code> (cache STRING: <code>sha256</code>|<code>blake3</code>)</td><td>selects the algorithm behind <code>emp::Hash</code> (<code>HashT&lt;EMP_HASH_DEFAULT&gt;</code>). <code>blake3</code> auto-enables <code>EMP_WITH_BLAKE3</code>, compiles repo-root <code>third_party/blake3/</code> into <code>libemp-tool</code> (per-file ISA-tiered sources: SSE2/SSE4.1/AVX2/AVX-512 on x86_64, NEON on aarch64), and PUBLIC-defines <code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT</code> so downstream consumers inherit the choice with no source change (CMakeLists.txt:32-34, 166-197). A separate <code>EMP_WITH_BLAKE3</code> option (default OFF, auto-on when the backend is <code>blake3</code>; CMakeLists.txt:34) compiles the vendored backend so a site can name <code>HashT&lt;HashOption::blake3&gt;</code> explicitly while the process default stays <code>sha256</code> — instantiating it without that flag is a <code>static_assert</code> failure (hash.h:86). A <code>HashAbiMarker</code> link-time guard (hash.h:67, symbol defined in <code>ec.cpp:509</code>) turns a mixed-default link into an undefined-reference error. New in <code>b1f4efd</code></td></tr>
 </table>
 <div class="callout c-note"><span class="lbl">Circuit assets are committed, not generated</span>
 <p>The 63 <code>.empbc</code> files are pre-generated and git-tracked under <code>emp-tool/ir/files/</code> — the
@@ -353,8 +353,10 @@ this audit:</p>
 <tr><td><code>test_conventions.md</code></td><td>test file layout</td><td><code>benchmark_conventions.md</code></td><td>benchmark layout</td></tr>
 <tr><td><code>composition.md</code></td><td>the <code>run</code>/<code>run_compose</code> inline-vs-reuse composition model (new with <code>67642c2</code>; linked from <code>frontend.md</code>)</td><td></td><td></td></tr>
 </table>
-<p>The <code>test/</code> directory holds <b>36 <code>test_*.cpp</code> files</b> (one per primitive/layer header, under <code>test/{circuits,ir,runtime}/</code>;
-<code>test/ir/test_transform.cpp</code> and <code>test/ir/test_compose.cpp</code> joined in <code>67642c2</code>).
+<p>The <code>test/</code> directory holds <b>37 <code>test_*.cpp</code> files</b> (one per primitive/layer header, under <code>test/{circuits,ir,runtime}/</code>;
+<code>test/ir/test_transform.cpp</code> and <code>test/ir/test_compose.cpp</code> joined in <code>67642c2</code>, and
+<code>test/runtime/test_test_mode.cpp</code> — covering the <code>(lane, ordinal)</code> seed model, lane-scope nesting,
+and pool determinism across fresh pools — in <code>1e00838</code>).
 The primitive/value tests are each a tutorial <code>example()</code> + a <code>run_correctness()</code> against
 external ground truth (NIST/FIPS vectors, OpenSSL cross-checks, scalar references, boundary cases); the IR-layer
 tests are structural checks, several using fork-based child-process probes to assert fatal rejection
@@ -363,7 +365,8 @@ tests are structural checks, several using fork-based child-process probes to as
 compile-failure targets</b> (<code>circuit_fn_contract_neg_1..9</code>, all <code>EXCLUDE_FROM_ALL</code>, built
 from that probes file) that must fail to compile with a specific expected diagnostic. <b>12 throughput
 benchmarks</b> build only on demand. CI runs the matrix {ubuntu-latest, ubuntu-24.04-arm, macos-latest} ×
-{Debug, Release} with the portable ISA floor + ctest, plus a weekly CodeQL security scan.</p>
+{Debug, Release} with the portable ISA floor + ctest (47 registered cases — 38 run-test executables plus the 9
+negative compile-failure probes), plus a weekly CodeQL security scan.</p>
 
 <!-- ===================================================================== -->
 <h2 id="ecosystem">8 · Ecosystem &amp; downstream position</h2>
@@ -386,7 +389,7 @@ should internalize.</p>
 <table class="grid">
 <tr><th>Posture item</th><th>What to know</th></tr>
 <tr><td><b>Compile-time-only ISA dispatch</b></td><td>The SIMD tier (VAES/VPCLMULQDQ/AVX-512) is chosen from feature macros at build time — there is <b>no runtime CPUID fallback</b>. A <code>-march=native</code> binary is host-CPU-locked and will SIGILL on an older CPU. Mitigation: <code>EMP_TOOL_NATIVE_ARCH=OFF</code>. Commits <code>c57538b</code>/<code>0b07d67</code> widened this surface: the six-tier bit-transpose dispatcher (<code>runtime/core/transpose.hpp:748</code>) adds <code>EMP_HAS_GFNI512</code>/<code>EMP_HAS_GFNI256</code> x86 tiers plus a native NEON tier, all under the same compile-time-only scheme; the BLAKE3 option's per-file ISA sources are likewise build-time-selected.</td></tr>
-<tr><td><b>Hash backend is a build-time ABI axis</b> <span class="tag">new · b1f4efd</span></td><td><code>emp::Hash</code> is now <code>HashT&lt;EMP_HASH_DEFAULT&gt;</code> (<code>runtime/crypto/hash.h:46</code>); <code>EMP_HASH_BACKEND=blake3</code> flips the digest algorithm for the whole process <em>and</em>, via PUBLIC CMake definitions, every downstream consumer. Two builds that disagree cannot interoperate (transcripts, RO/FS hashes) and their <code>Hash</code> layouts differ (<code>state_t</code> = <code>EVP_MD_CTX*</code> vs <code>blake3_hasher</code>) — the <code>HashAbiMarker</code> guard (hash.h:39-44, defined in <code>ec.cpp:509</code>) converts a mixed-default link into an undefined-reference error rather than silent ODR corruption. Test gap: <code>test/runtime/test_hash.cpp</code> unconditionally pins FIPS 180-4 SHA-256 answers against the bare <code>Hash</code> alias (no <code>#ifdef EMP_WITH_BLAKE3</code> anywhere), so it must fail under a blake3-configured build — there is <b>no in-tree BLAKE3 KAT</b>. The default <code>sha256</code> build is byte-identical to before.</td></tr>
+<tr><td><b>Hash backend is a build-time ABI axis</b> <span class="tag">new · b1f4efd</span></td><td><code>emp::Hash</code> is now <code>HashT&lt;EMP_HASH_DEFAULT&gt;</code> (<code>runtime/crypto/hash.h:82</code>); <code>EMP_HASH_BACKEND=blake3</code> flips the digest algorithm for the whole process <em>and</em>, via PUBLIC CMake definitions, every downstream consumer. Two builds that disagree cannot interoperate (transcripts, RO/FS hashes) and their <code>Hash</code> layouts differ (<code>state_t</code> = <code>EVP_MD_CTX*</code> vs <code>blake3_hasher</code>) — the <code>HashAbiMarker</code> guard (hash.h:67, defined in <code>ec.cpp:509</code>) converts a mixed-default link into an undefined-reference error rather than silent ODR corruption. <code>test/runtime/test_hash.cpp</code> is backend-aware (<code>f3c7c74</code>): the FIPS 180-4 SHA-256 answers are pinned to <code>HashT&lt;HashOption::sha256&gt;</code>, and official BLAKE3 known-answer vectors run under <code>#ifdef EMP_WITH_BLAKE3</code>. The default <code>sha256</code> build is byte-identical to before.</td></tr>
 <tr><td><b>WireReuse relaxes the IR's single-writer invariant</b> <span class="tag">new · 67642c2</span></td><td>A <code>WireReuse::Linear/Full</code> program deliberately rewrites wire ids, so <code>validate_program</code>'s reuse branch (<code>ir/validate.h:50-93</code>) proves only <em>executability</em> (in-range, written-before-read, no input writes, bounded <code>num_wires ≤ num_inputs + num_gates</code>) — liveness-safety of a given reuse is the <em>producer's</em> contract (<code>ir/transform.h</code>), checked by execute-compare/digest tests, not the validator. The mode rides in <code>.empbc</code> flags bits 0-1; unknown bits and reserved value 3 are rejected (<code>ir/empbc.h:127-132</code>), and pre-67642c2 readers fail closed on any nonzero flags byte. The dense-only analyses (<code>liveness/schedule/layout_pass</code>) and <code>scheduled_execute_program</code> refuse reuse programs via always-on <code>require_dense</code> (<code>ir/passes.h:31,73,94,134</code>; <code>ir/schedule.h:63</code>), turning silent lifetime-aliasing miscomputation into a fatal rejection.</td></tr>
 <tr><td><b>Validation that survives NDEBUG — and that doesn't</b></td><td><code>.empbc</code> structural validation (<code>validate_program</code>) is always-on in Release and reports through the stack-wide fatal <code>error()</code> path. Developer-misuse guards remain <b>debug-only</b> by default: the cross-context guard (<code>check_same_context</code>, opt back in with <code>-DEMP_CONTEXT_CHECKS=1</code>) and the schedule-plan digest staleness check. Peer-controlled EC point lengths are now hard-checked in <code>recv_pt</code>; local misuse checks such as FS double-enable and alignment remain assertions.</td></tr>
 <tr><td><b>Test-mode randomness kill switch</b></td><td><code>EMP_TEST_MODE=1</code> (or <code>set_test_mode(true)</code>) swaps PRG seeding and EC scalar generation for deterministic per-lane <code>(lane, ordinal)</code> seeds. Intended for wire-byte equivalence testing; an accidentally-set env var makes production randomness fully deterministic.</td></tr>
@@ -400,10 +403,9 @@ and field axioms; hash-to-curve against RFC 9380 vectors; in-circuit AES/SHA/Kec
 <code>test_builtin_circuits.cpp</code> proves the native kernels and the recorded IR builtins agree bit-for-bit.
 The residual audit surface is the committed <code>.empbc</code> float assets and their off-tree generation provenance,
 the <code>NDEBUG</code> behaviour of the debug-only developer guards, the documented UB preconditions
-(div-by-zero saturation, <code>INT_MIN/−1</code>, default-constructed values), and two post-refactor test gaps:
+(div-by-zero saturation, <code>INT_MIN/−1</code>, default-constructed values), and one post-refactor test gap:
 <code>MITCCRH::hash_cir_fixed</code> (<code>runtime/crypto/mitccrh.h:128</code>, added in <code>4af78dd</code>) has no caller
-anywhere under <code>test/</code>, and the BLAKE3 build configuration has no in-tree known-answer coverage (see the
-posture row above).</p></div>
+anywhere under <code>test/</code>.</p></div>
 
 <!-- ===================================================================== -->
 <h2 id="reports">10 · The three detailed reports</h2>
@@ -425,7 +427,9 @@ header is <code>build/emp-tool/ir/circuit_asset_dirs.h</code>.</li>
 session/WireValue redesign these reports describe are now committed on <code>main</code>; the reports were
 written against that working tree.</li>
 <li><b>Two vendored-code locations.</b> Vendored code lives in two different <code>third_party/</code> directories:
-<code>emp-tool/third_party/</code> (ThreadPool.h + sse2neon.h, header shims inside the installed include tree) and
+<code>emp-tool/third_party/</code> (ThreadPool.h + sse2neon.h, header shims inside the installed include tree — note
+ThreadPool.h is <b>no longer pristine</b>: <code>1e00838</code> locally alters it to <code>#include</code>
+<code>runtime/core/test_mode.h</code> and wrap each enqueued task in a test-mode lane) and
 repo-root <code>third_party/blake3/</code> (the opt-in BLAKE3 backend added in <code>b1f4efd</code>, compiled — not
 header-only — and pulled in via CMake). Do not assume a single vendored subtree when scoping a diff.</li>
 <li><b>Pre-alpha API.</b> This development branch's CMake version reads <code>1.0.0</code> but names and headers may
