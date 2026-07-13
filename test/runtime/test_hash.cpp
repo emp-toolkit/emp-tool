@@ -1,4 +1,5 @@
-// crypto/hash.h — SHA-256 wrapper around OpenSSL EVP. Read example() first;
+// crypto/hash.h — streaming hash, templated on the algorithm (HashT<opt>:
+// OpenSSL SHA-256 default, vendored BLAKE3 opt-in). Read example() first;
 // the rest is verification. (EC-point KDF moved to crypto/ro.h,
 // covered by test_ro.cpp.)
 //
@@ -7,8 +8,13 @@
 //   Hash::put_block(b, n=1)                   feed n blocks
 //   Hash::digest(out, reset_after=true)       finalize (or snapshot)
 //   Hash::reset()                             reinit context
-//   Hash::hash_once(out, p, n)                one-shot SHA-256
-//   Hash::hash_for_block(p, n)                first 16 bytes of SHA-256, as block
+//   Hash::hash_once(out, p, n)                one-shot digest
+//   Hash::hash_for_block(p, n)                first 16 bytes of the digest, as block
+//
+// `Hash` is an alias for the build's default backend (EMP_HASH_DEFAULT), so
+// the generic checks below run against whichever algorithm the build selected;
+// the known-answer checks pin HashT<opt> explicitly so each compiled-in
+// algorithm is verified against its standard vectors regardless of the default.
 
 #include "emp-tool/emp-tool.h"
 
@@ -38,13 +44,13 @@ static void example() {
 	h.put("abc", 3);
 	uint8_t out[Hash::DIGEST_SIZE];
 	h.digest(out);
-	cout << "  SHA-256(\"abc\") =\n    " << to_hex(out, Hash::DIGEST_SIZE) << "\n";
+	cout << "  Hash(\"abc\")    =\n    " << to_hex(out, Hash::DIGEST_SIZE) << "\n";
 
 	// (2) put_block: feed a block-typed buffer.
 	block b = makeBlock(0xDEADBEEFULL, 0xCAFEBABEULL);
 	h.put_block(&b);
 	h.digest(out);
-	cout << "  SHA-256(b)     =\n    " << to_hex(out, Hash::DIGEST_SIZE) << "\n";
+	cout << "  Hash(b)        =\n    " << to_hex(out, Hash::DIGEST_SIZE) << "\n";
 
 	// (3) Snapshot mode (reset_after = false): finalize a copy without
 	// disturbing the running transcript. Used for streaming Fiat-Shamir.
@@ -65,8 +71,10 @@ static void example() {
 
 // ---------- correctness ----------
 
-static bool check_known_vectors() {
-	// FIPS 180-4 examples.
+static bool check_sha256_known_vectors() {
+	// FIPS 180-4 examples, pinned to the SHA-256 backend (compiled in every
+	// build) so they hold even when the default Hash is another algorithm.
+	using Sha256 = HashT<HashOption::sha256>;
 	struct V { const char *msg; size_t n; const char *hex; };
 	V vs[] = {
 		{"abc", 3,
@@ -78,36 +86,67 @@ static bool check_known_vectors() {
 	};
 	bool all_ok = true;
 	for (auto &v : vs) {
-		uint8_t out[Hash::DIGEST_SIZE];
-		Hash::hash_once(out, v.msg, (int)v.n);
-		bool ok = to_hex(out, Hash::DIGEST_SIZE) == v.hex;
+		uint8_t out[Sha256::DIGEST_SIZE];
+		Sha256::hash_once(out, v.msg, (int)v.n);
+		bool ok = to_hex(out, Sha256::DIGEST_SIZE) == v.hex;
 		all_ok &= ok;
 	}
-	cout << "  [FIPS 180-4 known answers]            " << (all_ok ? "OK" : "FAIL") << "\n";
+	cout << "  [SHA-256 FIPS 180-4 known answers]    " << (all_ok ? "OK" : "FAIL") << "\n";
 	return all_ok;
 }
 
-static bool check_against_openssl(int trials = 64) {
+static bool check_sha256_against_openssl(int trials = 64) {
+	using Sha256 = HashT<HashOption::sha256>;
 	PRG prg;
 	for (int t = 0; t < trials; ++t) {
 		int n = 1 + (t * 17) % 4096;
 		vector<uint8_t> buf(n);
 		prg.random_data_unaligned(buf.data(), n);
 
-		uint8_t emp_out[Hash::DIGEST_SIZE];
-		Hash::hash_once(emp_out, buf.data(), n);
+		uint8_t emp_out[Sha256::DIGEST_SIZE];
+		Sha256::hash_once(emp_out, buf.data(), n);
 
 		uint8_t ref[SHA256_DIGEST_LENGTH];
 		SHA256(buf.data(), n, ref);
 
 		if (memcmp(emp_out, ref, SHA256_DIGEST_LENGTH) != 0) {
-			cout << "  [Hash::hash_once vs OpenSSL SHA256]  FAIL  t=" << t << " n=" << n << "\n";
+			cout << "  [SHA-256 hash_once vs OpenSSL]       FAIL  t=" << t << " n=" << n << "\n";
 			return false;
 		}
 	}
-	cout << "  [Hash::hash_once vs OpenSSL SHA256]   OK   trials=" << trials << "\n";
+	cout << "  [SHA-256 hash_once vs OpenSSL]        OK   trials=" << trials << "\n";
 	return true;
 }
+
+#ifdef EMP_WITH_BLAKE3
+static bool check_blake3_known_vectors() {
+	// Official BLAKE3 test vectors (test_vectors/test_vectors.json in the
+	// upstream repo): the input is the repeating byte sequence 0,1,...,250 and
+	// the expected value is the first 32 bytes of the extended output. Lengths
+	// past 1024 cross chunk boundaries, exercising the tree/parent logic and
+	// the compiled SIMD kernels, not just the single-chunk path.
+	using Blake3 = HashT<HashOption::blake3>;
+	struct V { size_t n; const char *hex; };
+	V vs[] = {
+		{0,    "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"},
+		{3,    "e1be4d7a8ab5560aa4199eea339849ba8e293d55ca0a81006726d184519e647f"},
+		{1024, "42214739f095a406f3fc83deb889744ac00df831c10daa55189b5d121c855af7"},
+		{4096, "015094013f57a5277b59d8475c0501042c0b642e531b0a1c8f58d2163229e969"},
+	};
+	bool all_ok = true;
+	for (auto &v : vs) {
+		vector<uint8_t> buf(v.n);
+		for (size_t i = 0; i < v.n; ++i)
+			buf[i] = (uint8_t)(i % 251);
+		uint8_t out[Blake3::DIGEST_SIZE];
+		Blake3::hash_once(out, buf.data(), (int)v.n);
+		bool ok = to_hex(out, Blake3::DIGEST_SIZE) == v.hex;
+		all_ok &= ok;
+	}
+	cout << "  [BLAKE3 official known answers]       " << (all_ok ? "OK" : "FAIL") << "\n";
+	return all_ok;
+}
+#endif
 
 static bool check_streaming_equals_oneshot(int trials = 32) {
 	PRG prg;
@@ -159,8 +198,11 @@ static bool check_snapshot_does_not_disturb() {
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
-	ok &= check_known_vectors();
-	ok &= check_against_openssl();
+	ok &= check_sha256_known_vectors();
+	ok &= check_sha256_against_openssl();
+#ifdef EMP_WITH_BLAKE3
+	ok &= check_blake3_known_vectors();
+#endif
 	ok &= check_streaming_equals_oneshot();
 	ok &= check_snapshot_does_not_disturb();
 	return ok;
