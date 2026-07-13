@@ -47,9 +47,7 @@ in a reused-wire program rests on the *producer*, not the validator.
 configure time and **PUBLIC-propagated** to consumers. A `HashAbiMarker`
 link-time guard prevents mixing translation units built against different
 defaults (ODR safety). Note: selecting `blake3` is a **protocol-wide
-transcript change** — any two peers must agree on the backend. (CMake help
-text names a nonexistent `emp::Blake3Backend`; the real spelling is
-`HashT<HashOption::blake3>`.)
+transcript change** — any two peers must agree on the backend.
 
 ### R3 · `ComposePlan` holds non-owning program pointers
 `ir/context/compose.h:28-32` · commit `67642c2`

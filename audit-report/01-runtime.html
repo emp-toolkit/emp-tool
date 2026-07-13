@@ -110,7 +110,7 @@ hardware vector registers, with <b>no protocol policy</b> above it.</p>
 <div class="meta">
 <table>
 <tr><td>Report</td><td>1 of 3 — Runtime substrate (<code>runtime/{core,crypto,io,execution}/</code>)</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer architecture, since committed)</td></tr>
+<tr><td>Source tree</td><td><code>emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer architecture, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>runtime/core/{block,transpose,block_vector,simd_tier,constants,test_mode,utils}</code> · <code>runtime/crypto/{aes,prp,f2k,ccrh,mitccrh,prg,hash,ro,ec,session_id}</code> · <code>runtime/io/{io_channel,net_io_channel,tcp_socket,tls_io_channel,trace_io}</code> · <code>runtime/execution/{half_gate,privacy_free}</code></td></tr>
 <tr><td>Endianness</td><td><b>Little-endian only</b> — <code class="ref">runtime/runtime.h:14</code> <code>static_assert</code>s <code>__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__</code>; wire formats memcpy integers in host order and refuse to build on big-endian.</td></tr>
 <tr><td>Failure model</td><td><b>Fail-fast <code>_Exit(1)</code></b> throughout via <code>error()</code> or equivalent fatal helpers. No exceptions, no error recovery; a malformed wire message terminates the process.</td></tr>
@@ -680,13 +680,13 @@ dual CC0-1.0/Apache-2.0, see <code>VENDOR.md</code>) straight into <code>libemp-
 flags (sse2/sse4.1/avx2/avx512 sources on x86_64, NEON on aarch64, portable-only elsewhere;
 <code class="ref">CMakeLists.txt:149-172</code>) and exports <b>PUBLIC</b> definitions
 <code>EMP_WITH_BLAKE3</code> + <code>EMP_HASH_DEFAULT=::emp::HashOption::blake3</code>
-(<code class="ref">CMakeLists.txt:176-180</code>), so downstream consumers (emp-ot, emp-ag) inherit the choice
+(<code class="ref">CMakeLists.txt:176-180</code>), so downstream consumers inherit the choice
 with no source change. Note BLAKE3's own <code>blake3_dispatch.c</code> does <em>runtime</em> cpuid dispatch
 among its compiled-in kernels — unlike every emp-tool kernel (§14). Switching backends changes every
 Fiat–Shamir / commitment transcript, so both parties must build identically.</p>
 <div class="callout c-ok"><span class="lbl">HashAbiMarker — ODR/link guard for mismatched defaults</span>
 <p><code>Hash</code>'s layout differs by backend (<code>EVP_MD_CTX*</code> vs an inline
-<code>blake3_hasher</code>), and Hash objects cross the emp-tool/emp-ot/emp-ag boundary (the IOChannel FS
+<code>blake3_hasher</code>), and Hash objects cross library boundaries (the IOChannel FS
 transcripts). When BLAKE3 is compiled in, every TU statically references
 <code>&amp;HashAbiMarker&lt;EMP_HASH_DEFAULT&gt;::sym</code> for <em>its own</em> default
 (<code class="ref">hash.h:29-44</code>); <code>libemp-tool</code> defines the symbol only for the default it was

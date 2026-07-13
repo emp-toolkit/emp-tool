@@ -98,7 +98,7 @@ recording, or a cryptographic backend — with the gate stream guaranteed identi
 <div class="meta">
 <table>
 <tr><td>Report</td><td>2 of 3 — Boolean IR, contexts &amp; sessions</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (runtime/ir/circuits refactor, since committed)</td></tr>
+<tr><td>Source tree</td><td><code>emp-tool</code> · working tree on <code>main</code> (runtime/ir/circuits refactor, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>ir/{program,validate,visit,passes,schedule,execute,transform,artifact,empbc,assets,builtins}.h</code> · <code>ir/{assets,builtins}.cpp</code> · <code>ir/wire_value.h</code> · <code>ir/context/{concept,checks,clear,count,digest,record,compose}.h</code> · <code>ir/session/{session,session_io,clear_session}.h</code></td></tr>
 <tr><td>Wire value</td><td>A context names its own <code>Wire</code> type: <code>uint8_t</code> (Clear/Count), <code>uint32_t</code> (Record/Digest/Compose wire ids), or <code>block</code> (a downstream garbling backend label).</td></tr>
 <tr><td>Layering</td><td><code>ir/program.h</code> (the <code>BooleanProgram</code> IR) and <code>ir/context/concept.h</code> (the <code>BooleanContext</code> concept) are the two pure design roots — zero internal includes, usable without any backend. Everything else here is built on them.</td></tr>

@@ -9,11 +9,11 @@ License:  dual-licensed CC0-1.0 OR Apache-2.0 (with the Apache-2.0-w/-LLVM-excep
 ## Why it's here
 
 emp-tool's `Hash` (`runtime/crypto/hash.h`) supports a swappable backend policy.
-The default backend is OpenSSL SHA-256; a build may opt into `emp::Blake3Backend`
-(configure with `-DEMP_WITH_BLAKE3=ON`). BLAKE3 is ~3-4x faster per byte than
-SHA-NI and, since preprocessing hashing sits on the serial critical path, that
-translates into a measured end-to-end speedup for the maliciously-secure garbling
-backends.
+The default backend is OpenSSL SHA-256; a build may opt into the BLAKE3 backend
+(`HashT<HashOption::blake3>`; configure with `-DEMP_WITH_BLAKE3=ON`). BLAKE3 is
+~3-4x faster per byte than SHA-NI and, since preprocessing hashing sits on the
+serial critical path, that translates into a measured end-to-end speedup for
+the maliciously-secure garbling backends.
 
 ## What's included
 
@@ -36,7 +36,7 @@ these sources straight into `libemp-tool` with the per-file ISA flags
 (`-msse2 / -msse4.1 / -mavx2 / -mavx512f -mavx512vl`, or NEON on ARM) and adds
 this directory as a PUBLIC include path plus the `EMP_WITH_BLAKE3` define. The
 objects therefore travel inside `libemp-tool` and the usage requirements
-propagate through emp-tool's exported target, so emp-ot / emp-ag pick up BLAKE3
+propagate through emp-tool's exported target, so consumers pick up BLAKE3
 with no extra dependency to resolve.
 
 ## Updating

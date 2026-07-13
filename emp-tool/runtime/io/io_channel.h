@@ -120,7 +120,7 @@ public:
 	// produce the same digest value — exactly one party should pass true.
 	// The hash backend is a template parameter (default = the build's
 	// EMP_FS_HASH_DEFAULT, settable stack-wide via CMake's EMP_FS_HASH
-	// and inherited by emp-ot / emp-ag): choosing it here is an
+	// and inherited by consuming libraries): choosing it here is an
 	// AGREEMENT with the peer — both parties' transcripts must use the
 	// same backend or every derived challenge diverges. Idempotent
 	// assert: calling twice is a bug.

@@ -10,8 +10,8 @@
 #include <type_traits>
 
 // One Hash templated on the algorithm. Default is OpenSSL SHA-256 (production);
-// a build opts into the vendored BLAKE3 (third_party/blake3, ~3-4x faster per
-// byte) with -DEMP_WITH_BLAKE3 and, to flip the default, -DEMP_HASH_DEFAULT.
+// a build opts into the vendored BLAKE3 (third_party/blake3) with
+// -DEMP_WITH_BLAKE3 and, to flip the default, -DEMP_HASH_DEFAULT.
 // Switching the algorithm changes the Fiat-Shamir / commitment transcript, so
 // it is a protocol-wide choice inherited by every consumer of this build.
 #ifdef EMP_WITH_BLAKE3
@@ -28,9 +28,9 @@ enum class HashOption { sha256, blake3 };
 
 // Default backend for the IOChannel Fiat-Shamir transcript (enable_fs's
 // template default), selectable per build independently of the global
-// Hash: CMake's EMP_FS_HASH sets this PUBLIC on emp-tool, so emp-ot /
-// emp-ag inherit it with no code change. Falls back to the global
-// default. Both parties of a protocol must agree (it changes every FS
+// Hash: CMake's EMP_FS_HASH sets this PUBLIC on emp-tool, so consumers
+// inherit it with no code change. Falls back to the global default.
+// Both parties of a protocol must agree (it changes every FS
 // challenge); commitments / RO / garbling under Hash are unaffected.
 #ifndef EMP_FS_HASH_DEFAULT
 #define EMP_FS_HASH_DEFAULT EMP_HASH_DEFAULT
@@ -57,8 +57,8 @@ namespace detail {
 #ifdef EMP_WITH_BLAKE3
 // Build-consistency backstop. With both algorithms compiled in, every library
 // linked together MUST agree on EMP_HASH_DEFAULT: the default Hash's layout
-// differs by algorithm (EVP_MD_CTX* vs blake3_hasher) and its objects cross the
-// emp-tool / emp-ot / emp-ag boundary (the IOChannel Fiat-Shamir Hash). The CMake
+// differs by algorithm (EVP_MD_CTX* vs blake3_hasher) and its objects cross
+// library boundaries (the IOChannel Fiat-Shamir Hash). The CMake
 // build guarantees agreement — consumers inherit the define from emp-tool's
 // exported interface — so this only fires on a hand-mismatched or stale-lib build,
 // turning it into a link error ("undefined reference to emp::HashAbiMarker<...>")

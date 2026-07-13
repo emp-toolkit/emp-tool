@@ -31,12 +31,12 @@ option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so com
 # choice inherited by every consumer that links this emp-tool build.
 set(EMP_HASH_BACKEND "sha256" CACHE STRING "Default emp::Hash backend: sha256 or blake3")
 set_property(CACHE EMP_HASH_BACKEND PROPERTY STRINGS sha256 blake3)
-option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so emp::Blake3Backend is available (auto-on when EMP_HASH_BACKEND=blake3 or EMP_FS_HASH=blake3)." OFF)
+option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so HashT<HashOption::blake3> is available (auto-on when EMP_HASH_BACKEND=blake3 or EMP_FS_HASH=blake3)." OFF)
 
 # Fiat-Shamir transcript hash (io_channel.h enable_fs default), selectable
 # independently of EMP_HASH_BACKEND: "default" follows it; "sha256"/"blake3"
 # pin the FS transcript while commitments/RO/garbling keep using emp::Hash.
-# Propagates PUBLIC to every consumer (emp-ot, emp-ag) — an AGREEMENT-class
+# Propagates PUBLIC to every consumer — an AGREEMENT-class
 # choice: both parties' stacks must be built with the same value.
 set(EMP_FS_HASH "default" CACHE STRING
     "Fiat-Shamir transcript hash: default (= EMP_HASH_BACKEND), sha256, or blake3")
@@ -160,7 +160,7 @@ endif()
 # Optional BLAKE3 hash backend (vendored, third_party/blake3). Compiled straight
 # into libemp-tool with per-file ISA flags, so the objects plus the PUBLIC
 # include dir + EMP_WITH_BLAKE3 define propagate through emp-tool's exported
-# target — emp-ot / emp-ag inherit BLAKE3 with no extra dependency to resolve.
+# target — consumers inherit BLAKE3 with no extra dependency to resolve.
 # Vendored C is built with -w (its warnings are not ours to fix).
 # ---------------------------------------------------------------------
 if(EMP_HASH_BACKEND STREQUAL "blake3" OR EMP_FS_HASH STREQUAL "blake3")

@@ -109,7 +109,7 @@ recorder, or a real MPC backend.</p>
 <div class="meta">
 <table>
 <tr><td>Report</td><td>3 of 3 — Circuit value objects &amp; frontend</td></tr>
-<tr><td>Source tree</td><td><code>/Users/wangxiao/Documents/emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
+<tr><td>Source tree</td><td><code>emp-tool</code> · working tree on <code>main</code> (the runtime/ir/circuits three-layer refactor, since committed)</td></tr>
 <tr><td>Files in scope</td><td><code>circuits/{bit,bitvec,unsigned_int,signed_int,float,float_traits,numeric_kernels,sort,value_traits,typed}.h</code>; <code>circuits/crypto/{aes128,sha256,keccak,crypto}.h</code>; <code>circuits/frontend/{circuit_fn,rec,frontend,compose}.h</code>. The <code>WireBundle</code>/<code>WireValue</code> concepts it satisfies live in <code>ir/wire_value.h</code>, and the composition recorder <code>ComposeCtx</code> in <code>ir/context/compose.h</code> (Report 2).</td></tr>
 <tr><td>Conventions</td><td><b>LSB at index 0</b> everywhere; gate cost = AND count (XOR/NOT free); tests cross-validate over <code>ClearCtx</code> against host references and FIPS/NIST vectors.</td></tr>
 </table>
