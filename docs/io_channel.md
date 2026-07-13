@@ -9,7 +9,8 @@ threads, or when investigating a NetIO deadlock.
 Callers MUST call `flush()` at the end of any protocol step that ends
 in sends, before returning to the caller or blocking on anything other
 than a recv on the same NetIO. The auto-flush only fires when the same
-NetIO does a recv (`flush()` at the top of `recv_data_internal`); a
+NetIO does a recv (recv_data_internal drains pending sends via
+`flush_unlocked()` before blocking on the read); a
 NetIO whose step is purely sends — e.g. the IKNP receiver-role channel
 during `setup_recv` — strands its tail bytes in the user-space
 `send_buf` until something else moves them.
@@ -38,19 +39,58 @@ unsafe to call from a thread other than the one currently sending.
 
 ## Debug build assertion
 
-Under `!NDEBUG`, the shared `IOChannel` base carries an `_in_use` atomic
-counter and a `touch_guard` that wraps `send_data_internal` /
-`recv_data_internal` / `flush`. If two threads enter any of those on
-the same instance simultaneously, the build aborts with `IO-channel race:
-concurrent <op> on the same channel`. Zero cost under `-DNDEBUG`.
+Under `!NDEBUG`, each concrete channel (NetIO, TLSIO) carries a
+per-instance `_in_use` atomic counter, guarded by a shared
+`touch_guard` defined in the `IOChannel` base (io_channel.h). The
+guard wraps that channel's `send_data_internal` / `recv_data_internal`
+/ `flush`; if two threads enter any of those on the same instance
+simultaneously, the build aborts with `IO-channel race: concurrent
+<op> on the same channel`. TraceIO, being a pass-through tee, does not
+install the guard. Zero cost under `-DNDEBUG`.
 
 Use this when a multi-party protocol behaves flakily — race or no
 race, the answer falls out of a Debug build.
 
+## Fiat–Shamir transcript
+
+The `IOChannel` base can keep two running hash transcripts — one over
+every byte sent, one over every byte received — for deriving
+Fiat–Shamir challenges from the wire. Off by default;
+`enable_fs<opt>(send_first)` turns it on.
+
+Cross-party contract: both parties MUST select the same backend `opt`
+(default `EMP_FS_HASH_DEFAULT`, set stack-wide via CMake `EMP_FS_HASH`)
+or every derived challenge diverges. Exactly one party passes
+`send_first=true` — it fixes the concatenation order so both ends
+compute the same digest. `enable_fs` is single-shot: calling it twice
+asserts.
+
+`get_digest()` returns the first 16 B of `H(d_AB ‖ d_BA)` over both
+directions and is non-destructive (call it repeatedly to derive
+sub-challenges across stages). `get_send_digest()` / `get_recv_digest()`
+are per-direction snapshots for diagnostics. All three assert that
+`enable_fs` ran first.
+
+## Other base surface
+
+- **`sync()`**: optional 1-byte ping/pong handshake to confirm both
+  directions are alive. NetIO implements it; the base default is a
+  no-op.
+- **Telemetry**: the base tracks `send_counter` / `recv_counter` /
+  `rounds` / `flushes_count`; `get_statistics_string()` renders them
+  for logging (`~NetIO` prints it unless constructed `quiet`).
+- **NetIO factories**: `NetIO::listen(port)` / `NetIO::connect(addr,
+  port)` are named, ownership-returning replacements for the
+  nullptr-means-server constructor; `make_sibling()` opens a second
+  duplex channel to the same peer on the same port.
+- **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
+  byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
+  wire-equivalence checks; see `test_mode.md`.
+
 ## TLS variant
 
-`TLSIO` (in `emp-tool/runtime/io/tls_io_channel.h`) is a third `IOChannel` for
-deployments where the wire crosses an untrusted network. Same flush
+`TLSIO` (in `emp-tool/runtime/io/tls_io_channel.h`) is another `IOChannel`
+implementation for deployments where the wire crosses an untrusted network. Same flush
 contract, same single-thread-owned discipline, same telemetry counters
 as NetIO; the only difference is the wire — TLS 1.3 over OpenSSL
 instead of raw TCP. Pin both ends of the protocol-version range to

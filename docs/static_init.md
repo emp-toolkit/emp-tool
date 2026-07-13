@@ -98,13 +98,12 @@ question, no fiasco.
 
 ## Auditing existing constants
 
-These file-scope block constants are `inline constexpr` and
-SIOF-immune:
+These emp-tool file-scope block constants are `inline constexpr`
+and SIOF-immune:
 
 | File | Constant |
 |---|---|
 | `emp-tool/runtime/core/block.hpp` | `zero_block`, `all_one_block`, `select_mask[2]`, `bit0_mask`, `bit1_mask` |
-| `emp-ot/common/cggm.h` | `kCggmLsbClearMask` |
 
 `grep -rn '^\(inline \|static \|const \)\+const block' .` over the
 codebase finds candidates; anything that isn't `inline constexpr` is

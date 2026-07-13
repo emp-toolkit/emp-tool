@@ -66,7 +66,7 @@ static bool check_main_lane_sequence() {
 
 	// The ctor id XORs into the low (ordinal) half, as for any seed.
 	PRG c(nullptr, 5);
-	block e = makeBlock(0, 2 ^ 5);
+	block e = makeBlock(0, 7);  // ordinal 2 XOR id 5
 	block s = c.seed();
 	ok &= cmpBlock(&e, &s, 1);
 

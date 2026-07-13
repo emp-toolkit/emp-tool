@@ -10,8 +10,10 @@
 //   2. Run the protocol once "before" the change, dumping wire bytes
 //      via TraceIO to <prefix>.send / <prefix>.recv .
 //   3. Apply the optimization. Run again to a different prefix.
-//   4. `diff before.send after.send` and `diff before.recv after.recv`
-//      must both be empty for the change to be wire-equivalent.
+//   4. Diff each direction at its sender: both parties' `.send` files
+//      must be identical across runs for the change to be wire-equivalent
+//      (a `.recv` file holds only consumed bytes, so it can miss trailing
+//      bytes the peer never read).
 //
 // Determinism contract: requires emp::is_test_mode() == true at protocol
 // startup and, if the protocol spawns threads, the lane discipline of

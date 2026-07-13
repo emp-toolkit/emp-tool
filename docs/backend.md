@@ -4,9 +4,9 @@ emp-tool's circuits are evaluated by a **`BooleanContext`** — a type with a ch
 copyable `Wire` and value-return `public_bit` / `and_gate` / `xor_gate` /
 `not_gate`. There is no global backend and no `void*` virtual dispatch: a context
 is passed explicitly and the gate ops are statically dispatched and inlineable. See
-[circuits.md](circuits.md) for the value layer and `ir/context/context.h` for the
-concept and the built-in analysis contexts (`ClearCtx` / `CountCtx` / `DigestCtx` /
-`RecordCtx`).
+[circuits.md](circuits.md) for the value layer, and the concept
+(`ir/context/concept.h`) and the built-in analysis contexts (`ClearCtx` / `CountCtx`
+/ `DigestCtx` / `RecordCtx`), all re-exported by `ir/context/context.h`.
 
 ## Implementing a backend: a pure context + a session
 
@@ -20,7 +20,7 @@ the four gate ops, no I/O — like emp-sh2pc's `SH2PCCtx`, or the shared
 
 The **session** owns the clear↔circuit I/O boundary and the protocol state (IO,
 party, OT/preprocessing, batching), wrapping a context — like emp-tool's
-`ClearSession` (`session/clear_session.h`):
+`ClearSession` (`ir/session/clear_session.h`):
 
 - hold the context and expose `ctx()` for value/context-level work
   (the `DirectSession` concept, `ir/session/session.h`);

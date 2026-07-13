@@ -1,7 +1,9 @@
 # Numeric semantics
 
-Normative rules for arithmetic on `UInt_T` / `Int_T` /
-`BitVec_T`. These match **hardware** two's-complement semantics on
+Normative rules for arithmetic on `UInt_T` / `Int_T`, plus the shared
+shift and bitwise rules that also apply to `BitVec_T` (which itself has
+no arithmetic operators). These match **hardware** two's-complement
+semantics on
 commodity x86 / arm — *not* C's "undefined behavior" rules. A naive
 translator that reproduces a source language's UB-avoidance dance
 will produce extra gates for no reason.
@@ -36,22 +38,28 @@ signed-overflow UB is sidestepped — emp-tool wraps deterministically.
   (sign-fill) on `Int_T`.
 - Shift amounts ≥ width yield zero on logical ops, or sign-fill on
   signed `>>`.
-- Both static-shamt and dynamic-shamt forms exist. The dynamic form
-  treats `shamt` as unsigned.
+- The static (public constant) form exists on every type. The dynamic
+  (secret) barrel-shift form is fixed-width `UInt_T` / `Int_T` only
+  (`requires N > 0`); `BitVec_T` and runtime-width values provide only
+  the public constant-amount shift. The dynamic amount is an unsigned
+  `UInt_T`.
 
 To do a *logical* right-shift on an `Int_T`:
 `s.as_unsigned() >> k` (then `.as_signed()` if you need the type back).
 
 ## Resize
 
-- `resize(W)` zero-extends on `UInt_T`, sign-extends on
-  `Int_T`. Truncation drops the high bits.
+- `resize(W)` is the runtime-width form (`UInt_T` / `Int_T` at
+  runtime width): zero-extends on `UInt_T`, sign-extends on `Int_T`,
+  truncates by dropping the high bits.
+- For a fixed-width value use the compile-time views `zext<M>()` /
+  `trunc<M>()` on `UInt_T` and `sext<M>()` / `trunc<M>()` on `Int_T`.
 - Resize is structural — costs no AND gates.
 
 ## Negation
 
 - `UInt_T` has no unary `-`. For modular negation subtract from a zero
-  constant: `UInt_T<Ctx,N>::constant(ctx, 0) - x` (`= ~x + 1` mod 2^W,
+  constant: `UInt_T<Ctx,N>::constant(ctx, 0) - x` (`= ~x + 1` mod 2^N,
   matching C unsigned negation); the result is still `UInt_T`.
 - Unary `-` on `Int_T` is two's-complement negate. `-INT_MIN`
   wraps to `INT_MIN` as a bit pattern (no exception).
@@ -59,6 +67,6 @@ To do a *logical* right-shift on an `Int_T`:
 ## Magnitude
 
 There is no separate `abs()` helper on `Int_T`. Compute the magnitude when
-needed as `x.select(x[W-1], -x).as_unsigned()` for a fixed-width value.
-For `INT_MIN`, this returns the unsigned bit pattern `2^(W-1)` — faithful
+needed as `x.select(x[N-1], -x).as_unsigned()` for a fixed-width value.
+For `INT_MIN`, this returns the unsigned bit pattern `2^(N-1)` — faithful
 as a magnitude even though no signed value can represent it.

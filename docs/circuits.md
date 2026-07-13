@@ -4,8 +4,9 @@ Conventions for the circuit value types under `emp-tool/circuits/`.
 
 The circuit value layer is the **context-bound typed values**: `Bit_T<Ctx>`,
 `UInt_T<Ctx,N>`, `Int_T<Ctx,N>`, `Float_T<Ctx,W>`, and `BitVec_T<Ctx,N>`,
-templated on a `BooleanContext` (`ir/context/context.h`). Static dispatch, no global
-backend; each value carries its own `Ctx*` and issues value-return gates on it.
+templated on a `BooleanContext` (`ir/context/concept.h`, re-exported by the
+`ir/context/context.h` umbrella). Static dispatch, no global backend; each value
+carries its own `Ctx*` and issues value-return gates on it.
 This is the layer the [frontend](frontend.md) compiles and replays. The
 `BooleanContext` is pure circuit execution (gates only); concrete values enter and
 leave through a **session** (emp-tool's `ClearSession` in
@@ -91,9 +92,13 @@ party that does not; a plaintext `ClearSession` always populates it.
   comparisons, `& | ^ ~`, logical-left / arithmetic-right shifts, `sext`/`trunc`,
   `as_unsigned`.
 
-**Fixed vs runtime width.** `N > 0` is a fixed-width value and a `WireValue`
-(compile-time width, clear codec, wire layout — the form a session feeds through
-`input`/`reveal` and the frontend compiles). `N == 0` (the `runtime_width` sentinel) is
+**Fixed vs runtime width.** `N > 0` is a fixed-width value; for `N <= 64` it is
+a `WireValue` (compile-time width, clear codec, wire layout — the form a session
+feeds through `input`/`reveal` and the frontend compiles). A wider fixed-width
+`UInt_T` / `Int_T` (`N > 64`) has no 64-bit clear codec, so it is only a
+`WireBundle` (frontend-compilable, usable as a circuit argument) but not
+session-I/O-eligible — use `BitVec_T<Ctx,N>` for typed session I/O past 64 bits.
+`N == 0` (the `runtime_width` sentinel) is
 the *same* `UInt_T` / `Int_T` family with the width carried in the wire vector and
 chosen at construction — `UInt_T<Ctx,0>(ctx, width)`, `UInt_T<Ctx,0>::constant(ctx,
 width, v)`. It shares every operator above through the runtime-sized kernels; the

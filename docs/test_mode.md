@@ -40,7 +40,7 @@ Two randomness sources in emp-tool reach the wire:
    via emp::PRG-driven rejection instead of OpenSSL's internal
    CSPRNG.
 
-`PRG(const block*, int)` (explicit seed) is unaffected — callers
+`PRG(const void*, int)` (explicit seed) is unaffected — callers
 that pass their own seed already control determinism.
 
 ## Toggle mechanics
@@ -104,7 +104,7 @@ in production paths.
   scheduling; wire-byte identity additionally requires one writer
   lane per channel, since concurrent writers to a single channel
   interleave nondeterministically even with deterministic seeds.
-- **`PRG(const block*, int)` is unchanged in test mode.** Callers
+- **`PRG(const void*, int)` is unchanged in test mode.** Callers
   with their own explicit seed sources already control determinism;
   the test-mode hook only affects the OS-random default path.
 - **`ECGroup::rand_scalar` uses a `thread_local PRG`.** Determinism
@@ -132,11 +132,11 @@ delete io;
 delete under;
 ```
 
-Counters: `TraceIO` inherits the `IOChannel::counter` book-keeping
-from the base. The wrapped underlying channel's `counter` does NOT
-increment for traced bytes — protocol code that observes
-`io->counter` reads the wrapping `TraceIO`'s count, which is
-correct.
+Counters: `TraceIO` inherits the `IOChannel::send_counter` /
+`recv_counter` book-keeping from the base. The wrapped underlying
+channel's counters do NOT increment for traced bytes — protocol
+code that observes `io->send_counter` / `io->recv_counter` reads
+the wrapping `TraceIO`'s counts, which is correct.
 
 ## Verification workflow
 
@@ -148,15 +148,18 @@ EMP_TEST_MODE=1 ./run ./build/your_protocol_test before
 # … apply your refactor / optimization, rebuild …
 EMP_TEST_MODE=1 ./run ./build/your_protocol_test after
 
-# All four diffs must be empty.
+# Each direction of the wire, checked at its sender; both must be empty.
 diff before.alice.send after.alice.send
-diff before.alice.recv after.alice.recv
 diff before.bob.send   after.bob.send
-diff before.bob.recv   after.bob.recv
 ```
 
+A direction is diffed at its *sender*: the receiver's `.recv` file only
+contains bytes the application consumed, so it can miss trailing bytes a
+refactor sends that the peer never reads. The two `.send` files together
+cover the full wire.
+
 A reference harness lives in emp-ot at
-[`test/trace_equiv.cpp`](https://github.com/emp-toolkit/emp-ot/blob/master/test/trace_equiv.cpp)
+[`test/trace_equiv.cpp`](https://github.com/emp-toolkit/emp-ot/blob/main/test/trace_equiv.cpp)
 and may be a useful template for new wire-equivalence tests.
 
 ## What test mode does NOT cover

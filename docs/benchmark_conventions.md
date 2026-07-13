@@ -13,8 +13,12 @@ garbling bench, which garbles and evaluates locally) run directly.
 Benchmark files are named `bench_<component>.cpp` and build to
 `build/bench/bench_<component>`.
 
-Each benchmark accepts per-row seconds from `argv[1]` and defaults to
-`0.2` seconds unless the benchmark has a strong reason to do otherwise.
+Each single-process benchmark accepts per-row seconds from `argv[1]`
+and defaults to `0.2` seconds unless the benchmark has a strong reason
+to do otherwise. The two two-party benchmarks (`bench_netio`,
+`bench_tlsio`) are the exception: `argv[1]` is the party id (consumed
+by `./run`), and the sweep runs a fixed byte budget per size with no
+duration control.
 
 ## Measurement rules
 
@@ -31,8 +35,6 @@ Each benchmark accepts per-row seconds from `argv[1]` and defaults to
   or `cy/B @3GHz`.
 - **Fixed-size ops** (e.g. `packing(N=128)`): single row, report
   `Mops` and `cy/op @3GHz`.
-- Use `__attribute__((target("sse2")))` on x86 where the timing
-  primitives need SSE.
 
 ## Harness skeleton
 

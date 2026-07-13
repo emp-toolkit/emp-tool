@@ -52,8 +52,8 @@ take `const bool*`.
 For runtime-sized bit sequences, use byte-bools:
 
 ```cpp
-std::vector<uint8_t>
-std::span<const uint8_t>
+std::vector<uint8_t>    // owning; the byte-bool codec returns this
+const uint8_t*          // + length; the byte-bool codec reads this
 ```
 
 Each byte represents one bit and must be normalized to `0` or `1`.

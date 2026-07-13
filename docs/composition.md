@@ -94,7 +94,8 @@ auto sha = compile_linear<rec::UInt<256>, rec::UInt<512>>(sha_compress);  // ONC
 sess.run_compose([&](auto& ctx, auto s, auto... blk){
     ((s = run(ctx, sha, s, blk)), ...); return s; }, init, b0, b1 /*…*/);
 
-// SIMD / batch: N independent instances
+// SIMD / batch: N independent instances (schematic — p.key/p.msg and the free
+// concat() stand in for real arg-splitting / member .concat())
 auto aes = compile_linear<rec::UInt<128>, rec::UInt<128>>(aes_enc);
 sess.run_compose([&](auto& ctx, auto... p){
     return concat(run(ctx, aes, p.key, p.msg)...); }, p0, p1 /*…*/);
@@ -145,7 +146,8 @@ On emp-ag2pc, `sess.run_compose(body, …)`:
 Requirements/notes:
 
 - Units must be `compile_linear` (the trust path needs AND-pinned wire reuse — see
-  [transform.h](../emp-tool/ir/transform.h), `WireReuse`).
+  [transform.h](../emp-tool/ir/transform.h) for `make_compact`; the `WireReuse`
+  levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
 - `run_tiled(unit, repeats, state)` is one-line sugar over `run_compose` for the common
   state→state chain.
 - Measured on a 100M-AND sha chain (2× m8a.8xlarge): compose ≈ **−11% wall / +12%

@@ -40,7 +40,7 @@ I/O stays the session's job, around the circuit:
 
 ```cpp
 ClearSession sess;                                    // session owns the I/O boundary
-using Ctx = ClearSession::ctx_t;                      // a protocol session (SH2PCSession, AG2PCSession) exposes the same surface
+using Ctx = ClearSession::ctx_t;                      // a protocol session (e.g. SH2PCSession) exposes the same surface
 using UInt32 = UInt_T<Ctx, 32>;
 auto a = sess.input<UInt32>(ALICE, av);               // session feeds inputs
 auto b = sess.input<UInt32>(BOB,   bv);
@@ -87,8 +87,12 @@ A circuit value is anything satisfying the `WireBundle` concept
 value family onto another context. Adding the clear codec (`clear_t` /
 `encode` / `decode`) makes it the stronger `WireValue` — the form session I/O
 needs; the frontend itself requires only `WireBundle` (a clear codec is not
-needed to compile/run). The four built-in families (`Bit_T`, `UInt_T`, `Int_T`,
-`Float_T` in `circuits/typed.h`) satisfy both at fixed width. The runtime-width
+needed to compile/run). The five built-in families (`Bit_T`, `BitVec_T`,
+`UInt_T`, `Int_T`, `Float_T` in `circuits/typed.h`) model `WireBundle` at fixed
+width; `Bit_T` / `BitVec_T` / `Float_T` also model `WireValue` at every width,
+while `UInt_T` / `Int_T` model `WireValue` only for width <= 64 (their clear
+codecs ride 64-bit integers) — use `BitVec_T` for typed session I/O past 64 bits.
+The runtime-width
 forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>` (width chosen at construction)
 intentionally do **not** model `WireBundle` — they have no *static* `width()` —
 so they cannot be a `compile` / `run` argument; convert to a fixed
@@ -124,16 +128,18 @@ UInt_T<ClearCtx,32>`); `run` uses it to reconstruct the live result type.
 ```cpp
 #include "emp-tool/circuits/frontend/circuit_fn.h"
 #include "emp-tool/circuits/frontend/rec.h"
+#include "emp-tool/ir/session/clear_session.h"
 namespace cf = emp::frontend;
 using namespace emp;
 
 auto add  = [](auto a, auto b) { return a + b; };
 auto circ = cf::compile<rec::UInt<32>, rec::UInt<32>>(add);   // record ONCE
 
-ClearCtx cx;                                                  // run on any context
-auto x = UInt_T<ClearCtx,32>::constant(cx, 7);
-auto y = UInt_T<ClearCtx,32>::constant(cx, 5);
-auto z = cf::run(cx, circ, x, y);                            // replay -> UInt_T<ClearCtx,32>
+ClearSession sess;                                            // run on any session's context
+using Ctx = ClearSession::ctx_t;
+auto x = sess.input<UInt_T<Ctx,32>>(ALICE, 7);
+auto y = sess.input<UInt_T<Ctx,32>>(BOB,   5);
+auto z = cf::run(sess.ctx(), circ, x, y);                     // replay -> UInt_T<Ctx,32>
 ```
 
 - **compiled** — `compile<ArgVs...>(body)` records the body once through a
@@ -141,7 +147,7 @@ auto z = cf::run(cx, circ, x, y);                            // replay -> UInt_T
   types over `RecordCtx`; use the `rec::` aliases). `run(ctx, circ, args...)`
   replays it on the live `ctx` (args **by const-ref**, rebound to that ctx; the
   context is **explicit** — no global backend). The same `Circuit` runs
-  identically on `ClearCtx`, `SH2PCCtx`, etc. — user circuits are as portable as
+  identically on the plaintext session's context, `SH2PCCtx`, etc. — user circuits are as portable as
   the built-in `.empbc` files.
 - **live** — `run(body, args...)` invokes the body directly on already-live typed
   values (it recovers the context from the first argument). Same contract.
@@ -163,8 +169,7 @@ rejected at construction rather than silently mis-running. Accessors:
 `circ.program()`, `circ.signature()`.
 
 No analyses are baked into the circuit — gate counts, liveness, and the AND-depth
-schedule are free functions over the program (`ir/passes.h`,
-`ir/context/context.h`), computed when wanted.
+schedule are free functions over the program (`ir/passes.h`), computed when wanted.
 
 ## What's inside (internals)
 
@@ -177,17 +182,18 @@ schedule are free functions over the program (`ir/passes.h`,
   the value types over `RecordCtx` used as `compile` arguments.
 - `ir/wire_value.h` — the generic `WireBundle` concept (the structural value
   contract) and `WireValue` (`WireBundle` + the clear codec).
-- `ir/context/context.h` — the `BooleanContext` concept and the contexts
-  `ClearCtx` (plaintext) and `RecordCtx` (records a `BooleanProgram`), plus the
-  `CountCtx` / `DigestCtx` analysis helpers, `execute_program(ctx, prog, inputs,
-  ws)` (value-return replay over any `BooleanContext`), and `ProgramWorkspace`.
+- `ir/context/context.h` — a convenience umbrella re-exporting the
+  `BooleanContext` concept and the contexts `ClearCtx` (plaintext) and `RecordCtx`
+  (records a `BooleanProgram`), plus the `CountCtx` / `DigestCtx` analysis helpers;
+  the value-return replay it re-exports — `execute_program(ctx, prog, inputs, ws)`
+  and `ProgramWorkspace` — is defined in `ir/execute.h`.
 - `ir/artifact.h` — `CircuitArtifact` (program + signature) +
   `validate_artifact`.
 - `circuits/frontend/circuit_fn.h` — the `RecordValue` concept (refining `WireBundle`),
   `circuit_fn_traits` / `circuit_contract`, `Circuit<RetV,ArgVs...>`, `compile`,
   `run`.
-- `ir/passes.h` — analyses over the IR (`count`, `liveness`, `schedule`,
-  `layout`) as free functions.
+- `ir/passes.h` — analyses over the IR (`count_pass`, `liveness_pass`,
+  `schedule_pass`, `layout_pass`) as free functions.
 
 ## Adding a new backend
 

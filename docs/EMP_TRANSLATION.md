@@ -332,7 +332,7 @@ Float ops are large (thousands of AND gates for a single mul) — each
 nontrivial op replays the recorded `fp<W>_<op>.empbc` builtin. For ML-style
 fixed-point work, prefer `Int_T` with a chosen scale.
 
-### 4.12. Crypto primitives (AES-128, SHA3-256)
+### 4.12. Crypto primitives (AES-128, SHA-256, SHA3-256/Keccak)
 
 Don't hand-roll AES or SHA3 in scalar `Bit_T`/integer ops. Use the
 `emp::circuit::crypto` kernels over `BitVec_T` blocks/messages. emp-tool ships pre-built
@@ -448,7 +448,7 @@ caller wants. `sess.num_and()` reports the ANDs garbled so far.
 [docs/io_channel.md](io_channel.md).
 
 For malicious-secure 2PC use **emp-ag2pc**; for malicious-secure
-multi-party (n ≥ 3) use **emp-agmpc** (in `ref/`).
+multi-party (n ≥ 3) use **emp-agmpc** (a sibling repository).
 
 ---
 

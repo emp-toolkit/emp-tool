@@ -61,6 +61,7 @@ binary that runs on any AES-NI + PCLMUL + SSE4.2 (x86_64) or
 | `EMP_TOOL_BUILD_TESTS` | `ON` when top-level | Build the test suite under `test/`. |
 | `EMP_TOOL_BUILD_BENCHMARKS` | `OFF` | Build throughput benchmarks under `bench/`; not registered with `ctest`. |
 | `EMP_TOOL_INSTALL` | `ON` when top-level | Generate install + export rules. |
+| `EMP_WITH_BLAKE3` | `OFF` | Compile the vendored BLAKE3 backend so `HashT<HashOption::blake3>` is usable while the default `Hash` stays `sha256`. Auto-`ON` when `EMP_HASH_BACKEND` or `EMP_FS_HASH` is `blake3`. |
 | `EMP_HASH_BACKEND` | `sha256` | Default `emp::Hash` backend (`sha256` or `blake3`); changes every hash use, transcript-wide. Inherited by consumers. |
 | `EMP_FS_HASH` | `default` | Fiat–Shamir transcript hash only (`default` = follow `EMP_HASH_BACKEND`, `sha256`, `blake3`); commitments/RO keep `emp::Hash`. Inherited by consumers; both parties must build with the same value. |
 
@@ -132,6 +133,10 @@ emp-tool/
 └── third_party/  ThreadPool, sse2neon
 ```
 
+The vendored BLAKE3 sources live at repo-root `third_party/blake3/` and are
+compiled into `libemp-tool` when `EMP_WITH_BLAKE3` is enabled (directly, or
+via a blake3 backend selection).
+
 The canonical circuit value layer is the context-bound typed values in
 `circuits/typed.h`: `Bit_T<Ctx>`, `UInt_T<Ctx,N>`, `Int_T<Ctx,N>`,
 `Float_T<Ctx,W>`, and `BitVec_T<Ctx,N>`, each templated on a `BooleanContext`
@@ -188,15 +193,13 @@ block one = ccrh.H(buf[0]);                      // single-block form
 ```
 
 CCRH has three call shapes: a scalar `H(block)` returning one block, a
-templated batched `H<n>(out, in)` that the compiler unrolls (best up to
-n ≤ 16, beyond which register spills hurt throughput), and a runtime
-`Hn(out, in, n)` for large batches. MITCCRH has a different shape — see
-`crypto/mitccrh.h`. `CCRH` is the single correlation-robust hash: its `sigma`
-preprocessing costs roughly half a cycle per block in bulk and rules out a
-footgun class of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)`
-correlated.
+templated batched `H<n>(out, in)` that the compiler unrolls (best for small
+`n`), and a runtime `Hn(out, in, n)` for large batches. MITCCRH has a
+different shape — see `crypto/mitccrh.h`. `CCRH` is the single
+correlation-robust hash: its `sigma` preprocessing rules out a footgun class
+of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)` correlated.
 
-### Hash (SHA-256)
+### Hash
 
 ```cpp
 Hash hash;
@@ -205,6 +208,25 @@ char dig[Hash::DIGEST_SIZE];                     // 32 bytes
 
 hash.put(data, sizeof(data));
 hash.digest(dig);                                // resets after digesting
+```
+
+`Hash` is an alias for `HashT<>` — SHA-256 by default, the vendored BLAKE3
+when built with `-DEMP_HASH_BACKEND=blake3`. `DIGEST_SIZE` is 32 bytes
+either way.
+
+### Random oracle
+
+`RO` frames heterogeneous fields into one domain-separated transcript and
+squeezes a digest. The domain string and session id are mandatory — sharing
+them across protocols defeats the separation.
+
+```cpp
+block sid;
+PRG().random_block(&sid, 1);
+
+RO ro("my-protocol:v1", sid);                    // domain + session id
+ro.absorb((uint64_t)7).absorb(sid);              // typed, length-framed fields
+block h = ro.squeeze_block();                    // or squeeze_digest / squeeze_point
 ```
 
 ### GF(2^128) multiplication
@@ -240,11 +262,32 @@ Point T = G.hash_to_point("my message", 10, dst, sizeof(dst) - 1);
 ### Network IO
 
 ```cpp
-NetIO io(party == ALICE ? nullptr : "127.0.0.1", 12345);
-io.send_data(buf, n);                            // buffered
-io.flush();                                      // drain outbound
-io.recv_data(buf, n);                            // blocks until n bytes arrive
+auto io = (party == ALICE) ? NetIO::listen(12345)
+                           : NetIO::connect("127.0.0.1", 12345);
+io->send_data(buf, n);                           // buffered
+io->flush();                                     // drain outbound
+io->recv_data(buf, n);                           // blocks until n bytes arrive
 ```
+
+Every channel counts bytes, rounds, and flushes — `io->get_statistics_string()`
+prints them. `TLSIO` (`runtime/io/tls_io_channel.h`) is a drop-in `IOChannel`
+speaking TLS 1.3 under the same flush/threading contract, configured via
+`TLSConfig`. See [docs/io_channel.md](docs/io_channel.md) for the channel
+contract.
+
+### Fiat–Shamir transcripts
+
+Any `IOChannel` can hash everything it sends and receives:
+
+```cpp
+io->enable_fs(party == ALICE);                   // exactly one party passes true
+// ... protocol traffic ...
+block chal = io->get_digest();                   // both parties derive the same block
+```
+
+Both parties must select the same transcript hash (CMake `EMP_FS_HASH`).
+`get_send_digest()` / `get_recv_digest()` snapshot one direction — a file-free
+alternative to `TraceIO` for wire-regression checks.
 
 ### Plaintext circuit evaluation
 
@@ -291,19 +334,21 @@ context's job, around the circuit. Add `#include <emp-tool/circuits/frontend/cir
 ```cpp
 #include <emp-tool/circuits/frontend/circuit_fn.h>
 #include <emp-tool/circuits/frontend/rec.h>
+#include <emp-tool/ir/session/clear_session.h>
 using namespace emp;
 namespace cf = emp::frontend;
 
 auto add  = [](auto a, auto b){ return a + b; };               // pure circuit (implicit ctx)
 auto circ = cf::compile<rec::UInt<32>, rec::UInt<32>>(add);    // record ONCE -> Circuit
 
-ClearCtx cx;                                                   // ... then run on any context
-auto x = UInt_T<ClearCtx,32>::constant(cx, 7);
-auto y = UInt_T<ClearCtx,32>::constant(cx, 5);
-auto z = cf::run(cx, circ, x, y);                             // replay -> UInt_T<ClearCtx,32> (== 12)
+ClearSession sess;                                             // ... then run on any session's context
+using Ctx = ClearSession::ctx_t;
+auto x = sess.input<UInt_T<Ctx,32>>(ALICE, 7);
+auto y = sess.input<UInt_T<Ctx,32>>(BOB,   5);
+auto z = cf::run(sess.ctx(), circ, x, y);                      // replay -> UInt_T<Ctx,32> (== 12)
 ```
 
-The same `circ` runs identically on `ClearCtx`, the garbled `SH2PCCtx`, and
+The same `circ` runs identically on the plaintext session, the garbled `SH2PCCtx`, and
 future contexts — user circuits are as portable as the built-in `.empbc` files.
 Arguments are named by the recording value types (`rec::UInt<32>`, `rec::Bit`,
 `rec::Float<32>`, …); the compiled `Circuit` holds a validated `BooleanProgram` +
@@ -317,7 +362,9 @@ Circuits load from the native binary `.empbc` format into one
 `emp::circuit::BooleanProgram` (flat: inputs are wires `[0, num_inputs)`,
 outputs are an explicit wire list) and replay through any `BooleanContext`. The
 loader validates structure (bounds, single-definition, topological order) and
-rejects malformed files. Floating-point `.empbc` assets ship in
+rejects malformed files. Assets resolve from `$EMP_CIRCUIT_DIR` (if set), then
+the build tree, then the install tree — point `EMP_CIRCUIT_DIR` at assets
+staged anywhere else. Floating-point `.empbc` assets ship in
 `emp-tool/ir/files/`; see
 [docs/floating_point_circuits.md](docs/floating_point_circuits.md) for the
 asset format and regeneration notes. You can also `compile` your own pure
@@ -325,24 +372,26 @@ circuit function (above) or capture a recorded program and load it through this
 API.
 
 ```cpp
-#include <emp-tool/ir/context/context.h>   // execute_program, ClearCtx
+#include <emp-tool/ir/context/context.h>   // execute_program
+#include <emp-tool/ir/session/clear_session.h>
 #include <emp-tool/ir/empbc.h>     // load_empbc_file
 using namespace emp;
 using namespace emp::circuit;
 
 BooleanProgram program = load_empbc_file("my_circuit.empbc");
 
-ClearCtx ctx;                                            // any BooleanContext
-std::vector<ClearCtx::Wire> inputs(program.num_inputs);
+using Ctx = ClearSession::ctx_t;                         // any BooleanContext
+Ctx ctx;
+std::vector<Ctx::Wire> inputs(program.num_inputs);
 // ... fill inputs (the leading wires) ...
-std::vector<ClearCtx::Wire> out =
+std::vector<Ctx::Wire> out =
     execute_program(ctx, program,
-                    std::span<const ClearCtx::Wire>(inputs.data(), inputs.size()));
+                    std::span<const Ctx::Wire>(inputs.data(), inputs.size()));
 ```
 
 `execute_program(ctx, program, inputs)` walks the gate list issuing the
-context's value-return gate ops, so the same loaded program runs on `ClearCtx`,
-the garbled `SH2PCCtx`, or any other context unchanged. A bulk/round-sensitive
+context's value-return gate ops, so the same loaded program runs on the
+plaintext context, the garbled `SH2PCCtx`, or any other context unchanged. A bulk/round-sensitive
 context can consume the AND-depth schedule instead (`make_scheduled_plan` +
 `scheduled_execute_program`).
 
@@ -357,6 +406,13 @@ ctest --test-dir build --output-on-failure
 Each test file under `test/` doubles as a tutorial for the
 corresponding header — see `docs/test_conventions.md` for the file conventions
 (`example()` / `run_correctness()` per file).
+
+Two-party tests and benchmarks run both parties: `./run <binary> [args]`
+launches party 1 and party 2 locally on a fresh `EMP_PORT` per invocation
+(`ctest` already wraps the two-party tests in it). For a real two-machine run,
+set `EMP_PORT` (shared port) on both hosts and `EMP_PEER_IP` (party 1's
+address, which party 2 uses to connect) on party 2's host, then start
+`<binary> 1 ...` / `<binary> 2 ...` directly.
 
 ### Benchmarks
 
@@ -373,9 +429,10 @@ Benchmarks are separate from `ctest` and live under `bench/`; see
 ### Wire-byte equivalence (test mode)
 
 Setting `EMP_TEST_MODE=1` swaps every randomness source in the
-toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for a
-deterministic counter-derived stream so two runs of the same code
-produce byte-identical wire output. Combined with `TraceIO` (an
+toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for
+deterministic `(lane, ordinal)`-seeded streams, so two runs of the
+same code — single- or multi-threaded — produce byte-identical wire
+output. Combined with `TraceIO` (an
 `IOChannel` adapter that tees wire bytes to a file), this lets you
 verify that an optimization or refactor doesn't change a protocol's
 observable behavior:
@@ -384,12 +441,30 @@ observable behavior:
 EMP_TEST_MODE=1 ./run ./build/your_protocol_test before
 # … apply your refactor …
 EMP_TEST_MODE=1 ./run ./build/your_protocol_test after
-diff before.alice.send after.alice.send   # must be empty
-diff before.alice.recv after.alice.recv   # must be empty
+diff before.alice.send after.alice.send   # each direction, checked at its sender
+diff before.bob.send   after.bob.send     # both must be empty
 ```
 
 See [docs/test_mode.md](docs/test_mode.md) for the full design,
 determinism contract, and limitations.
+
+## Documentation
+
+| Topic | Doc |
+|---|---|
+| Typed circuit values, circuit authoring | [docs/circuits.md](docs/circuits.md) |
+| Numeric semantics (wrap, shifts, float) | [docs/numeric_semantics.md](docs/numeric_semantics.md) |
+| Circuit frontend (compile once, run anywhere) | [docs/frontend.md](docs/frontend.md) |
+| Implementing a `BooleanContext` / session backend | [docs/backend.md](docs/backend.md) |
+| IOChannel contract (flush, threads, Fiat–Shamir) | [docs/io_channel.md](docs/io_channel.md) |
+| API conventions and failure model | [docs/api_conventions.md](docs/api_conventions.md) |
+| Old emp-tool API → this tree | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
+| Floating-point circuit assets | [docs/floating_point_circuits.md](docs/floating_point_circuits.md) |
+| Test mode / wire-byte determinism | [docs/test_mode.md](docs/test_mode.md) |
+| Test and benchmark conventions | [docs/test_conventions.md](docs/test_conventions.md), [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |
+
+An implementation audit for external reviewers lives in
+[audit-report/](audit-report/) (start at `index.html`).
 
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
 
