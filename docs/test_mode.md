@@ -8,7 +8,7 @@ build the framework:
 
 | Header | Role |
 |---|---|
-| [`emp-tool/runtime/core/test_mode.h`](../emp-tool/runtime/core/test_mode.h) | The toggle. `is_test_mode()`, `set_test_mode(bool)`, `next_test_seed()`, `reset_test_seed_counter()`. |
+| [`emp-tool/runtime/core/test_mode.h`](../emp-tool/runtime/core/test_mode.h) | The toggle and the lane machinery. `is_test_mode()`, `set_test_mode(bool)`, `next_test_seed()`, `reset_test_seed_counter()`, `test_lane_scope`, `next_test_child_lane()`. |
 | [`emp-tool/runtime/io/trace_io.h`](../emp-tool/runtime/io/trace_io.h) | `TraceIO` IOChannel adapter that tees wire bytes to a pair of files alongside delivering them. |
 
 ## When to use it
@@ -29,9 +29,11 @@ Two randomness sources in emp-tool reach the wire:
 
 1. **`PRG()` default-construction** — used pervasively by base OTs,
    PPRF roots, Δ sampling, malicious-mode consistency check seeds,
-   etc. In test mode, `PRG()` pulls a deterministic counter-derived
+   etc. In test mode, `PRG()` pulls a deterministic `(lane, ordinal)`
    seed from `next_test_seed()` instead of OS entropy
-   (`/dev/urandom` or `RDSEED`).
+   (`/dev/urandom` or `RDSEED`): the lane names the logical unit of
+   work (main thread = lane 0), the ordinal counts constructions
+   within the lane.
 2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's
    `BN_rand_range` in the toolkit. Used by P-256 base OTs (PVW,
    CSW, NP, CO). In test mode, it samples uniform in `[0, order)`
@@ -56,9 +58,37 @@ emp::set_test_mode(true);  // before any PRG() default-construction
 The env var is read once at first call to `is_test_mode()` and
 cached. `set_test_mode()` overrides it programmatically.
 
-`reset_test_seed_counter()` rewinds the counter to its initial
-value — call it between independent test iterations to get
-reproducible PRG sequences within one process.
+`reset_test_seed_counter()` rewinds every lane's ordinal and
+releases lane 0 — call it between independent test iterations to
+get reproducible PRG sequences within one process.
+
+## Multi-threading: lanes
+
+A seed is the pair `(lane, ordinal)`, so determinism under threads
+reduces to one rule: **every spawned worker draws under its own
+lane, chosen by the code that created the work** (whose program
+order is deterministic), never discovered by the worker itself.
+
+- **`ThreadPool` tasks: automatic.** `enqueue` derives a lane on the
+  enqueuing thread and installs it around the task body. Nested
+  enqueues derive hierarchically, so they stay deterministic too.
+- **Hand-spawned `std::thread`s: one line.** The body's first
+  statement installs the creator-chosen lane:
+
+  ```cpp
+  std::thread([&, peer]() {
+      emp::test_lane_scope guard(0x100 + peer);  // any stable id
+      // ... PRG() draws here come from (0x100+peer, 0), (…, 1), ...
+  });
+  ```
+
+- **Forgetting is loud.** A second thread drawing from lane 0 would
+  replay the main thread's streams byte-for-byte — silently wrong —
+  so test mode aborts with a pointer to this document instead.
+
+Lanes make the *randomness* reproducible. Byte-identical *traces*
+additionally require that each traced channel has a single writer
+lane — see the contract below.
 
 ### Cost in production
 
@@ -68,11 +98,12 @@ in production paths.
 
 ## Determinism contract
 
-- **Single-threaded execution required.** Multiple threads
-  consuming the global seed counter produce non-reproducible
-  orderings. Protocols with internal threading need their own
-  determinism story (typically: per-thread seed = `base ^ tid`,
-  plus a deterministic merge order on the wire).
+- **Threads need lanes.** Pool tasks get one automatically;
+  hand-spawned threads install `test_lane_scope` with a stable id
+  (peer index, slice number). Seeds are then reproducible under any
+  scheduling; wire-byte identity additionally requires one writer
+  lane per channel, since concurrent writers to a single channel
+  interleave nondeterministically even with deterministic seeds.
 - **`PRG(const block*, int)` is unchanged in test mode.** Callers
   with their own explicit seed sources already control determinism;
   the test-mode hook only affects the OS-random default path.
@@ -130,7 +161,10 @@ and may be a useful template for new wire-equivalence tests.
 
 ## What test mode does NOT cover
 
-- **Threading orderings.** See contract above.
+- **Transcript interleaving across lanes.** Lanes fix the seeds;
+  they cannot fix the order in which concurrent lanes' bytes land on
+  a *shared* channel. Keep one writer lane per traced channel (the
+  per-thread-NetIO pattern).
 - **Caller-provided randomness.** A `PRG` constructed with an
   explicit seed bypasses the test-mode hook entirely.
 - **Other OpenSSL randomness.** Only `BN_rand_range` (via

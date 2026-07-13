@@ -25,6 +25,14 @@ freely, subject to the following restrictions:
 #ifndef EMP_THREAD_POOL_H
 #define EMP_THREAD_POOL_H
 
+// Altered from the original for emp-tool: in test mode
+// (emp::is_test_mode()), every enqueued task runs under a deterministic
+// emp::test_lane_scope whose lane is derived on the enqueuing thread, so
+// pool-parallel randomness reproduces across runs regardless of which
+// worker executes the task. See emp-tool/runtime/core/test_mode.h.
+
+#include "emp-tool/runtime/core/test_mode.h"
+
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -89,11 +97,23 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	    std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
 	std::future<return_type> res = task->get_future();
+	// In test mode, the task's lane is derived HERE, on the enqueuing
+	// thread: enqueue order is program order, so the task's randomness is
+	// reproducible no matter which worker runs it, or when.
+	uint64_t test_lane = 0;
+	const bool lane_task = emp::is_test_mode();
+	if (lane_task) test_lane = emp::next_test_child_lane();
 	{
 		std::unique_lock<std::mutex> lock(queue_mutex);
 		if (stop)
 			throw std::runtime_error("enqueue on stopped ThreadPool");
-		tasks.emplace([task]() { (*task)(); });
+		if (lane_task)
+			tasks.emplace([task, test_lane]() {
+				emp::test_lane_scope scope(test_lane);
+				(*task)();
+			});
+		else
+			tasks.emplace([task]() { (*task)(); });
 	}
 	condition.notify_one();
 	return res;

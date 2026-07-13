@@ -13,9 +13,12 @@
 //   4. `diff before.send after.send` and `diff before.recv after.recv`
 //      must both be empty for the change to be wire-equivalent.
 //
-// Determinism contract: requires single-threaded execution and
-// emp::is_test_mode() == true at protocol startup. Multiple threads
-// or test-mode-off → traces are non-reproducible.
+// Determinism contract: requires emp::is_test_mode() == true at protocol
+// startup and, if the protocol spawns threads, the lane discipline of
+// test_mode.h (pool tasks get lanes automatically; hand-spawned threads
+// install test_lane_scope) plus one lane per traced channel — concurrent
+// writers to one channel interleave nondeterministically even with
+// deterministic seeds. Test-mode-off → traces are non-reproducible.
 
 #include "emp-tool/runtime/io/io_channel.h"
 #include <cstdio>

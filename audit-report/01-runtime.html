@@ -295,13 +295,14 @@ reveal-policy bug with confidentiality impact. <code>MAX_POINT_BYTES</code> caps
 deserialization.</p>
 
 <div class="callout c-warn"><span class="lbl">Test mode is a one-env-var randomness kill switch</span>
-<p><code>test_mode.h</code> exposes a global atomic flag seeded from <code>$EMP_TEST_MODE</code> plus a monotonic
-seed counter starting at <code>0xC0FFEE12345</code> (<code class="ref">test_mode.h:24-39</code>). When on,
-<code>PRG()</code> default construction draws a deterministic counter seed and
+<p><code>test_mode.h</code> exposes a global atomic flag seeded from <code>$EMP_TEST_MODE</code> plus
+per-thread <code>(lane, ordinal)</code> seed state (main thread = lane 0, ordinals from 0; spawned work
+runs under creator-assigned lanes so multi-threaded runs reproduce). When on,
+<code>PRG()</code> default construction draws the deterministic pair seed and
 <code>ECGroup::rand_scalar()</code> becomes a PRG-driven sampler. <b>A production binary that ever sets
 <code>EMP_TEST_MODE=1</code> (env var <em>or</em> <code>set_test_mode(true)</code>) becomes completely
-insecure</b> — seeds become <code>0xC0FFEE12345, +1, +2, …</code>. Only <code>v[0] == '1'</code> is checked
-(<code class="ref">test_mode.h:27-28</code>), so <code>=1</code> / <code>=10</code> trigger it; a single env var
+insecure</b> — seeds become the enumerable pairs <code>(lane, 0), (lane, 1), …</code>. Only <code>v[0] == '1'</code> is checked
+(<code class="ref">test_mode.h:39-40</code>), so <code>=1</code> / <code>=10</code> trigger it; a single env var
 away from a catastrophic randomness downgrade. Deserves operational guardrails (or a build-time hard-disable
 in release).</p></div>
 
@@ -976,7 +977,7 @@ OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equ
 <table class="grid">
 <tr><th>#</th><th>Item</th><th>Where</th><th>Severity / note</th></tr>
 <tr><td>1</td><td>Compile-time-only ISA dispatch; SIGILL (no runtime fallback) on a mismatched CPU — now also covers the GFNI512/GFNI256/NEON transpose tiers</td><td><code class="ref">simd_tier.h:20-98</code>, <code class="ref">transpose.hpp:748-772</code></td><td>Deployment hazard — match <code>-march</code> (mitigate with <code>EMP_TOOL_NATIVE_ARCH=OFF</code>)</td></tr>
-<tr><td>2</td><td>Test mode = one-env-var randomness kill switch (seed <code>0xC0FFEE12345</code>)</td><td><code class="ref">test_mode.h:24-39</code></td><td>Catastrophic if ever set in production</td></tr>
+<tr><td>2</td><td>Test mode = one-env-var randomness kill switch (enumerable <code>(lane, ordinal)</code> seeds)</td><td><code class="ref">test_mode.h</code></td><td>Catastrophic if ever set in production</td></tr>
 <tr><td>3</td><td>Fail-fast <code>error()</code> → <code>std::_Exit(1)</code>; no read timeouts</td><td><code class="ref">utils.hpp:33-42</code>, library-wide</td><td>Hostile peer can reliably crash/hang the process</td></tr>
 <tr><td>4</td><td><code>assert</code>-based developer-misuse checks in release (FS double-enable, alignment, local send-point length)</td><td><code class="ref">io_channel.h:121,195</code>, AES/PRP/PRG</td><td>Intentional debug-only class; peer-controlled point recv length is now always-on</td></tr>
 <tr><td>5</td><td>Uninitialized-memory-to-wire surface (<code>BlockVec</code>/default-init)</td><td><code class="ref">block_vector.h:15-44</code></td><td>Non-determinism / potential leak; sweep send/hash paths</td></tr>

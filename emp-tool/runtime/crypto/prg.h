@@ -30,11 +30,13 @@ class PRG { public:
 
 		block v;
 		if (is_test_mode()) {
-			// Deterministic seed from the global counter. Each PRG()
-			// default-construction in test mode gets a distinct value
-			// so streams don't collide. Single-threaded determinism
-			// only — see emp-tool/runtime/core/test_mode.h.
-			v = makeBlock(0LL, (int64_t)next_test_seed());
+			// Deterministic seed: lane in the high half, per-lane
+			// construction ordinal in the low half. Distinct lanes never
+			// collide, and a lane's sequence depends only on its own
+			// program order, so multi-threaded runs reproduce under the
+			// lane discipline of emp-tool/runtime/core/test_mode.h.
+			const TestSeed ts = next_test_seed();
+			v = makeBlock((int64_t)ts.lane, (int64_t)ts.ordinal);
 		} else {
 #ifndef ENABLE_RDSEED
 			v = from_urand();
