@@ -1,0 +1,9 @@
+{
+  "name": "fp16_square.empbc",
+  "sha256": "33dfb583eb6eed4b94a0b94cdc12f03fcb66c8bc1811a1ac9b11591c633a5fb3",
+  "num_inputs": 16,
+  "num_outputs": 16,
+  "num_gates": 1471,
+  "num_and": 478,
+  "and_depth": 41
+}

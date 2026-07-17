@@ -1,0 +1,9 @@
+{
+  "name": "sha3_256_256.empbc",
+  "sha256": "2f95bfd8b6b8818333dc43bf4104a45c2910f2e376b92800589ce5b6e6cac7d5",
+  "num_inputs": 256,
+  "num_outputs": 256,
+  "num_gates": 192347,
+  "num_and": 38400,
+  "and_depth": 24
+}

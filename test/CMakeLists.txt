@@ -50,6 +50,15 @@ add_test(NAME test_run
          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 set_tests_properties(test_run PROPERTIES TIMEOUT 20)
 
+if(TARGET empbc-tool)
+    add_test(NAME test_empbc_tool
+             COMMAND /bin/bash ${PROJECT_SOURCE_DIR}/test/test_empbc_tool.sh
+                               $<TARGET_FILE:empbc-tool>
+                               ${PROJECT_SOURCE_DIR}/emp-tool/ir/files
+             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    set_tests_properties(test_empbc_tool PROPERTIES TIMEOUT 120)
+endif()
+
 # ---- runtime/ : core, crypto, io, execution primitives ----
 add_test_case(runtime test_aes)
 add_test_case(runtime test_block)
@@ -72,6 +81,7 @@ add_test_case(runtime test_halfgate)         # half-gate garble/eval free functi
 # ---- ir/ : context, session, passes, program, builtins ----
 add_test_case(ir test_boolean_program)
 add_test_case_cxx20(ir test_passes)              # ir/passes.h: count/liveness/schedule/layout
+add_test_case_cxx20(ir test_analysis)            # aggregate scalar metrics for tooling/manifests
 add_test_case_cxx20(ir test_transform)           # ir/transform.h: make_compact/uncompact (wire-id reuse)
 add_test_case_cxx20(ir test_compose)             # frontend/compose.h: invoke + ComposePlan + flatten
 add_test_case_cxx20(ir test_context)             # BooleanContext concept + contexts cross-check

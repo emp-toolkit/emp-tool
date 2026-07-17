@@ -1,0 +1,9 @@
+{
+  "name": "fp16_mul.empbc",
+  "sha256": "fd850ea81f0cfb59572a842039e5b65a6ec3b30b3c4dba25ee8d4039bce1f5bf",
+  "num_inputs": 32,
+  "num_outputs": 16,
+  "num_gates": 2072,
+  "num_and": 717,
+  "and_depth": 48
+}

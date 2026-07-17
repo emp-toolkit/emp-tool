@@ -1,0 +1,9 @@
+{
+  "name": "fp32_isnan.empbc",
+  "sha256": "56c913cded18a8344255b064aab72fe286b422355142a8407155ac04a063c525",
+  "num_inputs": 32,
+  "num_outputs": 8,
+  "num_gates": 105,
+  "num_and": 30,
+  "and_depth": 6
+}

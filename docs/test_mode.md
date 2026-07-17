@@ -31,7 +31,7 @@ Two randomness sources in emp-tool reach the wire:
    PPRF roots, Δ sampling, malicious-mode consistency check seeds,
    etc. In test mode, `PRG()` pulls a deterministic `(lane, ordinal)`
    seed from `next_test_seed()` instead of OS entropy
-   (`/dev/urandom` or `RDSEED`): the lane names the logical unit of
+   (`/dev/urandom`): the lane names the logical unit of
    work (main thread = lane 0), the ordinal counts constructions
    within the lane.
 2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's

@@ -1,7 +1,7 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(OpenSSL)
+find_dependency(OpenSSL 3.0)
 find_dependency(Threads)
 
 include("${CMAKE_CURRENT_LIST_DIR}/emp-toolTargets.cmake")

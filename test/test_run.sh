@@ -41,6 +41,7 @@ hang() {
 	local sleeper
 	sleep 30 &
 	sleeper=$!
+	echo "$sleeper" >"$state_dir/sleeper-$party.pid"
 	trap 'kill "$sleeper" 2>/dev/null; wait "$sleeper" 2>/dev/null; exit 0' INT TERM HUP
 	wait "$sleeper"
 }
@@ -78,7 +79,7 @@ record_failure() {
 	((failures += 1))
 }
 
-children_are_gone() {
+processes_are_gone() {
 	local label=$1
 	local party pid_file pid
 	for party in 1 2; do
@@ -92,6 +93,15 @@ children_are_gone() {
 			record_failure "$label: party $party was left running (pid $pid)"
 			kill -KILL "$pid" 2>/dev/null || true
 		fi
+		pid_file=$state_dir/sleeper-$party.pid
+		if [[ ! -f "$pid_file" ]]; then
+			continue
+		fi
+		pid=$(<"$pid_file")
+		if kill -0 "$pid" 2>/dev/null; then
+			record_failure "$label: party $party's sleeper was left running (pid $pid)"
+			kill -KILL "$pid" 2>/dev/null || true
+		fi
 	done
 }
 
@@ -102,13 +112,13 @@ run_case() {
 	local label=$4
 	shift 4
 
-	rm -f "$state_dir"/party-*.pid
+	rm -f "$state_dir"/party-*.pid "$state_dir"/sleeper-*.pid
 	EMP_RUN_TIMEOUT=$timeout "$harness" "$helper" "$scenario" "$state_dir" "$@"
 	local status=$?
 	if [[ $status -ne $expected ]]; then
 		record_failure "$label: expected status $expected, got $status"
 	fi
-	children_are_gone "$label"
+	processes_are_gone "$label"
 }
 
 run_case 0 success 5 "both succeed"
@@ -119,7 +129,7 @@ run_case 124 hang 1 "timeout"
 
 # A signal delivered to the supervisor must clean up both live parties and
 # preserve the conventional shell status for that signal.
-rm -f "$state_dir"/party-*.pid
+rm -f "$state_dir"/party-*.pid "$state_dir"/sleeper-*.pid
 EMP_RUN_TIMEOUT=30 "$harness" "$helper" hang "$state_dir" &
 harness_pid=$!
 attempts=0
@@ -133,7 +143,7 @@ status=$?
 if [[ $status -ne 143 ]]; then
 	record_failure "signal cleanup: expected status 143, got $status"
 fi
-children_are_gone "signal cleanup"
+processes_are_gone "signal cleanup"
 
 if (( failures != 0 )); then
 	echo "test_run: $failures failure(s)" >&2

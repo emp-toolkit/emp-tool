@@ -1,0 +1,9 @@
+{
+  "name": "fp64_ge.empbc",
+  "sha256": "9916954b7db1187d083b621565b64a1410cb8fdc4d8ac0e72c33a7b5ad206129",
+  "num_inputs": 128,
+  "num_outputs": 8,
+  "num_gates": 988,
+  "num_and": 214,
+  "and_depth": 66
+}

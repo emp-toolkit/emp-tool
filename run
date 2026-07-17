@@ -29,23 +29,30 @@ bob_pid=
 alice_done=0
 bob_done=0
 
-# Stop a still-running party, escalate if it ignores TERM, and always reap it.
-# The launched program is the direct child identified by $!, so no Bash 4+
-# wait -n support is needed (macOS still ships Bash 3.2).
-terminate_and_reap() {
+# Stop a party's entire process group, escalating if any descendant ignores
+# TERM. Each party is launched as its group's leader below, so a timed-out
+# wrapper cannot orphan a grandchild that keeps a pipe or socket open.
+terminate_group() {
 	local pid=$1
 	local attempts=0
 
-	if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-		kill -TERM "$pid" 2>/dev/null || true
-		while kill -0 "$pid" 2>/dev/null && (( attempts < 10 )); do
+	if [[ -n "$pid" ]] && kill -0 -- "-$pid" 2>/dev/null; then
+		kill -TERM -- "-$pid" 2>/dev/null || true
+		while kill -0 -- "-$pid" 2>/dev/null && (( attempts < 10 )); do
 			sleep 0.02
 			((attempts += 1))
 		done
-		if kill -0 "$pid" 2>/dev/null; then
-			kill -KILL "$pid" 2>/dev/null || true
+		if kill -0 -- "-$pid" 2>/dev/null; then
+			kill -KILL -- "-$pid" 2>/dev/null || true
 		fi
 	fi
+}
+
+# Stop a party and all of its descendants, then reap the direct child. No
+# Bash 4+ wait -n support is needed (macOS still ships Bash 3.2).
+terminate_and_reap() {
+	local pid=$1
+	terminate_group "$pid"
 	wait "$pid" 2>/dev/null || true
 }
 
@@ -69,13 +76,18 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
+# Monitor mode gives each background job its own process group on both Linux
+# and macOS Bash. Disable it immediately after launch; the group membership
+# remains while the rest of the supervisor retains ordinary script semantics.
 # ALICE listens and BOB's connector retries until the listener is ready, so a
 # fixed startup sleep is unnecessary. Quote the program and argument vector so
 # spaces and wildcard characters reach both parties unchanged.
+set -m
 "$program" 1 "$@" &
 alice_pid=$!
 "$program" 2 "$@" &
 bob_pid=$!
+set +m
 
 deadline=$((SECONDS + timeout_seconds))
 alice_status=0
@@ -88,6 +100,7 @@ while (( !alice_done || !bob_done )); do
 	if (( !alice_done )) && ! kill -0 "$alice_pid" 2>/dev/null; then
 		wait "$alice_pid"
 		alice_status=$?
+		terminate_group "$alice_pid"
 		alice_done=1
 		if (( alice_status != 0 )); then
 			echo "run: party 1 failed with status $alice_status" >&2
@@ -102,6 +115,7 @@ while (( !alice_done || !bob_done )); do
 	if (( !bob_done )) && ! kill -0 "$bob_pid" 2>/dev/null; then
 		wait "$bob_pid"
 		bob_status=$?
+		terminate_group "$bob_pid"
 		bob_done=1
 		if (( bob_status != 0 )); then
 			echo "run: party 2 failed with status $bob_status" >&2

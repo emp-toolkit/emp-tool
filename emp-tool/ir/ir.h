@@ -13,6 +13,7 @@
 #include "emp-tool/ir/validate.h"
 #include "emp-tool/ir/visit.h"
 #include "emp-tool/ir/passes.h"
+#include "emp-tool/ir/analysis.h"
 #include "emp-tool/ir/execute.h"
 #include "emp-tool/ir/schedule.h"
 #include "emp-tool/ir/artifact.h"

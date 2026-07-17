@@ -1,0 +1,9 @@
+{
+  "name": "fp16_iszero.empbc",
+  "sha256": "573e34a47f79265eb0b31bf31e06fbcbe89ed55db35ffd868bc68a7d5f0df2bd",
+  "num_inputs": 16,
+  "num_outputs": 8,
+  "num_gates": 66,
+  "num_and": 14,
+  "and_depth": 5
+}

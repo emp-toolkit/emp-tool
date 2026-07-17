@@ -129,6 +129,7 @@ struct LayoutStats {
 	// Output-rooted dead-code-elimination sizes (what a backend rooted on the
 	// revealed/returned outputs would actually execute).
 	int64_t reachable_wire = 0;
+	int64_t reachable_gate = 0;
 	int64_t reachable_and  = 0;
 };
 
@@ -160,8 +161,11 @@ inline LayoutStats layout_pass(const BooleanProgram& p, const LivenessStats& liv
 		if (!g.is_not() && !g.is_const()) visit(g.in1);
 	}
 	for (uint32_t w = 0; w < p.num_wires; ++w) if (reach[w]) ++s.reachable_wire;
-	for (const auto& g : p.gates)
-		if (g.is_and() && reach[g.out]) ++s.reachable_and;
+	for (const auto& g : p.gates) {
+		if (!reach[g.out]) continue;
+		++s.reachable_gate;
+		if (g.is_and()) ++s.reachable_and;
+	}
 	return s;
 }
 

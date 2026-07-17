@@ -1,0 +1,9 @@
+{
+  "name": "fp32_square.empbc",
+  "sha256": "303e51b67b570c002f77f012c2cbe7a40f68bb02ba6e0bb7a53578fd35439c87",
+  "num_inputs": 32,
+  "num_outputs": 32,
+  "num_gates": 5851,
+  "num_and": 1876,
+  "and_depth": 146
+}

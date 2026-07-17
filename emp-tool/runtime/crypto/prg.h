@@ -5,14 +5,8 @@
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/core/constants.h"
 #include "emp-tool/runtime/core/test_mode.h"
-#include <climits>
 #include <memory>
 #include <random>
-
-#ifdef ENABLE_RDSEED
-#include <x86intrin.h>
-#else
-#endif
 
 namespace emp {
 
@@ -38,22 +32,7 @@ class PRG { public:
 			const TestSeed ts = next_test_seed();
 			v = makeBlock((int64_t)ts.lane, (int64_t)ts.ordinal);
 		} else {
-#ifndef ENABLE_RDSEED
 			v = from_urand();
-#else
-			unsigned long long r0, r1;
-			int i = 0, j = 0;
-			// To prevent an AMD CPU bug. (PR #156)
-			for(; i < 10; ++i)
-				if((_rdseed64_step(&r0) == 1) && (r0 != ULLONG_MAX) && (r0 != 0)) break;
-
-			for(; j < 10; ++j)
-				if((_rdseed64_step(&r1) == 1) && (r1 != ULLONG_MAX) && (r1 != 0)) break;
-			if (i == 10 or j == 10)
-				v = from_urand();
-			else
-				v = makeBlock(r0, r1);
-#endif
 		}
 		reseed(&v, id);
 	}

@@ -1,7 +1,7 @@
 // crypto/prg.h — AES-CTR pseudorandom generator. Throughput benchmark.
 //
 // What's in prg.h:
-//   PRG(seed=nullptr, id=0)                  fixed-key seed (or rdseed/urandom)
+//   PRG(seed=nullptr, id=0)                  fixed-key seed (or urandom)
 //   reseed(const block * seed, id=0)         re-key + reset counter
 //   random_block(block *, n=1)               n blocks of CTR-mode AES output
 //   random_data(void *, nbytes)              16-byte aligned dest

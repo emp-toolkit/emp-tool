@@ -33,7 +33,8 @@ emp-sh2pc's garbled `SH2PCCtx`.
 - A C++20 compiler (Clang ≥ 12, GCC ≥ 10, AppleClang 14+)
 - OpenSSL ≥ 3.0
 - pthreads
-- x86_64 with AES-NI + PCLMULQDQ + SSE4.2, **or** arm64 with `armv8-a+crypto+crc`. The default build targets the host CPU (`-march=native` on x86_64, `-mcpu=native` on arm64) and pulls in VAES, VPCLMULQDQ, AVX-512 etc. wherever the host CPU has them; pass `-DEMP_TOOL_NATIVE_ARCH=OFF` for a portable binary tied only to the baseline above.
+- Linux or macOS on x86_64 with AES-NI + PCLMULQDQ + SSE4.2, or arm64
+  with `armv8-a+crypto+crc`. Other platforms fail at CMake configuration time.
 
 ## Build and install
 
@@ -43,23 +44,21 @@ cmake --build build -j
 cmake --install build           # respects CMAKE_INSTALL_PREFIX
 ```
 
-The default build is tuned for performance: `Release`, `-O3
--funroll-loops`, and the host CPU's ISA (`-march=native` on x86_64,
-`-mcpu=native` on arm64) so VAES / VPCLMULQDQ / AVX-512 etc.
-are used wherever the host CPU supports them. **Binaries built this way
-are tied to the build machine's CPU** — they will SIGILL on a CPU
-missing any instruction the build host had. To produce a portable
-binary that runs on any AES-NI + PCLMUL + SSE4.2 (x86_64) or
-`armv8-a+crypto+crc` (arm64) machine, pass
-`-DEMP_TOOL_NATIVE_ARCH=OFF`.
+The default Release build uses `-O3 -funroll-loops` and tunes for the build
+host's ISA (`-march=native` on x86_64 or `-mcpu=native` on arm64). This enables
+the best available SIMD tiers, but the resulting binary may SIGILL on older
+CPUs. Set `-DEMP_TOOL_NATIVE_ARCH=OFF` for the portable AES-NI + PCLMUL +
+SSE4.2 x86_64 baseline or `armv8-a+crypto+crc` arm64 baseline. Default PRG
+construction obtains its seed from `/dev/urandom` on every supported platform.
 
 ### CMake options
 
 | Option | Default | Effect |
 |---|---|---|
-| `EMP_TOOL_NATIVE_ARCH` | `ON` | Build for the host CPU (`-march=native` / arm64 `-mcpu=native`). Best performance, host-CPU-locked binary. Set `OFF` for portable binaries. |
+| `EMP_TOOL_NATIVE_ARCH` | `ON` | Tune for the build host's ISA. Set `OFF` for a portable baseline binary. |
 | `EMP_TOOL_BUILD_TESTS` | `ON` when top-level | Build the test suite under `test/`. |
 | `EMP_TOOL_BUILD_BENCHMARKS` | `OFF` | Build throughput benchmarks under `bench/`; not registered with `ctest`. |
+| `EMP_TOOL_BUILD_TOOLS` | `ON` when top-level | Build command-line tools such as `empbc-tool`. |
 | `EMP_TOOL_INSTALL` | `ON` when top-level | Generate install + export rules. |
 | `EMP_WITH_BLAKE3` | `OFF` | Compile the vendored BLAKE3 backend so `HashT<HashOption::blake3>` is usable while the default `Hash` stays `sha256`. Auto-`ON` when `EMP_HASH_BACKEND` or `EMP_FS_HASH` is `blake3`. |
 | `EMP_HASH_BACKEND` | `sha256` | Default `emp::Hash` backend (`sha256` or `blake3`); changes every hash use, transcript-wide. Inherited by consumers. |
@@ -395,6 +394,27 @@ context's value-return gate ops, so the same loaded program runs on the
 plaintext context, the garbled `SH2PCCtx`, or any other context unchanged. A bulk/round-sensitive
 context can consume the AND-depth schedule instead (`make_scheduled_plan` +
 `scheduled_execute_program`).
+
+### Circuit statistics and asset manifests
+
+Top-level builds also produce `empbc-tool`. It uses the same hostile-input-safe
+loader and IR passes as the library:
+
+```bash
+./build/empbc-tool inspect emp-tool/ir/files/aes128.empbc
+./build/empbc-tool inspect --json emp-tool/ir/files/aes128.empbc
+./build/empbc-tool compare old.empbc new.empbc
+./build/empbc-tool manifest --output emp-tool/ir/files/manifests emp-tool/ir/files
+./build/empbc-tool check-manifest emp-tool/ir/files/manifests emp-tool/ir/files
+```
+
+Reports include SHA-256, format/index width, stored and dense wire counts, gate
+mix, AND depth and maximum level width, output-rooted reachability, dead gates,
+peak live wires, maximum fanout, and stable program digests. The checked-in
+`emp-tool/ir/files/manifests/` directory keeps one compact JSON baseline per
+asset, making binary drift and major complexity changes visible in focused
+code-review diffs. Set `EMP_TOOL_BUILD_TOOLS=OFF` when only the library is
+wanted.
 
 ## Tests
 

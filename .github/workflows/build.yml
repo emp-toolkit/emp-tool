@@ -3,13 +3,79 @@ on: [push, pull_request]
 
 jobs:
   build:
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-        build_type: [Debug, Release]
+        include:
+          - name: Ubuntu GCC Debug portable
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Debug
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
+          - name: Ubuntu GCC Release portable
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
+          - name: Ubuntu Clang shared BLAKE3
+            os: ubuntu-latest
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            shared: ON
+            native: OFF
+            hash: blake3
+            fs_hash: default
+          - name: Ubuntu GCC split hash policy
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: blake3
+          - name: Ubuntu GCC native ISA
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            shared: OFF
+            native: ON
+            hash: sha256
+            fs_hash: default
+          - name: Ubuntu arm64 GCC portable
+            os: ubuntu-24.04-arm
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
+          - name: macOS AppleClang portable
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 35
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
     steps:
       - uses: actions/checkout@v6
       - name: Locate OpenSSL (macOS)
@@ -19,21 +85,34 @@ jobs:
         run: >
           cmake -B build
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-          -DEMP_TOOL_NATIVE_ARCH=OFF
+          -DBUILD_SHARED_LIBS=${{ matrix.shared }}
+          -DEMP_TOOL_NATIVE_ARCH=${{ matrix.native }}
+          -DEMP_HASH_BACKEND=${{ matrix.hash }}
+          -DEMP_FS_HASH=${{ matrix.fs_hash }}
       - name: Build
-        run: cmake --build build -j $(getconf _NPROCESSORS_ONLN)
+        run: cmake --build build --parallel
       - name: Test
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir build --output-on-failure --timeout 150
+      - name: Reject invalid hash backend
+        if: matrix.name == 'Ubuntu GCC Release portable'
+        run: |
+          if cmake -S . -B build-invalid-hash \
+              -DEMP_TOOL_BUILD_TESTS=OFF \
+              -DEMP_TOOL_BUILD_TOOLS=OFF \
+              -DEMP_HASH_BACKEND=invalid; then
+            echo "invalid EMP_HASH_BACKEND was accepted" >&2
+            exit 1
+          fi
 
-  # AddressSanitizer + UndefinedBehaviorSanitizer. One Ubuntu leg (LSan is
-  # Linux-only); RelWithDebInfo for line numbers without Debug's slowdown.
-  # detect_leaks=0 keeps the focus on memory corruption / UB rather than
-  # exit-time leaks in test mains; UBSan halt_on_error=1 turns a detected
-  # violation into a non-zero exit (default is print-and-continue).
+  # Linux Clang owns the sanitizer leg so both major compiler families are
+  # continuously exercised. Alignment checking remains enabled.
   sanitize:
-    name: ASan + UBSan (Ubuntu)
+    name: ASan + UBSan (Ubuntu Clang)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    env:
+      CC: clang
+      CXX: clang++
     steps:
       - uses: actions/checkout@v6
       - name: Configure (ASan + UBSan)
@@ -46,9 +125,9 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
       - name: Build
-        run: cmake --build build-san -j $(getconf _NPROCESSORS_ONLN)
+        run: cmake --build build-san --parallel
       - name: Test (ASan + UBSan)
-        run: ctest --test-dir build-san --output-on-failure
+        run: ctest --test-dir build-san --output-on-failure --timeout 150
         env:
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1

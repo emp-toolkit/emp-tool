@@ -1,0 +1,9 @@
+{
+  "name": "fp32_eq.empbc",
+  "sha256": "0942daff2be4e06dc872557da8cecdb64a878f8b2ec9daad7f750d3577245534",
+  "num_inputs": 64,
+  "num_outputs": 8,
+  "num_gates": 435,
+  "num_and": 111,
+  "and_depth": 9
+}

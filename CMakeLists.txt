@@ -15,15 +15,37 @@ endif()
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
-include(CheckCSourceRuns)
+
+# emp-tool's runtime and SIMD layers are intentionally POSIX-only today. Fail
+# during configuration instead of reaching obscure socket/intrinsic errors.
+if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$")
+    message(FATAL_ERROR
+        "emp-tool supports Linux and macOS only (got ${CMAKE_SYSTEM_NAME})")
+endif()
+if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|aarch64|arm64)$")
+    message(FATAL_ERROR
+        "emp-tool supports x86-64 and arm64 only (got ${CMAKE_SYSTEM_PROCESSOR})")
+endif()
+if(NOT CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang)$")
+    message(FATAL_ERROR
+        "emp-tool supports GCC, Clang, and AppleClang (got ${CMAKE_CXX_COMPILER_ID})")
+endif()
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 10)
+    message(FATAL_ERROR "emp-tool requires GCC 10 or newer")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12)
+    message(FATAL_ERROR "emp-tool requires Clang 12 or newer")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+    message(FATAL_ERROR "emp-tool requires AppleClang 14 or newer")
+endif()
 
 # ---------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------
 option(EMP_TOOL_BUILD_TESTS       "Build emp-tool tests"               ${PROJECT_IS_TOP_LEVEL})
 option(EMP_TOOL_BUILD_BENCHMARKS  "Build emp-tool benchmarks"          OFF)
+option(EMP_TOOL_BUILD_TOOLS       "Build emp-tool command-line tools"   ${PROJECT_IS_TOP_LEVEL})
 option(EMP_TOOL_INSTALL           "Generate install / export rules"    ${PROJECT_IS_TOP_LEVEL})
-option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so compile-time SIMD tiers such as VAES, VPCLMULQDQ, and AVX-512 are enabled when available. Default ON for performance; turn OFF to produce a portable binary that runs on any AES-NI + PCLMUL + SSE4.2 CPU." ON)
+option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native/-mcpu=native). OFF produces a portable baseline binary." ON)
 
 # Hash backend for emp::Hash (runtime/crypto/hash.h). sha256 = OpenSSL (default);
 # blake3 = vendored BLAKE3 (third_party/blake3), ~3-4x faster per byte. Selecting
@@ -31,6 +53,10 @@ option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native) so com
 # choice inherited by every consumer that links this emp-tool build.
 set(EMP_HASH_BACKEND "sha256" CACHE STRING "Default emp::Hash backend: sha256 or blake3")
 set_property(CACHE EMP_HASH_BACKEND PROPERTY STRINGS sha256 blake3)
+if(NOT EMP_HASH_BACKEND MATCHES "^(sha256|blake3)$")
+    message(FATAL_ERROR
+        "EMP_HASH_BACKEND must be sha256 or blake3 (got '${EMP_HASH_BACKEND}')")
+endif()
 option(EMP_WITH_BLAKE3 "Build the vendored BLAKE3 backend so HashT<HashOption::blake3> is available (auto-on when EMP_HASH_BACKEND=blake3 or EMP_FS_HASH=blake3)." OFF)
 
 # Fiat-Shamir transcript hash (io_channel.h enable_fs default), selectable
@@ -50,23 +76,6 @@ endif()
 # ---------------------------------------------------------------------
 find_package(OpenSSL 3.0 REQUIRED)
 find_package(Threads REQUIRED)
-
-# ---------------------------------------------------------------------
-# rdseed probe (x86 only)
-# ---------------------------------------------------------------------
-set(EMP_TOOL_HAS_RDSEED OFF)
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i.86)")
-    set(_save_flags "${CMAKE_REQUIRED_FLAGS}")
-    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -mrdseed")
-    check_c_source_runs("
-        #include <x86intrin.h>
-        int main(void){ unsigned long long r; return _rdseed64_step(&r) == -1; }"
-        EMP_TOOL_RDSEED_RUNS)
-    set(CMAKE_REQUIRED_FLAGS "${_save_flags}")
-    if(EMP_TOOL_RDSEED_RUNS)
-        set(EMP_TOOL_HAS_RDSEED ON)
-    endif()
-endif()
 
 # ---------------------------------------------------------------------
 # Source list
@@ -142,18 +151,12 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64)")
     else()
         target_compile_options(emp-tool PUBLIC -march=armv8-a+crypto+crc)
     endif()
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64|i.86)")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64)")
     if(EMP_TOOL_NATIVE_ARCH)
         target_compile_options(emp-tool PUBLIC -march=native)
     else()
         target_compile_options(emp-tool PUBLIC -maes -mpclmul -mssse3 -msse4.2)
     endif()
-endif()
-
-# Feature defines.
-if(EMP_TOOL_HAS_RDSEED)
-    target_compile_definitions(emp-tool PUBLIC ENABLE_RDSEED)
-    target_compile_options(emp-tool PUBLIC -mrdseed)
 endif()
 
 # ---------------------------------------------------------------------
@@ -240,11 +243,24 @@ if(EMP_TOOL_INSTALL)
     install(FILES emp-tool/ir/files/README.md
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/ir/files)
 
+    install(DIRECTORY emp-tool/ir/files/manifests
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/ir/files
+        FILES_MATCHING PATTERN "*.json")
+
+    install(FILES LICENSE THIRD_PARTY_NOTICES.md
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/emp-tool)
+
     # Vendored BLAKE3 public header (only its API is needed by consumers; the
     # .c backends are already compiled into libemp-tool).
     if(EMP_WITH_BLAKE3)
         install(FILES third_party/blake3/blake3.h
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/emp-tool/third_party/blake3)
+        install(FILES
+            third_party/blake3/LICENSE_A2
+            third_party/blake3/LICENSE_A2LLVM
+            third_party/blake3/LICENSE_CC0
+            third_party/blake3/VENDOR.md
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/emp-tool/blake3)
     endif()
 
     install(EXPORT emp-toolTargets
@@ -264,6 +280,13 @@ endif()
 export(TARGETS emp-tool
        NAMESPACE emp-tool::
        FILE      ${CMAKE_CURRENT_BINARY_DIR}/emp-toolTargets.cmake)
+
+# ---------------------------------------------------------------------
+# Tools
+# ---------------------------------------------------------------------
+if(EMP_TOOL_BUILD_TOOLS)
+    add_subdirectory(tools)
+endif()
 
 # ---------------------------------------------------------------------
 # Tests

@@ -460,14 +460,10 @@ AES-128 — a clean, standard assumption.</p>
 <li>Given seed pointer → unaligned-safe <code>_mm_loadu_si128</code> (<code class="ref">prg.h:21-29</code>).</li>
 <li>Else if test mode → a deterministic <code>(lane, ordinal)</code> pair seed <b>(insecure by design,
 <code class="ref">prg.h:32-39</code>)</b>.</li>
-<li>Else with <code>ENABLE_RDSEED</code> → <code>_rdseed64_step</code> ×2, rejecting <code>0</code>/<code>all-ones</code>
-to dodge an AMD CPU bug (PR #156), up to 10 attempts, falling back to urandom
-(<code class="ref">prg.h:44-56</code>).</li>
-<li>Else → <code>/dev/urandom</code> via <code>std::random_device</code> (<code class="ref">prg.h:60-68</code>).</li>
+<li>Else → <code>/dev/urandom</code> via <code>std::random_device</code>.</li>
 </ol>
 <div class="callout c-audit"><span class="lbl">Seeding caveats</span>
-<p><code>rdseed</code> failure <b>silently</b> degrades to urandom (fine for security — urandom is trusted — but
-an operator can't tell which source was used). The <code>reseed(seed, id)</code> <code>id</code> parameter is
+<p>The <code>reseed(seed, id)</code> <code>id</code> parameter is
 XORed into the low 64 bits (<code class="ref">prg.h:69-75</code>): <code>PRG(seed, id)</code> equals
 <code>PRG(seed⊕id, 0)</code>, so <code>id</code> is a domain separator over a fixed seed, <b>not</b>
 independent entropy.</p></div>

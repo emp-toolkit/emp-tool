@@ -1,0 +1,9 @@
+{
+  "name": "fp64_recip.empbc",
+  "sha256": "0431a7a6b47fe1d2bf33182e55df6992cc072f8d4184484deeff79b0db788655",
+  "num_inputs": 64,
+  "num_outputs": 64,
+  "num_gates": 45922,
+  "num_and": 15391,
+  "and_depth": 359
+}
