@@ -33,11 +33,32 @@ namespace emp {
 
 namespace detail {
 
+// Test mode deliberately replaces cryptographic randomness with predictable
+// streams. Say so once, loudly, at activation time rather than adding logging
+// or another check to every random draw.
+inline void warn_insecure_test_mode_once() {
+    static const bool warned = []() {
+        std::fputs(
+            "\n"
+            "=======================================================================\n"
+            "WARNING: EMP TEST MODE ENABLED - RANDOMNESS IS DETERMINISTIC AND INSECURE\n"
+            "Default PRG seeds and EC scalars are predictable in this process.\n"
+            "Use only for testing; never process real secrets in this process.\n"
+            "=======================================================================\n",
+            stderr);
+        std::fflush(stderr);
+        return true;
+    }();
+    (void)warned;
+}
+
 inline std::atomic<bool>& test_mode_flag() {
     static std::atomic<bool> flag(
         []() {
             const char* v = std::getenv("EMP_TEST_MODE");
-            return v != nullptr && v[0] == '1';
+            const bool enabled = v != nullptr && v[0] == '1';
+            if (enabled) warn_insecure_test_mode_once();
+            return enabled;
         }());
     return flag;
 }
@@ -104,6 +125,7 @@ inline uint64_t mix64(uint64_t x) {
 // constructions and ECGroup::rand_scalar calls. Has no effect on
 // PRG instances already constructed.
 inline void set_test_mode(bool on) {
+    if (on) detail::warn_insecure_test_mode_once();
     detail::test_mode_flag().store(on);
 }
 

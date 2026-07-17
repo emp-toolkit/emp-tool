@@ -58,6 +58,12 @@ emp::set_test_mode(true);  // before any PRG() default-construction
 The env var is read once at first call to `is_test_mode()` and
 cached. `set_test_mode()` overrides it programmatically.
 
+The first activation by either mechanism prints a prominent warning to
+`stderr`, once per process, that default PRG seeds and EC scalar randomness are
+deterministic and insecure. The warning happens at activation rather than on
+each random draw, so it adds no work to the randomness hot path. Never process
+real secrets in a process running in test mode.
+
 `reset_test_seed_counter()` rewinds every lane's ordinal and
 releases lane 0 — call it between independent test iterations to
 get reproducible PRG sequences within one process.

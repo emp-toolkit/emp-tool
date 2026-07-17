@@ -70,6 +70,9 @@ add_test_case(runtime test_mitccrh)
 add_test_case(runtime test_prg)
 add_test_case(runtime test_prp)
 add_test_case(runtime test_test_mode)
+set_tests_properties(test_test_mode PROPERTIES
+    ENVIRONMENT "EMP_TEST_MODE=1"
+    PASS_REGULAR_EXPRESSION "WARNING: EMP TEST MODE ENABLED - RANDOMNESS IS DETERMINISTIC AND INSECURE")
 add_test_case(runtime test_utils)
 add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
