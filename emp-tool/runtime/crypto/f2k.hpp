@@ -326,6 +326,86 @@ inline void GaloisFieldPacking::packing(block *res, const block *data) {
 	block hi = _mm256_castsi256_si128(hi256) ^ _mm256_extracti128_si256(hi256, 1);
 	*res = reduce(lo, hi);
 }
+#elif EMP_HAS_AVX2
+namespace detail {
+
+// AVX2 pack group: blocks 8*OFF..8*OFF+7 shifted by their bit index k =
+// 8*OFF + j. Each ymm holds two blocks; variable 64-bit shifts form the
+// within-block shift and its carry. The two 128-bit lanes are folded once
+// after all 16 byte groups have been accumulated.
+template<int OFF>
+__attribute__((target("avx2,sse2")))
+static inline void gf_pack_group_avx2(const block *data, __m256i &acc_lo,
+                                      __m256i &acc_hi) {
+	const __m256i cnt01 = _mm256_set_epi64x(1, 1, 0, 0);
+	const __m256i inv01 = _mm256_set_epi64x(63, 63, 64, 64);
+	const __m256i cnt23 = _mm256_set_epi64x(3, 3, 2, 2);
+	const __m256i inv23 = _mm256_set_epi64x(61, 61, 62, 62);
+	const __m256i cnt45 = _mm256_set_epi64x(5, 5, 4, 4);
+	const __m256i inv45 = _mm256_set_epi64x(59, 59, 60, 60);
+	const __m256i cnt67 = _mm256_set_epi64x(7, 7, 6, 6);
+	const __m256i inv67 = _mm256_set_epi64x(57, 57, 58, 58);
+	const __m256i d01 = _mm256_loadu_si256(
+	    reinterpret_cast<const __m256i *>(data + OFF * 8));
+	const __m256i d23 = _mm256_loadu_si256(
+	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 2));
+	const __m256i d45 = _mm256_loadu_si256(
+	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 4));
+	const __m256i d67 = _mm256_loadu_si256(
+	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 6));
+	const __m256i s01 = _mm256_sllv_epi64(d01, cnt01);
+	const __m256i c01 = _mm256_srlv_epi64(d01, inv01);
+	const __m256i s23 = _mm256_sllv_epi64(d23, cnt23);
+	const __m256i c23 = _mm256_srlv_epi64(d23, inv23);
+	const __m256i s45 = _mm256_sllv_epi64(d45, cnt45);
+	const __m256i c45 = _mm256_srlv_epi64(d45, inv45);
+	const __m256i s67 = _mm256_sllv_epi64(d67, cnt67);
+	const __m256i c67 = _mm256_srlv_epi64(d67, inv67);
+	const __m256i lo = s01 ^ _mm256_bslli_epi128(c01, 8)
+	                    ^ s23 ^ _mm256_bslli_epi128(c23, 8)
+	                    ^ s45 ^ _mm256_bslli_epi128(c45, 8)
+	                    ^ s67 ^ _mm256_bslli_epi128(c67, 8);
+	const __m256i hi = _mm256_bsrli_epi128(c01, 8)
+	                    ^ _mm256_bsrli_epi128(c23, 8)
+	                    ^ _mm256_bsrli_epi128(c45, 8)
+	                    ^ _mm256_bsrli_epi128(c67, 8);
+	if constexpr (OFF == 0) {
+		acc_lo ^= lo;
+		acc_hi ^= hi;
+	} else {
+		acc_lo ^= _mm256_bslli_epi128(lo, OFF);
+		acc_hi ^= _mm256_bsrli_epi128(lo, 16 - OFF)
+		        ^ _mm256_bslli_epi128(hi, OFF);
+	}
+}
+
+}  // namespace detail
+
+__attribute__((target("avx2,sse2,pclmul")))
+inline void GaloisFieldPacking::packing(block *res, const block *data) {
+	__m256i acc_lo = _mm256_setzero_si256(), acc_hi = _mm256_setzero_si256();
+	detail::gf_pack_group_avx2< 0>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 1>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 2>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 3>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 4>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 5>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 6>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 7>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 8>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2< 9>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<10>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<11>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<12>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<13>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<14>(data, acc_lo, acc_hi);
+	detail::gf_pack_group_avx2<15>(data, acc_lo, acc_hi);
+	block lo = _mm256_castsi256_si128(acc_lo)
+	         ^ _mm256_extracti128_si256(acc_lo, 1);
+	block hi = _mm256_castsi256_si128(acc_hi)
+	         ^ _mm256_extracti128_si256(acc_hi, 1);
+	*res = reduce(lo, hi);
+}
 #else
 #ifdef __x86_64__
 __attribute__((target("sse2,pclmul")))
@@ -350,7 +430,7 @@ inline void GaloisFieldPacking::packing(block *res, const block *data) {
 	detail::gf_pack_byte<15>(data, lo, hi);
 	*res = reduce(lo, hi);
 }
-#endif  // EMP_HAS_AVX512BW
+#endif  // EMP_HAS_AVX512BW / EMP_HAS_AVX2
 
 inline void GaloisFieldPacking::packing(block *res, const bool *data) {
 	bools_to_bits(res, data, 128);

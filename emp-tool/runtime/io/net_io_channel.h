@@ -37,6 +37,7 @@ namespace emp {
 
 class NetIO : public IOChannel { public:
 	int sock = -1;
+	std::shared_ptr<tcp::ListenerHandle> listener;  // shared by related server channels
 	bool is_server, quiet;
 	// Endpoint info retained so a duplex sibling can be spawned (make_sibling).
 	std::string addr_;              // peer address (empty when this is a server)
@@ -71,7 +72,12 @@ class NetIO : public IOChannel { public:
 		is_server = (address == nullptr);
 		addr_ = address ? address : "";
 		port_ = port;
-		init_from_sock(is_server ? tcp::server_listen(port) : tcp::client_connect(address, port));
+		if (is_server) {
+			listener = std::make_shared<tcp::ListenerHandle>(tcp::open_listener(port));
+			init_from_sock(tcp::accept_one(listener->fd));
+		} else {
+			init_from_sock(tcp::client_connect(address, port));
+		}
 		if (!quiet) std::cout << "connected\n";
 	}
 
@@ -86,24 +92,23 @@ class NetIO : public IOChannel { public:
 		return std::make_unique<NetIO>(address, port, quiet);
 	}
 
-	// Open a second channel to the same peer, on the same role and port. Safe
-	// to call once this connection is established: server_listen closes its
-	// listening socket after accept (and sets SO_REUSEADDR), so the port is
-	// free to listen on again; the peer calls make_sibling() symmetrically and
-	// the two reconnect. Ownership is the unique_ptr's.
+	// Open another channel to the same peer and port. Related server channels
+	// share the listener, so make_sibling() may be called repeatedly on the
+	// primary or any sibling. The client makes another connection to the same
+	// port. The listener closes when the last related server NetIO is destroyed.
 	std::unique_ptr<NetIO> make_sibling() const {
-		// Settle before reusing the same port for the duplex sibling. The
-		// primary connection's accept/connect has just completed; its in-flight
-		// handshake/teardown segments can otherwise collide with the sibling on
-		// the same port — the server closes its first listener and re-listens,
-		// and a sibling SYN landing in that gap (or a primary retransmit landing
-		// on the fresh listener) can mis-pair the two channels and deadlock the
-		// protocol (a low-probability race, worse at higher RTT). A 0.1 s pause
-		// drains those segments so the sibling pairing is unambiguous;
-		// make_sibling is called once per session, so the cost is negligible.
-		usleep(100000);  // 0.1 s
-		return is_server ? listen(port_, /*quiet=*/true)
-		                 : connect(addr_.c_str(), port_, /*quiet=*/true);
+		if (!is_server)
+			return connect(addr_.c_str(), port_, /*quiet=*/true);
+
+		expecting(listener != nullptr,
+		          "NetIO::make_sibling requires a server listener");
+		int sibling_sock = tcp::accept_one(listener->fd);
+
+		auto sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
+		sibling->is_server = true;  // preserve sync()'s server/client ordering
+		sibling->port_ = port_;
+		sibling->listener = listener;
+		return sibling;
 	}
 
 	// Wrap an already-connected socket fd, for callers that run their
@@ -162,6 +167,7 @@ class NetIO : public IOChannel { public:
 		} else {
 			recv_data_internal(&tmp, 1);
 			send_data_internal(&tmp, 1);
+			flush_unlocked();
 		}
 	}
 

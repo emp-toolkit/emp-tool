@@ -8,6 +8,7 @@
 //   send_bool / recv_bool              packed via bools_to_bits
 //   flush()                            drain outbound only (no peer coupling)
 //   sync()                             1-byte ping/pong handshake
+//   make_sibling()                     more connections on the same port
 //
 // Test functions below are templated on the IO type so correctness and
 // regression checks can be reused by IO implementations.
@@ -156,6 +157,33 @@ static void run_send_only_regression(int port, int party, const char *tag) {
 	if (party == ALICE) cout << tag << " send-only regression: OK\n";
 }
 
+// Create many live siblings on the same port. Half are created from the primary;
+// then the primary is destroyed and the rest are created from the first sibling.
+// This verifies shared listener ownership, repeated accept/connect pairing, and
+// closure only after the last related NetIO dies. A fresh session then reuses the
+// same port.
+static void run_sibling_regression(int port, int party) {
+	{
+		auto primary = party == ALICE ? NetIO::listen(port, true)
+		                              : NetIO::connect(peer_ip(), port, true);
+		std::vector<std::unique_ptr<NetIO>> siblings;
+		siblings.reserve(16);
+		for (int round = 0; round < 16; ++round) {
+			NetIO *source = round < 8 ? primary.get() : siblings.front().get();
+			siblings.push_back(source->make_sibling());
+			siblings.back()->sync();
+			if (round == 7) primary.reset();
+		}
+	}
+	{
+		auto primary = party == ALICE ? NetIO::listen(port, true)
+		                              : NetIO::connect(peer_ip(), port, true);
+		auto sibling = primary->make_sibling();
+		sibling->sync();
+	}
+	if (party == ALICE) cout << "NetIO shared-listener regression: OK\n";
+}
+
 // Run the full correctness/regression suite on one IO type,
 // using a contiguous block of three ports starting at port_base:
 // port_base+0 = main channel, +1 / +2 = regression channels.
@@ -172,6 +200,7 @@ int main(int argc, char **argv) {
 	party = parse_party(argv);
 	port = peer_port();
 
-	// Three contiguous ports: main, regression-a, regression-b.
+	// Four contiguous ports: main, two send-only cases, sibling regression.
 	run_suite<NetIO>(port, party, "NetIO");
+	run_sibling_regression(port + 3, party);
 }

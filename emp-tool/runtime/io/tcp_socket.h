@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -16,12 +17,10 @@
 namespace emp {
 namespace tcp {
 
-// Bind, listen, accept once, return the accepted fd. Closes the
-// listener after a single accept — every transport here is one-channel-
-// per-port. Fail-fast on bind/listen errors.
-inline int server_listen(int port) {
-	struct sockaddr_in dest, serv;
-	socklen_t socksize = sizeof(struct sockaddr_in);
+// Bind and listen without accepting. Related server NetIO channels share this
+// descriptor so repeated sibling connections use the same listener.
+inline int open_listener(int port) {
+	struct sockaddr_in serv;
 	std::memset(&serv, 0, sizeof(serv));
 	serv.sin_family = AF_INET;
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -41,7 +40,44 @@ inline int server_listen(int port) {
 		std::perror("error: listen");
 		std::_Exit(1);
 	}
-	int s = ::accept(listener, (struct sockaddr *)&dest, &socksize);
+	return listener;
+}
+
+// Shared RAII owner for a listening socket. NetIO siblings share one handle so
+// any related channel can accept another sibling and the listener closes when
+// the last related server channel is destroyed.
+class ListenerHandle {
+public:
+	explicit ListenerHandle(int fd) : fd(fd) {}
+	~ListenerHandle() { if (fd >= 0) ::close(fd); }
+
+	ListenerHandle(const ListenerHandle&) = delete;
+	ListenerHandle& operator=(const ListenerHandle&) = delete;
+
+	int fd;
+};
+
+// Accept one connection from an existing listener, retrying an interrupted
+// system call. The caller decides whether to keep or close the listener.
+inline int accept_one(int listener) {
+	struct sockaddr_in peer;
+	socklen_t peer_size = sizeof(peer);
+	int s;
+	do {
+		s = ::accept(listener, (struct sockaddr *)&peer, &peer_size);
+	} while (s < 0 && errno == EINTR);
+	if (s < 0) {
+		std::perror("error: accept");
+		std::_Exit(1);
+	}
+	return s;
+}
+
+// One-shot compatibility helper used by transports that need only one
+// connection, such as TLSIO.
+inline int server_listen(int port) {
+	int listener = open_listener(port);
+	int s = accept_one(listener);
 	::close(listener);
 	return s;
 }

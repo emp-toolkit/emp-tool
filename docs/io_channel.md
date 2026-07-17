@@ -81,8 +81,11 @@ are per-direction snapshots for diagnostics. All three assert that
   for logging (`~NetIO` prints it unless constructed `quiet`).
 - **NetIO factories**: `NetIO::listen(port)` / `NetIO::connect(addr,
   port)` are named, ownership-returning replacements for the
-  nullptr-means-server constructor; `make_sibling()` opens a second
-  duplex channel to the same peer on the same port.
+  nullptr-means-server constructor; repeated `make_sibling()` calls on the
+  primary or any related sibling open additional duplex channels to the same
+  peer on the same port. Related server channels share listener ownership; the
+  listener closes with the last one. This avoids closing, rebinding, or sleeping
+  between accepts.
 - **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
   byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
   wire-equivalence checks; see `test_mode.md`.

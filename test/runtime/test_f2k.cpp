@@ -221,16 +221,16 @@ static bool check_packing() {
 	PRG prg;
 	GaloisFieldPacking pkr;
 	for (int t = 0; t < 16; ++t) {
-		block data[128];
+		alignas(32) block storage[129];
+		block *data = storage + 1;  // 16-byte aligned, deliberately not 32-byte aligned.
 		prg.random_block(data, 128);
 		block got;
 		pkr.packing(&got, data);
 		// Reference: Σ data[i] * X^i where X^i has only bit i set.
-		block want = makeBlock(0, 0), prod;
+		block want = makeBlock(0, 0);
 		for (int i = 0; i < 128; ++i) {
 			block xi = set_bit(makeBlock(0, 0), i);
-			gfmul(data[i], xi, &prod);
-			want = want ^ prod;
+			want = want ^ ref_gfmul(data[i], xi);
 		}
 		if (!blocks_eq(got, want)) return false;
 	}
