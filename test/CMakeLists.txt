@@ -43,9 +43,17 @@ function(add_test_case_cxx20 folder name)
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endfunction()
 
+# Shell-level regression coverage for the two-party process supervisor itself.
+add_test(NAME test_run
+         COMMAND /bin/bash ${PROJECT_SOURCE_DIR}/test/test_run.sh
+                           ${PROJECT_SOURCE_DIR}/run
+         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(test_run PROPERTIES TIMEOUT 20)
+
 # ---- runtime/ : core, crypto, io, execution primitives ----
 add_test_case(runtime test_aes)
 add_test_case(runtime test_block)
+add_test_case(runtime test_error)
 add_test_case(runtime test_ccrh)
 add_test_case(runtime test_f2k)
 add_test_case(runtime test_hash)
@@ -58,6 +66,7 @@ add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case_with_run(runtime test_netio)
 add_test_case_with_run(runtime test_tlsio)
+set_tests_properties(test_netio test_tlsio PROPERTIES TIMEOUT 130)
 add_test_case(runtime test_halfgate)         # half-gate garble/eval free functions
 
 # ---- ir/ : context, session, passes, program, builtins ----

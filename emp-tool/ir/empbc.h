@@ -62,7 +62,7 @@ struct Reader {
 	size_t n, pos = 0;
 	Reader(const uint8_t* p_, size_t n_) : p(p_), n(n_) {}
 	void need(size_t k) const {
-		if (pos + k > n) error("empbc: truncated file");
+		expecting(pos <= n && k <= n - pos, "empbc: truncated file");
 	}
 	uint8_t  u8()  { need(1); return p[pos++]; }
 	uint16_t u16() { need(2); uint16_t v = (uint16_t)p[pos] | ((uint16_t)p[pos + 1] << 8); pos += 2; return v; }
@@ -119,14 +119,14 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 	Reader r(bytes, len);
 
 	for (uint8_t m : MAGIC)
-		if (r.u8() != m) error("empbc: bad magic");
+		expecting(r.u8() == m, "empbc: bad magic");
 	uint16_t version = r.u16();
-	if (version != VERSION) error("empbc: unsupported version");
+	expecting(version == VERSION, "empbc: unsupported version");
 	int iw = r.u8();
-	if (iw != 2 && iw != 4) error("empbc: bad index_width");
+	expecting(iw == 2 || iw == 4, "empbc: bad index_width");
 	uint8_t flags = r.u8();
-	if (flags & ~0x3u) error("empbc: unknown flags bits set");
-	if ((flags & 0x3u) == 3) error("empbc: reserved wire_reuse value");
+	expecting((flags & ~0x3u) == 0, "empbc: unknown flags bits set");
+	expecting((flags & 0x3u) != 3, "empbc: reserved wire_reuse value");
 
 	BooleanProgram p;
 	p.wire_reuse           = (WireReuse)(flags & 0x3u);
@@ -141,8 +141,8 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 	const uint64_t grec = (uint64_t)4 * iw;
 	const uint64_t expect =
 	    (uint64_t)HEADER_LEN + (uint64_t)num_gates * grec + (uint64_t)num_outputs * (uint64_t)iw;
-	if (expect != (uint64_t)len)
-		error("empbc: declared sizes do not match file length");
+	expecting(expect == (uint64_t)len,
+	          "empbc: declared sizes do not match file length");
 
 	p.gates.reserve(num_gates);
 	for (uint32_t i = 0; i < num_gates; ++i) {
@@ -151,7 +151,7 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 		g.in1 = r.idx(iw);
 		g.out = r.idx(iw);
 		uint8_t op = r.u8();
-		if (op > (uint8_t)Op::Const1) error("empbc: unknown op code");
+		expecting(op <= (uint8_t)Op::Const1, "empbc: unknown op code");
 		g.op = (Op)op;
 		r.u8();                          // reserved
 		if (iw == 4) { r.u8(); r.u8(); }
@@ -168,18 +168,19 @@ inline BooleanProgram load_empbc(const std::vector<uint8_t>& bytes) {
 	return load_empbc(bytes.data(), bytes.size());
 }
 
-// No cleanup on the failure paths: error() ends the process (utils.hpp), so an
+// No cleanup on the failure paths: expecting() ends the process, so an
 // open FILE* cannot leak into continued execution.
 inline BooleanProgram load_empbc_file(const char* path) {
 	FILE* f = std::fopen(path, "rb");
-	if (!f) error((std::string("empbc: cannot open ") + path).c_str());
-	if (std::fseek(f, 0, SEEK_END) != 0) error("empbc: seek failed");
+	expecting(f != nullptr,
+	          [&] { return std::string("empbc: cannot open ") + path; });
+	expecting(std::fseek(f, 0, SEEK_END) == 0, "empbc: seek failed");
 	long sz = std::ftell(f);
-	if (sz < 0) error("empbc: tell failed");
+	expecting(sz >= 0, "empbc: tell failed");
 	std::rewind(f);
 	std::vector<uint8_t> buf((size_t)sz);
-	if (sz > 0 && std::fread(buf.data(), 1, (size_t)sz, f) != (size_t)sz)
-		error("empbc: short read");
+	expecting(sz == 0 || std::fread(buf.data(), 1, (size_t)sz, f) == (size_t)sz,
+	          "empbc: short read");
 	std::fclose(f);
 	return load_empbc(buf);
 }
@@ -187,10 +188,12 @@ inline BooleanProgram load_empbc_file(const char* path) {
 inline void save_empbc_file(const char* path, const BooleanProgram& p) {
 	std::vector<uint8_t> b = save_empbc(p);
 	FILE* f = std::fopen(path, "wb");
-	if (!f) error((std::string("empbc: cannot open for write ") + path).c_str());
+	expecting(f != nullptr, [&] {
+		return std::string("empbc: cannot open for write ") + path;
+	});
 	bool ok = b.empty() || std::fwrite(b.data(), 1, b.size(), f) == b.size();
 	std::fclose(f);
-	if (!ok) error("empbc: short write");
+	expecting(ok, "empbc: short write");
 }
 
 }  // namespace circuit

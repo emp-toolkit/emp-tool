@@ -9,6 +9,11 @@ namespace emp {
 
 typedef struct { block rd_key[11]; } AES_KEY;
 
+// Deliberately debug-only: these checks sit in the deepest AES kernels and are
+// commonly reached after PRG/PRP already validated the public API boundary.
+// Making every expansion an always-on expecting() would duplicate alignment
+// branches in the cryptographic hot path. Direct AES callers still get the
+// contract check in debug builds.
 #define EMP_AES_ASSERT_ALIGNED(p) \
 	assert((reinterpret_cast<uintptr_t>(p) & (alignof(block) - 1)) == 0 \
 	       && "pointer must be 16-byte (block) aligned")

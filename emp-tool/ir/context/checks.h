@@ -26,8 +26,10 @@ inline void check_same_context(const A& l, const B& r) {
     // A null context means a default-constructed (uninitialized) value reached an
     // operator — catch it clearly instead of dereferencing null. (Two defaults
     // would otherwise both be null and "match".)
-    if (!l.context() || !r.context()) error("typed value: operand is uninitialized (default-constructed, no context)");
-    if (l.context() != r.context()) error("typed value: operands belong to different contexts");
+    expecting(l.context() && r.context(),
+              "typed value: operand is uninitialized (default-constructed, no context)");
+    expecting(l.context() == r.context(),
+              "typed value: operands belong to different contexts");
 #else
     (void)l; (void)r;
 #endif

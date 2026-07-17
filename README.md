@@ -243,8 +243,9 @@ gfmul(a, b, &c);                                 // c = a · b in GF(2^128)
 
 ### Elliptic curves
 
-`ECGroup` wraps an OpenSSL `EC_GROUP` + `BN_CTX`. Default curve is
-P-256; pass any OpenSSL `NID_*` to the constructor to switch.
+`ECGroup` wraps an OpenSSL P-256 `EC_GROUP` + `BN_CTX`. P-256 is the only
+supported curve; the legacy NID constructor parameter is retained for source
+compatibility but rejects every value except `NID_X9_62_prime256v1`.
 `Scalar` and `Point` are the corresponding handles.
 
 ```cpp
@@ -409,7 +410,10 @@ corresponding header — see `docs/test_conventions.md` for the file conventions
 
 Two-party tests and benchmarks run both parties: `./run <binary> [args]`
 launches party 1 and party 2 locally on a fresh `EMP_PORT` per invocation
-(`ctest` already wraps the two-party tests in it). For a real two-machine run,
+(`ctest` already wraps the two-party tests in it). The harness fails if either
+party fails, terminates the sibling, and imposes a 120-second timeout; set
+`EMP_RUN_TIMEOUT` to another positive number of seconds when a longer benchmark
+needs it. For a real two-machine run,
 set `EMP_PORT` (shared port) on both hosts and `EMP_PEER_IP` (party 1's
 address, which party 2 uses to connect) on party 2's host, then start
 `<binary> 1 ...` / `<binary> 2 ...` directly.

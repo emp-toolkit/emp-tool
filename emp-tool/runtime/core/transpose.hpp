@@ -12,13 +12,30 @@
 //     tier: GFNI512 > GFNI256 > AVX512BW > AVX2 > SSE2 on x86_64, native
 //     NEON on aarch64, the generic sse_trans elsewhere.
 
-#include <assert.h>
 #include <cstdint>
 #include <cstring>
 
 #include "emp-tool/runtime/core/simd_tier.h"   // EMP_HAS_* tier macros
 
 namespace emp {
+
+namespace detail {
+
+// The byte-matrix layouts intentionally place 16-bit transpose results at
+// arbitrary byte addresses. Access them through memcpy so the operation is
+// well-defined on every target; compilers lower these fixed-size copies to the
+// same unaligned loads/stores used by the surrounding SIMD kernels.
+static inline uint16_t load_u16_unaligned(const void *src) {
+  uint16_t value;
+  std::memcpy(&value, src, sizeof(value));
+  return value;
+}
+
+static inline void store_u16_unaligned(void *dst, uint16_t value) {
+  std::memcpy(dst, &value, sizeof(value));
+}
+
+}  // namespace detail
 
 // Modified from
 // https://mischasan.wordpress.com/2011/10/03/the-full-sse2-bit-matrix-transpose-routine/
@@ -66,7 +83,8 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
     uint8_t b[16];
   } tmp;
   __m128i vec;
-  assert(nrows % 8 == 0 && ncols % 8 == 0);
+  expecting(nrows % 8 == 0 && ncols % 8 == 0,
+            "sse_trans: dimensions must be multiples of 8");
 
   // Fast path for nrows%16==0, ncols%128==0: 16-row in-register byte
   // transpose, avoiding the 16-way `_mm_set_epi8(INP(...))` byte-gather
@@ -85,8 +103,9 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
           __m128i x = m[j];
           uint64_t cc8 = (col_byte + j) * 8;
           for (int b = 7; b >= 0; --b) {
-            *(uint16_t *)(out + (cc8 + b) * bpr_out + rr / 8) =
-                (uint16_t)_mm_movemask_epi8(x);
+            detail::store_u16_unaligned(
+                out + (cc8 + b) * bpr_out + rr / 8,
+                (uint16_t)_mm_movemask_epi8(x));
             x = _mm_slli_epi64(x, 1);
           }
         }
@@ -105,7 +124,8 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
                          INP(rr + 3, cc), INP(rr + 2, cc), INP(rr + 1, cc),
                          INP(rr + 0, cc));
       for (i = 8; --i >= 0; vec = _mm_slli_epi64(vec, 1))
-        *(uint16_t *)&OUT(rr, cc + i) = _mm_movemask_epi8(vec);
+        detail::store_u16_unaligned(&OUT(rr, cc + i),
+                                    (uint16_t)_mm_movemask_epi8(vec));
     }
   }
   if (rr == nrows)
@@ -118,7 +138,7 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
       (nrows % 8 == 0 && nrows % 16 != 0)) {
     for (cc = 0; cc + 16 <= ncols; cc += 16) {
       for (i = 0; i < 8; ++i) {
-        tmp.b[i] = h = *(uint16_t const *)&INP(rr + i, cc);
+        tmp.b[i] = h = detail::load_u16_unaligned(&INP(rr + i, cc));
         tmp.b[i + 8] = h >> 8;
       }
       for (i = 8; --i >= 0; tmp.x = _mm_slli_epi64(tmp.x, 1)) {
@@ -128,14 +148,14 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
     }
   } else {
     for (cc = 0; cc + 16 <= ncols; cc += 16) {
-      vec = _mm_set_epi16(*(uint16_t const *)&INP(rr + 7, cc),
-                          *(uint16_t const *)&INP(rr + 6, cc),
-                          *(uint16_t const *)&INP(rr + 5, cc),
-                          *(uint16_t const *)&INP(rr + 4, cc),
-                          *(uint16_t const *)&INP(rr + 3, cc),
-                          *(uint16_t const *)&INP(rr + 2, cc),
-                          *(uint16_t const *)&INP(rr + 1, cc),
-                          *(uint16_t const *)&INP(rr + 0, cc));
+      vec = _mm_set_epi16(detail::load_u16_unaligned(&INP(rr + 7, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 6, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 5, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 4, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 3, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 2, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 1, cc)),
+                          detail::load_u16_unaligned(&INP(rr + 0, cc)));
       for (i = 8; --i >= 0; vec = _mm_slli_epi64(vec, 1)) {
         OUT(rr, cc + i) = h = _mm_movemask_epi8(vec);
         OUT(rr, cc + i + 8) = h >> 8;
@@ -192,8 +212,9 @@ static inline void sse_trans_n128_one_tile_sse2(const block *inp,
     __m128i x = m[j];
     const uint64_t cc8 = (col_block * 16 + j) * 8;
     for (int b = 7; b >= 0; --b) {
-      *(uint16_t *)(out_b + (cc8 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-          (uint16_t)_mm_movemask_epi8(x);
+      detail::store_u16_unaligned(
+          out_b + (cc8 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+          (uint16_t)_mm_movemask_epi8(x));
       x = _mm_slli_epi64(x, 1);
     }
   }
@@ -272,10 +293,12 @@ inline void sse_trans_n128_avx2(block *out, const block *inp, uint64_t ncols) {
         const uint64_t cc8_1 = ((col_block + 1) * 16 + j) * 8;
         for (int b = 7; b >= 0; --b) {
           const uint32_t mask = (uint32_t)_mm256_movemask_epi8(x);
-          *(uint16_t *)(out_b + (cc8_0 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)mask;
-          *(uint16_t *)(out_b + (cc8_1 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)(mask >> 16);
+          detail::store_u16_unaligned(
+              out_b + (cc8_0 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)mask);
+          detail::store_u16_unaligned(
+              out_b + (cc8_1 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)(mask >> 16));
           x = _mm256_slli_epi64(x, 1);
         }
       }
@@ -351,14 +374,18 @@ inline void sse_trans_n128_avx512bw(block *out, const block *inp,
         const uint64_t cc8_3 = ((col_block + 3) * 16 + j) * 8;
         for (int b = 7; b >= 0; --b) {
           const uint64_t mask = (uint64_t)_mm512_movepi8_mask(x);
-          *(uint16_t *)(out_b + (cc8_0 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)mask;
-          *(uint16_t *)(out_b + (cc8_1 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)(mask >> 16);
-          *(uint16_t *)(out_b + (cc8_2 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)(mask >> 32);
-          *(uint16_t *)(out_b + (cc8_3 + b) * bpr_out_bytes + (size_t)rr_idx * 2) =
-              (uint16_t)(mask >> 48);
+          detail::store_u16_unaligned(
+              out_b + (cc8_0 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)mask);
+          detail::store_u16_unaligned(
+              out_b + (cc8_1 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)(mask >> 16));
+          detail::store_u16_unaligned(
+              out_b + (cc8_2 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)(mask >> 32));
+          detail::store_u16_unaligned(
+              out_b + (cc8_3 + b) * bpr_out_bytes + (size_t)rr_idx * 2,
+              (uint16_t)(mask >> 48));
           x = _mm512_slli_epi64(x, 1);
         }
       }
@@ -746,8 +773,9 @@ inline void sse_trans_n128_neon(block *out, const block *inp, uint64_t ncols) {
 }  // namespace detail
 
 inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
+  expecting((ncols % 128) == 0,
+            "sse_trans_n128: ncols must be a multiple of 128");
 #if defined(__x86_64__)
-  assert((ncols % 128) == 0);
   #if EMP_HAS_GFNI512
     detail::sse_trans_n128_gfni(out, inp, ncols);
   #elif EMP_HAS_GFNI256
@@ -760,7 +788,6 @@ inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
     detail::sse_trans_n128_sse2(out, inp, ncols);
   #endif
 #elif defined(__aarch64__)
-  assert((ncols % 128) == 0);
   detail::sse_trans_n128_neon(out, inp, ncols);
 #else
   sse_trans(reinterpret_cast<uint8_t *>(out),

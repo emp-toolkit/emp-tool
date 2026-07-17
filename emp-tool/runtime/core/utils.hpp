@@ -30,26 +30,15 @@ inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
 	return cheat;
 }
 
-inline void error(const char * s, int line, const char * file) {
-	fprintf(stderr, "%s at %s:%d\n", s, file, line);
-	// _Exit, not exit(): error() is the stack-wide fatal abort and fires from
-	// worker threads (protocol checks, malicious-abort, I/O failures). exit()'s
-	// destructor / atexit / stdio cleanup would race the still-live ThreadPool
-	// workers' heap use and trip glibc's malloc corruption detector. _Exit ends
-	// the process immediately, running no destructors. (Same rule as NetIO's
-	// recv/send fatal paths.)
-	std::_Exit(1);
-}
-
 // Party is per-process (argv[1]); port and peer IP are session config shared by
 // both parties, read from the environment so a two-machine run sets EMP_PORT /
 // EMP_PEER_IP once per host with no source change. One consequence: two runs on
 // the same host share EMP_PORT, so don't launch them concurrently.
 inline int parse_party(const char *const * arg, int max_party) {
 	const int p = arg[1] ? atoi(arg[1]) : 0;
-	if (p < ALICE || p > max_party)
-		error("parse_party: argv[1] (party) is out of range [1, max_party] "
-		      "(default max is BOB=2; multi-party callers pass nP)");
+	expecting(p >= ALICE && p <= max_party,
+	          "parse_party: argv[1] (party) is out of range [1, max_party] "
+	          "(default max is BOB=2; multi-party callers pass nP)");
 	return p;
 }
 inline int peer_port() {
@@ -112,6 +101,7 @@ static inline void bits32_to_bytes(uint32_t bits, void *out) {
 }
 
 inline void bools_to_bits(void *out_, const bool *bools, int64_t len) {
+	expecting(len >= 0, "bools_to_bits: negative bit count");
 	uint8_t *out = static_cast<uint8_t *>(out_);
 	int64_t full32 = len / 32;
 	for (int64_t i = 0; i < full32; ++i) {
@@ -125,6 +115,7 @@ inline void bools_to_bits(void *out_, const bool *bools, int64_t len) {
 }
 
 inline void bits_to_bools(bool *bools, const void *in_, int64_t len) {
+	expecting(len >= 0, "bits_to_bools: negative bit count");
 	const uint8_t *in = static_cast<const uint8_t *>(in_);
 	int64_t full32 = len / 32;
 	for (int64_t i = 0; i < full32; ++i) {

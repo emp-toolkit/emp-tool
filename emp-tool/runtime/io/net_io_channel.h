@@ -65,8 +65,8 @@ class NetIO : public IOChannel { public:
 #endif
 
 	NetIO(const char *address, int port, bool quiet = false) : quiet(quiet) {
-		if (port < 0 || port > 65535)
-			error("NetIO: invalid port number");
+		expecting(port >= 0 && port <= 65535,
+		          "NetIO: invalid port number");
 
 		is_server = (address == nullptr);
 		addr_ = address ? address : "";
@@ -144,8 +144,9 @@ class NetIO : public IOChannel { public:
 		send_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
 		recv_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
 		stream = fdopen(sock, "wb");
-		if (stream == nullptr)
-			error((std::string("NetIO: fdopen failed: ") + std::strerror(errno)).c_str());
+		expecting(stream != nullptr, [&] {
+			return std::string("NetIO: fdopen failed: ") + std::strerror(errno);
+		});
 		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
 	}
 
@@ -168,8 +169,8 @@ class NetIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
-		if (len < 0) error("NetIO::send_data: negative len");
-		if (len + (int64_t)send_ptr <= (int64_t)NETWORK_STAGING_BUFFER_SIZE) {
+		expecting(len >= 0, "NetIO::send_data: negative len");
+		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {
@@ -183,7 +184,7 @@ class NetIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "recv_data");
 #endif
-		if (len < 0) error("NetIO::recv_data: negative len");
+		expecting(len >= 0, "NetIO::recv_data: negative len");
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.

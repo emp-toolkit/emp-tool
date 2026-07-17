@@ -3,7 +3,6 @@
 
 // Inline definitions for block.h's API. Included via block.h.
 
-#include <assert.h>
 #include <cstring>
 #include <iostream>
 #include <iomanip>
@@ -20,6 +19,7 @@ inline bool getLSB(const block & x) {
 // Bit i of x as a bool (bit 0 is getLSB). Generic accessor; any protocol meaning
 // pinned to a specific bit is documented at the use site, not here.
 inline bool getBit(const block & x, int i) {
+	expecting(i >= 0 && i < 128, "getBit: bit index out of range [0, 128)");
 	return i < 64 ? ((x[0] >> i) & 1) == 1
 	              : ((x[1] >> (i - 64)) & 1) == 1;
 }
@@ -58,7 +58,7 @@ inline constexpr block bit0_mask = makeBlock(0, 1);
 inline constexpr block bit1_mask = makeBlock(0, 2);
 
 inline block set_bit(const block & a, int i) {
-	assert(i >= 0 && i < 128);
+	expecting(i >= 0 && i < 128, "set_bit: bit index out of range [0, 128)");
 	if(i < 64)
 		return makeBlock(0L, 1ULL<<i) | a;
 	else
@@ -83,6 +83,7 @@ inline std::ostream& operator<<(std::ostream& out, const block& blk) {
 }
 
 inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, const block* __restrict__ y, int64_t nblocks) {
+	expecting(nblocks >= 0, "xorBlocks_arr: negative block count");
 	const block * dest = nblocks+x;
 	for (; x != dest;) {
 		*(res++) = *(x++) ^ *(y++);
@@ -90,6 +91,7 @@ inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, 
 }
 
 inline void xorBlocksTo_arr(block* __restrict__ dst, const block* __restrict__ src, int64_t nblocks) {
+	expecting(nblocks >= 0, "xorBlocksTo_arr: negative block count");
 	const block * dest = nblocks+src;
 	for (; src != dest;) {
 		*dst = *dst ^ *(src++);
@@ -98,6 +100,7 @@ inline void xorBlocksTo_arr(block* __restrict__ dst, const block* __restrict__ s
 }
 
 inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, block y, int64_t nblocks) {
+	expecting(nblocks >= 0, "xorBlocks_arr: negative block count");
 	const block * dest = nblocks+x;
 	for (; x != dest;)
 		*(res++) =  *(x++) ^ y;
@@ -107,6 +110,7 @@ inline void xorBlocks_arr(block* __restrict__ res, const block* __restrict__ x, 
 __attribute__((target("sse4")))
 #endif
 inline bool cmpBlock(const block * x, const block * y, int64_t nblocks) {
+	expecting(nblocks >= 0, "cmpBlock: negative block count");
 	__m128i acc = _mm_setzero_si128();
 	const block * dest = nblocks+x;
 	for (; x != dest;)

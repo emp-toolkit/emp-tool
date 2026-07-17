@@ -37,10 +37,10 @@ struct CompactResult {
 // runtime register allocator would do, so a Linear result reproduces a backend's
 // own slot assignment.
 inline CompactResult make_compact(const BooleanProgram& dense, WireReuse target = WireReuse::Full) {
-	if (target == WireReuse::None)
-		error("make_compact: target must be WireReuse::Linear or WireReuse::Full");
-	if (dense.wire_reuse != WireReuse::None)
-		error("make_compact: input must be a dense (WireReuse::None) program");
+	expecting(target != WireReuse::None,
+	          "make_compact: target must be WireReuse::Linear or WireReuse::Full");
+	expecting(dense.wire_reuse == WireReuse::None,
+	          "make_compact: input must be a dense (WireReuse::None) program");
 	validate_program(dense);
 	const LivenessStats live = liveness_pass(dense);   // dense input: well-defined
 

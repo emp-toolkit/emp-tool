@@ -21,10 +21,10 @@ inline void expand_message_xmd_sha256(
 		const unsigned char *dst, size_t dst_len) {
 	const size_t b_in_bytes = 32;     // SHA-256 output
 	const size_t s_in_bytes = 64;     // SHA-256 input block
-	if (out_len > 65535 || dst_len > 255) error("H2C XMD len");
+	expecting(out_len <= 65535 && dst_len <= 255, "H2C XMD len");
 
 	size_t ell = (out_len + b_in_bytes - 1) / b_in_bytes;
-	if (ell > 255) error("H2C XMD ell");
+	expecting(ell <= 255, "H2C XMD ell");
 
 	// DST_prime = DST || I2OSP(len(DST), 1). dst_len ≤ 255 checked above.
 	constexpr size_t kMaxDstPrime = 256;
@@ -42,25 +42,25 @@ inline void expand_message_xmd_sha256(
 	unsigned char b0[32], bi[32], prev[32];
 	unsigned int outlen = 0;
 	EVP_MD_CTX *md = EVP_MD_CTX_new();
-	if (md == nullptr) error("H2C XMD: EVP_MD_CTX_new");
+	expecting(md != nullptr, "H2C XMD: EVP_MD_CTX_new");
 
 	// b_0 = H(Z_pad || msg || l_i_b_str || 0x00 || DST_prime)
-	if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
-	    || EVP_DigestUpdate(md, z_pad, s_in_bytes) != 1
-	    || EVP_DigestUpdate(md, msg, msg_len) != 1
-	    || EVP_DigestUpdate(md, l_i_b_str, 2) != 1
-	    || EVP_DigestUpdate(md, &zero, 1) != 1
-	    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
-	    || EVP_DigestFinal_ex(md, b0, &outlen) != 1)
-		error("H2C XMD: EVP_Digest* (b0)");
+	expecting(EVP_DigestInit_ex(md, EVP_sha256(), NULL) == 1
+	          && EVP_DigestUpdate(md, z_pad, s_in_bytes) == 1
+	          && EVP_DigestUpdate(md, msg, msg_len) == 1
+	          && EVP_DigestUpdate(md, l_i_b_str, 2) == 1
+	          && EVP_DigestUpdate(md, &zero, 1) == 1
+	          && EVP_DigestUpdate(md, dst_prime, dst_prime_len) == 1
+	          && EVP_DigestFinal_ex(md, b0, &outlen) == 1,
+	          "H2C XMD: EVP_Digest* (b0)");
 
 	// b_1 = H(b_0 || 0x01 || DST_prime)
-	if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
-	    || EVP_DigestUpdate(md, b0, b_in_bytes) != 1
-	    || EVP_DigestUpdate(md, &one, 1) != 1
-	    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
-	    || EVP_DigestFinal_ex(md, bi, &outlen) != 1)
-		error("H2C XMD: EVP_Digest* (b1)");
+	expecting(EVP_DigestInit_ex(md, EVP_sha256(), NULL) == 1
+	          && EVP_DigestUpdate(md, b0, b_in_bytes) == 1
+	          && EVP_DigestUpdate(md, &one, 1) == 1
+	          && EVP_DigestUpdate(md, dst_prime, dst_prime_len) == 1
+	          && EVP_DigestFinal_ex(md, bi, &outlen) == 1,
+	          "H2C XMD: EVP_Digest* (b1)");
 
 	std::memcpy(out, bi, std::min(out_len, b_in_bytes));
 	std::memcpy(prev, bi, b_in_bytes);
@@ -70,12 +70,12 @@ inline void expand_message_xmd_sha256(
 		unsigned char tmp[32];
 		for (size_t j = 0; j < b_in_bytes; j++) tmp[j] = b0[j] ^ prev[j];
 		unsigned char ib = (unsigned char)i;
-		if (EVP_DigestInit_ex(md, EVP_sha256(), NULL) != 1
-		    || EVP_DigestUpdate(md, tmp, b_in_bytes) != 1
-		    || EVP_DigestUpdate(md, &ib, 1) != 1
-		    || EVP_DigestUpdate(md, dst_prime, dst_prime_len) != 1
-		    || EVP_DigestFinal_ex(md, bi, &outlen) != 1)
-			error("H2C XMD: EVP_Digest* (bi)");
+		expecting(EVP_DigestInit_ex(md, EVP_sha256(), NULL) == 1
+		          && EVP_DigestUpdate(md, tmp, b_in_bytes) == 1
+		          && EVP_DigestUpdate(md, &ib, 1) == 1
+		          && EVP_DigestUpdate(md, dst_prime, dst_prime_len) == 1
+		          && EVP_DigestFinal_ex(md, bi, &outlen) == 1,
+		          "H2C XMD: EVP_Digest* (bi)");
 
 		size_t off = (i - 1) * b_in_bytes;
 		std::memcpy(out + off, bi, std::min(out_len - off, b_in_bytes));
@@ -91,10 +91,10 @@ inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 	const size_t L = 48;
 	unsigned char buf[2 * L];
 	expand_message_xmd_sha256(buf, sizeof(buf), msg, msg_len, dst, dst_len);
-	if (BN_bin2bn(buf,     L, u0) == nullptr) error("hash_to_field: BN_bin2bn u0");
-	if (BN_mod(u0, u0, p, ctx) == 0)          error("hash_to_field: BN_mod u0");
-	if (BN_bin2bn(buf + L, L, u1) == nullptr) error("hash_to_field: BN_bin2bn u1");
-	if (BN_mod(u1, u1, p, ctx) == 0)          error("hash_to_field: BN_mod u1");
+	expecting(BN_bin2bn(buf, L, u0) != nullptr, "hash_to_field: BN_bin2bn u0");
+	expecting(BN_mod(u0, u0, p, ctx) != 0, "hash_to_field: BN_mod u0");
+	expecting(BN_bin2bn(buf + L, L, u1) != nullptr, "hash_to_field: BN_bin2bn u1");
+	expecting(BN_mod(u1, u1, p, ctx) != 0, "hash_to_field: BN_mod u1");
 }
 
 // Simplified SWU for P-256, A=-3, Z=-10. RFC 9380 §6.6.2 non-optimized
@@ -110,73 +110,73 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		const BIGNUM *Z, BN_CTX *ctx) {
 	BIGNUM *u2 = BN_new(), *t = BN_new(), *tv1 = BN_new(), *tmp = BN_new();
 	BIGNUM *x1 = BN_new(), *gx = BN_new(), *y = BN_new();
-	if (!u2 || !t || !tv1 || !tmp || !x1 || !gx || !y) error("SSWU: BN_new");
+	expecting(u2 && t && tv1 && tmp && x1 && gx && y, "SSWU: BN_new");
 
 	// t = Z * u^2 ; tv1 = t^2 + t
-	if (BN_mod_sqr(u2, u, p, ctx) != 1
-	    || BN_mod_mul(t, Z, u2, p, ctx) != 1
-	    || BN_mod_sqr(tmp, t, p, ctx) != 1
-	    || BN_mod_add(tv1, tmp, t, p, ctx) != 1)
-		error("SSWU: BN_mod_* (t/tv1)");
+	expecting(BN_mod_sqr(u2, u, p, ctx) == 1
+	          && BN_mod_mul(t, Z, u2, p, ctx) == 1
+	          && BN_mod_sqr(tmp, t, p, ctx) == 1
+	          && BN_mod_add(tv1, tmp, t, p, ctx) == 1,
+	          "SSWU: BN_mod_* (t/tv1)");
 
 	if (BN_is_zero(tv1)) {
 		// x1 = B / (Z * A)
-		if (BN_mod_mul(tmp, Z, A, p, ctx) != 1)
-			error("SSWU: BN_mod_mul (Z*A)");
-		if (BN_mod_inverse(tmp, tmp, p, ctx) == nullptr)
-			error("SSWU: Z*A not invertible");
-		if (BN_mod_mul(x1, B, tmp, p, ctx) != 1)
-			error("SSWU: BN_mod_mul (x1=B/(Z*A))");
+		expecting(BN_mod_mul(tmp, Z, A, p, ctx) == 1,
+		          "SSWU: BN_mod_mul (Z*A)");
+		expecting(BN_mod_inverse(tmp, tmp, p, ctx) != nullptr,
+		          "SSWU: Z*A not invertible");
+		expecting(BN_mod_mul(x1, B, tmp, p, ctx) == 1,
+		          "SSWU: BN_mod_mul (x1=B/(Z*A))");
 	} else {
 		// x1 = (-B / A) * (1 + tv1^{-1})
 		BIGNUM *inv = BN_new(), *one_plus = BN_new();
 		BIGNUM *negB = BN_new(), *Ainv = BN_new();
-		if (!inv || !one_plus || !negB || !Ainv) error("SSWU: BN_new");
-		if (BN_mod_inverse(inv, tv1, p, ctx) == nullptr)
-			error("SSWU: tv1 not invertible");
+		expecting(inv && one_plus && negB && Ainv, "SSWU: BN_new");
+		expecting(BN_mod_inverse(inv, tv1, p, ctx) != nullptr,
+		          "SSWU: tv1 not invertible");
 		BN_one(one_plus);
-		if (BN_mod_add(one_plus, one_plus, inv, p, ctx) != 1
-		    || BN_sub(negB, p, B) != 1)
-			error("SSWU: BN_mod_add/sub (else-branch)");
-		if (BN_mod_inverse(Ainv, A, p, ctx) == nullptr)
-			error("SSWU: A not invertible");
-		if (BN_mod_mul(tmp, negB, Ainv, p, ctx) != 1
-		    || BN_mod_mul(x1, tmp, one_plus, p, ctx) != 1)
-			error("SSWU: BN_mod_mul (x1)");
+		expecting(BN_mod_add(one_plus, one_plus, inv, p, ctx) == 1
+		          && BN_sub(negB, p, B) == 1,
+		          "SSWU: BN_mod_add/sub (else-branch)");
+		expecting(BN_mod_inverse(Ainv, A, p, ctx) != nullptr,
+		          "SSWU: A not invertible");
+		expecting(BN_mod_mul(tmp, negB, Ainv, p, ctx) == 1
+		          && BN_mod_mul(x1, tmp, one_plus, p, ctx) == 1,
+		          "SSWU: BN_mod_mul (x1)");
 		BN_free(inv); BN_free(one_plus); BN_free(negB); BN_free(Ainv);
 	}
 
 	// gx1 = x1^3 + A*x1 + B
-	if (BN_mod_sqr(tmp, x1, p, ctx) != 1
-	    || BN_mod_mul(gx, tmp, x1, p, ctx) != 1
-	    || BN_mod_mul(tmp, A, x1, p, ctx) != 1
-	    || BN_mod_add(gx, gx, tmp, p, ctx) != 1
-	    || BN_mod_add(gx, gx, B, p, ctx) != 1)
-		error("SSWU: BN_mod_* (gx1)");
+	expecting(BN_mod_sqr(tmp, x1, p, ctx) == 1
+	          && BN_mod_mul(gx, tmp, x1, p, ctx) == 1
+	          && BN_mod_mul(tmp, A, x1, p, ctx) == 1
+	          && BN_mod_add(gx, gx, tmp, p, ctx) == 1
+	          && BN_mod_add(gx, gx, B, p, ctx) == 1,
+	          "SSWU: BN_mod_* (gx1)");
 
 	// BN_mod_sqrt's prototype takes BIGNUM* (non-const) for the modulus
 	// even though it doesn't mutate it; the const_cast is safe.
 	if (BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) != NULL) {
-		if (BN_copy(x_out, x1) == NULL) error("SSWU: BN_copy x_out");
+		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
 	} else {
 		// x2 = t * x1 ; gx2 = x2^3 + A*x2 + B
-		if (BN_mod_mul(x1, t, x1, p, ctx) != 1
-		    || BN_mod_sqr(tmp, x1, p, ctx) != 1
-		    || BN_mod_mul(gx, tmp, x1, p, ctx) != 1
-		    || BN_mod_mul(tmp, A, x1, p, ctx) != 1
-		    || BN_mod_add(gx, gx, tmp, p, ctx) != 1
-		    || BN_mod_add(gx, gx, B, p, ctx) != 1)
-			error("SSWU: BN_mod_* (gx2)");
-		if (BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) == NULL)
-			error("H2C SSWU: neither candidate square");
-		if (BN_copy(x_out, x1) == NULL) error("SSWU: BN_copy x_out");
+		expecting(BN_mod_mul(x1, t, x1, p, ctx) == 1
+		          && BN_mod_sqr(tmp, x1, p, ctx) == 1
+		          && BN_mod_mul(gx, tmp, x1, p, ctx) == 1
+		          && BN_mod_mul(tmp, A, x1, p, ctx) == 1
+		          && BN_mod_add(gx, gx, tmp, p, ctx) == 1
+		          && BN_mod_add(gx, gx, B, p, ctx) == 1,
+		          "SSWU: BN_mod_* (gx2)");
+		expecting(BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) != NULL,
+		          "H2C SSWU: neither candidate square");
+		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
 	}
 
 	// sgn0 correction: if sgn0(u) != sgn0(y), y = -y
 	if (BN_is_bit_set(u, 0) != BN_is_bit_set(y, 0)) {
-		if (BN_sub(y, p, y) != 1) error("SSWU: BN_sub (sgn0)");
+		expecting(BN_sub(y, p, y) == 1, "SSWU: BN_sub (sgn0)");
 	}
-	if (BN_copy(y_out, y) == NULL) error("SSWU: BN_copy y_out");
+	expecting(BN_copy(y_out, y) != NULL, "SSWU: BN_copy y_out");
 
 	BN_free(u2); BN_free(t); BN_free(tv1); BN_free(tmp);
 	BN_free(x1); BN_free(gx); BN_free(y);
@@ -191,7 +191,8 @@ void sswu_z_for_curve(BIGNUM * z_out, const BIGNUM * p, int curve_nid) {
 		BN_sub(z_out, p, z_out);
 		return;
 	default:
-		error("hash_to_point: unsupported curve (no SSWU Z table entry)");
+		expecting(false,
+		          "hash_to_point: unsupported curve (no SSWU Z table entry)");
 	}
 }
 
@@ -201,11 +202,11 @@ void sswu_z_for_curve(BIGNUM * z_out, const BIGNUM * p, int curve_nid) {
 
 Scalar::Scalar() {
 	n_ = BN_new();
-	if (n_ == nullptr) error("Scalar: BN_new");
+	expecting(n_ != nullptr, "Scalar: BN_new");
 }
 Scalar::Scalar(const Scalar &oth) {
 	n_ = BN_new();
-	if (n_ == nullptr) error("Scalar: BN_new");
+	expecting(n_ != nullptr, "Scalar: BN_new");
 	BN_copy(n_, oth.n_);
 }
 Scalar::Scalar(Scalar && oth) noexcept : n_(oth.n_) {
@@ -229,7 +230,8 @@ void Scalar::to_bin(unsigned char * out) const {
 
 void Scalar::to_bin_padded(unsigned char * out, size_t fixed_len) const {
 	int actual = BN_num_bytes(n_);
-	if ((size_t)actual > fixed_len) error("Scalar::to_bin_padded: number too large");
+	expecting((size_t)actual <= fixed_len,
+	          "Scalar::to_bin_padded: number too large");
 	std::memset(out, 0, fixed_len - (size_t)actual);
 	BN_bn2bin(n_, out + (fixed_len - (size_t)actual));
 }
@@ -237,7 +239,7 @@ void Scalar::to_bin_padded(unsigned char * out, size_t fixed_len) const {
 void Scalar::from_bin(const unsigned char * in, size_t length) {
 	if (n_ != nullptr) BN_free(n_);
 	n_ = BN_bin2bn(in, (int)length, nullptr);
-	if (n_ == nullptr) error("Scalar::from_bin: BN_bin2bn");
+	expecting(n_ != nullptr, "Scalar::from_bin: BN_bin2bn");
 }
 
 Scalar Scalar::add(const Scalar &oth) const {
@@ -276,7 +278,7 @@ Point::Point(ECGroup * g) {
 	if (g == nullptr) return;
 	group_ = g;
 	point_ = EC_POINT_new(g->ec_group());
-	if (point_ == nullptr) error("Point: EC_POINT_new");
+	expecting(point_ != nullptr, "Point: EC_POINT_new");
 }
 
 Point::~Point() {
@@ -287,8 +289,8 @@ Point::Point(const Point & p) {
 	if (p.group_ == nullptr) return;
 	group_ = p.group_;
 	point_ = EC_POINT_new(group_->ec_group());
-	if (point_ == nullptr) error("Point: EC_POINT_new");
-	if (EC_POINT_copy(point_, p.point_) == 0) error("ECC COPY");
+	expecting(point_ != nullptr, "Point: EC_POINT_new");
+	expecting(EC_POINT_copy(point_, p.point_) != 0, "ECC COPY");
 }
 
 Point::Point(Point && p) noexcept
@@ -304,22 +306,22 @@ Point& Point::operator=(Point p) {
 }
 
 void Point::to_bin(unsigned char * buf, size_t buf_len) const {
-	if (group_ == nullptr) error("Point::to_bin on uninitialized point");
+	expecting(group_ != nullptr, "Point::to_bin on uninitialized point");
 	int ret = EC_POINT_point2oct(group_->ec_group(), point_,
 	                             POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, group_->bn_ctx());
-	if (ret == 0) error("ECC TO_BIN");
+	expecting(ret != 0, "ECC TO_BIN");
 }
 
 size_t Point::size() const {
-	if (group_ == nullptr) error("Point::size on uninitialized point");
+	expecting(group_ != nullptr, "Point::size on uninitialized point");
 	size_t ret = EC_POINT_point2oct(group_->ec_group(), point_,
 	                                POINT_CONVERSION_UNCOMPRESSED, NULL, 0, group_->bn_ctx());
-	if (ret == 0) error("ECC SIZE_BIN");
+	expecting(ret != 0, "ECC SIZE_BIN");
 	return ret;
 }
 
 void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
-	if (g == nullptr) error("Point::from_bin: null group");
+	expecting(g != nullptr, "Point::from_bin: null group");
 	// If already initialized against a different group, drop the old
 	// point and re-allocate against `g`. Without this, the silent
 	// fall-through used the prior group's curve while ignoring `g`.
@@ -330,10 +332,10 @@ void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
 	if (point_ == nullptr) {
 		group_ = g;
 		point_ = EC_POINT_new(group_->ec_group());
-		if (point_ == nullptr) error("Point::from_bin: EC_POINT_new");
+		expecting(point_ != nullptr, "Point::from_bin: EC_POINT_new");
 	}
 	int ret = EC_POINT_oct2point(group_->ec_group(), point_, buf, buf_len, group_->bn_ctx());
-	if (ret == 0) error("ECC FROM_BIN");
+	expecting(ret != 0, "ECC FROM_BIN");
 	// from_bin is the deserialization entry for externally-supplied bytes,
 	// so validate the decoded point before returning it. oct2point already
 	// rejects off-curve encodings, but assert the on-curve invariant
@@ -342,55 +344,61 @@ void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
 	// a usable group element. On a cofactor-1 curve (P-256, the only curve
 	// wired up) on-curve + non-identity implies prime-order subgroup
 	// membership, so no separate subgroup check is required.
-	if (EC_POINT_is_on_curve(group_->ec_group(), point_, group_->bn_ctx()) != 1)
-		error("Point::from_bin: point not on curve");
-	if (EC_POINT_is_at_infinity(group_->ec_group(), point_))
-		error("Point::from_bin: point at infinity");
+	expecting(EC_POINT_is_on_curve(group_->ec_group(), point_, group_->bn_ctx()) == 1,
+	          "Point::from_bin: point not on curve");
+	expecting(!EC_POINT_is_at_infinity(group_->ec_group(), point_),
+	          "Point::from_bin: point at infinity");
 }
 
 Point Point::add(const Point & rhs) const {
-	if (group_ == nullptr) error("Point::add on uninitialized point");
-	if (rhs.group_ != group_) error("Point::add: group mismatch");
+	expecting(group_ != nullptr, "Point::add on uninitialized point");
+	expecting(rhs.group_ == group_, "Point::add: group mismatch");
 	Point ret(group_);
 	int res = EC_POINT_add(group_->ec_group(), ret.point_, point_, rhs.point_, group_->bn_ctx());
-	if (res == 0) error("ECC ADD");
+	expecting(res != 0, "ECC ADD");
 	return ret;
 }
 
 Point Point::mul(const Scalar &m) const {
-	if (group_ == nullptr) error("Point::mul on uninitialized point");
+	expecting(group_ != nullptr, "Point::mul on uninitialized point");
 	Point ret(group_);
 	int res = EC_POINT_mul(group_->ec_group(), ret.point_, NULL, point_, m.n(), group_->bn_ctx());
-	if (res == 0) error("ECC MUL");
+	expecting(res != 0, "ECC MUL");
 	return ret;
 }
 
 Point Point::inv() const {
-	if (group_ == nullptr) error("Point::inv on uninitialized point");
+	expecting(group_ != nullptr, "Point::inv on uninitialized point");
 	Point ret(*this);
 	int res = EC_POINT_invert(group_->ec_group(), ret.point_, group_->bn_ctx());
-	if (res == 0) error("ECC INV");
+	expecting(res != 0, "ECC INV");
 	return ret;
 }
 
 bool Point::operator==(const Point & rhs) const {
-	if (group_ == nullptr || rhs.group_ == nullptr)
-		error("Point::operator== on uninitialized point");
-	if (rhs.group_ != group_) error("Point::operator==: group mismatch");
+	expecting(group_ != nullptr && rhs.group_ != nullptr,
+	          "Point::operator== on uninitialized point");
+	expecting(rhs.group_ == group_, "Point::operator==: group mismatch");
 	int ret = EC_POINT_cmp(group_->ec_group(), point_, rhs.point_, group_->bn_ctx());
-	if (ret == -1) error("ECC CMP");
+	expecting(ret != -1, "ECC CMP");
 	return (ret == 0);
 }
 
 // ===== ECGroup =====
 
 ECGroup::ECGroup(int curve_nid) : curve_nid_(curve_nid) {
+	// Point deserialization relies on the supported curve having cofactor 1,
+	// and hash_to_point implements only the RFC 9380 P-256 suite. Keep the NID
+	// parameter for source compatibility, but do not create a partially
+	// supported group whose security invariants differ from P-256.
+	expecting(curve_nid == NID_X9_62_prime256v1,
+	          "ECGroup: only NID_X9_62_prime256v1 (P-256) is supported");
 	ec_group_ = EC_GROUP_new_by_curve_name(curve_nid);
-	if (ec_group_ == nullptr) error("ECGroup: unsupported curve NID");
+	expecting(ec_group_ != nullptr, "ECGroup: EC_GROUP_new_by_curve_name");
 	bn_ctx_ = BN_CTX_new();
-	if (bn_ctx_ == nullptr) error("ECGroup: BN_CTX_new");
-	if (EC_GROUP_get_order(ec_group_, order_.n(), bn_ctx_) == 0)
-		error("ECGroup: EC_GROUP_get_order");
+	expecting(bn_ctx_ != nullptr, "ECGroup: BN_CTX_new");
+	expecting(EC_GROUP_get_order(ec_group_, order_.n(), bn_ctx_) != 0,
+	          "ECGroup: EC_GROUP_get_order");
 	scratch_ = new unsigned char[scratch_size_];
 }
 
@@ -413,8 +421,8 @@ void ECGroup::resize_scratch(size_t size) {
 Scalar ECGroup::rand_scalar() {
 	Scalar n;
 	if (!is_test_mode()) {
-		if (BN_rand_range(n.n(), order_.n()) != 1)
-			error("ECGroup::rand_scalar: BN_rand_range");
+		expecting(BN_rand_range(n.n(), order_.n()) == 1,
+		          "ECGroup::rand_scalar: BN_rand_range");
 		return n;
 	}
 	// Test mode: deterministic uniform sample in [0, order_) via
@@ -441,8 +449,8 @@ Scalar ECGroup::rand_scalar() {
 	do {
 		prg->random_data_unaligned(buf.data(), n_bytes);
 		buf[0] &= top_mask;
-		if (BN_bin2bn(buf.data(), n_bytes, n.n()) == nullptr)
-			error("ECGroup::rand_scalar: BN_bin2bn");
+		expecting(BN_bin2bn(buf.data(), n_bytes, n.n()) != nullptr,
+		          "ECGroup::rand_scalar: BN_bin2bn");
 	} while (BN_cmp(n.n(), order_.n()) >= 0);
 	return n;
 }
@@ -450,14 +458,14 @@ Scalar ECGroup::rand_scalar() {
 Point ECGroup::get_generator() {
 	Point res(this);
 	int ret = EC_POINT_copy(res.point_, EC_GROUP_get0_generator(ec_group_));
-	if (ret == 0) error("ECC GEN");
+	expecting(ret != 0, "ECC GEN");
 	return res;
 }
 
 Point ECGroup::mul_gen(const Scalar &m) {
 	Point res(this);
 	int ret = EC_POINT_mul(ec_group_, res.point_, m.n(), NULL, NULL, bn_ctx_);
-	if (ret == 0) error("ECC GEN MUL");
+	expecting(ret != 0, "ECC GEN MUL");
 	return res;
 }
 
@@ -465,12 +473,12 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
                              const char * dst, size_t dst_len) {
 	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
-	if (!p || !A || !B || !Z) error("hash_to_point: BN_new");
+	expecting(p && A && B && Z, "hash_to_point: BN_new");
 	EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_);
 	sswu_z_for_curve(Z, p, curve_nid_);
 
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
-	if (!u0 || !u1) error("hash_to_point: BN_new");
+	expecting(u0 && u1, "hash_to_point: BN_new");
 	hash_to_field_p256(u0, u1, p,
 	                   reinterpret_cast<const unsigned char*>(msg), length,
 	                   reinterpret_cast<const unsigned char*>(dst), dst_len,
@@ -478,21 +486,21 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 
 	BIGNUM *x0 = BN_new(), *y0 = BN_new();
 	BIGNUM *x1 = BN_new(), *y1 = BN_new();
-	if (!x0 || !y0 || !x1 || !y1) error("hash_to_point: BN_new");
+	expecting(x0 && y0 && x1 && y1, "hash_to_point: BN_new");
 	map_to_curve_sswu_p256(x0, y0, u0, p, A, B, Z, bn_ctx_);
 	map_to_curve_sswu_p256(x1, y1, u1, p, A, B, Z, bn_ctx_);
 
 	EC_POINT *Q0 = EC_POINT_new(ec_group_);
 	EC_POINT *Q1 = EC_POINT_new(ec_group_);
-	if (!Q0 || !Q1) error("hash_to_point: EC_POINT_new");
+	expecting(Q0 && Q1, "hash_to_point: EC_POINT_new");
 	EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_);
 	EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_);
 
-	if (EC_POINT_add(ec_group_, out.point_, Q0, Q1, bn_ctx_) == 0)
-		error("H2C ADD");
+	expecting(EC_POINT_add(ec_group_, out.point_, Q0, Q1, bn_ctx_) != 0,
+	          "H2C ADD");
 	// P-256 cofactor h = 1 — clear_cofactor is identity, skip it.
-	if (EC_POINT_is_on_curve(ec_group_, out.point_, bn_ctx_) != 1)
-		error("H2C result not on curve");
+	expecting(EC_POINT_is_on_curve(ec_group_, out.point_, bn_ctx_) == 1,
+	          "H2C result not on curve");
 
 	EC_POINT_free(Q0); EC_POINT_free(Q1);
 	BN_free(p); BN_free(A); BN_free(B); BN_free(Z);

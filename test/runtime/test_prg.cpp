@@ -15,16 +15,33 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, 2);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 // ---------- example ----------
 
@@ -229,6 +246,24 @@ static bool check_uniform_engine() {
 	return true;
 }
 
+static bool check_negative_lengths_rejected() {
+	PRG p;
+	alignas(block) block b = zero_block;
+	bool bit = false;
+	return dies([&] { p.random_data(&b, -1); })
+	    && dies([&] { p.random_data_unaligned(&b, -1); })
+	    && dies([&] { p.random_bool(&bit, -1); })
+	    && dies([&] { p.random_block(&b, -1); });
+}
+
+static bool check_aligned_apis_reject_unaligned_data() {
+	PRG p;
+	alignas(block) uint8_t storage[sizeof(block) + 1] = {};
+	void *unaligned = storage + 1;
+	return dies([&] { p.random_data(unaligned, 1); })
+	    && dies([&] { p.random_block(reinterpret_cast<block *>(unaligned), 1); });
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	struct Case { const char *name; bool (*fn)(); };
@@ -243,6 +278,8 @@ static bool run_correctness() {
 		{"random_bool ∈ {0,1}",                 check_random_bool_is_0_or_1},
 		{"random_bool mean ~ 0.5",              check_random_bool_distribution},
 		{"UniformRandomBitGenerator interface", check_uniform_engine},
+		{"negative lengths rejected",           check_negative_lengths_rejected},
+		{"aligned APIs reject unaligned data",  check_aligned_apis_reject_unaligned_data},
 	};
 	bool all = true;
 	for (auto &c : cases) {

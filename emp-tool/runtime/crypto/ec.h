@@ -77,9 +77,10 @@ private:
 	friend class ECGroup;       // hash_to_point assigns point_ / group_ on lazy-init
 };
 
-// Wraps an EC_GROUP + BN_CTX + cached order. Curve is selectable at
-// construction; default is P-256. Non-copyable, non-movable: it owns
-// raw OpenSSL handles and a scratch buffer that would multi-free.
+// Wraps a P-256 EC_GROUP + BN_CTX + cached order. The constructor retains its
+// NID parameter for source compatibility but rejects every value except
+// NID_X9_62_prime256v1. Non-copyable, non-movable: it owns raw OpenSSL handles
+// and a scratch buffer that would multi-free.
 class ECGroup {
 public:
 	explicit ECGroup(int curve_nid = NID_X9_62_prime256v1);
@@ -104,8 +105,7 @@ public:
 	// using the SSWU_RO_ suite. `dst` is the per-protocol domain-
 	// separation tag (RFC 9380 §3.1) — pick one stable string per
 	// protocol; the canonical "QUUX-V01-CS02-with-<suite>" is only for
-	// validating against §J vectors. Only P-256 is wired up today;
-	// other curves error at runtime.
+	// validating against §J vectors. ECGroup construction guarantees P-256.
 	Point hash_to_point(const char * msg, size_t length,
 	                    const char * dst, size_t dst_len);
 

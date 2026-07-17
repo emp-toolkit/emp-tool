@@ -1,5 +1,6 @@
 #ifndef EMP_UTILS_H__
 #define EMP_UTILS_H__
+#include "emp-tool/runtime/core/error.h"
 #include <string>
 #include "emp-tool/runtime/core/block.h"
 #include "emp-tool/runtime/core/simd_tier.h"
@@ -18,13 +19,6 @@
 namespace emp {
 using std::chrono::time_point;
 using std::chrono::high_resolution_clock;
-
-// Defaults capture the caller's source location via __builtin_LINE /
-// __builtin_FILE — both evaluate at the call site, so an unadorned
-// `error("msg")` records where it fired.
-[[noreturn]] inline void error(const char * s,
-                               int line = __builtin_LINE(),
-                               const char * file = __builtin_FILE());
 
 inline int parse_party(const char * const * arg, int max_party = BOB);   // argv[1] in [1, max_party]; default ALICE=1 / BOB=2
 inline int peer_port();                              // $EMP_PORT, default 12345

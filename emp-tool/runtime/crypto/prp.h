@@ -27,8 +27,10 @@ class PRP { public:
 	}
 
 	void permute_block(block *data, int64_t nblocks) {
-		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
-		       "random_block requires 16-byte aligned data");
+		expecting(nblocks >= 0, "PRP::permute_block: negative block count");
+		if (nblocks == 0) return;
+		expecting(((uintptr_t)data & (alignof(block) - 1)) == 0,
+		          "PRP::permute_block: data must be 16-byte aligned");
 		while (nblocks > 0) {
 			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			ParaEnc(data, &aes, 1, n);

@@ -55,13 +55,13 @@ public:
         BitVec_T r(*ctx_); for (int i = 0; i < N; ++i) r.w[i] = kernel::mux(*ctx_, sel.w, t.w[i], w[i]); return r;
     }
     BitVec_T operator<<(int s) const {
-        if (s < 0) error("BitVec_T::operator<<: shift amount must be >= 0");
+        expecting(s >= 0, "BitVec_T::operator<<: shift amount must be >= 0");
         BitVec_T r(*ctx_); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < N; ++i) r.w[i] = (i >= s) ? w[i - s] : z;
         return r;
     }
     BitVec_T operator>>(int s) const {
-        if (s < 0) error("BitVec_T::operator>>: shift amount must be >= 0");
+        expecting(s >= 0, "BitVec_T::operator>>: shift amount must be >= 0");
         BitVec_T r(*ctx_); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < N; ++i) r.w[i] = (i + s < N) ? w[i + s] : z;
         return r;

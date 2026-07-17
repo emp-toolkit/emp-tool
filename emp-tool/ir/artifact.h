@@ -37,12 +37,13 @@ struct CircuitArtifact {
 inline void validate_artifact(const CircuitArtifact& a) {
 	validate_program(a.program);
 	const uint64_t ins = a.signature.total_input_bits();   // compared in 64-bit (no truncation)
-	if (ins > UINT32_MAX)
-		error("validate_artifact: total_input_bits exceeds UINT32_MAX");
-	if (ins != (uint64_t)a.program.num_inputs)
-		error("validate_artifact: sum(arg_widths) != program.num_inputs");
-	if ((uint64_t)a.signature.return_width != (uint64_t)a.program.outputs.size())
-		error("validate_artifact: return_width != program.outputs size");
+	expecting(ins <= UINT32_MAX,
+	          "validate_artifact: total_input_bits exceeds UINT32_MAX");
+	expecting(ins == (uint64_t)a.program.num_inputs,
+	          "validate_artifact: sum(arg_widths) != program.num_inputs");
+	expecting((uint64_t)a.signature.return_width ==
+	              (uint64_t)a.program.outputs.size(),
+	          "validate_artifact: return_width != program.outputs size");
 }
 
 }  // namespace circuit

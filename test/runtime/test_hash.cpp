@@ -23,15 +23,33 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, 2);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 
 // ---------- example ----------
@@ -195,6 +213,46 @@ static bool check_snapshot_does_not_disturb() {
 	return ok;
 }
 
+static bool check_invalid_lengths_rejected() {
+	uint8_t out[Hash::DIGEST_SIZE];
+	block b = zero_block;
+	return dies([&] {
+		Hash h;
+		h.put(&b, -1);
+	}) && dies([&] {
+		Hash h;
+		h.put_block(&b, -1);
+	}) && dies([&] {
+		Hash h;
+		h.put_block(&b, std::numeric_limits<int64_t>::max());
+	}) && dies([&] {
+		Hash::hash_once(out, &b, -1);
+	});
+}
+
+class NullIO final : public IOChannel {
+public:
+	void send_data_internal(const void *, int64_t) override {}
+	void recv_data_internal(void *, int64_t) override {}
+};
+
+static bool check_fs_state_contracts_rejected() {
+	return dies([] {
+		NullIO io;
+		(void)io.get_send_digest();
+	}) && dies([] {
+		NullIO io;
+		(void)io.get_recv_digest();
+	}) && dies([] {
+		NullIO io;
+		(void)io.get_digest();
+	}) && dies([] {
+		NullIO io;
+		io.enable_fs(false);
+		io.enable_fs(false);
+	});
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -205,6 +263,14 @@ static bool run_correctness() {
 #endif
 	ok &= check_streaming_equals_oneshot();
 	ok &= check_snapshot_does_not_disturb();
+	bool invalid_rejected = check_invalid_lengths_rejected();
+	cout << "  [negative/overflow lengths rejected]   "
+	     << (invalid_rejected ? "OK" : "FAIL") << "\n";
+	ok &= invalid_rejected;
+	bool fs_contracts = check_fs_state_contracts_rejected();
+	cout << "  [Fiat-Shamir state contracts rejected] "
+	     << (fs_contracts ? "OK" : "FAIL") << "\n";
+	ok &= fs_contracts;
 	return ok;
 }
 

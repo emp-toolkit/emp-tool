@@ -3,4 +3,134 @@
 # to-back ctest runs don't collide on a socket still in TIME_WAIT. Port travels
 # via EMP_PORT (read by peer_port()); only the party id is a positional arg.
 export EMP_PORT=$(( (RANDOM % 30000) + 20000 ))
-(sleep 0.05; $1 1 ${@:2}) &  $1 2 ${@:2}
+
+if [[ $# -lt 1 ]]; then
+	echo "usage: $0 <binary> [args]" >&2
+	exit 2
+fi
+
+timeout_seconds=${EMP_RUN_TIMEOUT:-120}
+case "$timeout_seconds" in
+	''|*[!0-9]*)
+		echo "run: EMP_RUN_TIMEOUT must be a positive integer" >&2
+		exit 2
+		;;
+esac
+if (( timeout_seconds <= 0 )); then
+	echo "run: EMP_RUN_TIMEOUT must be a positive integer" >&2
+	exit 2
+fi
+
+program=$1
+shift
+
+alice_pid=
+bob_pid=
+alice_done=0
+bob_done=0
+
+# Stop a still-running party, escalate if it ignores TERM, and always reap it.
+# The launched program is the direct child identified by $!, so no Bash 4+
+# wait -n support is needed (macOS still ships Bash 3.2).
+terminate_and_reap() {
+	local pid=$1
+	local attempts=0
+
+	if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+		kill -TERM "$pid" 2>/dev/null || true
+		while kill -0 "$pid" 2>/dev/null && (( attempts < 10 )); do
+			sleep 0.02
+			((attempts += 1))
+		done
+		if kill -0 "$pid" 2>/dev/null; then
+			kill -KILL "$pid" 2>/dev/null || true
+		fi
+	fi
+	wait "$pid" 2>/dev/null || true
+}
+
+# Any exit path not reached after both waits (signal, timeout, or unexpected
+# shell failure) must not leave a peer blocked in accept()/recv(). Preserve the
+# status that triggered EXIT rather than replacing it with a cleanup status.
+cleanup() {
+	local status=$?
+	trap - EXIT INT TERM HUP
+	if (( !alice_done )); then
+		terminate_and_reap "$alice_pid"
+	fi
+	if (( !bob_done )); then
+		terminate_and_reap "$bob_pid"
+	fi
+	exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
+
+# ALICE listens and BOB's connector retries until the listener is ready, so a
+# fixed startup sleep is unnecessary. Quote the program and argument vector so
+# spaces and wildcard characters reach both parties unchanged.
+"$program" 1 "$@" &
+alice_pid=$!
+"$program" 2 "$@" &
+bob_pid=$!
+
+deadline=$((SECONDS + timeout_seconds))
+alice_status=0
+bob_status=0
+
+# Bash records a completed background child's status until wait consumes it.
+# Polling kill -0 lets this Bash-3.2-compatible loop notice whichever party
+# finishes first, then wait retrieves its real exit status.
+while (( !alice_done || !bob_done )); do
+	if (( !alice_done )) && ! kill -0 "$alice_pid" 2>/dev/null; then
+		wait "$alice_pid"
+		alice_status=$?
+		alice_done=1
+		if (( alice_status != 0 )); then
+			echo "run: party 1 failed with status $alice_status" >&2
+			if (( !bob_done )); then
+				terminate_and_reap "$bob_pid"
+				bob_done=1
+			fi
+			exit "$alice_status"
+		fi
+	fi
+
+	if (( !bob_done )) && ! kill -0 "$bob_pid" 2>/dev/null; then
+		wait "$bob_pid"
+		bob_status=$?
+		bob_done=1
+		if (( bob_status != 0 )); then
+			echo "run: party 2 failed with status $bob_status" >&2
+			if (( !alice_done )); then
+				terminate_and_reap "$alice_pid"
+				alice_done=1
+			fi
+			exit "$bob_status"
+		fi
+	fi
+
+	if (( alice_done && bob_done )); then
+		break
+	fi
+
+	if (( SECONDS >= deadline )); then
+		echo "run: parties timed out after ${timeout_seconds}s (EMP_PORT=$EMP_PORT)" >&2
+		if (( !alice_done )); then
+			terminate_and_reap "$alice_pid"
+			alice_done=1
+		fi
+		if (( !bob_done )); then
+			terminate_and_reap "$bob_pid"
+			bob_done=1
+		fi
+		exit 124
+	fi
+
+	sleep 0.01
+done
+
+exit 0

@@ -29,7 +29,9 @@ namespace circuit {
 // They are defined only for dense (WireReuse::None) programs — compaction
 // (ir/transform.h) runs them on its dense input, never on its reuse output.
 inline void require_dense(const BooleanProgram& p, const char* who) {
-	if (p.wire_reuse != WireReuse::None) error((std::string(who) + ": requires a dense (WireReuse::None) program").c_str());
+	expecting(p.wire_reuse == WireReuse::None, [&] {
+		return std::string(who) + ": requires a dense (WireReuse::None) program";
+	});
 }
 
 // AND-depth scheduling metadata (filled by schedule_pass). Useful to protocols

@@ -12,7 +12,6 @@
 // Test functions below are templated on the IO type so correctness and
 // regression checks can be reused by IO implementations.
 
-#include <cassert>
 #include <cstring>
 #include <iostream>
 
@@ -43,13 +42,15 @@ static void run_correctness(IO *io, int party, const char *tag) {
 				io->send_data(data, length);
 				io->send_data(data, length);
 				io->recv_data(data2, length);
-				assert(memcmp(data, data2, length) == 0);
+				expecting(memcmp(data, data2, length) == 0,
+				          "NetIO test: ALICE byte round-trip mismatch");
 			} else {
 				prg.random_data_unaligned(data2, length);
 				io->recv_data(data, length);
 				io->recv_data(data, length);
 				io->send_data(data2, length);
-				assert(memcmp(data, data2, length) == 0);
+				expecting(memcmp(data, data2, length) == 0,
+				          "NetIO test: BOB byte round-trip mismatch");
 			}
 		}
 		io->flush();
@@ -69,10 +70,12 @@ static void run_correctness(IO *io, int party, const char *tag) {
 			io->send_bool(data + 7, 1024 * 1024 - 7);
 		} else {
 			io->recv_bool(data2, 1024 * 1024);
-			assert(memcmp(data2, data, 1024 * 1024) == 0);
+			expecting(memcmp(data2, data, 1024 * 1024) == 0,
+			          "NetIO test: aligned bool round-trip mismatch");
 			memset(data2, 0, 1024 * 1024);
 			io->recv_bool(data2 + 7, 1024 * 1024 - 7);
-			assert(memcmp(data2 + 7, data + 7, 1024 * 1024 - 7) == 0);
+			expecting(memcmp(data2 + 7, data + 7, 1024 * 1024 - 7) == 0,
+			          "NetIO test: unaligned bool round-trip mismatch");
 		}
 		delete[] data;
 		delete[] data2;
@@ -121,10 +124,11 @@ static void run_send_only_regression(int port, int party, const char *tag) {
 			io.flush();                // peer's recv depends on this
 			char ack = 0;
 			io.recv_data(&ack, 1);     // hold connection open until BOB confirms
-			assert(ack == 1);
+			expecting(ack == 1, "NetIO test: explicit-flush acknowledgement mismatch");
 		} else {
 			io.recv_data(data2, N);
-			assert(memcmp(data, data2, N) == 0);
+			expecting(memcmp(data, data2, N) == 0,
+			          "NetIO test: explicit-flush payload mismatch");
 			char ack = 1;
 			io.send_data(&ack, 1);
 			io.flush();
@@ -141,7 +145,8 @@ static void run_send_only_regression(int port, int party, const char *tag) {
 			delete io;                 // must flush; otherwise BOB hits EOF
 		} else {
 			io->recv_data(data2, N);
-			assert(memcmp(data, data2, N) == 0);
+			expecting(memcmp(data, data2, N) == 0,
+			          "NetIO test: destructor-flush payload mismatch");
 			delete io;
 		}
 	}

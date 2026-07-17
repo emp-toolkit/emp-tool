@@ -62,8 +62,8 @@ public:
     V input(int owner, const typename V::clear_t& value) {
         static_assert(std::same_as<typename V::context_type, ctx_t>,
             "ClearSession::input<V>: V must be a value over this session's ctx_t");
-        if (owner < PUBLIC)
-            error("ClearSession::input: owner must be PUBLIC or a party id >= 1");
+        expecting(owner >= PUBLIC,
+                  "ClearSession::input: owner must be PUBLIC or a party id >= 1");
         constexpr int n = V::width();
         const std::array<bool, (std::size_t)n> bits = V::encode(value);   // stack; width is the type
         std::array<typename ctx_t::Wire, (std::size_t)n> wires{};
@@ -81,8 +81,8 @@ public:
     reveal_t<V> reveal(const V& value, int recipient) {
         static_assert(std::same_as<typename V::context_type, ctx_t>,
             "ClearSession::reveal<V>: V must be a value over this session's ctx_t");
-        if (recipient < PUBLIC)
-            error("ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
+        expecting(recipient >= PUBLIC,
+                  "ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
         constexpr int n = V::width();
         std::array<typename ctx_t::Wire, (std::size_t)n> wires{};
         value.pack_wires(wires.data());
@@ -105,9 +105,10 @@ public:
     V input(int owner, const typename V::clear_t& value, int width) {
         static_assert(std::same_as<typename V::context_type, ctx_t>,
             "ClearSession::input<V>: V must be a value over this session's ctx_t");
-        if (owner < PUBLIC)
-            error("ClearSession::input: owner must be PUBLIC or a party id >= 1");
-        if (width < 1) error("ClearSession::input: runtime width must be >= 1");
+        expecting(owner >= PUBLIC,
+                  "ClearSession::input: owner must be PUBLIC or a party id >= 1");
+        expecting(width >= 1,
+                  "ClearSession::input: runtime width must be >= 1");
         const std::vector<uint8_t> bits = V::encode(value, width);
         std::vector<typename ctx_t::Wire> wires((std::size_t)width);
         for (int i = 0; i < width; ++i)
@@ -118,8 +119,8 @@ public:
     reveal_t<V> reveal(const V& value, int recipient) {
         static_assert(std::same_as<typename V::context_type, ctx_t>,
             "ClearSession::reveal<V>: V must be a value over this session's ctx_t");
-        if (recipient < PUBLIC)
-            error("ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
+        expecting(recipient >= PUBLIC,
+                  "ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
         const int n = value.width();
         std::vector<typename ctx_t::Wire> wires((std::size_t)n);
         value.pack_wires(wires.data());

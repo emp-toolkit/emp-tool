@@ -58,13 +58,15 @@ struct ComposeCtx {
 
 	uint32_t alloc_() {
 		inputs_closed = true;
-		if (next_id == UINT32_MAX) error("ComposeCtx: wire id overflow");
+		expecting(next_id != UINT32_MAX, "ComposeCtx: wire id overflow");
 		return next_id++;
 	}
 	Wire external_input(size_t n) {
-		if (inputs_closed) error("ComposeCtx::external_input: called after a gate/call was emitted");
-		if (n == 0) error("ComposeCtx::external_input: zero-width argument");
-		if ((uint64_t)next_id + n > UINT32_MAX) error("ComposeCtx::external_input: wire id overflow");
+		expecting(!inputs_closed,
+		          "ComposeCtx::external_input: called after a gate/call was emitted");
+		expecting(n != 0, "ComposeCtx::external_input: zero-width argument");
+		expecting(n <= static_cast<size_t>(UINT32_MAX - next_id),
+		          "ComposeCtx::external_input: wire id overflow");
 		Wire base = next_id; next_id += (uint32_t)n; num_inputs += (uint32_t)n; return base;
 	}
 
@@ -83,7 +85,8 @@ struct ComposeCtx {
 	// walked here — only the reference + wiring are kept.
 	std::vector<Wire> call_unit(const circuit::BooleanProgram& unit, const Wire* in, size_t n) {
 		inputs_closed = true;
-		if (n != unit.num_inputs) error("ComposeCtx::call_unit: argument width != unit num_inputs");
+		expecting(n == unit.num_inputs,
+		          "ComposeCtx::call_unit: argument width != unit num_inputs");
 		std::vector<Wire> outs(unit.outputs.size());
 		for (auto& o : outs) o = alloc_();
 		int idx = (int)plan.instances.size();

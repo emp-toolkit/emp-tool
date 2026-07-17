@@ -59,9 +59,12 @@ public:
     }
 
     void send_data_internal(const void* data, int64_t nbyte) override {
+        expecting(nbyte >= 0,
+                  "TraceIO::send_data_internal: negative byte count");
         // Tee first, deliver after, so a crash mid-write still leaves
         // a trace prefix that matches what the peer didn't yet see.
-        if ((int64_t)std::fwrite(data, 1, nbyte, send_fp_) != nbyte) {
+        const size_t bytes = static_cast<size_t>(nbyte);
+        if (std::fwrite(data, 1, bytes, send_fp_) != bytes) {
             std::fprintf(stderr, "TraceIO: short write to .send\n");
             std::abort();
         }
@@ -71,8 +74,11 @@ public:
     }
 
     void recv_data_internal(void* data, int64_t nbyte) override {
+        expecting(nbyte >= 0,
+                  "TraceIO::recv_data_internal: negative byte count");
         under_->recv_data_internal(data, nbyte);
-        if ((int64_t)std::fwrite(data, 1, nbyte, recv_fp_) != nbyte) {
+        const size_t bytes = static_cast<size_t>(nbyte);
+        if (std::fwrite(data, 1, bytes, recv_fp_) != bytes) {
             std::fprintf(stderr, "TraceIO: short write to .recv\n");
             std::abort();
         }

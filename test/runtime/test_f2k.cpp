@@ -17,12 +17,29 @@
 #include "emp-tool/emp-tool.h"
 
 #include <chrono>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, STDERR_FILENO);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 // ---------- example: typical usage ----------
 
@@ -280,6 +297,9 @@ static bool run_correctness() {
 	bool c = true;
 	for (int sz : {1, 4, 16, 1024}) c &= check_uni_hash_coeff_gen(sz);
 	cout << "  uni_hash_coeff_gen             " << (c ? "OK" : "FAIL") << "\n";
+	block coeff = zero_block;
+	bool c2 = dies([&] { uni_hash_coeff_gen(&coeff, zero_block, 0); });
+	cout << "  uni_hash_coeff_gen rejects 0   " << (c2 ? "OK" : "FAIL") << "\n";
 	bool d = check_packing();
 	cout << "  GaloisFieldPacking::packing    " << (d ? "OK" : "FAIL") << "\n";
 	bool d2 = check_packing_bool();
@@ -287,7 +307,7 @@ static bool run_correctness() {
 	bool e = true;
 	for (int sz : {1, 4, 17, 1024}) e &= check_vector_self_xor(sz);
 	cout << "  vector_self_xor                " << (e ? "OK" : "FAIL") << "\n";
-	return a && b && b2 && c && d && d2 && e;
+	return a && b && b2 && c && c2 && d && d2 && e;
 }
 
 int main(int /*argc*/, char ** /*argv*/) {

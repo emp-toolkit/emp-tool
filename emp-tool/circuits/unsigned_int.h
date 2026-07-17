@@ -98,13 +98,13 @@ public:
     // --- shifts / rotates by a PUBLIC constant amount (pure wiring, no gates).
     //     Shift amount must be >= 0; logical (zero-fill) for both directions. ---
     UInt_T operator<<(int s) const {
-        if (s < 0) error("UInt_T::operator<<: shift amount must be >= 0");
+        expecting(s >= 0, "UInt_T::operator<<: shift amount must be >= 0");
         UInt_T r = blank_(); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < n_(); ++i) r.w[i] = (i >= s) ? w[i - s] : z;
         return r;
     }
     UInt_T operator>>(int s) const {
-        if (s < 0) error("UInt_T::operator>>: shift amount must be >= 0");
+        expecting(s >= 0, "UInt_T::operator>>: shift amount must be >= 0");
         UInt_T r = blank_(); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < n_(); ++i) r.w[i] = (i + s < n_()) ? w[i + s] : z;
         return r;
@@ -247,10 +247,11 @@ public:
 private:
     Ctx* ctx_ = nullptr;
     int n_() const { return (int)w.size(); }
-    static void validate_width_(int width) { if (width < 1) error("UInt_T: runtime width must be >= 1"); }
+    static void validate_width_(int width) { expecting(width >= 1, "UInt_T: runtime width must be >= 1"); }
     UInt_T blank_() const { UInt_T r(*ctx_); if constexpr (N == 0) r.w.resize(w.size()); return r; }
     void same_width_(const UInt_T& o) const {
-        if constexpr (N == 0) if (w.size() != o.w.size()) error("UInt_T: operands have different runtime widths");
+        if constexpr (N == 0)
+            expecting(w.size() == o.w.size(), "UInt_T: operands have different runtime widths");
     }
 };
 

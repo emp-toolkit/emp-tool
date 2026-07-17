@@ -72,7 +72,8 @@ private:
 	static constexpr uint32_t kPoint = 5;
 
 	RO& frame(uint32_t type, const void* p, size_t n) {
-		assert(n <= 0xFFFFFFFFull && "RO::absorb: field length exceeds 2^32-1");
+		expecting(n <= 0xFFFFFFFFull,
+		          "RO::absorb: field length exceeds 2^32-1");
 		uint32_t len = (uint32_t)n;
 		size_t off = buf_.size();
 		buf_.resize(off + 2 * sizeof(uint32_t) + n);

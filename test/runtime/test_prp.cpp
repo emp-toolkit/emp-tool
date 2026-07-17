@@ -16,10 +16,13 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
@@ -30,6 +33,20 @@ using clk = chrono::high_resolution_clock;
 
 static block bytes_to_block(const uint8_t b[16]) {
 	return _mm_loadu_si128(reinterpret_cast<const __m128i *>(b));
+}
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, STDERR_FILENO);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
 
 static void openssl_aes128_ecb(const uint8_t key[16], const uint8_t *in,
@@ -160,6 +177,14 @@ static bool check_re_key_idempotent() {
 	return ok;
 }
 
+static bool check_invalid_arguments_rejected() {
+	PRP p;
+	alignas(block) uint8_t storage[sizeof(block) + 1] = {};
+	block *unaligned = reinterpret_cast<block *>(storage + 1);
+	return dies([&] { p.permute_block(unaligned, -1); })
+	    && dies([&] { p.permute_block(unaligned, 1); });
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -167,6 +192,10 @@ static bool run_correctness() {
 	ok &= check_constructors_agree();
 	ok &= check_zero_key_matches_default_ctor();
 	ok &= check_re_key_idempotent();
+	bool rejected = check_invalid_arguments_rejected();
+	cout << "  [invalid arguments rejected]             "
+	     << (rejected ? "OK" : "FAIL") << "\n";
+	ok &= rejected;
 	return ok;
 }
 

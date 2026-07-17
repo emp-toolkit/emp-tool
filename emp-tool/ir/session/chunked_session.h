@@ -65,7 +65,7 @@ public:
   public:
     template <WireValue V>
     V add(int owner, const typename V::clear_t& clear) {
-      if (finished_) error("ChunkedSession::input_batch: add() after finish()");
+      expecting(!finished_, "ChunkedSession::input_batch: add() after finish()");
       static_assert(std::same_as<typename V::context_type, ctx_t>,
           "ChunkedSession::input_batch add<V>: V must be a value over this session's ctx_t");
       const auto eb = V::encode(clear);
@@ -77,16 +77,17 @@ public:
       return from_ids_<V>(sess_->ctx_, ids);
     }
     void finish() {
-      if (finished_) error("ChunkedSession::input_batch: finish() called twice");
+      expecting(!finished_,
+                "ChunkedSession::input_batch: finish() called twice");
       finished_ = true;
       sess_->self().batch_authenticate_into_(owners_, bits_, ids_);
     }
     // Reserved input ids that were never authenticated would be stale wires; a
     // batch built but dropped without finish() is a usage error, not silent.
     ~InputBatch() {
-      if (!finished_ && !owners_.empty())
-        error("ChunkedSession::input_batch: destroyed without finish() — "
-              "inputs were reserved but never authenticated");
+      expecting(finished_ || owners_.empty(),
+                "ChunkedSession::input_batch: destroyed without finish() — "
+                "inputs were reserved but never authenticated");
     }
   private:
     friend class ChunkedSession;
@@ -145,8 +146,8 @@ public:
       const typename ArgVs::template rebind<ctx_t>&... args) {
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
-    if ((uint32_t)in_ids.size() != c.program().num_inputs)
-      error("ChunkedSession::run: total argument width != circuit input count");
+    expecting((uint32_t)in_ids.size() == c.program().num_inputs,
+              "ChunkedSession::run: total argument width != circuit input count");
     return run_program_<typename RetV::template rebind<ctx_t>>(c.program(), in_ids);
   }
 
@@ -157,10 +158,10 @@ public:
         "ChunkedSession::run_artifact<RetV>: RetV must be a value over this session's ctx_t");
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
-    if ((uint32_t)in_ids.size() != prog.num_inputs)
-      error("ChunkedSession::run_artifact: total argument width != program num_inputs");
-    if ((uint32_t)RetV::width() != prog.outputs.size())
-      error("ChunkedSession::run_artifact: RetV width != program output count");
+    expecting((uint32_t)in_ids.size() == prog.num_inputs,
+              "ChunkedSession::run_artifact: total argument width != program num_inputs");
+    expecting((uint32_t)RetV::width() == prog.outputs.size(),
+              "ChunkedSession::run_artifact: RetV width != program output count");
     return run_program_<RetV>(prog, in_ids);
   }
 
@@ -179,12 +180,11 @@ protected:
   }
   template <class V>
   std::vector<uint32_t> value_ids_(const V& v) const {
-#if EMP_CONTEXT_CHECKS
     // ag2pc and agmpc both alias ChunkRecorderCtx, so the compile-time ctx_t check
-    // cannot tell two live sessions apart — reject a value bound to a different one.
-    if (v.context() != &ctx_)
-      error("ChunkedSession: value is bound to a different session's context");
-#endif
+    // cannot tell two live sessions apart. This is a session-boundary check, not a
+    // gate-path check, so keep the single pointer comparison in every build.
+    expecting(v.context() == &ctx_,
+              "ChunkedSession: value is bound to a different session's context");
     std::vector<typename ctx_t::Wire> wb((std::size_t)V::width());
     v.pack_wires(wb.data());
     std::vector<uint32_t> ids(wb.size());
@@ -203,8 +203,8 @@ protected:
         "ChunkedSession::run: argument must be a value over this session's ctx_t");
     std::vector<uint32_t> ids = value_ids_(a);
     for (uint32_t id : ids)
-      if (!self().is_materialized_(id))
-        error("ChunkedSession::run: argument is unflushed — checkpoint it first");
+      expecting(self().is_materialized_(id),
+                "ChunkedSession::run: argument is unflushed — checkpoint it first");
     dst.insert(dst.end(), ids.begin(), ids.end());
   }
 
@@ -224,8 +224,8 @@ protected:
   // chunk. If no keep id is pending, drop the chunk without running.
   void flush_(const std::vector<uint32_t>& keep_ids) {
     for (uint32_t id : keep_ids)
-      if (!ctx_.is_pending(id) && !self().is_materialized_(id))
-        error("ChunkedSession: keep/reveal wire is stale");
+      expecting(ctx_.is_pending(id) || self().is_materialized_(id),
+                "ChunkedSession: keep/reveal wire is stale");
 
     bool any_pending = false;
     for (uint32_t id : keep_ids) if (ctx_.is_pending(id)) { any_pending = true; break; }
@@ -234,8 +234,8 @@ protected:
     session::FlushPlan plan = session::plan_flush(
         ctx_.chunk_gates(), keep_ids,
         [this](uint32_t id) { return self().is_materialized_(id); });
-    if (!plan.ok)
-      error("ChunkedSession::flush: gate operand has no carried state (stale wire)");
+    expecting(plan.ok,
+              "ChunkedSession::flush: gate operand has no carried state (stale wire)");
 
     self().run_program_into_(plan.prog, plan.input_ids, plan.output_ids);
     count_ands_(plan.prog);

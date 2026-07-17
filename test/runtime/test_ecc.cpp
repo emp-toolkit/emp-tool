@@ -1,6 +1,7 @@
 #include "emp-tool/emp-tool.h"
 #include <fcntl.h>
 #include <iostream>
+#include <limits>
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 #include <openssl/obj_mac.h>
@@ -36,8 +37,9 @@ public:
 		out_.insert(out_.end(), p, p + nbyte);
 	}
 	void recv_data_internal(void *data, int64_t nbyte) override {
-		if (off_ + (size_t)nbyte > in_.size())
-			error("MemoryIO: read past input");
+		expecting(nbyte >= 0 && off_ <= in_.size() &&
+		              static_cast<size_t>(nbyte) <= in_.size() - off_,
+		          "MemoryIO: read past input");
 		std::memcpy(data, in_.data() + off_, (size_t)nbyte);
 		off_ += (size_t)nbyte;
 	}
@@ -48,6 +50,12 @@ public:
 int main() {
 	bool ok = true;
 	ECGroup G;
+	bool unsupported_curve_rejected = dies([] {
+		ECGroup unsupported(NID_secp224r1);
+	});
+	cout << "unsupported EC curve rejected: " << unsupported_curve_rejected << endl;
+	ok = ok && unsupported_curve_rejected;
+
 	Scalar ia = G.rand_scalar();
 	Scalar ib = G.rand_scalar();
 	Scalar ic = G.rand_scalar();
@@ -90,6 +98,38 @@ int main() {
 		Point p;
 		bool rejected = dies([&] { io.recv_pt(&G, &p); });
 		cout << "recv_pt oversized length rejected: " << rejected << endl;
+		ok = ok && rejected;
+	}
+
+	// Signed public counts must fail before counter updates, multiplication,
+	// pointer arithmetic, or conversion to an unsigned library size.
+	{
+		MemoryIO io(std::vector<unsigned char>{});
+		char byte = 0;
+		block blk = zero_block;
+		bool bit = false;
+		bool rejected =
+			dies([&] { io.send_data(&byte, -1); }) &&
+			dies([&] { io.recv_data(&byte, -1); }) &&
+			dies([&] { io.send_block(&blk, -1); }) &&
+			dies([&] { io.recv_block(&blk, -1); }) &&
+			dies([&] { io.send_block(
+				&blk, std::numeric_limits<int64_t>::max()); }) &&
+			dies([&] { io.recv_block(
+				&blk, std::numeric_limits<int64_t>::max()); }) &&
+			dies([&] { io.send_bool(&bit, -1); }) &&
+			dies([&] { io.recv_bool(&bit, -1); }) &&
+			dies([&] { io.send_pt(nullptr, -1); }) &&
+			dies([&] { io.recv_pt(&G, nullptr, -1); }) &&
+			dies([&] {
+				io.send_counter = std::numeric_limits<uint64_t>::max();
+				io.send_data(&byte, 1);
+			}) &&
+			dies([&] {
+				io.recv_counter = std::numeric_limits<uint64_t>::max();
+				io.recv_data(&byte, 1);
+			});
+		cout << "IO negative/overflow counts rejected: " << rejected << endl;
 		ok = ok && rejected;
 	}
 

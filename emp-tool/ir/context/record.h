@@ -24,16 +24,19 @@ struct RecordCtx {
     int64_t c0 = -1, c1 = -1;   // dedup the two constant wires
     bool inputs_closed = false; // flips once any gate is emitted (see alloc_)
 
-    uint32_t alloc_() { inputs_closed = true; if (next_id == UINT32_MAX) error("RecordCtx: wire id overflow"); return next_id++; }
+    uint32_t alloc_() { inputs_closed = true; expecting(next_id != UINT32_MAX, "RecordCtx: wire id overflow"); return next_id++; }
     Wire external_input(size_t n) {
         // Contract: all inputs are reserved before any gate, so inputs occupy
         // wires [0, num_inputs). A late external_input would interleave input ids
         // with gate ids and corrupt replay. Always enforced (cheap, record-path
         // only) so corruption can't slip through a release build.
-        if (inputs_closed) error("RecordCtx::external_input: called after a gate was emitted");
-        if (n == 0) error("RecordCtx::external_input: zero-width argument");
-        if ((uint64_t)next_id + n > UINT32_MAX) error("RecordCtx::external_input: wire id overflow");
-        if ((uint64_t)num_inputs + n > UINT32_MAX) error("RecordCtx::external_input: num_inputs overflow");
+        expecting(!inputs_closed,
+                  "RecordCtx::external_input: called after a gate was emitted");
+        expecting(n != 0, "RecordCtx::external_input: zero-width argument");
+        expecting(n <= static_cast<size_t>(UINT32_MAX - next_id),
+                  "RecordCtx::external_input: wire id overflow");
+        expecting(n <= static_cast<size_t>(UINT32_MAX - num_inputs),
+                  "RecordCtx::external_input: num_inputs overflow");
         Wire base = next_id; next_id += (uint32_t)n; num_inputs += (uint32_t)n; return base;
     }
 

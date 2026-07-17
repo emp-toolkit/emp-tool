@@ -91,13 +91,16 @@ class PRG { public:
 
 	// `data` must be block-aligned (16-byte). Use random_data_unaligned otherwise.
 	void random_data(void *data, int64_t nbytes) {
-		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
-		       "random_data requires 16-byte aligned data; use random_data_unaligned");
+		expecting(nbytes >= 0, "PRG::random_data: negative byte count");
+		if (nbytes == 0) return;
+		expecting(((uintptr_t)data & (alignof(block) - 1)) == 0,
+		          "PRG::random_data: data must be 16-byte aligned; use random_data_unaligned");
 		random_block((block *)data, nbytes/16);
 		if (nbytes % 16 != 0) {
 			block extra;
 			random_block(&extra, 1);
-			memcpy((nbytes/16*16)+(char *) data, &extra, nbytes%16);
+			memcpy((nbytes/16*16)+(char *) data, &extra,
+			       static_cast<size_t>(nbytes % 16));
 		}
 	}
 
@@ -105,7 +108,8 @@ class PRG { public:
 	// consuming a full byte for one bit, an 8x cut in AES work. Inner unpack
 	// uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
 	void random_bool(bool * data, int64_t length) {
-		if (length <= 0) return;
+		expecting(length >= 0, "PRG::random_bool: negative bit count");
+		if (length == 0) return;
 		constexpr int CHUNK_B = 16;  // 16 blocks = 2048 bits per pass
 		block buf[CHUNK_B];
 		int64_t produced = 0;
@@ -135,7 +139,9 @@ class PRG { public:
 	}
 
 	void random_data_unaligned(void *data, int64_t nbytes) {
-		if (nbytes <= 0) return;
+		expecting(nbytes >= 0,
+		          "PRG::random_data_unaligned: negative byte count");
+		if (nbytes == 0) return;
 		// Small-buffer fast path. Anything that fits in two blocks is
 		// filled with the minimum number of whole AES blocks and copied
 		// without an alignment dance. This also covers every case where
@@ -147,25 +153,25 @@ class PRG { public:
 			random_block(tmp,
 			             (nbytes + (int64_t)sizeof(block) - 1) /
 			             (int64_t)sizeof(block));
-			memcpy(data, tmp, nbytes);
+			memcpy(data, tmp, static_cast<size_t>(nbytes));
 			return;
 		}
 
 		// Aligned bulk path. nbytes > 32 here, so std::align is
 		// guaranteed to succeed.
-		size_t size = nbytes;
+		size_t size = static_cast<size_t>(nbytes);
 		void *aligned_data = data;
 		std::align(sizeof(block), sizeof(block), aligned_data, size);
 		// round down to a whole number of blocks
 		size = sizeof(block) * (size / sizeof(block));
-		int64_t chopped = nbytes - size;
+		int64_t chopped = nbytes - static_cast<int64_t>(size);
 
 		// temporarily fill the bulk of the buffer with random data
 		random_data(aligned_data, nbytes - chopped);
 
 		// move the random data to the start of the buffer
 		// (using memmove, not memcpy, because of memory overlap)
-		memmove(data, aligned_data, nbytes - chopped);
+		memmove(data, aligned_data, static_cast<size_t>(nbytes - chopped));
 
 		int64_t remaining_bytes = chopped;
 		char* end = (char*)data + nbytes;
@@ -180,12 +186,15 @@ class PRG { public:
 			block tmp;
 			random_block(&tmp, 1);
 			int64_t bytes_to_copy = std::min(remaining_bytes, (int64_t)sizeof(block));
-			memcpy(end - remaining_bytes, &tmp, bytes_to_copy);
+			memcpy(end - remaining_bytes, &tmp,
+			       static_cast<size_t>(bytes_to_copy));
 			remaining_bytes -= bytes_to_copy;
 		}
 	}
 
 	void random_block(block * data, int64_t nblocks=1) {
+		expecting(nblocks >= 0, "PRG::random_block: negative block count");
+		if (nblocks == 0) return;
 		// Caller must pass block-aligned `data` (16 bytes). random_data and
 		// random_data_unaligned wrap unaligned inputs.
 		//
@@ -194,8 +203,8 @@ class PRG { public:
 		// blocks; ParaCtrEnc builds counter plaintexts in-register and
 		// writes only the encrypted output to `data` — no intermediate
 		// counter-write pass.
-		assert(((uintptr_t)data & (alignof(block) - 1)) == 0 &&
-		       "random_block requires 16-byte aligned data");
+		expecting(((uintptr_t)data & (alignof(block) - 1)) == 0,
+		          "PRG::random_block: data must be 16-byte aligned");
 		while (nblocks > 0) {
 			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
 			detail::ParaCtrEnc(data, (int64_t)counter, &aes, n);

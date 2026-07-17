@@ -45,18 +45,20 @@ const std::vector<std::string>& circuit_asset_dirs() {
 }
 
 std::string find_circuit_asset(const std::string& filename) {
-	if (filename.empty())
-		error("find_circuit_asset: empty filename");
+	expecting(!filename.empty(), "find_circuit_asset: empty filename");
 	for (const auto& dir : circuit_asset_dirs()) {
 		std::string path = join_path(dir, filename);
 		if (file_exists(path)) return path;
 	}
 
-	std::string msg = "find_circuit_asset: could not find " + filename +
-	                  ". Set EMP_CIRCUIT_DIR or install emp-tool circuit assets. Searched:";
-	for (const auto& dir : circuit_asset_dirs())
-		msg += "\n  " + join_path(dir, filename);
-	error(msg.c_str());
+	expecting(false, [&] {
+		std::string msg = "find_circuit_asset: could not find " + filename +
+		                  ". Set EMP_CIRCUIT_DIR or install emp-tool circuit assets. Searched:";
+		for (const auto& dir : circuit_asset_dirs())
+			msg += "\n  " + join_path(dir, filename);
+		return msg;
+	});
+	return {};  // unreachable; keeps the value-returning contract explicit
 }
 
 }  // namespace circuit

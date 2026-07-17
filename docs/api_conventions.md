@@ -35,6 +35,48 @@ Consequences for code and tests:
   exception — fork, silence stderr, expect nonzero exit (see
   `test/ir/test_boolean_program.cpp`'s `dies()` helper).
 
+## Expected-condition branches
+
+Use `expecting(condition, message)` for a cheap invariant or API precondition
+that is overwhelmingly true during correct execution:
+
+```cpp
+expecting(len >= 0, "negative length");
+```
+
+`expecting` evaluates its condition exactly once and calls `error(message)` with
+the caller's file and line if it is false. On GCC/Clang it is force-inlined and
+tells the optimizer that `true` is the expected result, which can improve code
+layout and initial branch prediction without adding a helper call. The CPU's
+dynamic branch predictor still controls steady-state prediction. Compile-time
+conditions can still be folded away.
+
+Do not use `expecting` for ordinary data-dependent control flow where both
+outcomes are normal. It is the shared emp-tool/downstream spelling for contract
+checks that lead to `error()`.
+
+Operational results use the same form: store the result when needed, then state
+its successful condition with `expecting`. For a message that requires dynamic
+formatting, pass a callable; it is invoked only on failure:
+
+```cpp
+FILE *f = std::fopen(path, "rb");
+expecting(f != nullptr,
+          [&] { return std::string("cannot open ") + path; });
+```
+
+Use `expecting(false, message)` for an unconditional fatal/default case. Keep
+direct `error()` calls inside the failure primitive itself only; it remains a
+public compatibility sink for downstream code while new call sites consistently
+express the expected condition.
+
+Replacing `assert(condition)` with `expecting(condition, message)` makes the
+check survive `NDEBUG`. This is appropriate when violating the condition would
+permit undefined behavior or silent state corruption and the check is cheap. It
+is not a zero-cost substitution for a Release-build assertion, because a
+Release assertion is removed entirely. Compile-time contracts remain
+`static_assert`.
+
 ## Bit buffer contract
 
 EMP uses two bit-buffer shapes.
@@ -84,6 +126,18 @@ for (int64_t i = 0; i < len; ++i) {
     // ...
 }
 ```
+
+A negative length or count is always an API error, never an alternate spelling
+of zero. Reject it with `error()` at the public boundary, before updating an
+unsigned counter, multiplying by an element width, doing pointer arithmetic, or
+passing the value to an API whose size parameter is unsigned. Only after that
+check may a signed length be converted to `size_t`. Zero remains a valid no-op
+for buffer-fill, hash-absorb, and transport operations.
+
+When converting an element count to bytes, check multiplication against
+`INT64_MAX` before multiplying. This preserves the signed-length invariant all
+the way down to the byte-oriented API instead of overflowing first and trying
+to validate the result afterward.
 
 Template non-type parameters stay as `int` / `size_t` when they are
 compile-time bounded sizes (`int N`, `int K`, `size_t Width`, etc.).

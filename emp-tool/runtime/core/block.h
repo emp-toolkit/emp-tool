@@ -1,6 +1,8 @@
 #ifndef EMP_UTIL_BLOCK_H__
 #define EMP_UTIL_BLOCK_H__
 
+#include "emp-tool/runtime/core/error.h"
+
 #ifdef __x86_64__
 #include <immintrin.h>
 #elif __aarch64__

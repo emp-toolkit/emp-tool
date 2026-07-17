@@ -59,7 +59,8 @@ inline void sort(V* a, std::size_t n, bool ascending = true) {
 // collide with std::sort(first, last) via ADL.)
 template <class K, class P>
 inline void sort_by_key(std::vector<K>& keys, std::vector<P>& data, bool ascending = true) {
-    if (keys.size() != data.size()) error("sort_by_key: keys and data must have equal length");
+    expecting(keys.size() == data.size(),
+              "sort_by_key: keys and data must have equal length");
     batcher_network(keys.size(),
                     [&](std::size_t i, std::size_t j) { compare_swap(keys[i], keys[j], data[i], data[j], ascending); });
 }

@@ -47,10 +47,10 @@ inline void execute_program(const BooleanProgram& p,
                             Wire* outputs, size_t num_out,
                             CircuitScratch<Wire>& scratch,
                             Dispatcher&& dispatch) {
-	if (num_in != p.num_inputs)
-		error("execute_program: input count != program num_inputs");
-	if (num_out != p.outputs.size())
-		error("execute_program: output count != program outputs");
+	expecting(num_in == p.num_inputs,
+	          "execute_program: input count != program num_inputs");
+	expecting(num_out == p.outputs.size(),
+	          "execute_program: output count != program outputs");
 
 	scratch.ensure(p.num_wires);
 	Wire* w = scratch.wires.data();

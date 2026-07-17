@@ -19,15 +19,32 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, 2);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 // ---------- example ----------
 
@@ -172,6 +189,24 @@ static bool check_cmpBlock() {
 	return true;
 }
 
+static bool check_invalid_ranges_rejected() {
+	block a = zero_block, b = zero_block, out = zero_block;
+	bool bits[1] = {false};
+	uint8_t packed[1] = {0};
+	return dies([&] { (void)getBit(a, -1); })
+	    && dies([&] { (void)getBit(a, 128); })
+	    && dies([&] { (void)set_bit(a, -1); })
+	    && dies([&] { (void)set_bit(a, 128); })
+	    && dies([&] { xorBlocks_arr(&out, &a, &b, -1); })
+	    && dies([&] { xorBlocksTo_arr(&out, &a, -1); })
+	    && dies([&] { xorBlocks_arr(&out, &a, b, -1); })
+	    && dies([&] { (void)cmpBlock(&a, &b, -1); })
+	    && dies([&] { bools_to_bits(packed, bits, -1); })
+	    && dies([&] { bits_to_bools(bits, packed, -1); })
+	    && dies([&] { sse_trans(packed, packed, 7, 8); })
+	    && dies([&] { sse_trans_n128(&out, &a, 64); });
+}
+
 static bool check_sse_trans_roundtrip() {
 	PRG prg;
 	struct Shape { uint64_t r, c; };
@@ -287,6 +322,7 @@ static bool run_correctness() {
 		{"sigma linear + formula",      check_sigma_linear_and_formula},
 		{"xorBlocks_arr / xorBlocksTo", check_xorBlocks_arr},
 		{"cmpBlock",                    check_cmpBlock},
+		{"invalid ranges rejected",     check_invalid_ranges_rejected},
 		{"sse_trans round-trip",        check_sse_trans_roundtrip},
 		{"sse_trans_n128 parity",       check_sse_trans_n128_parity},
 		{"bytes<->bits32 round-trip",   check_bits_bytes_roundtrip},

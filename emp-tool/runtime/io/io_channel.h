@@ -5,11 +5,11 @@
 #include "emp-tool/runtime/crypto/hash.h"
 #include "emp-tool/runtime/crypto/ec.h"
 #include <atomic>
-#include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -126,7 +126,7 @@ public:
 	// assert: calling twice is a bug.
 	template <HashOption opt = EMP_FS_HASH_DEFAULT>
 	void enable_fs(bool send_first) {
-		assert(!fs_enabled() && "enable_fs called twice");
+		expecting(!fs_enabled(), "IOChannel::enable_fs: called twice");
 		fs_send_first_ = send_first;
 		fs_.template emplace<FsStateT<opt>>();
 	}
@@ -141,13 +141,13 @@ public:
 	// have crossed in that direction since enable_fs. Non-destructive;
 	// the running transcripts continue absorbing after the snapshot.
 	block get_send_digest() {
-		assert(fs_enabled() && "get_send_digest: enable_fs first");
+		expecting(fs_enabled(), "IOChannel::get_send_digest: enable_fs first");
 		return fs_digest_([](auto& st, char* buf) {
 			st.send.digest(buf, /*reset_after=*/false);
 		});
 	}
 	block get_recv_digest() {
-		assert(fs_enabled() && "get_recv_digest: enable_fs first");
+		expecting(fs_enabled(), "IOChannel::get_recv_digest: enable_fs first");
 		return fs_digest_([](auto& st, char* buf) {
 			st.recv.digest(buf, /*reset_after=*/false);
 		});
@@ -161,7 +161,7 @@ public:
 	// Output: H(d_AB ‖ d_BA)[0..16). Send-first side concatenates
 	// my_send first, the other side concatenates my_recv first.
 	block get_digest() {
-		assert(fs_enabled() && "get_digest: enable_fs first");
+		expecting(fs_enabled(), "IOChannel::get_digest: enable_fs first");
 		block out = zero_block;   // asserts guard FS-off; keep release defined
 		std::visit([&](auto& st) {
 			using St = std::decay_t<decltype(st)>;
@@ -179,7 +179,11 @@ public:
 	}
 
 	void send_data(const void *data, int64_t nbyte) {
-		send_counter += nbyte;
+		expecting(nbyte >= 0, "IOChannel::send_data: negative byte count");
+		const uint64_t bytes = static_cast<uint64_t>(nbyte);
+		expecting(bytes <= std::numeric_limits<uint64_t>::max() - send_counter,
+		          "IOChannel::send_data: send counter overflow");
+		send_counter += bytes;
 		if (last_dir_ != Dir::SEND) { ++rounds; last_dir_ = Dir::SEND; }
 		std::visit([&](auto& st) {
 			using St = std::decay_t<decltype(st)>;
@@ -190,7 +194,11 @@ public:
 	}
 
 	void recv_data(void *data, int64_t nbyte) {
-		recv_counter += nbyte;
+		expecting(nbyte >= 0, "IOChannel::recv_data: negative byte count");
+		const uint64_t bytes = static_cast<uint64_t>(nbyte);
+		expecting(bytes <= std::numeric_limits<uint64_t>::max() - recv_counter,
+		          "IOChannel::recv_data: receive counter overflow");
+		recv_counter += bytes;
 		if (last_dir_ != Dir::RECV) { ++rounds; last_dir_ = Dir::RECV; }
 		recv_data_internal(data, nbyte);
 		std::visit([&](auto& st) {
@@ -201,36 +209,47 @@ public:
 	}
 
 	void send_block(const block *data, int64_t nblock) {
-		send_data(data, nblock * sizeof(block));
+		expecting(nblock >= 0, "IOChannel::send_block: negative block count");
+		expecting(nblock <= std::numeric_limits<int64_t>::max() /
+		                 static_cast<int64_t>(sizeof(block)),
+		          "IOChannel::send_block: byte count overflow");
+		send_data(data, nblock * static_cast<int64_t>(sizeof(block)));
 	}
 
 	void recv_block(block *data, int64_t nblock) {
-		recv_data(data, nblock * sizeof(block));
+		expecting(nblock >= 0, "IOChannel::recv_block: negative block count");
+		expecting(nblock <= std::numeric_limits<int64_t>::max() /
+		                 static_cast<int64_t>(sizeof(block)),
+		          "IOChannel::recv_block: byte count overflow");
+		recv_data(data, nblock * static_cast<int64_t>(sizeof(block)));
 	}
 
 	void send_pt(Point *A, int64_t num_pts = 1) {
+		expecting(num_pts >= 0, "IOChannel::send_pt: negative point count");
 		for (int64_t i = 0; i < num_pts; ++i) {
 			const size_t len = A[i].size();
-			assert(len <= MAX_POINT_BYTES);
+			expecting(len <= MAX_POINT_BYTES,
+			          "IOChannel::send_pt: point length exceeds MAX_POINT_BYTES");
 			const uint32_t len_wire = static_cast<uint32_t>(len);
 			A[i].group()->resize_scratch(len);
 			unsigned char *tmp = A[i].group()->scratch();
 			send_data(&len_wire, sizeof(len_wire));
 			A[i].to_bin(tmp, len);
-			send_data(tmp, len);
+			send_data(tmp, static_cast<int64_t>(len));
 		}
 	}
 
 	void recv_pt(ECGroup *g, Point *A, int64_t num_pts = 1) {
+		expecting(num_pts >= 0, "IOChannel::recv_pt: negative point count");
 		for (int64_t i = 0; i < num_pts; ++i) {
 			uint32_t len_wire = 0;
 			recv_data(&len_wire, sizeof(len_wire));
-			if (len_wire > MAX_POINT_BYTES)
-				error("IOChannel::recv_pt: point length exceeds MAX_POINT_BYTES");
+			expecting(len_wire <= MAX_POINT_BYTES,
+			          "IOChannel::recv_pt: point length exceeds MAX_POINT_BYTES");
 			const size_t len = len_wire;
 			g->resize_scratch(len);
 			unsigned char *tmp = g->scratch();
-			recv_data(tmp, len);
+			recv_data(tmp, static_cast<int64_t>(len));
 			A[i].from_bin(g, tmp, len);
 		}
 	}
@@ -249,7 +268,8 @@ public:
 	// written before each pack. Whole-byte bytes get fully overwritten by
 	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
 	void send_bool(const bool *data, int64_t length) {
-		if (length <= 0) return;
+		expecting(length >= 0, "IOChannel::send_bool: negative bit count");
+		if (length == 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
 			int64_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
@@ -263,7 +283,8 @@ public:
 	}
 
 	void recv_bool(bool *data, int64_t length) {
-		if (length <= 0) return;
+		expecting(length >= 0, "IOChannel::recv_bool: negative bit count");
+		if (length == 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
 		while (length > 0) {
 			int64_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;

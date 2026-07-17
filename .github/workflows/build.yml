@@ -30,10 +30,6 @@ jobs:
   # detect_leaks=0 keeps the focus on memory corruption / UB rather than
   # exit-time leaks in test mains; UBSan halt_on_error=1 turns a detected
   # violation into a non-zero exit (default is print-and-continue).
-  # -fno-sanitize=alignment: the SSE bit-transpose (block.hpp sse_trans) does
-  # deliberate unaligned 2-byte stores into byte-addressed output; well-defined
-  # on x86-64/arm64 and only reachable from the test's sub-16 dimensions (real
-  # callers transpose 128-row blocks, which are aligned). Every other check stays on.
   sanitize:
     name: ASan + UBSan (Ubuntu)
     runs-on: ubuntu-latest
@@ -45,8 +41,8 @@ jobs:
           cmake -B build-san \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DEMP_TOOL_NATIVE_ARCH=OFF \
-            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize=alignment -fno-omit-frame-pointer" \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize=alignment -fno-omit-frame-pointer" \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
       - name: Build

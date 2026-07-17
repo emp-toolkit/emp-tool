@@ -28,12 +28,13 @@ struct DigestCtx {
     // nondeterministic replay. Mixes num_inputs (input reservation is part of the
     // digest). Call before any gate.
     Wire external_input(size_t n) {
-        if (n == 0) error("DigestCtx::external_input: zero-width argument");
-        if ((uint64_t)next_id + n > UINT32_MAX) error("DigestCtx::external_input: wire id overflow");
+        expecting(n != 0, "DigestCtx::external_input: zero-width argument");
+        expecting(n <= static_cast<size_t>(UINT32_MAX - next_id),
+                  "DigestCtx::external_input: wire id overflow");
         Wire base = next_id; next_id += (uint32_t)n; mix_(0xE); mix_((uint64_t)n); return base;
     }
     Wire emit_(uint64_t op, uint64_t a, uint64_t b) {
-        if ((uint64_t)next_id + 1 > UINT32_MAX) error("DigestCtx: wire id overflow");
+        expecting(next_id != UINT32_MAX, "DigestCtx: wire id overflow");
         uint32_t o = next_id++;
         mix_(op); mix_(a); mix_(b); mix_(o);
         return o;

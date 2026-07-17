@@ -228,7 +228,7 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b) {
 }
 
 inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz) {
-	assert(sz > 0);
+	expecting(sz > 0, "uni_hash_coeff_gen: size must be positive");
 	coeff[0] = seed;
 	if(sz == 1) return;
 

@@ -61,14 +61,15 @@ inline const std::vector<typename Ctx::Wire>& scheduled_execute_program(
     ProgramWorkspace<typename Ctx::Wire>& ws) {
     using W = typename Ctx::Wire;
     circuit::require_dense(p, "scheduled_execute_program");
-    if (inputs.size() != p.num_inputs)
-        error("scheduled_execute_program: input count != program num_inputs");
-    if (plan.num_inputs != p.num_inputs || plan.num_wires != p.num_wires ||
-        plan.num_gates != p.gates.size())
-        error("scheduled_execute_program: plan does not match program (stale plan?)");
+    expecting(inputs.size() == p.num_inputs,
+              "scheduled_execute_program: input count != program num_inputs");
+    expecting(plan.num_inputs == p.num_inputs &&
+                  plan.num_wires == p.num_wires &&
+                  plan.num_gates == p.gates.size(),
+              "scheduled_execute_program: plan does not match program (stale plan?)");
 #ifndef NDEBUG
-    if (plan.digest != digest_program(p))
-        error("scheduled_execute_program: plan digest mismatch (stale plan for a different program)");
+    expecting(plan.digest == digest_program(p),
+              "scheduled_execute_program: plan digest mismatch (stale plan for a different program)");
 #endif
 
     ws.scratch.ensure(p.num_wires);

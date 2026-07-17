@@ -139,13 +139,13 @@ public:
         circuit::validate_artifact(artifact_);
         const circuit::CircuitSignature& s = artifact_.signature;
         const std::array<uint32_t, sizeof...(ArgVs)> want{(uint32_t)ArgVs::width()...};
-        if (s.arg_widths.size() != sizeof...(ArgVs))
-            error("Circuit: artifact signature arity != declared value types");
+        expecting(s.arg_widths.size() == sizeof...(ArgVs),
+                  "Circuit: artifact signature arity != declared value types");
         for (std::size_t i = 0; i < want.size(); ++i)
-            if (s.arg_widths[i] != want[i])
-                error("Circuit: artifact argument width != declared value width");
-        if (s.return_width != (uint32_t)RetV::width())
-            error("Circuit: artifact return width != declared value width");
+            expecting(s.arg_widths[i] == want[i],
+                      "Circuit: artifact argument width != declared value width");
+        expecting(s.return_width == (uint32_t)RetV::width(),
+                  "Circuit: artifact return width != declared value width");
     }
 
     const circuit::BooleanProgram&   program()   const { return artifact_.program; }
@@ -271,13 +271,13 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
     const typename ArgVs::template rebind<Ctx>&... args) {
     using Wire = typename Ctx::Wire;
     const circuit::BooleanProgram& p = c.program();
-    if (c.signature().arg_widths.size() != sizeof...(ArgVs))
-        error("frontend::run: argument count != circuit arity (stale artifact?)");
+    expecting(c.signature().arg_widths.size() == sizeof...(ArgVs),
+              "frontend::run: argument count != circuit arity (stale artifact?)");
     std::vector<Wire> inputs;
     inputs.reserve(p.num_inputs);
     (detail::append_wires(inputs, args), ...);
-    if ((uint32_t)inputs.size() != p.num_inputs)
-        error("frontend::run: total argument width != circuit input count");
+    expecting((uint32_t)inputs.size() == p.num_inputs,
+              "frontend::run: total argument width != circuit input count");
     if constexpr (std::same_as<std::remove_cvref_t<Ctx>, ComposeCtx>) {
         // Composition: record one opaque instance (wiring only), don't inline.
         std::vector<Wire> out = ctx.call_unit(p, inputs.data(), inputs.size());
@@ -286,7 +286,7 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
 #if EMP_CONTEXT_CHECKS
         // Every argument must belong to the context it is being replayed on.
         { bool ok = true; ((ok = ok && args.context() == &ctx), ...);
-          if (!ok) error("frontend::run: an argument belongs to a different context"); }
+          expecting(ok, "frontend::run: an argument belongs to a different context"); }
 #endif
         ProgramWorkspace<Wire> ws;
         const std::vector<Wire>& ow =
@@ -312,7 +312,7 @@ run(F&& body, Arg0&& a0, Args&&... rest) {
 #if EMP_CONTEXT_CHECKS
         // All arguments must share the first argument's context.
         { bool ok = true; ((ok = ok && rest.context() == a0.context()), ...);
-          if (!ok) error("frontend::run: arguments belong to different contexts"); }
+          expecting(ok, "frontend::run: arguments belong to different contexts"); }
 #endif
         if constexpr (Tr::wants_ctx)
             return body(ctx, std::forward<Arg0>(a0), std::forward<Args>(rest)...);

@@ -114,13 +114,13 @@ public:
     // --- shifts by a PUBLIC constant amount (s >= 0): logical left, ARITHMETIC
     //     right (sign-extending). ---
     Int_T operator<<(int s) const {
-        if (s < 0) error("Int_T::operator<<: shift amount must be >= 0");
+        expecting(s >= 0, "Int_T::operator<<: shift amount must be >= 0");
         Int_T r = blank_(); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < n_(); ++i) r.w[i] = (i >= s) ? w[i - s] : z;
         return r;
     }
     Int_T operator>>(int s) const {                 // arithmetic: fill with sign bit
-        if (s < 0) error("Int_T::operator>>: shift amount must be >= 0");
+        expecting(s >= 0, "Int_T::operator>>: shift amount must be >= 0");
         Int_T r = blank_(); Wire sgn = w[n_() - 1];
         for (int i = 0; i < n_(); ++i) r.w[i] = (i + s < n_()) ? w[i + s] : sgn;
         return r;
@@ -202,11 +202,12 @@ public:
 private:
     Ctx* ctx_ = nullptr;
     int n_() const { return (int)w.size(); }
-    static void validate_width_(int width) { if (width < 1) error("Int_T: runtime width must be >= 1"); }
+    static void validate_width_(int width) { expecting(width >= 1, "Int_T: runtime width must be >= 1"); }
     Int_T blank_() const { Int_T r(*ctx_); if constexpr (N == 0) r.w.resize(w.size()); return r; }
     Int_T zeros_() const { Int_T r = blank_(); Wire z = ctx_->public_bit(false); for (int i = 0; i < n_(); ++i) r.w[i] = z; return r; }
     void same_width_(const Int_T& o) const {
-        if constexpr (N == 0) if (w.size() != o.w.size()) error("Int_T: operands have different runtime widths");
+        if constexpr (N == 0)
+            expecting(w.size() == o.w.size(), "Int_T: operands have different runtime widths");
     }
 };
 

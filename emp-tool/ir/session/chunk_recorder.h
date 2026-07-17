@@ -75,10 +75,10 @@ public:
     // recorder, so a second overlapping recorder would silently mutate the wrong
     // table. Make that a loud error rather than corruption. (A value must also not
     // outlive its recorder — the usual object-lifetime rule.)
-    if (g_chunk_rec != nullptr)
-      error("ChunkRecorderCtx: another chunked-session recorder is already active; "
-            "one must be destroyed before another records (use separate processes "
-            "for concurrent sessions)");
+    expecting(g_chunk_rec == nullptr,
+              "ChunkRecorderCtx: another chunked-session recorder is already active; "
+              "one must be destroyed before another records (use separate processes "
+              "for concurrent sessions)");
     rc_.reserve(1u << 16);
     rc_.push_back(0);         // id 0 = null sentinel
     next_id_ = 1;
@@ -91,9 +91,9 @@ public:
     // dtor would underflow/corrupt the wrong table. Fail loudly on the violation
     // ("values must not outlive their recorder") instead of corrupting silently.
     for (uint32_t id = 1; id < rc_.size(); ++id)
-      if (rc_[id] != 0)
-        error("ChunkRecorderCtx: destroyed while a value still holds a recorder wire "
-              "(a value outlived its recorder — RAII lifetime violation)");
+      expecting(rc_[id] == 0,
+                "ChunkRecorderCtx: destroyed while a value still holds a recorder wire "
+                "(a value outlived its recorder — RAII lifetime violation)");
 #endif
     if (g_chunk_rec == this) g_chunk_rec = nullptr;
   }
@@ -147,12 +147,14 @@ private:
   int64_t const_wire_[2] = {-1, -1};             // per-chunk Const0/Const1 dedup
 
   uint32_t alloc_id_() {
-    if (next_id_ == UINT32_MAX) error("ChunkRecorderCtx: recorder wire id overflow");
+    expecting(next_id_ != UINT32_MAX,
+              "ChunkRecorderCtx: recorder wire id overflow");
     rc_.push_back(0);                            // grow count table in lockstep with ids
     return next_id_++;
   }
   void require_allocated_(const Wire& a) const {
-    if (a >= next_id_) error("ChunkRecorderCtx: operand id was never allocated (corrupt wire)");
+    expecting(a < next_id_,
+              "ChunkRecorderCtx: operand id was never allocated (corrupt wire)");
   }
   Wire record_(const Wire& a, const Wire& b, circuit::Op op) {
     uint32_t o = alloc_id_();
@@ -168,9 +170,9 @@ private:
 // is now pinning/unpinning against a different (smaller) table.
 #if EMP_CONTEXT_CHECKS
 inline void chunk_rc_bounds_(uint32_t id) noexcept {
-  if (id >= g_chunk_rec->rc_.size())
-    error("ChunkRecorderCtx: wire id out of range for the active recorder "
-          "(a value outlived its recorder?)");
+  expecting(id < g_chunk_rec->rc_.size(),
+            "ChunkRecorderCtx: wire id out of range for the active recorder "
+            "(a value outlived its recorder?)");
 }
 #endif
 inline void chunk_pin(uint32_t id) noexcept {

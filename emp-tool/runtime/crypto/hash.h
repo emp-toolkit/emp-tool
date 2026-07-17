@@ -7,6 +7,7 @@
 #include <openssl/evp.h>
 #include <stdio.h>
 #include <cstring>
+#include <limits>
 #include <type_traits>
 
 // One Hash templated on the algorithm. Default is OpenSSL SHA-256 (production);
@@ -106,8 +107,10 @@ class HashT { public:
 			blake3_hasher_init(&st_);
 #endif
 		} else {
-			if ((st_ = EVP_MD_CTX_create()) == NULL) error("Hash function setup error!");
-			if (1 != EVP_DigestInit_ex(st_, EVP_sha256(), NULL)) error("Hash function setup error!");
+			st_ = EVP_MD_CTX_create();
+			expecting(st_ != NULL, "Hash function setup error!");
+			expecting(EVP_DigestInit_ex(st_, EVP_sha256(), NULL) == 1,
+			          "Hash function setup error!");
 		}
 	}
 	~HashT() {
@@ -117,17 +120,25 @@ class HashT { public:
 	HashT(const HashT&) = delete;
 	HashT& operator=(const HashT&) = delete;
 	void put(const void * data, int64_t nbyte) {
-		if (nbyte <= 0) return;
-		if (buf_len_ + nbyte > BUF_BYTES) flush_buf_();   // pending can't coalesce -> commit it
+		expecting(nbyte >= 0, "Hash::put: negative byte count");
+		if (nbyte == 0) return;
+		if (nbyte > BUF_BYTES - buf_len_) flush_buf_();   // pending can't coalesce -> commit it
 		if (nbyte >= BUF_BYTES) update_(data, nbyte);      // large input: straight to the algorithm
-		else { memcpy(buf_ + buf_len_, data, (size_t)nbyte); buf_len_ += (int)nbyte; }  // small: accumulate
+		else {
+			memcpy(buf_ + buf_len_, data, static_cast<size_t>(nbyte));
+			buf_len_ += static_cast<int>(nbyte);
+		}  // small: accumulate
 	}
 	// Commit any buffered bytes. Must run before every finalize; harmless to repeat.
 	void flush_buf_() {
 		if (buf_len_) { update_(buf_, buf_len_); buf_len_ = 0; }
 	}
 	void put_block(const block* blk, int64_t nblock=1){
-		put(blk, sizeof(block)*nblock);
+		expecting(nblock >= 0, "Hash::put_block: negative block count");
+		expecting(nblock <= std::numeric_limits<int64_t>::max() /
+		                 static_cast<int64_t>(sizeof(block)),
+		          "Hash::put_block: byte count overflow");
+		put(blk, static_cast<int64_t>(sizeof(block)) * nblock);
 	}
 	// reset_after = false snapshots the running hash without disturbing it, so
 	// subsequent put()s continue the same transcript (streaming Fiat-Shamir).
@@ -143,17 +154,16 @@ class HashT { public:
 		} else {
 			uint32_t len = 0;
 			if (reset_after) {
-				if (1 != EVP_DigestFinal_ex(st_, (unsigned char *)a, &len))
-					error("Hash::digest: EVP_DigestFinal_ex");
-				if (1 != EVP_DigestInit_ex(st_, EVP_sha256(), NULL))
-					error("Hash::digest: EVP_DigestInit_ex");
+				expecting(EVP_DigestFinal_ex(st_, (unsigned char *)a, &len) == 1,
+				          "Hash::digest: EVP_DigestFinal_ex");
+				expecting(EVP_DigestInit_ex(st_, EVP_sha256(), NULL) == 1,
+				          "Hash::digest: EVP_DigestInit_ex");
 			} else {
 				EVP_MD_CTX *snap = EVP_MD_CTX_create();
-				if (snap == NULL || 1 != EVP_MD_CTX_copy_ex(snap, st_)) error("Hash snapshot error!");
-				if (1 != EVP_DigestFinal_ex(snap, (unsigned char *)a, &len)) {
-					EVP_MD_CTX_destroy(snap);
-					error("Hash::digest: EVP_DigestFinal_ex (snap)");
-				}
+				expecting(snap != NULL && EVP_MD_CTX_copy_ex(snap, st_) == 1,
+				          "Hash snapshot error!");
+				expecting(EVP_DigestFinal_ex(snap, (unsigned char *)a, &len) == 1,
+				          "Hash::digest: EVP_DigestFinal_ex (snap)");
 				EVP_MD_CTX_destroy(snap);
 			}
 		}
@@ -165,15 +175,17 @@ class HashT { public:
 			blake3_hasher_reset(&st_);
 #endif
 		} else {
-			if (1 != EVP_DigestInit_ex(st_, EVP_sha256(), NULL)) error("Hash::reset: EVP_DigestInit_ex");
+			expecting(EVP_DigestInit_ex(st_, EVP_sha256(), NULL) == 1,
+			          "Hash::reset: EVP_DigestInit_ex");
 		}
 	}
 	static void hash_once(void * dgst, const void * data, int64_t nbyte) {
+		expecting(nbyte >= 0, "Hash::hash_once: negative byte count");
 		if constexpr (opt == HashOption::blake3) {
 #ifdef EMP_WITH_BLAKE3
 			thread_local blake3_hasher t;
 			blake3_hasher_init(&t);
-			blake3_hasher_update(&t, data, (size_t)nbyte);
+			blake3_hasher_update(&t, data, static_cast<size_t>(nbyte));
 			blake3_hasher_finalize(&t, (uint8_t *)dgst, DIGEST_SIZE);
 #endif
 		} else {
@@ -182,15 +194,17 @@ class HashT { public:
 			// reusing one drops that to a single EVP_DigestInit_ex.
 			struct Holder {
 				EVP_MD_CTX * c;
-				Holder() : c(EVP_MD_CTX_new()) { if (!c) error("hash_once: EVP_MD_CTX_new failed"); }
+				Holder() : c(EVP_MD_CTX_new()) {
+					expecting(c != nullptr, "hash_once: EVP_MD_CTX_new failed");
+				}
 				~Holder() { if (c) EVP_MD_CTX_free(c); }
 			};
 			thread_local Holder h;
 			uint32_t len = 0;
-			if (EVP_DigestInit_ex(h.c, EVP_sha256(), nullptr) != 1
-			    || EVP_DigestUpdate(h.c, data, nbyte) != 1
-			    || EVP_DigestFinal_ex(h.c, (unsigned char *)dgst, &len) != 1)
-				error("hash_once: EVP_Digest*");
+			expecting(EVP_DigestInit_ex(h.c, EVP_sha256(), nullptr) == 1
+			          && EVP_DigestUpdate(h.c, data, static_cast<size_t>(nbyte)) == 1
+			          && EVP_DigestFinal_ex(h.c, (unsigned char *)dgst, &len) == 1,
+			          "hash_once: EVP_Digest*");
 		}
 	}
 	#ifdef __x86_64__
@@ -203,12 +217,14 @@ class HashT { public:
 	}
 private:
 	void update_(const void * data, int64_t nbyte) {
+		// All callers validate nbyte before reaching this private boundary.
 		if constexpr (opt == HashOption::blake3) {
 #ifdef EMP_WITH_BLAKE3
-			blake3_hasher_update(&st_, data, (size_t)nbyte);
+			blake3_hasher_update(&st_, data, static_cast<size_t>(nbyte));
 #endif
 		} else {
-			if (1 != EVP_DigestUpdate(st_, data, nbyte)) error("Hash::put: EVP_DigestUpdate");
+			expecting(EVP_DigestUpdate(st_, data, static_cast<size_t>(nbyte)) == 1,
+			          "Hash::put: EVP_DigestUpdate");
 		}
 	}
 };

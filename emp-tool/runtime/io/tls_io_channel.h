@@ -126,8 +126,8 @@ class TLSIO : public IOChannel { public:
 	// defaults to mirror is_server but TLSConfig overrides if explicitly set.
 	TLSIO(const char *address, int port, const TLSConfig &cfg, bool quiet = false)
 	    : quiet(quiet) {
-		if (port < 0 || port > 65535)
-			error("TLSIO: invalid port number");
+		expecting(port >= 0 && port <= 65535,
+		          "TLSIO: invalid port number");
 		tls_detail::install_sigpipe_ignore_once();
 		is_server = (address == nullptr);
 		is_tls_server = cfg.is_tls_server;
@@ -299,8 +299,8 @@ class TLSIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "send_data");
 #endif
-		if (len < 0) error("TLSIO::send_data: negative len");
-		if (len + (int64_t)send_ptr <= (int64_t)NETWORK_STAGING_BUFFER_SIZE) {
+		expecting(len >= 0, "TLSIO::send_data: negative len");
+		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
 		} else {
@@ -314,7 +314,7 @@ class TLSIO : public IOChannel { public:
 #ifndef NDEBUG
 		touch_guard _g(_in_use, "recv_data");
 #endif
-		if (len < 0) error("TLSIO::recv_data: negative len");
+		expecting(len >= 0, "TLSIO::recv_data: negative len");
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. SSL_read goes straight to the socket BIO, no implicit
