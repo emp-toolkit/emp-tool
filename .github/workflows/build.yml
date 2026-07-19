@@ -131,3 +131,23 @@ jobs:
         env:
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+  # Release-package smoke: install emp-tool to a prefix, then build and run an
+  # external find_package(emp-tool) consumer against the install (default
+  # SHA-256 backend, and Clang/shared + BLAKE3 to cover the other backend axis).
+  install-consume:
+    name: Install + consume (find_package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: static SHA-256
+            args: ""
+          - name: shared BLAKE3
+            args: "-DBUILD_SHARED_LIBS=ON -DEMP_WITH_BLAKE3=ON -DEMP_HASH_BACKEND=blake3"
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install emp-tool, then build + run a find_package consumer
+        run: bash test/install_consumer/run.sh "$PWD" ${{ matrix.args }}
