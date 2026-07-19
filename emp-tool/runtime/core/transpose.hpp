@@ -783,17 +783,7 @@ inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
   #elif EMP_HAS_AVX512BW
     detail::sse_trans_n128_avx512bw(out, inp, ncols);
   #elif EMP_HAS_AVX2
-    // The x2 unpack network fills all 16 architectural YMM registers before
-    // accounting for its temporaries. At these cache-resident shapes the
-    // single-lane blocked kernel avoids that register pressure. Keep the
-    // selection exact: other matrix sizes can favor the wider kernel.
-    if (ncols == 8192 || ncols == 16384) {
-      sse_trans(reinterpret_cast<uint8_t *>(out),
-                reinterpret_cast<const uint8_t *>(inp),
-                /*nrows=*/128, ncols);
-    } else {
-      detail::sse_trans_n128_avx2(out, inp, ncols);
-    }
+    detail::sse_trans_n128_avx2(out, inp, ncols);
   #else
     detail::sse_trans_n128_sse2(out, inp, ncols);
   #endif

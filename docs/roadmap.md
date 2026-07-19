@@ -97,6 +97,40 @@ the CPU allows, without charging the peak-speed builds for it.
   existing transpose/AES parity tests, extended to run per available
   tier at runtime).
 
+## Measured kernel selection (within an ISA tier)
+
+**Current.** Within one ISA tier, each kernel family ships a single
+implementation. But the best implementation for a given shape can depend
+on the microarchitecture, not just the ISA. Measured example: at the
+AVX2 tier, the 128×N bit-transpose at the cache-resident shapes N=8192
+and N=16384 runs ~12% faster with a single-lane *blocked* kernel than
+with the wide x2-unpack kernel on an Intel Xeon 6 (Granite Rapids), but
+~14% *slower* with the blocked kernel on an AMD EPYC 9R45 (Zen 5). A
+`ncols==8192||16384 → blocked` special-case was tried and reverted for
+exactly this reason: it helps one vendor and regresses the other.
+
+**Gap.** The difference is a uarch/register-file/cache-behavior effect,
+so a vendor `if` (Intel vs AMD) is a crude proxy that overfits the two
+chips measured and can be wrong on an untested one (Zen 3/4, older
+Intel). There is no principled per-shape kernel choice today.
+
+**Proposed design.** Pick the kernel by *measurement*, not by a
+hand-written CPU table — the same approach as emp-ot's per-build-directory
+auto-tuner (microbenchmark the candidate kernels on the build/first-run
+host, cache the winner per shape, select at runtime from the cached
+result). This generalizes to every microarchitecture with no guessing and
+composes with the runtime ISA dispatch above (measure only within the
+tier the host actually runs). The candidates must be output-identical
+(the transpose kernels already are), so selection can never change
+results — only speed.
+
+**Acceptance.**
+- The transpose (and any other multi-kernel family) selects, per shape,
+  the fastest measured kernel on the build/run host, recovering the
+  ~12% Intel win without the ~14% AMD regression.
+- Selection is output-invariant (a parity test proves every candidate
+  agrees bit-for-bit) and adds no per-element cost (resolved once, cached).
+
 ## Embedder fatal-error observability hook
 
 **Current.** Every failure routes through `error()`
