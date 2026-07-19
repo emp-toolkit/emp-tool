@@ -68,9 +68,9 @@ class NetIO : public IOChannel { public:
 		port_ = port;
 		if (is_server) {
 			listener = std::make_shared<tcp::ListenerHandle>(tcp::open_listener(port));
-			init_from_sock(tcp::accept_one(listener->fd));
+			init_from_sock(tcp::accept_one_confirmed(listener->fd));
 		} else {
-			init_from_sock(tcp::client_connect(address, port));
+			init_from_sock(tcp::client_connect_confirmed(address, port));
 		}
 		if (!quiet) std::cout << "connected\n";
 	}
@@ -96,7 +96,7 @@ class NetIO : public IOChannel { public:
 
 		expecting(listener != nullptr,
 		          "NetIO::make_sibling requires a server listener");
-		int sibling_sock = tcp::accept_one(listener->fd);
+		int sibling_sock = tcp::accept_one_confirmed(listener->fd);
 
 		auto sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
 		sibling->is_server = true;  // preserve sync()'s server/client ordering

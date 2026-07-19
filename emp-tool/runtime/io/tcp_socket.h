@@ -38,7 +38,13 @@ inline int open_listener(int port) {
 	                 sizeof(struct sockaddr)) >= 0, [&] {
 		return std::string("tcp: bind: ") + std::strerror(errno);
 	});
-	expecting(::listen(listener, 1) >= 0, [&] {
+	// Backlog must hold every not-yet-accepted connection: a NetIO listener
+	// is shared across sibling channels (make_sibling), so under load the
+	// server can fall behind while several clients connect. A backlog of 1
+	// overflows there, and an overflowed connection is dropped/reset — the
+	// client sees a completed connect while the server never accepts it,
+	// crossing the accept/connect pairing (peer-closed or deadlock).
+	expecting(::listen(listener, SOMAXCONN) >= 0, [&] {
 		return std::string("tcp: listen: ") + std::strerror(errno);
 	});
 	return listener;
@@ -58,6 +64,13 @@ public:
 	int fd;
 };
 
+// Application-level "the peer's accept() actually ran" marker. A completed
+// TCP connect() only proves the connection reached A listen queue — possibly
+// a stale listener the server has stopped accepting on (e.g. a fresh session
+// reusing the same port). The server sends this byte right after accept(); the
+// client waits for it before treating the connection as established.
+inline constexpr unsigned char kAcceptAck = 0xa5;
+
 // Accept one connection from an existing listener, retrying an interrupted
 // system call. The caller decides whether to keep or close the listener.
 inline int accept_one(int listener) {
@@ -73,6 +86,19 @@ inline int accept_one(int listener) {
 	return s;
 }
 
+// accept_one plus a one-byte application acknowledgement, so the client can
+// confirm this accept() actually ran (see kAcceptAck). Raw ::send, so it does
+// not touch IOChannel byte counters or any Fiat-Shamir transcript.
+inline int accept_one_confirmed(int listener) {
+	int s = accept_one(listener);
+	ssize_t n;
+	do {
+		n = ::send(s, &kAcceptAck, 1, 0);
+	} while (n < 0 && errno == EINTR);
+	expecting(n == 1, "tcp: failed to acknowledge accepted connection");
+	return s;
+}
+
 // One-shot compatibility helper used by transports that need only one
 // connection, such as TLSIO.
 inline int server_listen(int port) {
@@ -85,7 +111,12 @@ inline int server_listen(int port) {
 // Connect to address:port, retrying on failure with a 1 ms backoff so
 // the server side has time to come up. Capped at ~60 s of total retry
 // time to catch a permanently-down peer instead of hanging the caller.
-inline int client_connect(const char *address, int port) {
+// When wait_for_accept is set, a connect() that landed on a listen queue
+// but was not acknowledged (kAcceptAck) — because it reached a stale
+// listener the server no longer accepts on — is treated as a failure and
+// retried, so "connected" always means the peer's accept() ran.
+inline int client_connect_impl(const char *address, int port,
+                               bool wait_for_accept) {
 	struct sockaddr_in dest;
 	std::memset(&dest, 0, sizeof(dest));
 	dest.sin_family = AF_INET;
@@ -97,8 +128,18 @@ inline int client_connect(const char *address, int port) {
 		expecting(s >= 0, [&] {
 			return std::string("tcp: socket: ") + std::strerror(errno);
 		});
-		if (::connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
-			return s;
+		if (::connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0) {
+			if (!wait_for_accept)
+				return s;
+			// Raw ::recv, so the ack is not counted by any IOChannel.
+			unsigned char ack = 0;
+			ssize_t n;
+			do {
+				n = ::recv(s, &ack, 1, 0);
+			} while (n < 0 && errno == EINTR);
+			if (n == 1 && ack == kAcceptAck)
+				return s;
+		}
 		::close(s);
 		::usleep(1000);
 	}
@@ -106,6 +147,19 @@ inline int client_connect(const char *address, int port) {
 	                        std::to_string(port) + " unreachable after " +
 	                        std::to_string(max_retries) + " attempts";
 	error(msg.c_str());
+}
+
+// Plain connect: returns as soon as the TCP handshake completes (the peer may
+// not have accept()ed yet). Used by transports with their own post-connect
+// handshake, e.g. TLSIO.
+inline int client_connect(const char *address, int port) {
+	return client_connect_impl(address, port, /*wait_for_accept=*/false);
+}
+
+// Connect and wait for the server's accept acknowledgement — safe against a
+// connection landing on a stale listener (see kAcceptAck). Used by NetIO.
+inline int client_connect_confirmed(const char *address, int port) {
+	return client_connect_impl(address, port, /*wait_for_accept=*/true);
 }
 
 inline void set_nodelay(int sock) {

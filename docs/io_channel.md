@@ -82,6 +82,18 @@ are per-direction snapshots for diagnostics. All three assert that
   peer on the same port. Related server channels share listener ownership; the
   listener closes with the last one. This avoids closing, rebinding, or sleeping
   between accepts.
+- **Multiple channels — recommended pattern**: to run several channels to
+  the same peer, keep one anchor NetIO alive and take the others via
+  `make_sibling()`, calling it **serially and in the same order on both
+  parties** (its accept/connect pairing is FIFO on the shared listener —
+  concurrent `make_sibling()` from multiple threads is not deterministic).
+  Do *not* rely on closing every channel and reopening a new one on the
+  same port as the coordination mechanism. That reopen path is supported
+  and race-free — each connection is only considered established once the
+  peer has actually `accept()`ed it (a one-byte accept acknowledgement in
+  `tcp_socket.h` protects against a `connect()` landing on the previous,
+  now-stale listener) — but the anchor + `make_sibling` pattern is simpler
+  and avoids the reconnect entirely.
 - **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
   byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
   wire-equivalence checks; see `test_mode.md`.
