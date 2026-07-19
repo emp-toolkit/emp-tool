@@ -81,6 +81,11 @@ private:
 // NID parameter for source compatibility but rejects every value except
 // NID_X9_62_prime256v1. Non-copyable, non-movable: it owns raw OpenSSL handles
 // and a scratch buffer that would multi-free.
+//
+// Not thread-safe: methods share one BN_CTX and one scratch buffer, so
+// concurrent calls on the same ECGroup race. Use one ECGroup per thread.
+// A Point borrows (does not own) the ECGroup it was created against and
+// must not outlive it.
 class ECGroup {
 public:
 	explicit ECGroup(int curve_nid = NID_X9_62_prime256v1);

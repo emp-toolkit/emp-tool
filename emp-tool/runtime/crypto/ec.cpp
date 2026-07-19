@@ -7,6 +7,7 @@
 #include <openssl/evp.h>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -237,6 +238,8 @@ void Scalar::to_bin_padded(unsigned char * out, size_t fixed_len) const {
 }
 
 void Scalar::from_bin(const unsigned char * in, size_t length) {
+	expecting(length <= (size_t)std::numeric_limits<int>::max(),
+	          "Scalar::from_bin: length exceeds INT_MAX");
 	if (n_ != nullptr) BN_free(n_);
 	n_ = BN_bin2bn(in, (int)length, nullptr);
 	expecting(n_ != nullptr, "Scalar::from_bin: BN_bin2bn");
@@ -244,31 +247,33 @@ void Scalar::from_bin(const unsigned char * in, size_t length) {
 
 Scalar Scalar::add(const Scalar &oth) const {
 	Scalar ret;
-	BN_add(ret.n_, n_, oth.n_);
+	expecting(BN_add(ret.n_, n_, oth.n_) == 1, "Scalar::add: BN_add");
 	return ret;
 }
 
 Scalar Scalar::mul_mod(const Scalar & b, const Scalar &m, BN_CTX *ctx) const {
 	Scalar ret;
-	BN_mod_mul(ret.n_, n_, b.n_, m.n_, ctx);
+	expecting(BN_mod_mul(ret.n_, n_, b.n_, m.n_, ctx) == 1,
+	          "Scalar::mul_mod: BN_mod_mul");
 	return ret;
 }
 
 Scalar Scalar::add_mod(const Scalar & b, const Scalar &m, BN_CTX *ctx) const {
 	Scalar ret;
-	BN_mod_add(ret.n_, n_, b.n_, m.n_, ctx);
+	expecting(BN_mod_add(ret.n_, n_, b.n_, m.n_, ctx) == 1,
+	          "Scalar::add_mod: BN_mod_add");
 	return ret;
 }
 
 Scalar Scalar::mul(const Scalar &oth, BN_CTX *ctx) const {
 	Scalar ret;
-	BN_mul(ret.n_, n_, oth.n_, ctx);
+	expecting(BN_mul(ret.n_, n_, oth.n_, ctx) == 1, "Scalar::mul: BN_mul");
 	return ret;
 }
 
 Scalar Scalar::mod(const Scalar &oth, BN_CTX *ctx) const {
 	Scalar ret;
-	BN_mod(ret.n_, n_, oth.n_, ctx);
+	expecting(BN_mod(ret.n_, n_, oth.n_, ctx) == 1, "Scalar::mod: BN_mod");
 	return ret;
 }
 
@@ -474,7 +479,8 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
 	expecting(p && A && B && Z, "hash_to_point: BN_new");
-	EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_);
+	expecting(EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_) == 1,
+	          "hash_to_point: EC_GROUP_get_curve");
 	sswu_z_for_curve(Z, p, curve_nid_);
 
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
@@ -493,8 +499,9 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 	EC_POINT *Q0 = EC_POINT_new(ec_group_);
 	EC_POINT *Q1 = EC_POINT_new(ec_group_);
 	expecting(Q0 && Q1, "hash_to_point: EC_POINT_new");
-	EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_);
-	EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_);
+	expecting(EC_POINT_set_affine_coordinates(ec_group_, Q0, x0, y0, bn_ctx_) == 1
+	          && EC_POINT_set_affine_coordinates(ec_group_, Q1, x1, y1, bn_ctx_) == 1,
+	          "hash_to_point: EC_POINT_set_affine_coordinates");
 
 	expecting(EC_POINT_add(ec_group_, out.point_, Q0, Q1, bn_ctx_) != 0,
 	          "H2C ADD");
