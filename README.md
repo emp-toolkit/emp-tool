@@ -492,6 +492,7 @@ determinism contract, and limitations.
 | Floating-point circuit assets | [docs/floating_point_circuits.md](docs/floating_point_circuits.md) |
 | Test mode / wire-byte determinism | [docs/test_mode.md](docs/test_mode.md) |
 | Test and benchmark conventions | [docs/test_conventions.md](docs/test_conventions.md), [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |
+| Tracked future work (ISA dispatch, embedder hook, asset reproducibility) | [docs/roadmap.md](docs/roadmap.md) |
 
 An implementation audit for external reviewers lives in
 [audit-report/](audit-report/) (start at `index.html`).
