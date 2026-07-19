@@ -853,10 +853,8 @@ factories wrap the nullptr-means-server constructor (<code class="ref">net_io_ch
 (the shared guard struct lives in <code class="ref">io_channel.h:25-39</code>; the per-instance counter at
 <code class="ref">net_io_channel.h:59-65</code>); <b>in release the guard compiles away</b> → silent wire
 corruption on misuse. <code>make_sibling</code> reconnects on the same role/port
-(<code class="ref">net_io_channel.h:94-107</code>); the same-port re-listen pairing race is now mitigated
-<em>in the primitive</em> by a 0.1 s settle pause (<code>usleep(100000)</code>,
-<code class="ref">net_io_channel.h:104</code>) before the sibling listen/connect — a probabilistic drain, not a
-handshake; the comment documents it as low-probability and RTT-sensitive. <b>No read timeouts</b>: a
+(<code class="ref">net_io_channel.h:100-118</code>); related server channels share the original listener,
+accept repeated siblings from it, and close it with the last channel, avoiding re-bind windows or fixed delays. <b>No read timeouts</b>: a
 peer that connects then goes silent hangs the process indefinitely (DoS vector); <code>client_connect</code>
 alone is capped (~60 s of 1 ms-backoff retries, <code class="ref">tcp_socket.h:58-72</code>). All transport
 errors → <code>std::_Exit(1)</code> (<code class="ref">net_io_channel.h:207,235</code>).</p></div>
