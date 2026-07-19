@@ -44,6 +44,10 @@ abs neg copysign
 Notes:
 
 - Predicate/classifier circuits currently output 8 bits; bit 0 is the result.
+- `add` / `sub` / `mul` / `div` / `min` / `max` are correctly rounded
+  (round-to-nearest-even; `test_float` verifies them bit-exactly against
+  the host). `sqrt` / `recip` / `rsqrt` are iterative kernels verified to
+  1e-2 relative tolerance — NOT correctly rounded.
 - `fma` is intentionally unfused: `add(mul(a, b), c)` with two roundings.
 - `rsqrt` is `1 / sqrt(x)`, also not a fused primitive.
 - Transcendentals (`sin`, `cos`, `tan`, `exp`, `log`, etc.) are not shipped.

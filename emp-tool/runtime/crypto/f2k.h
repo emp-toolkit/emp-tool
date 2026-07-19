@@ -2,7 +2,6 @@
 #define EMP_F2K_H__
 
 #include "emp-tool/runtime/core/block.h"
-#include <cassert>
 
 namespace emp {
 

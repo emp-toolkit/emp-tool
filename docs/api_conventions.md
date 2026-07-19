@@ -10,9 +10,13 @@ failure path.
 Every failure in emp-tool — hostile/corrupt input (`.empbc` loaders,
 `validate_program`), API misuse (shape/width mismatches), I/O setup and
 mid-protocol faults, malicious-abort checks — reports through `error()`
-(`runtime/core/utils.h`): print the message with the call site, then
+(`runtime/core/error.h`): print the message with the call site, then
 `std::_Exit(1)`. emp-tool does not throw, anywhere, and is
-`-fno-exceptions`-compatible.
+`-fno-exceptions`-compatible: `test_no_exceptions` compiles the public
+umbrella with `-fno-exceptions`, so a reachable `throw` fails the build.
+Standard-library allocation failure follows the same fail-stop model
+(under `-fno-exceptions` the runtime aborts instead of raising
+`std::bad_alloc`).
 
 Why one fatal path:
 

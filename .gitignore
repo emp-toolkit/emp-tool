@@ -47,3 +47,5 @@ install_manifest.txt
 
 # Editor / tool temp snapshots (e.g. write-to-temp-then-rename leftovers)
 *.tmp
+verdicts.txt
+AUDIT_FINDINGS.md

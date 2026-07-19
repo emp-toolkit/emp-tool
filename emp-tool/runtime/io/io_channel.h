@@ -4,7 +4,6 @@
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/hash.h"
 #include "emp-tool/runtime/crypto/ec.h"
-#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -16,29 +15,6 @@
 #include <variant>
 
 namespace emp {
-
-#ifndef NDEBUG
-// Debug-only concurrency assertion shared by the IOChannel implementations: an
-// IO channel is not thread-safe (unlocked send-buffer coalescing, and TLSIO's
-// SSL* mutates internal state on every read/write), so a debug build aborts if
-// two threads enter send_data / recv_data / flush on the same instance at once.
-// Each channel keeps the per-instance _in_use counter; release builds drop both.
-struct touch_guard {
-	std::atomic<int> &f;
-	const char *op;
-	touch_guard(std::atomic<int> &x, const char *o) : f(x), op(o) {
-		if (f.fetch_add(1, std::memory_order_acq_rel) != 0) {
-			std::fprintf(stderr,
-			             "IO-channel race: concurrent %s on the same channel — an "
-			             "IO channel is not thread-safe; only one thread may touch "
-			             "a given channel at a time.\n",
-			             op);
-			std::abort();
-		}
-	}
-	~touch_guard() { f.fetch_sub(1, std::memory_order_release); }
-};
-#endif
 
 // Polymorphic transport interface. Implementations override send_data_internal
 // / recv_data_internal; everything else (block / point / packed-bool helpers,
@@ -180,6 +156,9 @@ public:
 
 	void send_data(const void *data, int64_t nbyte) {
 		expecting(nbyte >= 0, "IOChannel::send_data: negative byte count");
+		// Documented no-op (docs/api_conventions.md): no counters, round
+		// accounting, FS absorb, or transport call.
+		if (nbyte == 0) return;
 		const uint64_t bytes = static_cast<uint64_t>(nbyte);
 		expecting(bytes <= std::numeric_limits<uint64_t>::max() - send_counter,
 		          "IOChannel::send_data: send counter overflow");
@@ -195,6 +174,8 @@ public:
 
 	void recv_data(void *data, int64_t nbyte) {
 		expecting(nbyte >= 0, "IOChannel::recv_data: negative byte count");
+		// Documented no-op, mirroring send_data.
+		if (nbyte == 0) return;
 		const uint64_t bytes = static_cast<uint64_t>(nbyte);
 		expecting(bytes <= std::numeric_limits<uint64_t>::max() - recv_counter,
 		          "IOChannel::recv_data: receive counter overflow");

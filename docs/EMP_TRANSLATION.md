@@ -42,7 +42,7 @@ Concretely, in EMP you may never write:
 if (secret_bit) { ... }              // host-language if on a secret
 while (secret_int < 10) { ... }      // loop bound depends on secret
 arr[secret_index]                    // memory access at secret address
-return secret_value;                 // early-exit branch
+if (secret_bit) return x;            // secret-dependent early exit
 ```
 
 The circuit is *static*. Both branches of every conditional must be
@@ -67,11 +67,11 @@ distinct C++ type. `Ctx` is the `BooleanContext` the body is written over.
 | `uint8_t … uint64_t`, `unsigned`  | `UInt_T<Ctx,N>`                        | N = bit width; wraps mod 2^N |
 | `int8_t … int64_t`, `int`         | `Int_T<Ctx,N>`                         | two's complement |
 | `float` (IEEE 754 binary32)       | `Float_T<Ctx,32>`                      | also `Float_T<Ctx,16>` / `<Ctx,64>` |
-| `double` (IEEE 754 binary64)      | `Float_T<Ctx,64>`                      | correctly-rounded; same op set |
+| `double` (IEEE 754 binary64)      | `Float_T<Ctx,64>`                      | same op set |
 | fixed-size bit array / packed flags | `UInt_T<Ctx,N>` (use `& \| ^ ~`)     | bitwise ops, shifts/rotates, `slice`/`concat` |
 | Python `int` (arbitrary precision)| `Int_T<Ctx,N>` after **you** pick N    | translator must commit to a width |
 | Python `bool`                     | `Bit_T<Ctx>`                           | |
-| Python `float`                    | `Float_T<Ctx,32>`                      | |
+| Python `float`                    | `Float_T<Ctx,64>`                      | CPython `float` is binary64 |
 | `std::string`, `bytes`, `bytearray` | array of `UInt_T<Ctx,8>` of fixed length | length is public; pad to max |
 | `std::vector<T>` (fixed size)     | `std::vector<EMPType>` of public length | |
 | `std::vector<T>` (secret size)    | **not supported** — pad to public max length and carry a `valid` `Bit_T<Ctx>` per slot |
@@ -87,9 +87,11 @@ when you operate on already-live values, `Ctx` is the concrete context type
 
 ### 2.1. Width is a type parameter
 
-The width is part of the type — there is no run-time width argument. Make a
-public constant with `T::constant(ctx, v)` (or `a.constant(v)` from an
-existing value of the same family/context):
+For the fixed-width forms used throughout this guide, the width is part of
+the type. (In-circuit runtime-width forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>`
+exist — see [docs/frontend.md](frontend.md) — but translated code should
+commit to fixed widths.) Make a public constant with `T::constant(ctx, v)`
+(or `a.constant(v)` from an existing value of the same family/context):
 
 ```cpp
 auto a = Int_T<ClearCtx,32>::constant(cx, -7);
@@ -303,7 +305,7 @@ those don't cover.
 
 ### 4.10. Sorting (oblivious)
 
-A bitonic sort is a public network of compare-swaps, each
+An oblivious sort is a public network of compare-swaps, each
 `(x, y) -> (min, max)` built from one comparison and two `select`s:
 
 ```cpp
@@ -315,8 +317,9 @@ auto swap = [](auto& x, auto& y) {        // ascending compare-swap
 };
 ```
 
-Drive it from a fixed (public) Batcher schedule. Cost is O(N log² N)
-compare-swaps; each is O(W) gates.
+Drive it from a fixed (public) Batcher odd-even schedule (the network the
+built-in `sort` uses). Cost is O(N log² N) compare-swaps; each is O(W)
+gates.
 
 ### 4.11. Floats
 
@@ -480,7 +483,10 @@ Refuse, or flag for the user, when the source program does any of these:
    `N ≤ 64`). GMP / `mpz_t` operations have no direct EMP equivalent —
    they need a custom multi-limb construction.
 9. **Float width**. emp-tool ships `Float_T<Ctx,16>` / `<Ctx,32>` /
-   `<Ctx,64>` (IEEE binary16 / binary32 / binary64), all correctly-rounded.
+   `<Ctx,64>` (IEEE binary16 / binary32 / binary64 formats). `+ − × ÷` /
+   `min` / `max` are correctly rounded; `fma` is unfused (two roundings)
+   and `sqrt` / `recip` / `rsqrt` are approximate — see
+   [docs/floating_point_circuits.md](floating_point_circuits.md).
    Map `float` to `Float_T<Ctx,32>` and `double` to `Float_T<Ctx,64>`; pick
    width 16 only when the source is explicitly half-precision.
    Transcendentals (`sin`/`cos`/`exp`/`log`/…) are not provided —

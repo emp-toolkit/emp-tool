@@ -89,9 +89,11 @@ question, no fiasco.
    }
    ```
 
-   Function-local statics are initialized on first call, after all
-   dynamic-init has had a chance to run, so they're SIOF-immune by
-   construction.
+   Function-local statics are initialized on first call, so no use can
+   ever observe them uninitialized — SIOF-immune by construction. (The
+   first call may itself happen during another TU's dynamic init, so
+   the local initializer must not read a dynamically-initialized global
+   from a third TU; keep it self-contained, as above.)
 
 3. **When in doubt, prefer the function-local-static form.** Marginal
    cost is one branch on first call; marginal safety is total.

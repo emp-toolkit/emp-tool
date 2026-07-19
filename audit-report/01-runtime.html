@@ -236,7 +236,7 @@ pointers, with no aliasing-safe overload.
 cryptographic sense. The toolkit does not claim it is safe for comparing secrets against attacker-chosen
 values under a timing adversary; it is used where both operands are typically known to one party.</p></div>
 <h3>Bit-matrix transpose — <code>core/transpose.hpp</code> (six tiers)</h3>
-<p>The entire transpose kernel family has moved out of <code>block.hpp</code> into its own 772-line header
+<p>The entire transpose kernel family has moved out of <code>block.hpp</code> into its own 809-line header
 <code class="ref">core/transpose.hpp</code>, still included via <code>block.h</code>
 (<code class="ref">block.h:74-75</code> pulls in <code>block.hpp</code> then <code>transpose.hpp</code>), so
 every external include path is unchanged. <code>block.hpp</code> itself is now 119 lines of block basics.
@@ -245,7 +245,7 @@ Two entry points (declared <code class="ref">block.h:55-70</code>): the generic 
 <code>nrows=128</code> hot path <code>sse_trans_n128(out, inp, ncols)</code> (<code>ncols</code> multiple of 128)
 that every OT extension drives. Pure data movement, but intricate pointer arithmetic.</p>
 <p><code>sse_trans_n128</code> now dispatches at compile time over <b>six kernels</b>
-(<code class="ref">transpose.hpp:748-772</code>): on x86_64,
+(<code class="ref">transpose.hpp:775-807</code>): on x86_64,
 <code>sse_trans_n128_gfni</code> (GFNI + AVX512VBMI + AVX512BW, in-register
 <code>vgf2p8affineqb</code>/<code>vpermi2b</code>) &gt; <code>sse_trans_n128_gfni256</code> (VEX-only GFNI on ymm —
 the consumer-Intel shape with AVX-512 fused off) &gt; <code>sse_trans_n128_avx512bw</code> &gt;
@@ -989,7 +989,7 @@ OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equ
 <h2 id="risk">15 · Auditor risk register</h2>
 <table class="grid">
 <tr><th>#</th><th>Item</th><th>Where</th><th>Severity / note</th></tr>
-<tr><td>1</td><td>Compile-time-only ISA dispatch; SIGILL (no runtime fallback) on a mismatched CPU — now also covers the GFNI512/GFNI256/NEON transpose tiers</td><td><code class="ref">simd_tier.h:20-98</code>, <code class="ref">transpose.hpp:748-772</code></td><td>Deployment hazard — match <code>-march</code> (mitigate with <code>EMP_TOOL_NATIVE_ARCH=OFF</code>)</td></tr>
+<tr><td>1</td><td>Compile-time-only ISA dispatch; SIGILL (no runtime fallback) on a mismatched CPU — now also covers the GFNI512/GFNI256/NEON transpose tiers</td><td><code class="ref">simd_tier.h:20-98</code>, <code class="ref">transpose.hpp:775-807</code></td><td>Deployment hazard — match <code>-march</code> (mitigate with <code>EMP_TOOL_NATIVE_ARCH=OFF</code>)</td></tr>
 <tr><td>2</td><td>Test mode = one-env-var randomness kill switch (enumerable <code>(lane, ordinal)</code> seeds)</td><td><code class="ref">test_mode.h</code></td><td>Catastrophic if ever set in production</td></tr>
 <tr><td>3</td><td>Fail-fast <code>error()</code> → <code>std::_Exit(1)</code>; no read timeouts</td><td><code class="ref">utils.hpp:33-42</code>, library-wide</td><td>Hostile peer can reliably crash/hang the process</td></tr>
 <tr><td>4</td><td><code>assert</code>-based developer-misuse checks in release (FS double-enable, alignment, local send-point length)</td><td><code class="ref">io_channel.h:121,195</code>, AES/PRP/PRG</td><td>Intentional debug-only class; peer-controlled point recv length is now always-on</td></tr>
@@ -1004,7 +1004,7 @@ OpenSSL/reference cross-checks — there is no formal proof of x86↔aarch64 equ
 <tr><td>13</td><td>PRG CTR two-time-pad if forks reuse overlapping counter ranges</td><td><code class="ref">prg.h:86-90</code></td><td>Misuse hazard; non-overlapping forks are independent</td></tr>
 <tr><td>14</td><td>Second hash backend (<code>EMP_HASH_BACKEND=blake3</code>) is a protocol-wide transcript change; <code>HashAbiMarker</code> link guard covers the mixed-default ODR hazard, but only when BLAKE3 is compiled in</td><td><code class="ref">hash.h:23-54</code>, <code class="ref">ec.cpp:504-509</code>, <code class="ref">CMakeLists.txt:166-196</code></td><td>Both parties must build identically; SHA-256 stays the default — no transcript change unless opted in</td></tr>
 <tr><td>15</td><td><code>MITCCRH::hash_cir_fixed</code> has zero test coverage (only its own definition and comment reference it)</td><td><code class="ref">mitccrh.h:119-133</code></td><td>New primitive shipped untested; the MITCCRH reference-derivation pinning does not cover it</td></tr>
-<tr><td>16</td><td>Six-kernel transpose family anchored only to the generic SSE2 <code>sse_trans</code> (parity test); the generic reference itself is round-trip-tested only, never against an independent transpose</td><td><code class="ref">transpose.hpp:748-772</code>, <code>test_block.cpp</code></td><td>A self-inverse bug in the shared reference would pass every tier</td></tr>
+<tr><td>16</td><td>Six-kernel transpose family anchored only to the generic SSE2 <code>sse_trans</code> (parity test); the generic reference itself is round-trip-tested only, never against an independent transpose</td><td><code class="ref">transpose.hpp:775-807</code>, <code>test_block.cpp</code></td><td>A self-inverse bug in the shared reference would pass every tier</td></tr>
 </table>
 
 <div class="callout c-ok"><span class="lbl">Strong correctness baseline</span>

@@ -7,10 +7,12 @@ test file for a header under `emp-tool/runtime/core/`, `emp-tool/runtime/crypto/
 
 ## One file per component
 
-Each primitive header should have exactly one corresponding file under `test/<layer>/`,
+Each primitive header gets one corresponding file under `test/<layer>/`,
 named `test_<header>.cpp`, where `<layer>` mirrors the source layer —
 `test/runtime/`, `test/ir/`, or `test/circuits/` (e.g. `crypto/f2k.h` →
-`test/runtime/test_f2k.cpp`).
+`test/runtime/test_f2k.cpp`). This is a convention, not an enforced
+invariant; known gap: `runtime/execution/privacy_free_*` has no dedicated
+test file (the registered execution test covers half-gates).
 Binaries land flat at `build/test_<header>` (`RUNTIME_OUTPUT_DIRECTORY` is the
 build root — no `build/test/` traversal).
 The numeric circuit headers use abbreviated names:
@@ -42,8 +44,8 @@ three shapes recur.
   `main()`, each recording failures through a `check()` / `chk()`
   helper into a fail counter that `main()` normalizes to a 0/1 exit.
 - **Two-party `test/runtime/` io tests** (`test_netio`, `test_tlsio`)
-  drive a `void run_correctness(IO*, party, …)` that asserts on
-  failure instead of returning `bool`, and have no `example()`.
+  drive a `void run_correctness(IO*, party, …)` that fails fast through
+  `expecting()` instead of returning `bool`, and have no `example()`.
 
 A few older runtime files (`test_ro`, `test_ecc`, `test_halfgate`) are
 flat `main()`-plus-assert. Use the first shape for a genuinely new

@@ -105,6 +105,9 @@ public:
     }
     UInt_T operator>>(int s) const {
         expecting(s >= 0, "UInt_T::operator>>: shift amount must be >= 0");
+        // Amounts >= width saturate (docs/numeric_semantics.md); clamp
+        // before the i + s index test can overflow int.
+        if (s > n_()) s = n_();
         UInt_T r = blank_(); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < n_(); ++i) r.w[i] = (i + s < n_()) ? w[i + s] : z;
         return r;
@@ -232,8 +235,7 @@ public:
     // Runtime-width contract (RuntimeWidthValue; session-I/O only, never compiled).
     // The codec rides byte-bools (uint8_t 0/1) in a runtime-sized vector; sessions
     // must copy into real bool storage at the engine boundary, never reinterpret
-    // uint8_t* as bool*. Caller supplies width; bits beyond 64 zero-extend (matches
-    // the old input_int(width, uint64_t, owner) behavior).
+    // uint8_t* as bool*. Caller supplies width; bits beyond 64 zero-extend.
     void pack_wires(Wire* out) const requires (N == 0) { for (int i = 0; i < n_(); ++i) out[i] = w[i]; }
     static std::vector<uint8_t> encode(uint64_t v, int width) requires (N == 0) {
         std::vector<uint8_t> b((std::size_t)width);

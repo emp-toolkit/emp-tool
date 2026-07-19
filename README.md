@@ -29,7 +29,9 @@ emp-sh2pc's garbled `SH2PCCtx`.
 ## Requirements
 
 - CMake ≥ 3.25
-- A C++20 compiler (Clang ≥ 12, GCC ≥ 10, AppleClang 14+)
+- A C++20 compiler (Clang ≥ 12, GCC ≥ 10, AppleClang 14+; CI exercises
+  the current GCC / Clang / AppleClang releases — the stated minimums
+  are not CI-tested)
 - OpenSSL ≥ 3.0
 - pthreads
 - Linux or macOS on x86_64 with AES-NI + PCLMULQDQ + SSE4.2, or arm64
@@ -144,7 +146,10 @@ value-return gates on it.
 The numeric layer makes signedness explicit: `UInt_T<Ctx,N>` wraps mod 2^N
 matching `uint{N}_t`, `Int_T<Ctx,N>` is two's-complement matching `int{N}_t` on
 hardware (C signed-overflow UB is sidestepped — emp-tool wraps
-deterministically). `Float_T<Ctx,W>` is IEEE binary{16,32,64}. Comparisons
+deterministically). `Float_T<Ctx,W>` carries IEEE binary{16,32,64} values:
+`+ − × ÷` / `min` / `max` are correctly rounded, `fma` is unfused (two
+roundings), and `sqrt` / `recip` / `rsqrt` are approximate — see
+[docs/floating_point_circuits.md](docs/floating_point_circuits.md). Comparisons
 return `Bit_T<Ctx>`; the host clear types are `bool` / `uint64_t` / `int64_t` /
 the host float.
 
@@ -314,8 +319,10 @@ auto big = sess.input<U32>(ALICE, UINT32_MAX);
 auto wrapped = big + U32::constant(sess.ctx(), 1u);   // == 0
 ```
 
-`UInt_T` wraps mod 2^N, `Int_T` is two's-complement, `Float_T` is IEEE
-binary{16,32,64}, and comparisons return `Bit_T<ClearCtx>`. The same typed
+`UInt_T` wraps mod 2^N, `Int_T` is two's-complement, `Float_T` carries IEEE
+binary{16,32,64} values (per-operation semantics:
+[docs/floating_point_circuits.md](docs/floating_point_circuits.md)), and
+comparisons return `Bit_T<ClearCtx>`. The same typed
 circuit code runs over any `BooleanContext` unchanged; only the session that
 feeds inputs and reveals outputs differs — a protocol session over a garbled
 context in place of `ClearSession`. Pure circuit bodies never do I/O. `reveal`
@@ -488,6 +495,26 @@ determinism contract, and limitations.
 
 An implementation audit for external reviewers lives in
 [audit-report/](audit-report/) (start at `index.html`).
+
+## Security
+
+- Research software. This line has been reviewed by its maintainer
+  (see [audit-report/](audit-report/)) and by automated tooling
+  (ASan/UBSan CI legs, CodeQL, always-on contract checks, the test
+  suite); it has not had an independent security audit.
+- No systematic constant-time guarantee. AES-based kernels use CPU AES
+  instructions (AES-NI, or NEON via sse2neon); elliptic-curve
+  operations call OpenSSL; other kernels are written for throughput,
+  and secret-dependent timing has not been audited across the tree.
+- `TLSIO` verifies the peer's certificate chain against the configured
+  CA (optionally mutually, `require_peer_cert`). It does not check a
+  peer identity beyond that: any certificate issued by the configured
+  CA authenticates, so the CA must be deployment-private.
+- Failures are fail-stop: a violated check terminates the process
+  ([docs/api_conventions.md](docs/api_conventions.md)). Test mode
+  (`EMP_TEST_MODE=1`) makes all randomness deterministic and is never
+  safe for real secrets.
+- Report vulnerabilities to wangxiao1254@gmail.com.
 
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)
 

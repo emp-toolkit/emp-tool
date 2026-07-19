@@ -9,7 +9,9 @@ emp-tool contains or distributes the following third-party material.
   retained at the top of the installed `emp-tool/third_party/sse2neon.h`.
 - **progschj ThreadPool** — zlib-style license. The complete notice is retained
   at the top of the installed `emp-tool/third_party/ThreadPool.h`; emp-tool's
-  deterministic test-lane integration is marked as an alteration in that file.
+  deterministic test-lane integration and the exception-free enqueue error
+  path (`emp::error` instead of `throw`) are marked as alterations in that
+  file.
 - **Berkeley SoftFloat 3e-derived generated circuit assets** — BSD 3-Clause.
   The complete notice is installed beside the `.empbc` assets in
   `emp-tool/ir/files/README.md`.

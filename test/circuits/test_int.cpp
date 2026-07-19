@@ -8,6 +8,7 @@
 #include "emp-tool/circuits/unsigned_int.h"
 #include "emp-tool/ir/session/clear_session.h"
 #include "emp-tool/runtime/core/constants.h"
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -134,6 +135,17 @@ static void sweep_shift_public() {
       check_eq("public <<", sess.reveal(a << (int)s, PUBLIC).value(), shl_w(v, s));
       check_eq("public >> (arith)", sess.reveal(a >> (int)s, PUBLIC).value(), asr_w(v, s));
     }
+  for (int32_t v : kShiftVals) {
+    // Extreme public amount: << zeros, >> sign-fills — and the i + s
+    // index arithmetic must not overflow int.
+    auto a = sess.input<Int32>(ALICE, v);
+    check_eq("public << INT_MAX", sess.reveal(a << INT_MAX, PUBLIC).value(),
+             (int32_t)0);
+    auto b = sess.input<Int32>(ALICE, v);
+    check_eq("public >> INT_MAX (arith)",
+             sess.reveal(b >> INT_MAX, PUBLIC).value(),
+             v < 0 ? (int32_t)-1 : (int32_t)0);
+  }
 }
 
 // Secret (barrel) shift amount. shamt >= 32 exercises the overflow path:

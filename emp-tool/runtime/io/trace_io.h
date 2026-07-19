@@ -40,17 +40,13 @@ public:
         const std::string send_path = prefix + ".send";
         const std::string recv_path = prefix + ".recv";
         send_fp_ = std::fopen(send_path.c_str(), "wb");
-        if (send_fp_ == nullptr) {
-            std::fprintf(stderr, "TraceIO: cannot open %s for write\n",
-                         send_path.c_str());
-            std::abort();
-        }
+        expecting(send_fp_ != nullptr, [&] {
+            return "TraceIO: cannot open " + send_path + " for write";
+        });
         recv_fp_ = std::fopen(recv_path.c_str(), "wb");
-        if (recv_fp_ == nullptr) {
-            std::fprintf(stderr, "TraceIO: cannot open %s for write\n",
-                         recv_path.c_str());
-            std::abort();
-        }
+        expecting(recv_fp_ != nullptr, [&] {
+            return "TraceIO: cannot open " + recv_path + " for write";
+        });
     }
 
     ~TraceIO() override {
@@ -61,13 +57,12 @@ public:
     void send_data_internal(const void* data, int64_t nbyte) override {
         expecting(nbyte >= 0,
                   "TraceIO::send_data_internal: negative byte count");
+        if (nbyte == 0) return;
         // Tee first, deliver after, so a crash mid-write still leaves
         // a trace prefix that matches what the peer didn't yet see.
         const size_t bytes = static_cast<size_t>(nbyte);
-        if (std::fwrite(data, 1, bytes, send_fp_) != bytes) {
-            std::fprintf(stderr, "TraceIO: short write to .send\n");
-            std::abort();
-        }
+        expecting(std::fwrite(data, 1, bytes, send_fp_) == bytes,
+                  "TraceIO: short write to .send");
         // Bypass under_->send_data so under_'s `send_counter` doesn't
         // double-count — we (the wrapping IOChannel) own the counter.
         under_->send_data_internal(data, nbyte);
@@ -76,12 +71,11 @@ public:
     void recv_data_internal(void* data, int64_t nbyte) override {
         expecting(nbyte >= 0,
                   "TraceIO::recv_data_internal: negative byte count");
+        if (nbyte == 0) return;
         under_->recv_data_internal(data, nbyte);
         const size_t bytes = static_cast<size_t>(nbyte);
-        if (std::fwrite(data, 1, bytes, recv_fp_) != bytes) {
-            std::fprintf(stderr, "TraceIO: short write to .recv\n");
-            std::abort();
-        }
+        expecting(std::fwrite(data, 1, bytes, recv_fp_) == bytes,
+                  "TraceIO: short write to .recv");
     }
 
     void flush() override { under_->flush(); }

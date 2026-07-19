@@ -62,6 +62,9 @@ public:
     }
     BitVec_T operator>>(int s) const {
         expecting(s >= 0, "BitVec_T::operator>>: shift amount must be >= 0");
+        // Amounts >= width saturate (docs/numeric_semantics.md); clamp
+        // before the i + s index test can overflow int.
+        if (s > N) s = N;
         BitVec_T r(*ctx_); Wire z = ctx_->public_bit(false);
         for (int i = 0; i < N; ++i) r.w[i] = (i + s < N) ? w[i + s] : z;
         return r;

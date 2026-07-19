@@ -74,6 +74,10 @@ set_tests_properties(test_test_mode PROPERTIES
     ENVIRONMENT "EMP_TEST_MODE=1"
     PASS_REGULAR_EXPRESSION "WARNING: EMP TEST MODE ENABLED - RANDOMNESS IS DETERMINISTIC AND INSECURE")
 add_test_case(runtime test_utils)
+# Exception-free public surface (docs/api_conventions.md): compiled with
+# -fno-exceptions, so any `throw` reachable from the umbrella fails the build.
+add_test_case(runtime test_no_exceptions)
+target_compile_options(test_no_exceptions PRIVATE -fno-exceptions)
 add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case_with_run(runtime test_netio)

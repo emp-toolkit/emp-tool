@@ -37,19 +37,15 @@ threads on the same instance corrupts the buffer. Each instance must be
 owned by one thread at a time — `flush()` counts as a "touch" and is
 unsafe to call from a thread other than the one currently sending.
 
-## Debug build assertion
+## Thread-safety contract
 
-Under `!NDEBUG`, each concrete channel (NetIO, TLSIO) carries a
-per-instance `_in_use` atomic counter, guarded by a shared
-`touch_guard` defined in the `IOChannel` base (io_channel.h). The
-guard wraps that channel's `send_data_internal` / `recv_data_internal`
-/ `flush`; if two threads enter any of those on the same instance
-simultaneously, the build aborts with `IO-channel race: concurrent
-<op> on the same channel`. TraceIO, being a pass-through tee, does not
-install the guard. Zero cost under `-DNDEBUG`.
-
-Use this when a multi-party protocol behaves flakily — race or no
-race, the answer falls out of a Debug build.
+A channel is not thread-safe: send-buffer coalescing is unlocked, and
+TLSIO's `SSL*` mutates internal state on every read and write. Only one
+thread may touch a given channel at a time; sequential hand-off between
+threads is fine. Threaded consumers take a channel per thread —
+`make_sibling()` on NetIO, or a per-lane channel at the protocol layer.
+Races on a shared channel are not detected at runtime; when debugging a
+threaded consumer, build with `-fsanitize=thread`.
 
 ## Fiat–Shamir transcript
 
@@ -103,8 +99,12 @@ buffer), and do a two-phase `SSL_shutdown` from the destructor so
 buffered records actually leave the box before FIN.
 
 Cert / key / CA material is caller-supplied via `TLSConfig` (PEM file
-paths). mTLS is on by default — both sides verify; clear
-`require_peer_cert` on the server to make client-cert presentation
-optional, or set `insecure_skip_verify` in dev only. One `SSL_CTX` per
-channel; if a profile shows the per-channel cert-parse cost mattering,
-share a CTX via a thin factory.
+paths). mTLS is on by default — each side verifies the peer's
+certificate chain against the configured CA; clear `require_peer_cert`
+on the server to make client-cert presentation optional, or set
+`insecure_skip_verify` in dev only. Verification is chain-only: no
+expected-hostname / SAN / fingerprint binding, so any certificate
+issued by the configured CA authenticates — the CA must be
+deployment-private (see the README's Security section). One `SSL_CTX`
+per channel; if a profile shows the per-channel cert-parse cost
+mattering, share a CTX via a thin factory.

@@ -14,6 +14,7 @@
 #include "emp-tool/circuits/bitvec.h"
 #include "emp-tool/circuits/unsigned_int.h"
 #include <array>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -137,6 +138,14 @@ static void sweep_shifts() {
       check_eq("shl", from_bits<32>(sess.reveal(a << s, PUBLIC).value()), want_l);
       check_eq("shr", from_bits<32>(sess.reveal(a >> s, PUBLIC).value()), want_r);
     }
+  for (uint32_t v : vs) {
+    // Extreme public amount: saturates to zero — and the i + s index
+    // arithmetic must not overflow int.
+    auto a = sess.input<V>(ALICE, to_bits<32>(v));
+    check_eq("shl INT_MAX", from_bits<32>(sess.reveal(a << INT_MAX, PUBLIC).value()), 0u);
+    auto b = sess.input<V>(ALICE, to_bits<32>(v));
+    check_eq("shr INT_MAX", from_bits<32>(sess.reveal(b >> INT_MAX, PUBLIC).value()), 0u);
+  }
 }
 
 // ---- slice / concat ------------------------------------------------------

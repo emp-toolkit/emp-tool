@@ -114,10 +114,12 @@ types without spelling `RecordCtx`:
 | `Float_T<Ctx,W>`     | `rec::Float<W>` (`= Float_T<RecordCtx,W>`) |
 | `BitVec_T<Ctx,N>`    | `rec::BitVec<N>` (`= BitVec_T<RecordCtx,N>`) |
 
-The metadata a compiled signature needs — bit width, host clear type + codec,
-and the per-context family map — lives on the value type itself
-(`width()`, `clear_t`, `encode`/`decode`, `rebind<Ctx>`) and is exposed
-uniformly through `emp::value_traits<T>` (`circuits/value_traits.h`):
+The metadata a compiled signature needs — bit width and the per-context
+family map — lives on the value type itself (`width()`, `rebind<Ctx>`).
+The clear codec (`clear_t`, `encode`/`decode`) is NOT part of the compiled
+signature (compile/run needs only `WireBundle`, as above); it is used at
+the session I/O boundary, and where present it is exposed uniformly
+through `emp::value_traits<T>` (`circuits/value_traits.h`):
 `value_traits<T>::width()`, `value_traits<T>::encode(v)`,
 `value_traits<T>::decode(bits)`, `value_traits<T>::rebind<Ctx>`. A value's
 `rebind<Ctx>` re-attaches a context (`UInt_T<RecordCtx,32>::rebind<ClearCtx> ==

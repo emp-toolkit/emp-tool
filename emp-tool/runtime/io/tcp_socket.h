@@ -13,6 +13,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
+
+#include "emp-tool/runtime/core/error.h"
 
 namespace emp {
 namespace tcp {
@@ -26,20 +29,18 @@ inline int open_listener(int port) {
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
 	serv.sin_port = htons(port);
 	int listener = ::socket(AF_INET, SOCK_STREAM, 0);
-	if (listener < 0) {
-		std::perror("error: socket");
-		std::_Exit(1);
-	}
+	expecting(listener >= 0, [&] {
+		return std::string("tcp: socket: ") + std::strerror(errno);
+	});
 	int reuse = 1;
 	::setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
-	if (::bind(listener, (struct sockaddr *)&serv, sizeof(struct sockaddr)) < 0) {
-		std::perror("error: bind");
-		std::_Exit(1);
-	}
-	if (::listen(listener, 1) < 0) {
-		std::perror("error: listen");
-		std::_Exit(1);
-	}
+	expecting(::bind(listener, (struct sockaddr *)&serv,
+	                 sizeof(struct sockaddr)) >= 0, [&] {
+		return std::string("tcp: bind: ") + std::strerror(errno);
+	});
+	expecting(::listen(listener, 1) >= 0, [&] {
+		return std::string("tcp: listen: ") + std::strerror(errno);
+	});
 	return listener;
 }
 
@@ -66,10 +67,9 @@ inline int accept_one(int listener) {
 	do {
 		s = ::accept(listener, (struct sockaddr *)&peer, &peer_size);
 	} while (s < 0 && errno == EINTR);
-	if (s < 0) {
-		std::perror("error: accept");
-		std::_Exit(1);
-	}
+	expecting(s >= 0, [&] {
+		return std::string("tcp: accept: ") + std::strerror(errno);
+	});
 	return s;
 }
 
@@ -94,18 +94,18 @@ inline int client_connect(const char *address, int port) {
 	const int max_retries = 60000;  // 60 s at 1 ms backoff
 	for (int attempt = 0; attempt < max_retries; ++attempt) {
 		int s = ::socket(AF_INET, SOCK_STREAM, 0);
-		if (s < 0) {
-			std::perror("error: socket");
-			std::_Exit(1);
-		}
+		expecting(s >= 0, [&] {
+			return std::string("tcp: socket: ") + std::strerror(errno);
+		});
 		if (::connect(s, (struct sockaddr *)&dest, sizeof(struct sockaddr)) == 0)
 			return s;
 		::close(s);
 		::usleep(1000);
 	}
-	std::fprintf(stderr, "error: client_connect: %s:%d unreachable after %d attempts\n",
-	             address, port, max_retries);
-	std::_Exit(1);
+	const std::string msg = "client_connect: " + std::string(address) + ":" +
+	                        std::to_string(port) + " unreachable after " +
+	                        std::to_string(max_retries) + " attempts";
+	error(msg.c_str());
 }
 
 inline void set_nodelay(int sock) {

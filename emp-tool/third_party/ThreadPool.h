@@ -25,12 +25,16 @@ freely, subject to the following restrictions:
 #ifndef EMP_THREAD_POOL_H
 #define EMP_THREAD_POOL_H
 
-// Altered from the original for emp-tool: in test mode
+// Altered from the original for emp-tool: (1) in test mode
 // (emp::is_test_mode()), every enqueued task runs under a deterministic
 // emp::test_lane_scope whose lane is derived on the enqueuing thread, so
 // pool-parallel randomness reproduces across runs regardless of which
-// worker executes the task. See emp-tool/runtime/core/test_mode.h.
+// worker executes the task (see emp-tool/runtime/core/test_mode.h);
+// (2) enqueue-on-stopped-pool reports through emp::error() instead of
+// throwing, keeping the public surface exception-free
+// (docs/api_conventions.md, enforced by test_no_exceptions).
 
+#include "emp-tool/runtime/core/error.h"
 #include "emp-tool/runtime/core/test_mode.h"
 
 #include <condition_variable>
@@ -39,7 +43,6 @@ freely, subject to the following restrictions:
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -106,7 +109,7 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	{
 		std::unique_lock<std::mutex> lock(queue_mutex);
 		if (stop)
-			throw std::runtime_error("enqueue on stopped ThreadPool");
+			emp::error("ThreadPool: enqueue on stopped pool");
 		if (lane_task)
 			tasks.emplace([task, test_lane]() {
 				emp::test_lane_scope scope(test_lane);

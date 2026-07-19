@@ -184,6 +184,22 @@ static void run_sibling_regression(int port, int party) {
 	if (party == ALICE) cout << "NetIO shared-listener regression: OK\n";
 }
 
+// Zero-length send/recv are documented no-ops (docs/api_conventions.md):
+// no counter, round, or flush-state mutation, no transport call, and a
+// null pointer is fine at count zero. Purely local — both parties run it
+// symmetrically with no wire traffic.
+template <typename IO>
+static void run_zero_length_noop(IO *io, int party, const char *tag) {
+	const uint64_t s0 = io->send_counter, r0 = io->recv_counter;
+	const uint64_t rounds0 = io->rounds, f0 = io->flushes_count;
+	io->send_data(nullptr, 0);
+	io->recv_data(nullptr, 0);
+	expecting(io->send_counter == s0 && io->recv_counter == r0 &&
+	              io->rounds == rounds0 && io->flushes_count == f0,
+	          "NetIO test: zero-length send/recv mutated channel state");
+	if (party == ALICE) cout << tag << " zero-length no-op: OK\n";
+}
+
 // Run the full correctness/regression suite on one IO type,
 // using a contiguous block of three ports starting at port_base:
 // port_base+0 = main channel, +1 / +2 = regression channels.
@@ -191,6 +207,7 @@ template <typename IO>
 static void run_suite(int port_base, int party, const char *tag) {
 	IO *io = new IO(party == ALICE ? nullptr : peer_ip(), port_base, true);
 	run_correctness(io, party, tag);
+	run_zero_length_noop(io, party, tag);
 	run_send_only_regression<IO>(port_base, party, tag);
 	delete io;
 }

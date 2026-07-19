@@ -6,7 +6,7 @@
 #include "emp-tool/runtime/core/constants.h"
 #include "emp-tool/runtime/core/test_mode.h"
 #include <memory>
-#include <random>
+#include <sys/random.h>
 
 namespace emp {
 
@@ -37,12 +37,12 @@ class PRG { public:
 		reseed(&v, id);
 	}
 	block from_urand () {
+		// Kernel entropy. Seeding sits on the exception-free public
+		// surface (docs/api_conventions.md), so the (practically
+		// unreachable) failure path fail-stops.
 		block v;
-		uint32_t data[sizeof(block) / sizeof(uint32_t)];
-		std::random_device rand_div("/dev/urandom");
-		for (size_t i = 0; i < sizeof(block) / sizeof(uint32_t); ++i)
-			data[i] = rand_div();
-		memcpy(&v, data, sizeof(block));
+		expecting(getentropy(&v, sizeof(block)) == 0,
+		          "PRG: system entropy unavailable");
 		return v;
 	}
 	void reseed(const block* seed, uint64_t id = 0) {

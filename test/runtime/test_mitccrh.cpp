@@ -167,6 +167,55 @@ static bool check_hash_cir() {
 	return ok;
 }
 
+// hash_cir_fixed<K,H> contract: hashes under the keys
+// from an explicit renew_ks(tweaks) WITHOUT consuming them. Checks:
+// (1) equivalence with the first consuming hash_cir under the same
+// schedule; (2) repeated fixed calls reproduce the output and leave
+// key_used untouched, so a later hash_cir still starts at key 0;
+// (3) a different tweak vector changes every hashed lane.
+template <int K, int H>
+static bool check_hash_cir_fixed() {
+	const block S = makeBlock(0xf1e2ULL, 0xd3c4ULL);
+	PRG prg(&zero_block);
+	block tweaks[8], tweaks2[8], in[K * H];
+	prg.random_block(tweaks, 8);
+	prg.random_block(tweaks2, 8);
+	prg.random_block(in, K * H);
+
+	MITCCRH<8> a, b, c;
+	a.setS(S); b.setS(S); c.setS(S);
+	a.renew_ks(tweaks);
+	b.renew_ks(tweaks);
+	c.renew_ks(tweaks2);
+
+	block fixed_out[K * H], cir_out[K * H], again[K * H], after[K * H],
+	    other[K * H];
+	memcpy(fixed_out, in, sizeof(in));
+	memcpy(cir_out, in, sizeof(in));
+	memcpy(again, in, sizeof(in));
+	memcpy(after, in, sizeof(in));
+	memcpy(other, in, sizeof(in));
+
+	a.template hash_cir_fixed<K, H>(fixed_out);
+	b.template hash_cir<K, H>(cir_out);
+	bool ok = memcmp(fixed_out, cir_out, sizeof(in)) == 0;
+
+	a.template hash_cir_fixed<K, H>(again);
+	ok &= memcmp(again, fixed_out, sizeof(in)) == 0;
+
+	a.template hash_cir<K, H>(after);
+	ok &= memcmp(after, cir_out, sizeof(in)) == 0;
+
+	c.template hash_cir_fixed<K, H>(other);
+	for (int i = 0; i < K * H; ++i)
+		ok &= memcmp(&other[i], &fixed_out[i], sizeof(block)) != 0;
+
+	ostringstream os;
+	os << "  [hash_cir_fixed<" << K << "," << H << "> contract]";
+	cout << left << setw(46) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
 template <int K, int H>
 static bool check_out_of_place() {
 	const block S = makeBlock(0x9999ULL, 0xaaaaULL);
@@ -246,6 +295,9 @@ static bool run_correctness() {
 	ok &= check_hash_cir<2, 1>();
 	ok &= check_hash_cir<2, 2>();
 	ok &= check_hash_cir<8, 1>();
+	ok &= check_hash_cir_fixed<2, 1>();
+	ok &= check_hash_cir_fixed<8, 1>();
+	ok &= check_hash_cir_fixed<8, 2>();
 	ok &= check_out_of_place<1, 1>();
 	ok &= check_out_of_place<8, 4>();
 	ok &= check_hash_cir_out_of_place<2, 1>();

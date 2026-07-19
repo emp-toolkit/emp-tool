@@ -8,6 +8,7 @@
 #include "emp-tool/ir/session/clear_session.h"
 #include "emp-tool/runtime/core/constants.h"
 #include <array>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -130,6 +131,12 @@ static void sweep_shift_public() {
       auto a = sess.input<UInt32>(ALICE, v);
       check_u("shl pub", sess.reveal<uint32_t>(a << s, PUBLIC).value(), shl_w(v, (unsigned)s));
       check_u("shr pub", sess.reveal<uint32_t>(a >> s, PUBLIC).value(), shr_w(v, (unsigned)s));
+    }
+    {   // extreme public amount: saturates; i + s must not overflow int
+      auto a = sess.input<UInt32>(ALICE, v);
+      check_u("shl INT_MAX", sess.reveal<uint32_t>(a << INT_MAX, PUBLIC).value(), 0u);
+      auto b = sess.input<UInt32>(ALICE, v);
+      check_u("shr INT_MAX", sess.reveal<uint32_t>(b >> INT_MAX, PUBLIC).value(), 0u);
     }
     for (int s = 0; s <= 40; ++s) {        // rotates are mod-32
       auto a = sess.input<UInt32>(ALICE, v);

@@ -164,9 +164,9 @@ int main() {
 		check(rejects(huge_reuse_a), "huge reuse header (0 inputs) not rejected before allocation");
 		// (b) num_inputs == num_wires == 0xFFFFFFFF, no gates: passes the bound
 		//     (NW == num_inputs + 0), so validation must NOT size written[] to
-		//     num_wires nor loop over num_inputs — that was a ~4 GB alloc + 4e9-
-		//     iteration DoS. It must load cheaply as a no-op program (sizing only
-		//     the non-input slots, here zero).
+		//     num_wires nor loop over num_inputs — either would be a ~4 GB
+		//     alloc + 4e9-iteration DoS. It must load cheaply as a no-op
+		//     program (sizing only the non-input slots, here zero).
 		std::vector<uint8_t> huge_reuse_b = {
 			'E','M','P','B',
 			1,0,        // version

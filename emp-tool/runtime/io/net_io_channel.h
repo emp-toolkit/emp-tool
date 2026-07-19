@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <atomic>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -56,14 +55,9 @@ class NetIO : public IOChannel { public:
 	size_t recv_fill = 0;           // bytes available in recv_buf
 
 	// Byte counts and flush count live on the IOChannel base.
-
-#ifndef NDEBUG
-	// Debug-only concurrency assertion (NetIO is not thread-safe: the
-	// send_buf coalescing is unlocked). The shared touch_guard that trips on
-	// a concurrent send_data/recv_data/flush lives in io_channel.h; this is
-	// just its per-instance counter (dropped in release builds).
-	std::atomic<int> _in_use{0};
-#endif
+	// NOT thread-safe (unlocked send-buffer coalescing): one thread at a
+	// time per channel; threaded consumers take a sibling channel each
+	// (make_sibling). Races are not detected at runtime — use TSan.
 
 	NetIO(const char *address, int port, bool quiet = false) : quiet(quiet) {
 		expecting(port >= 0 && port <= 65535,
@@ -83,8 +77,8 @@ class NetIO : public IOChannel { public:
 
 	// Named factories owning their result (auto-freed via unique_ptr). The role
 	// is explicit in the name and the signature — listen() takes no address;
-	// connect() requires one — replacing the nullptr-means-server sentinel of the
-	// (const char*, int) constructor.
+	// connect() requires one — an explicit alternative to the
+	// nullptr-means-server sentinel of the (const char*, int) constructor.
 	static std::unique_ptr<NetIO> listen(int port, bool quiet = false) {
 		return std::make_unique<NetIO>(nullptr, port, quiet);
 	}
@@ -136,9 +130,6 @@ class NetIO : public IOChannel { public:
 	}
 
 	void flush() override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "flush");
-#endif
 		flush_unlocked();
 	}
 
@@ -172,10 +163,8 @@ class NetIO : public IOChannel { public:
 	}
 
 	void send_data_internal(const void *data, int64_t len) override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "send_data");
-#endif
 		expecting(len >= 0, "NetIO::send_data: negative len");
+		if (len == 0) return;
 		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
@@ -187,10 +176,8 @@ class NetIO : public IOChannel { public:
 	}
 
 	void recv_data_internal(void *data, int64_t len) override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "recv_data");
-#endif
 		expecting(len >= 0, "NetIO::recv_data: negative len");
+		if (len == 0) return;
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.
@@ -211,7 +198,8 @@ class NetIO : public IOChannel { public:
 				// free/flush memory those threads are mid-use on, tripping
 				// glibc's heap-corruption detector ("unaligned fastbin chunk").
 				// _Exit ends the process at once, running no destructors.
-				if (n <= 0) { fprintf(stderr, "error: net_recv_data (peer closed or read error)\n"); _Exit(1); }
+				expecting(n > 0,
+				          "net_recv_data (peer closed or read error)");
 				recv_ptr = 0;
 				recv_fill = (size_t)n;
 			}
@@ -236,10 +224,12 @@ private:
 		size_t sent = 0;
 		while (sent < len) {
 			size_t res = fwrite((const char *)data + sent, 1, len - sent, stream);
-			if (res > 0) sent += res;
-			// _Exit, not exit(): same worker-thread fatal-abort rule as
-			// recv_data_internal — do not run destructors while peers are live.
-			else { fprintf(stderr, "error: net_send_data (peer closed or write error)\n"); _Exit(1); }
+			// error() inside expecting uses _Exit, not exit(): same
+			// worker-thread fatal-abort rule as recv_data_internal — do
+			// not run destructors while peers are live.
+			expecting(res > 0,
+			          "net_send_data (peer closed or write error)");
+			sent += res;
 		}
 	}
 

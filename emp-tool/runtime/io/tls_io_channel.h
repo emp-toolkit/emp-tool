@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <atomic>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -84,11 +83,19 @@ inline void install_sigpipe_ignore_once() {
 }
 
 [[noreturn]] inline void die(const char *what) {
-	std::fprintf(stderr, "TLSIO: %s\n", what);
-	ERR_print_errors_fp(stderr);
-	// _Exit, not exit(): a TLS I/O failure can fire on a worker thread; running
-	// destructors / atexit while sibling threads are live races their heap use.
-	std::_Exit(1);
+	// The OpenSSL error queue folds into one diagnostic line, reported
+	// through error() like every other failure (docs/api_conventions.md).
+	// error() uses _Exit, not exit(): a TLS I/O failure can fire on a
+	// worker thread; running destructors / atexit while sibling threads
+	// are live races their heap use.
+	std::string msg = std::string("TLSIO: ") + what;
+	for (unsigned long e = ERR_get_error(); e != 0; e = ERR_get_error()) {
+		char buf[256];
+		ERR_error_string_n(e, buf, sizeof(buf));
+		msg += "; ";
+		msg += buf;
+	}
+	error(msg.c_str());
 }
 
 }  // namespace tls_detail
@@ -113,14 +120,9 @@ class TLSIO : public IOChannel { public:
 
 	// Byte counts and flush count live on the IOChannel base.
 
-#ifndef NDEBUG
-	// Debug-only concurrency assertion (TLSIO is not thread-safe: unlocked
-	// send_buf coalescing, and an SSL* mutates internal state on every
-	// read/write). The shared touch_guard that trips on a concurrent
-	// send_data/recv_data/flush lives in io_channel.h; this is just its
-	// per-instance counter (dropped in release builds).
-	std::atomic<int> _in_use{0};
-#endif
+	// NOT thread-safe (unlocked send-buffer coalescing, and an SSL*
+	// mutates internal state on every read/write): one thread at a time
+	// per channel. Races are not detected at runtime — use TSan.
 
 	// (addr == nullptr) → TCP listener; otherwise TCP client. is_tls_server
 	// defaults to mirror is_server but TLSConfig overrides if explicitly set.
@@ -193,9 +195,6 @@ class TLSIO : public IOChannel { public:
 	}
 
 	void flush() override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "flush");
-#endif
 		flush_unlocked();
 	}
 
@@ -296,10 +295,8 @@ class TLSIO : public IOChannel { public:
 	}
 
 	void send_data_internal(const void *data, int64_t len) override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "send_data");
-#endif
 		expecting(len >= 0, "TLSIO::send_data: negative len");
+		if (len == 0) return;
 		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
 			memcpy(send_buf + send_ptr, data, len);
 			send_ptr += len;
@@ -311,10 +308,8 @@ class TLSIO : public IOChannel { public:
 	}
 
 	void recv_data_internal(void *data, int64_t len) override {
-#ifndef NDEBUG
-		touch_guard _g(_in_use, "recv_data");
-#endif
 		expecting(len >= 0, "TLSIO::recv_data: negative len");
+		if (len == 0) return;
 		// Drain pending sends before blocking on the peer's reply, else
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. SSL_read goes straight to the socket BIO, no implicit

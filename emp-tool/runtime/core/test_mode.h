@@ -22,6 +22,8 @@
 // from lane 0 aborts: two threads sharing a lane would replay identical
 // "random" streams — silently wrong rather than merely nondeterministic.
 
+#include "emp-tool/runtime/core/error.h"
+
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
@@ -149,18 +151,16 @@ inline TestSeed next_test_seed() {
     detail::sync_test_epoch(s);
     if (s.lane == 0) {
         // Only one thread may consume main-lane seeds; a second one
-        // would replay the same streams. Always-on rather than an
-        // assert: test mode usually runs under Release/NDEBUG.
+        // would replay the same streams. Always-on: test mode usually
+        // runs under Release/NDEBUG builds.
         auto& owner = detail::lane0_owner();
         const uint64_t token = detail::this_thread_token();
         uint64_t expected = 0;
-        if (!owner.compare_exchange_strong(expected, token) && expected != token) {
-            fprintf(stderr,
-                    "test mode: a second thread drew lane-0 randomness; run "
-                    "spawned work under emp::test_lane_scope (see "
-                    "docs/test_mode.md)\n");
-            abort();
-        }
+        expecting(owner.compare_exchange_strong(expected, token) ||
+                      expected == token,
+                  "test mode: a second thread drew lane-0 randomness; run "
+                  "spawned work under emp::test_lane_scope (see "
+                  "docs/test_mode.md)");
     }
     return {s.lane, s.ctr++};
 }

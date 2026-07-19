@@ -121,6 +121,9 @@ public:
     }
     Int_T operator>>(int s) const {                 // arithmetic: fill with sign bit
         expecting(s >= 0, "Int_T::operator>>: shift amount must be >= 0");
+        // Amounts >= width sign-fill (docs/numeric_semantics.md); clamp
+        // before the i + s index test can overflow int.
+        if (s > n_()) s = n_();
         Int_T r = blank_(); Wire sgn = w[n_() - 1];
         for (int i = 0; i < n_(); ++i) r.w[i] = (i + s < n_()) ? w[i + s] : sgn;
         return r;

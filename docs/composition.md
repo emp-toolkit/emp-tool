@@ -150,8 +150,9 @@ Requirements/notes:
   levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
 - `run_tiled(unit, repeats, state)` is one-line sugar over `run_compose` for the common
   state→state chain.
-- Measured on a 100M-AND sha chain (2× m8a.8xlarge): compose ≈ **−11% wall / +12%
-  throughput** vs the inline/live baseline, with negligible setup, because the unit is
+- In a development benchmark (100M-AND sha chain, 2× m8a.8xlarge, 2026-06;
+  raw outputs not archived in-repo): compose ≈ −11% wall / +12% throughput
+  vs the inline/live baseline, with negligible setup, because the unit is
   compiled once and replayed by reference rather than materialized.
 
 The plan is also independently materializable (`flatten_compose` in
