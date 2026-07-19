@@ -36,6 +36,7 @@
 #include "emp-tool/runtime/core/utils.h"                // error()
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <tuple>
 #include <type_traits>
@@ -135,9 +136,9 @@ public:
     // structurally AND that the signature matches the declared value types — so a
     // stale, hand-edited, or mis-typed loaded artifact is rejected here rather
     // than silently mis-running. The artifact is otherwise immutable (private).
-    explicit Circuit(circuit::CircuitArtifact a) : artifact_(std::move(a)) {
-        circuit::validate_artifact(artifact_);
-        const circuit::CircuitSignature& s = artifact_.signature;
+    explicit Circuit(circuit::CircuitArtifact a) {
+        circuit::validate_artifact(a);
+        const circuit::CircuitSignature& s = a.signature;
         const std::array<uint32_t, sizeof...(ArgVs)> want{(uint32_t)ArgVs::width()...};
         expecting(s.arg_widths.size() == sizeof...(ArgVs),
                   "Circuit: artifact signature arity != declared value types");
@@ -146,13 +147,22 @@ public:
                       "Circuit: artifact argument width != declared value width");
         expecting(s.return_width == (uint32_t)RetV::width(),
                   "Circuit: artifact return width != declared value width");
+        artifact_ = std::make_shared<const circuit::CircuitArtifact>(std::move(a));
     }
 
-    const circuit::BooleanProgram&   program()   const { return artifact_.program; }
-    const circuit::CircuitSignature& signature() const { return artifact_.signature; }
+    const circuit::BooleanProgram&   program()   const { return artifact_->program; }
+    const circuit::CircuitSignature& signature() const { return artifact_->signature; }
+
+    // Co-owning handle on the program, for composition: a ComposePlan that
+    // records this circuit as a unit keeps the whole artifact alive through
+    // this aliasing pointer, so the plan outlives the source Circuit.
+    std::shared_ptr<const circuit::BooleanProgram> program_shared() const {
+        return std::shared_ptr<const circuit::BooleanProgram>(artifact_,
+                                                              &artifact_->program);
+    }
 
 private:
-    circuit::CircuitArtifact artifact_;
+    std::shared_ptr<const circuit::CircuitArtifact> artifact_;
 };
 
 struct invalid_circuit_fn {};   // sentinel for the contract-violating branch
@@ -280,7 +290,9 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
               "frontend::run: total argument width != circuit input count");
     if constexpr (std::same_as<std::remove_cvref_t<Ctx>, ComposeCtx>) {
         // Composition: record one opaque instance (wiring only), don't inline.
-        std::vector<Wire> out = ctx.call_unit(p, inputs.data(), inputs.size());
+        // Pass the co-owning program handle so the plan outlives this Circuit.
+        std::vector<Wire> out =
+            ctx.call_unit(c.program_shared(), inputs.data(), inputs.size());
         return RetV::template rebind<Ctx>::from_wires(ctx, out.data());
     } else {
 #if EMP_CONTEXT_CHECKS

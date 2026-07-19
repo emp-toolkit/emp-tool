@@ -79,6 +79,30 @@ int main() {
 		}
 	}
 
+	// ---- lifetime: the plan co-owns its units; flatten after they die ----
+	{
+		std::vector<uint8_t> in(8); for (auto& x : in) x = rng() & 1;
+		std::vector<uint8_t> want;
+		ComposePlan plan;
+		{
+			// Build the unit and plan in an inner scope, then let the unit
+			// Circuit go out of scope BEFORE flattening. The plan must keep
+			// the unit program alive — a non-owning pointer would dangle here
+			// (an ASan use-after-free on the sanitize leg).
+			auto local_unit = cf::compile_linear<R8>(
+			    [](auto s) { return s * s.constant(3u) + s.constant(1u); });
+			auto body = [&](auto& ctx, auto s) {
+				for (int i = 0; i < 3; ++i) s = cf::run(ctx, local_unit, s);
+				return s;
+			};
+			want = run_bytes(cf::compile<R8>(body).program(), in);
+			plan = cf::compose<R8>(body);
+		}
+		auto flat = flatten_compose(plan);
+		check(plan.instances.size() == 3, "lifetime: expected 3 instances");
+		check(run_bytes(flat, in) == want, "lifetime: flatten after unit scope != inline");
+	}
+
 	if (ok) printf("test_compose: all checks passed\n");
 	return ok ? 0 : 1;
 }

@@ -17,16 +17,20 @@
 #include "emp-tool/ir/validate.h"          // validate_program (flatten_compose)
 #include "emp-tool/runtime/core/utils.h"   // error()
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <vector>
 
 namespace emp {
 
-// One opaque unit call: a reference to a (Linear) unit program plus the
-// composition wire ids it reads (in_ids, one per unit input) and the fresh
-// composition wire ids it produces (out_ids, one per unit output bit).
+// One opaque unit call: a shared, co-owning handle on a (Linear) unit
+// program plus the composition wire ids it reads (in_ids, one per unit
+// input) and the fresh composition wire ids it produces (out_ids, one
+// per unit output bit). The plan co-owns each unit, so it stays valid
+// after the source circuits go out of scope; identical units (a tiled
+// chain) share one control block.
 struct ComposeInstance {
-	const circuit::BooleanProgram* unit = nullptr;
+	std::shared_ptr<const circuit::BooleanProgram> unit;
 	std::vector<uint32_t> in_ids;
 	std::vector<uint32_t> out_ids;
 };
@@ -83,14 +87,17 @@ struct ComposeCtx {
 	// Record one opaque call of `unit` reading `in` (length == unit.num_inputs);
 	// returns fresh wire ids for the unit's outputs. The unit's gates are NOT
 	// walked here — only the reference + wiring are kept.
-	std::vector<Wire> call_unit(const circuit::BooleanProgram& unit, const Wire* in, size_t n) {
+	std::vector<Wire> call_unit(std::shared_ptr<const circuit::BooleanProgram> unit,
+	                            const Wire* in, size_t n) {
 		inputs_closed = true;
-		expecting(n == unit.num_inputs,
+		expecting(unit != nullptr, "ComposeCtx::call_unit: null unit");
+		expecting(n == unit->num_inputs,
 		          "ComposeCtx::call_unit: argument width != unit num_inputs");
-		std::vector<Wire> outs(unit.outputs.size());
+		std::vector<Wire> outs(unit->outputs.size());
 		for (auto& o : outs) o = alloc_();
 		int idx = (int)plan.instances.size();
-		plan.instances.push_back(ComposeInstance{&unit, std::vector<uint32_t>(in, in + n), outs});
+		plan.instances.push_back(
+		    ComposeInstance{std::move(unit), std::vector<uint32_t>(in, in + n), outs});
 		plan.events.push_back(ComposeEvent{circuit::Gate{}, idx});
 		return outs;
 	}
