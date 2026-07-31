@@ -18,6 +18,7 @@
 //   bool is_materialized_(id)                                 // id in carried state?
 //   template<class Pred> void prune_carried_(keep)            // drop carried !keep(id)
 //   int party_()
+//   static constexpr bool kCountsAndsInternally               // optional: skip base scan
 //
 // Derived also defines run(body, ...) (its replay strategy differs) and owns the
 // protocol/engine members + CarriedState. The base provides input / input_batch /
@@ -217,6 +218,11 @@ protected:
     return from_ids_<RetV>(ctx_, out_ids);
   }
   void count_ands_(const circuit::BooleanProgram& prog) {
+    if constexpr (requires { Derived::kCountsAndsInternally; }) {
+      static_assert(std::is_same_v<decltype(Derived::kCountsAndsInternally),
+                                   const bool>);
+      if constexpr (Derived::kCountsAndsInternally) return;
+    }
     for (const auto& g : prog.gates) if (g.op == circuit::Op::And) ++num_and_;
   }
 
