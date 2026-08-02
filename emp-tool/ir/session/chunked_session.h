@@ -17,6 +17,7 @@
 //   void validate_recipient_(recipient)                       // reject bad recipient pre-flush
 //   bool is_materialized_(id)                                 // id in carried state?
 //   template<class Pred> void prune_carried_(keep)            // drop carried !keep(id)
+//   void materialize_deferred_inputs_()                        // optional normal-operation barrier
 //   int party_()
 //   static constexpr bool kCountsAndsInternally               // optional: skip base scan
 //
@@ -34,6 +35,7 @@
 #include <optional>
 #include <type_traits>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace emp {
@@ -64,6 +66,16 @@ public:
   // ---- multi-owner input batch: ONE authentication phase across owners ----
   class InputBatch {
   public:
+    InputBatch(const InputBatch &) = delete;
+    InputBatch &operator=(const InputBatch &) = delete;
+    InputBatch(InputBatch &&other) noexcept
+        : sess_(std::exchange(other.sess_, nullptr)),
+          owners_(std::move(other.owners_)),
+          bits_(std::move(other.bits_)),
+          ids_(std::move(other.ids_)),
+          finished_(std::exchange(other.finished_, true)) {}
+    InputBatch &operator=(InputBatch &&) = delete;
+
     template <WireValue V>
     V add(int owner, const typename V::clear_t& clear) {
       expecting(!finished_, "ChunkedSession::input_batch: add() after finish()");
@@ -145,6 +157,7 @@ public:
   typename RetV::template rebind<ctx_t>
   run(const frontend::Circuit<RetV, ArgVs...>& c,
       const typename ArgVs::template rebind<ctx_t>&... args) {
+    settle_deferred_inputs_();
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
     expecting((uint32_t)in_ids.size() == c.program().num_inputs,
@@ -157,6 +170,7 @@ public:
   RetV run_artifact(const circuit::BooleanProgram& prog, const Args&... args) {
     static_assert(std::same_as<typename RetV::context_type, ctx_t>,
         "ChunkedSession::run_artifact<RetV>: RetV must be a value over this session's ctx_t");
+    settle_deferred_inputs_();
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
     expecting((uint32_t)in_ids.size() == prog.num_inputs,
@@ -226,9 +240,19 @@ protected:
     for (const auto& g : prog.gates) if (g.op == circuit::Op::And) ++num_and_;
   }
 
+  // A protocol may defer input authentication while assembling a distinct
+  // execution mode (for example an offline-prepared run).  Every ordinary
+  // ChunkedSession boundary settles those descriptors first.  Sessions without
+  // the hook compile to exactly their former code.
+  void settle_deferred_inputs_() {
+    if constexpr (requires(Derived& d) { d.materialize_deferred_inputs_(); })
+      self().materialize_deferred_inputs_();
+  }
+
   // Run the pending chunk, materializing exactly the PENDING keep ids; clear the
   // chunk. If no keep id is pending, drop the chunk without running.
   void flush_(const std::vector<uint32_t>& keep_ids) {
+    settle_deferred_inputs_();
     for (uint32_t id : keep_ids)
       expecting(ctx_.is_pending(id) || self().is_materialized_(id),
                 "ChunkedSession: keep/reveal wire is stale");
