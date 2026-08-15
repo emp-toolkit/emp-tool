@@ -89,7 +89,7 @@ static void bench(double sec) {
 	for (int nb : {32, 128, 512, 2048, 8192, 32768, 131072}) {
 		vector<uint8_t> buf(nb);
 		double calls = run_for(sec, [&]() {
-			prg.random_bool(reinterpret_cast<bool *>(buf.data()), nb);
+			prg.random_bool(buf.data(), nb);
 		}, buf.data());
 		ostringstream lbl; lbl << "random_bool(N=" << nb << ")";
 		print_vec(lbl.str(), calls, (size_t)nb);

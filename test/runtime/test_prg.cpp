@@ -214,10 +214,33 @@ static bool check_random_bool_is_0_or_1() {
 	PRG p;
 	for (int len : {1, 7, 32, 128, 1023, 4096}) {
 		vector<uint8_t> buf(len);
-		// random_bool writes via bool*; 1 byte per bool, value 0 or 1.
-		p.random_bool(reinterpret_cast<bool *>(buf.data()), len);
+		p.random_bool(buf.data(), len);
 		for (int i = 0; i < len; ++i)
 			if (buf[i] > 1) return false;
+	}
+	return true;
+}
+
+static bool check_random_bool_representations_match() {
+	block seed = makeBlock(0x1234, 0x5678);
+	PRG empty(&seed);
+	uint8_t *no_bytes = nullptr;
+	empty.random_bool(nullptr, 0);
+	empty.random_bool(no_bytes, 0);
+	if (empty.position() != 0) return false;
+	bool bools[4097];
+	for (int len : {0, 1, 7, 31, 32, 33, 127, 128, 129, 2048, 2049, 4097}) {
+		PRG a(&seed), b(&seed);
+		vector<uint8_t> bytes(len);
+		a.random_bool(bools, len);
+		b.random_bool(bytes.data(), len);
+		for (int i = 0; i < len; ++i)
+			if (bytes[i] > 1 || (bytes[i] != 0) != bools[i]) return false;
+		if (a.position() != b.position()) return false;
+		block next_a, next_b;
+		a.random_block(&next_a, 1);
+		b.random_block(&next_b, 1);
+		if (!blocks_eq(next_a, next_b)) return false;
 	}
 	return true;
 }
@@ -227,7 +250,7 @@ static bool check_random_bool_distribution() {
 	PRG p;
 	const int N = 1 << 18;
 	vector<uint8_t> buf(N);
-	p.random_bool(reinterpret_cast<bool *>(buf.data()), N);
+	p.random_bool(buf.data(), N);
 	int64_t ones = 0;
 	for (int i = 0; i < N; ++i) ones += buf[i];
 	double mean = (double)ones / N;
@@ -276,6 +299,7 @@ static bool run_correctness() {
 		{"random_data_unaligned vs aligned ref", check_random_data_unaligned},
 		{"random_data_unaligned counter",       check_random_data_unaligned_counter},
 		{"random_bool ∈ {0,1}",                 check_random_bool_is_0_or_1},
+		{"random_bool bool/byte parity",         check_random_bool_representations_match},
 		{"random_bool mean ~ 0.5",              check_random_bool_distribution},
 		{"UniformRandomBitGenerator interface", check_uniform_engine},
 		{"negative lengths rejected",           check_negative_lengths_rejected},

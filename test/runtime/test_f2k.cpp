@@ -20,6 +20,7 @@
 #include <fcntl.h>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -241,35 +242,39 @@ static bool check_vector_inn_prdt_bool(int sz) {
 	PRG prg;
 	vector<block> xs(sz);
 	prg.random_block(xs.data(), sz);
-	vector<uint8_t> bs_bytes(sz);
-	prg.random_bool(reinterpret_cast<bool *>(bs_bytes.data()), sz);
-	const bool *bs = reinterpret_cast<const bool *>(bs_bytes.data());
+	vector<uint8_t> bs(sz);
+	prg.random_bool(bs.data(), sz);
+	auto bools = make_unique<bool[]>(sz);
+	for (int i = 0; i < sz; ++i) bools[i] = bs[i] != 0;
 
-	block got;
-	vector_inn_prdt_sum_red(&got, xs.data(), bs, sz);
+	block got_bytes, got_bools;
+	vector_inn_prdt_sum_red(&got_bytes, xs.data(), bs.data(), sz);
+	vector_inn_prdt_sum_red(&got_bools, xs.data(), bools.get(), sz);
 
 	// Reference: XOR of xs[i] for indices where bs[i] = 1.
 	block want = makeBlock(0, 0);
 	for (int i = 0; i < sz; ++i)
 		if (bs[i]) want = want ^ xs[i];
-	return blocks_eq(got, want);
+	return blocks_eq(got_bytes, want) && blocks_eq(got_bools, want);
 }
 
 static bool check_packing_bool() {
 	PRG prg;
 	GaloisFieldPacking pkr;
 	for (int t = 0; t < 16; ++t) {
-		uint8_t bits_bytes[128];
-		prg.random_bool(reinterpret_cast<bool *>(bits_bytes), 128);
-		const bool *bits = reinterpret_cast<const bool *>(bits_bytes);
-		block got;
-		pkr.packing(&got, bits);
+		uint8_t bits[128];
+		bool bools[128];
+		prg.random_bool(bits, 128);
+		for (int i = 0; i < 128; ++i) bools[i] = bits[i] != 0;
+		block got_bytes, got_bools;
+		pkr.packing(&got_bytes, bits);
+		pkr.packing(&got_bools, bools);
 		// Reference: same identity as block-version, with each X^i contributing
 		// only when bits[i]=1.
 		block want = makeBlock(0, 0);
 		for (int i = 0; i < 128; ++i)
 			if (bits[i]) want = want ^ set_bit(makeBlock(0, 0), i);
-		if (!blocks_eq(got, want)) return false;
+		if (!blocks_eq(got_bytes, want) || !blocks_eq(got_bools, want)) return false;
 	}
 	return true;
 }
@@ -293,7 +298,7 @@ static bool run_correctness() {
 	cout << "  vector_inn_prdt_sum_*          " << (b ? "OK" : "FAIL") << "\n";
 	bool b2 = true;
 	for (int sz : {1, 7, 64, 1024}) b2 &= check_vector_inn_prdt_bool(sz);
-	cout << "  vector_inn_prdt_sum_red(bool)  " << (b2 ? "OK" : "FAIL") << "\n";
+	cout << "  vector_inn_prdt_sum_red(bits)  " << (b2 ? "OK" : "FAIL") << "\n";
 	bool c = true;
 	for (int sz : {1, 4, 16, 1024}) c &= check_uni_hash_coeff_gen(sz);
 	cout << "  uni_hash_coeff_gen             " << (c ? "OK" : "FAIL") << "\n";
@@ -303,7 +308,7 @@ static bool run_correctness() {
 	bool d = check_packing();
 	cout << "  GaloisFieldPacking::packing    " << (d ? "OK" : "FAIL") << "\n";
 	bool d2 = check_packing_bool();
-	cout << "  GaloisFieldPacking::packing(bool) " << (d2 ? "OK" : "FAIL") << "\n";
+	cout << "  GaloisFieldPacking::packing(bits) " << (d2 ? "OK" : "FAIL") << "\n";
 	bool e = true;
 	for (int sz : {1, 4, 17, 1024}) e &= check_vector_self_xor(sz);
 	cout << "  vector_self_xor                " << (e ? "OK" : "FAIL") << "\n";

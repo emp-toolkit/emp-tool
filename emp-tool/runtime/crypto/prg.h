@@ -87,34 +87,13 @@ class PRG { public:
 	// consuming a full byte for one bit, an 8x cut in AES work. Inner unpack
 	// uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
 	void random_bool(bool * data, int64_t length) {
-		expecting(length >= 0, "PRG::random_bool: negative bit count");
-		if (length == 0) return;
-		constexpr int CHUNK_B = 16;  // 16 blocks = 2048 bits per pass
-		block buf[CHUNK_B];
-		int64_t produced = 0;
-		while (produced < length) {
-			int64_t remaining = length - produced;
-			int64_t bits_pass = remaining < CHUNK_B * 128 ? remaining : CHUNK_B * 128;
-			int64_t blocks_pass = (bits_pass + 127) / 128;
-			random_block(buf, blocks_pass);
-			const uint8_t *bytes = reinterpret_cast<const uint8_t *>(buf);
-			int64_t full32 = bits_pass / 32;
-			for (int64_t i = 0; i < full32; ++i) {
-				uint32_t b32;
-				memcpy(&b32, bytes + i * 4, 4);
-				bits32_to_bytes(b32, data + produced + i * 32);
-			}
-			produced += full32 * 32;
-			int64_t tail_bits = bits_pass - full32 * 32;
-			if (tail_bits > 0) {
-				uint32_t b32 = 0;
-				memcpy(&b32, bytes + full32 * 4, (tail_bits + 7) / 8);
-				bool tmp[32];
-				bits32_to_bytes(b32, tmp);
-				memcpy(data + produced, tmp, tail_bits);
-				produced += tail_bits;
-			}
-		}
+		random_bool_impl_(data, length);
+	}
+
+	template <typename T>
+	requires std::is_same_v<T, uint8_t>
+	void random_bool(T *data, int64_t length) {
+		random_bool_impl_(data, length);
 	}
 
 	void random_data_unaligned(void *data, int64_t nbytes) {
@@ -215,6 +194,37 @@ class PRG { public:
 	}
 
 private:
+	template <typename T>
+	void random_bool_impl_(T *data, int64_t length) {
+		expecting(length >= 0, "PRG::random_bool: negative bit count");
+		if (length == 0) return;
+		constexpr int CHUNK_B = 16;
+		block buf[CHUNK_B];
+		int64_t produced = 0;
+		while (produced < length) {
+			int64_t remaining = length - produced;
+			int64_t bits_pass = remaining < CHUNK_B * 128 ? remaining : CHUNK_B * 128;
+			int64_t blocks_pass = (bits_pass + 127) / 128;
+			random_block(buf, blocks_pass);
+			const uint8_t *bytes = reinterpret_cast<const uint8_t *>(buf);
+			int64_t full32 = bits_pass / 32;
+			for (int64_t i = 0; i < full32; ++i) {
+				uint32_t b32;
+				memcpy(&b32, bytes + i * 4, 4);
+				bits32_to_bytes(b32, data + produced + i * 32);
+			}
+			produced += full32 * 32;
+			int64_t tail_bits = bits_pass - full32 * 32;
+			if (tail_bits > 0) {
+				uint32_t b32 = 0;
+				memcpy(&b32, bytes + full32 * 4, (tail_bits + 7) / 8);
+				for (int64_t i = 0; i < tail_bits; ++i)
+					data[produced + i] = static_cast<T>((b32 >> i) & 1);
+				produced += tail_bits;
+			}
+		}
+	}
+
 	uint64_t counter = 0;
 	AES_KEY aes;
 	block key;

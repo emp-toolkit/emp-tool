@@ -14,7 +14,9 @@
 // regression checks can be reused by IO implementations.
 
 #include <cstring>
+#include <cstdint>
 #include <iostream>
+#include <vector>
 
 #include "emp-tool/emp-tool.h"
 
@@ -28,6 +30,15 @@ using namespace emp;
 // -------------------------------------------------------------------------
 template <typename IO>
 static void run_correctness(IO *io, int party, const char *tag) {
+	uint64_t sent_before = io->send_counter, recv_before = io->recv_counter;
+	uint8_t *no_bytes = nullptr;
+	io->send_bool(nullptr, 0);
+	io->recv_bool(nullptr, 0);
+	io->send_bool(no_bytes, 0);
+	io->recv_bool(no_bytes, 0);
+	expecting(io->send_counter == sent_before && io->recv_counter == recv_before,
+	          "NetIO test: zero-length bool transfer changed counters");
+
 	// Stream of unaligned-byte sends: sends `length` bytes 1000 times in
 	// each direction, with `length` chosen to straddle the 32 KiB sender
 	// staging buffer (NETWORK_STAGING_BUFFER_SIZE/5 + 100) so most send_data calls
@@ -62,21 +73,35 @@ static void run_correctness(IO *io, int party, const char *tag) {
 	// Bool packing: 1 MiB of bools sent both aligned and at offset +7 (so
 	// the implementation cannot lean on uint64_t-aligned input).
 	{
+		constexpr int N = 1024 * 1024;
 		PRG prg(&zero_block);
-		bool *data  = new bool[1024 * 1024];
-		bool *data2 = new bool[1024 * 1024];
-		prg.random_bool(data, 1024 * 1024);
+		bool *data  = new bool[N];
+		bool *data2 = new bool[N];
+		vector<uint8_t> bytes(N), bytes2(N);
+		prg.random_bool(data, N);
+		for (int i = 0; i < N; ++i) bytes[i] = static_cast<uint8_t>(data[i]);
 		if (party == ALICE) {
-			io->send_bool(data, 1024 * 1024);
-			io->send_bool(data + 7, 1024 * 1024 - 7);
+			io->send_bool(data, N);
+			io->send_bool(data + 7, N - 7);
+			io->send_bool(bytes.data() + 3, N - 3);
+			io->send_bool(data + 5, N - 5);
 		} else {
-			io->recv_bool(data2, 1024 * 1024);
-			expecting(memcmp(data2, data, 1024 * 1024) == 0,
+			io->recv_bool(data2, N);
+			expecting(memcmp(data2, data, N) == 0,
 			          "NetIO test: aligned bool round-trip mismatch");
-			memset(data2, 0, 1024 * 1024);
-			io->recv_bool(data2 + 7, 1024 * 1024 - 7);
-			expecting(memcmp(data2 + 7, data + 7, 1024 * 1024 - 7) == 0,
+			memset(data2, 0, N);
+			io->recv_bool(data2 + 7, N - 7);
+			expecting(memcmp(data2 + 7, data + 7, N - 7) == 0,
 			          "NetIO test: unaligned bool round-trip mismatch");
+			memset(data2, 0, N);
+			io->recv_bool(data2 + 3, N - 3);
+			for (int i = 3; i < N; ++i)
+				expecting(data2[i] == data[i],
+				          "NetIO test: byte-bool send mismatch");
+			io->recv_bool(bytes2.data() + 5, N - 5);
+			for (int i = 5; i < N; ++i)
+				expecting((bytes2[i] != 0) == data[i],
+				          "NetIO test: byte-bool receive mismatch");
 		}
 		delete[] data;
 		delete[] data2;

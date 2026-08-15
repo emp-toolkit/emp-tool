@@ -287,26 +287,38 @@ static bool check_bits_bytes_roundtrip() {
 }
 
 static bool check_bools_bits_roundtrip() {
-	PRG prg;
+	uint8_t *no_bytes = nullptr;
+	bools_to_bits(nullptr, nullptr, 0);
+	bits_to_bools(nullptr, nullptr, 0);
+	bools_to_bits(nullptr, no_bytes, 0);
+	bits_to_bools(no_bytes, nullptr, 0);
+	bool bools_in[4097], bools_out[4097];
 	for (int len : {1, 7, 8, 9, 31, 32, 33, 127, 128, 1023, 1024, 4097}) {
-		vector<uint8_t> bools_in(len);   // byte-bools (0/1) — never vector<bool>
-		for (int i = 0; i < len; ++i) bools_in[i] = (i * 2654435761u) & 1;
-
-		vector<uint8_t> packed((len + 7) / 8, 0xAA);  // sentinel byte
-		bools_to_bits(packed.data(), reinterpret_cast<const bool *>(bools_in.data()), len);
-
-		vector<uint8_t> out_bytes(len);
-		bits_to_bools(reinterpret_cast<bool *>(out_bytes.data()), packed.data(), len);
+		vector<uint8_t> bytes_in(len);
 		for (int i = 0; i < len; ++i) {
-			bool got = out_bytes[i] != 0;
-			if (got != (bools_in[i] != 0)) return false;
+			bytes_in[i] = ((i * 2654435761u) & 1) ? 0xA5 : 0;
+			bools_in[i] = bytes_in[i] != 0;
+		}
+
+		vector<uint8_t> packed_bytes((len + 7) / 8, 0xAA);
+		vector<uint8_t> packed_bools((len + 7) / 8, 0xAA);
+		bools_to_bits(packed_bytes.data(), bytes_in.data(), len);
+		bools_to_bits(packed_bools.data(), bools_in, len);
+		if (packed_bytes != packed_bools) return false;
+
+		vector<uint8_t> bytes_out(len);
+		bits_to_bools(bytes_out.data(), packed_bytes.data(), len);
+		bits_to_bools(bools_out, packed_bytes.data(), len);
+		for (int i = 0; i < len; ++i) {
+			if (bytes_out[i] > 1 || (bytes_out[i] != 0) != bools_in[i]) return false;
+			if (bools_out[i] != bools_in[i]) return false;
 		}
 
 		// Tail-byte preservation: bits beyond `len` in the last byte must remain 0xAA.
 		if (len % 8 != 0) {
 			uint8_t mask_below = (uint8_t)((1u << (len % 8)) - 1);
 			uint8_t expected_tail_bits_above = 0xAA & (uint8_t)~mask_below;
-			uint8_t got_tail_above = packed.back() & (uint8_t)~mask_below;
+			uint8_t got_tail_above = packed_bytes.back() & (uint8_t)~mask_below;
 			if (got_tail_above != expected_tail_bits_above) return false;
 		}
 	}
@@ -326,7 +338,7 @@ static bool run_correctness() {
 		{"sse_trans round-trip",        check_sse_trans_roundtrip},
 		{"sse_trans_n128 parity",       check_sse_trans_n128_parity},
 		{"bytes<->bits32 round-trip",   check_bits_bytes_roundtrip},
-		{"bools<->bits round-trip",     check_bools_bits_roundtrip},
+		{"bool/byte-bools<->bits parity", check_bools_bits_roundtrip},
 	};
 	bool all = true;
 	for (auto &c : cases) {
