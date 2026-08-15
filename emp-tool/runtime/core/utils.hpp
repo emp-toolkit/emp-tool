@@ -100,7 +100,10 @@ static inline void bits32_to_bytes(uint32_t bits, void *out) {
 #endif
 }
 
-inline void bools_to_bits(void *out_, const bool *bools, int64_t len) {
+namespace detail {
+
+template <typename T>
+inline void bools_to_bits_impl(void *out_, const T *bools, int64_t len) {
 	expecting(len >= 0, "bools_to_bits: negative bit count");
 	uint8_t *out = static_cast<uint8_t *>(out_);
 	int64_t full32 = len / 32;
@@ -110,11 +113,13 @@ inline void bools_to_bits(void *out_, const bool *bools, int64_t len) {
 	}
 	for (int64_t i = full32 * 32; i < len; ++i) {
 		uint8_t mask = (uint8_t)1 << (i % 8);
-		out[i / 8] = (uint8_t)((out[i / 8] & ~mask) | (((uint8_t)bools[i]) << (i % 8)));
+		uint8_t bit = static_cast<uint8_t>(bools[i] != 0);
+		out[i / 8] = (uint8_t)((out[i / 8] & ~mask) | (bit << (i % 8)));
 	}
 }
 
-inline void bits_to_bools(bool *bools, const void *in_, int64_t len) {
+template <typename T>
+inline void bits_to_bools_impl(T *bools, const void *in_, int64_t len) {
 	expecting(len >= 0, "bits_to_bools: negative bit count");
 	const uint8_t *in = static_cast<const uint8_t *>(in_);
 	int64_t full32 = len / 32;
@@ -126,6 +131,28 @@ inline void bits_to_bools(bool *bools, const void *in_, int64_t len) {
 	for (int64_t i = full32 * 32; i < len; ++i) {
 		bools[i] = (in[i / 8] >> (i % 8)) & 1;
 	}
+}
+
+}  // namespace detail
+
+inline void bools_to_bits(void *out, const bool *bools, int64_t len) {
+	detail::bools_to_bits_impl(out, bools, len);
+}
+
+template <typename T>
+requires std::is_same_v<T, uint8_t>
+inline void bools_to_bits(void *out, const T *bools, int64_t len) {
+	detail::bools_to_bits_impl(out, bools, len);
+}
+
+inline void bits_to_bools(bool *bools, const void *in, int64_t len) {
+	detail::bits_to_bools_impl(bools, in, len);
+}
+
+template <typename T>
+requires std::is_same_v<T, uint8_t>
+inline void bits_to_bools(T *bools, const void *in, int64_t len) {
+	detail::bits_to_bools_impl(bools, in, len);
 }
 
 template <typename T>

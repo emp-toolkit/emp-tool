@@ -208,22 +208,46 @@ inline void vector_inn_prdt_sum_red(block *res, block const *a, const block *b) 
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
-inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b, int64_t sz) {
+namespace detail {
+
+template <typename T>
+inline void vector_inn_prdt_sum_red_bits(block *res, const block *a, const T *b,
+                                         int64_t sz) {
 	block r0 = zero_block, r1 = zero_block, r2 = zero_block, r3 = zero_block;
 	int64_t i = 0;
 	for (; i + 4 <= sz; i += 4) {
-		r0 = r0 ^ (a[i  ] & select_mask[b[i  ]]);
-		r1 = r1 ^ (a[i+1] & select_mask[b[i+1]]);
-		r2 = r2 ^ (a[i+2] & select_mask[b[i+2]]);
-		r3 = r3 ^ (a[i+3] & select_mask[b[i+3]]);
+		r0 = r0 ^ (a[i  ] & select_mask[b[i  ] != 0]);
+		r1 = r1 ^ (a[i+1] & select_mask[b[i+1] != 0]);
+		r2 = r2 ^ (a[i+2] & select_mask[b[i+2] != 0]);
+		r3 = r3 ^ (a[i+3] & select_mask[b[i+3] != 0]);
 	}
 	for (; i < sz; ++i)
-		r0 = r0 ^ (a[i] & select_mask[b[i]]);
+		r0 = r0 ^ (a[i] & select_mask[b[i] != 0]);
 	*res = (r0 ^ r1) ^ (r2 ^ r3);
+}
+
+}  // namespace detail
+
+inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b,
+                                    int64_t sz) {
+	detail::vector_inn_prdt_sum_red_bits(res, a, b, sz);
 }
 
 template<int N>
 inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b) {
+	vector_inn_prdt_sum_red(res, a, b, N);
+}
+
+template<typename T>
+requires std::is_same_v<T, uint8_t>
+inline void vector_inn_prdt_sum_red(block *res, const block *a, const T *b,
+                                    int64_t sz) {
+	detail::vector_inn_prdt_sum_red_bits(res, a, b, sz);
+}
+
+template<int N, typename T>
+requires std::is_same_v<T, uint8_t>
+inline void vector_inn_prdt_sum_red(block *res, const block *a, const T *b) {
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
@@ -433,6 +457,12 @@ inline void GaloisFieldPacking::packing(block *res, const block *data) {
 #endif  // EMP_HAS_AVX512BW / EMP_HAS_AVX2
 
 inline void GaloisFieldPacking::packing(block *res, const bool *data) {
+	bools_to_bits(res, data, 128);
+}
+
+template<typename T>
+requires std::is_same_v<T, uint8_t>
+inline void GaloisFieldPacking::packing(block *res, const T *data) {
 	bools_to_bits(res, data, 128);
 }
 

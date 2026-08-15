@@ -102,12 +102,16 @@ std::vector<uint8_t>    // owning; the byte-bool codec returns this
 const uint8_t*          // + length; the byte-bool codec reads this
 ```
 
-Each byte represents one bit and must be normalized to `0` or `1`.
+Each input byte represents one bit: zero is false and any nonzero value
+is true. APIs that produce byte-bools normalize their output to `0` or
+`1`. The bit packing, packed-bool I/O, PRG, and GF bit-vector helpers
+accept `uint8_t*` directly alongside their existing `bool*` overloads.
 
 Do not use `std::vector<bool>` in emp-tool library/protocol code. It is
 bit-packed, has proxy references, has no real `bool*`, and forces
-hidden copies. Do not reinterpret byte-bool storage as `bool*`; convert
-explicitly if an API requires real `bool` storage.
+hidden copies. Do not reinterpret byte-bool storage as `bool*`; pass it
+to a byte-bool overload, or convert explicitly if an API requires real
+`bool` storage.
 
 ## Length and count parameters
 

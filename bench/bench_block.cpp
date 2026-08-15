@@ -155,10 +155,10 @@ static void bench(double sec) {
 	cout << "\n=== bools_to_bits / bits_to_bools (sweep N bits) ===\n";
 	for (int len : {32, 128, 1024, 8192, 65536}) {
 		vector<uint8_t> bools(len);
-		prg.random_bool(reinterpret_cast<bool *>(bools.data()), len);
+		prg.random_bool(bools.data(), len);
 		vector<uint8_t> packed((len + 7) / 8);
 		double calls = run_for(sec, [&]() {
-			bools_to_bits(packed.data(), reinterpret_cast<const bool *>(bools.data()), len);
+			bools_to_bits(packed.data(), bools.data(), len);
 		}, packed.data());
 		ostringstream lbl; lbl << "bools_to_bits(N=" << len << ")";
 		// Bandwidth: bytes of bool input read.
@@ -169,7 +169,7 @@ static void bench(double sec) {
 		prg.random_data_unaligned(packed.data(), (int)packed.size());
 		vector<uint8_t> bools(len);
 		double calls = run_for(sec, [&]() {
-			bits_to_bools(reinterpret_cast<bool *>(bools.data()), packed.data(), len);
+			bits_to_bools(bools.data(), packed.data(), len);
 		}, bools.data());
 		ostringstream lbl; lbl << "bits_to_bools(N=" << len << ")";
 		print_vec_bytes(lbl.str(), calls, (size_t)len);

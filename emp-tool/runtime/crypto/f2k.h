@@ -2,6 +2,8 @@
 #define EMP_F2K_H__
 
 #include "emp-tool/runtime/core/block.h"
+#include <cstdint>
+#include <type_traits>
 
 namespace emp {
 
@@ -37,6 +39,12 @@ inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b);
 inline void vector_inn_prdt_sum_red(block* res, const block* a, const bool* b, int64_t sz);
 template<int N>
 inline void vector_inn_prdt_sum_red(block* res, const block* a, const bool* b);
+template<typename T>
+requires std::is_same_v<T, uint8_t>
+inline void vector_inn_prdt_sum_red(block* res, const block* a, const T* b, int64_t sz);
+template<int N, typename T>
+requires std::is_same_v<T, uint8_t>
+inline void vector_inn_prdt_sum_red(block* res, const block* a, const T* b);
 
 // Coefficients of the almost-universal hash {seed, seed^2, seed^3, ...}.
 inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz);
@@ -55,6 +63,9 @@ class GaloisFieldPacking {
 public:
 	void packing(block* res, const block* data);
 	void packing(block* res, const bool* data);
+	template<typename T>
+	requires std::is_same_v<T, uint8_t>
+	void packing(block* res, const T* data);
 };
 
 }  // namespace emp

@@ -117,13 +117,12 @@ static void bench(double sec) {
 		vector<block> a(n);
 		vector<uint8_t> bs(n);
 		prg.random_block(a.data(), n);
-		prg.random_bool(reinterpret_cast<bool *>(bs.data()), n);
+		prg.random_bool(bs.data(), n);
 		block r;
 		double calls = run_for(sec, [&]() {
-			vector_inn_prdt_sum_red(&r, a.data(),
-			    reinterpret_cast<const bool *>(bs.data()), n);
+			vector_inn_prdt_sum_red(&r, a.data(), bs.data(), n);
 		}, &r);
-		ostringstream lbl; lbl << "vec_inn_prdt_red(bool, N=" << n << ")";
+		ostringstream lbl; lbl << "vec_inn_prdt_red(byte-bool, N=" << n << ")";
 		print_vec(lbl.str(), calls, n);
 	}
 
@@ -174,12 +173,12 @@ static void bench(double sec) {
 	{
 		GaloisFieldPacking pkr;
 		uint8_t bits[128];
-		prg.random_bool(reinterpret_cast<bool *>(bits), 128);
+		prg.random_bool(bits, 128);
 		block r;
 		double calls = run_for(sec, [&]() {
-			pkr.packing(&r, reinterpret_cast<const bool *>(bits));
+			pkr.packing(&r, bits);
 		}, &r);
-		print_op("packing(bool*, 128)", calls);
+		print_op("packing(byte-bool*, 128)", calls);
 	}
 }
 

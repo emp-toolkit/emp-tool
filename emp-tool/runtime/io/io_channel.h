@@ -249,6 +249,28 @@ public:
 	// written before each pack. Whole-byte bytes get fully overwritten by
 	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
 	void send_bool(const bool *data, int64_t length) {
+		send_bool_impl_(data, length);
+	}
+
+	template <typename T>
+	requires std::is_same_v<T, uint8_t>
+	void send_bool(const T *data, int64_t length) {
+		send_bool_impl_(data, length);
+	}
+
+	void recv_bool(bool *data, int64_t length) {
+		recv_bool_impl_(data, length);
+	}
+
+	template <typename T>
+	requires std::is_same_v<T, uint8_t>
+	void recv_bool(T *data, int64_t length) {
+		recv_bool_impl_(data, length);
+	}
+
+private:
+	template <typename T>
+	void send_bool_impl_(const T *data, int64_t length) {
 		expecting(length >= 0, "IOChannel::send_bool: negative bit count");
 		if (length == 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
@@ -263,7 +285,8 @@ public:
 		}
 	}
 
-	void recv_bool(bool *data, int64_t length) {
+	template <typename T>
+	void recv_bool_impl_(T *data, int64_t length) {
 		expecting(length >= 0, "IOChannel::recv_bool: negative bit count");
 		if (length == 0) return;
 		uint8_t buf[IO_BOOL_CHUNK_SIZE / 8];
@@ -277,7 +300,6 @@ public:
 		}
 	}
 
-private:
 	// Last traffic direction, for the `rounds` counter. NONE until the first
 	// send/recv so the opening transfer in either direction opens round 1.
 	enum class Dir { NONE, SEND, RECV };
