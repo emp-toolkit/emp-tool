@@ -93,7 +93,7 @@ inline ProgramStats analyze_program(const BooleanProgram& stored) {
 	const CountStats count = count_pass(*dense);
 	const LivenessStats live = liveness_pass(*dense);
 	const ScheduleStats schedule = schedule_pass(*dense);
-	const LayoutStats layout = layout_pass(*dense, live);
+	const LayoutStats layout = layout_pass(*dense);
 
 	ProgramStats out;
 	out.wire_reuse = stored.wire_reuse;
@@ -120,7 +120,7 @@ inline ProgramStats analyze_program(const BooleanProgram& stored) {
 	for (const Gate& g : dense->gates) {
 		if (g.is_const()) continue;
 		++fanout[g.in0];
-		if (!g.is_not()) ++fanout[g.in1];
+		if (!g.is_not() && g.in1 != g.in0) ++fanout[g.in1];
 	}
 	for (uint64_t n : fanout) out.max_fanout = std::max(out.max_fanout, n);
 	return out;

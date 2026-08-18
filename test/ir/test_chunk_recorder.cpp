@@ -7,7 +7,8 @@
 //   * live_pending_ids as the implicit flush keep-set, and const-bit dedup +
 //     reset on drop_chunk.
 //   * plan_flush: DCE (incl. a dead gate's private operand), RecordCtx-canonical
-//     compaction, const-only programs, duplicate-keep dedup, and stale detection.
+//     compaction, const-only programs, duplicate-keep dedup, stale detection,
+//     and rejection of malformed recorder streams.
 // C++20.
 
 #include "emp-tool/ir/session/chunk_recorder.h"
@@ -119,10 +120,10 @@ int main() {
   {
     using circuit::Gate; using circuit::Op;
     // DCE: gate 4 is dead; it and its private operand (2) are dropped, keeping 3.
-    std::vector<Gate> chunk = {{0, 1, 3, Op::And}, {0, 2, 4, Op::And}};
-    auto p = session::plan_flush(chunk, {3}, [](uint32_t id) { return id <= 2; });
+    std::vector<Gate> chunk = {{1, 2, 4, Op::And}, {1, 3, 5, Op::And}};
+    auto p = session::plan_flush(chunk, {4}, [](uint32_t id) { return id >= 1 && id <= 3; });
     check(p.ok && p.prog.gates.size() == 1 && p.output_ids.size() == 1 &&
-          p.output_ids[0] == 3 && p.input_ids.size() == 2,
+          p.output_ids[0] == 4 && p.input_ids.size() == 2,
           "DCE drops the dead gate and its private operand");
 
     // Const-only program: a kept Const1 with no inputs.
@@ -133,9 +134,30 @@ int main() {
           "const-only program: no inputs, one gate, one output");
 
     // Duplicate keep ids collapse to a single output.
-    std::vector<Gate> one = {{0, 1, 2, Op::And}};
-    auto pd = session::plan_flush(one, {2, 2}, [](uint32_t id) { return id <= 1; });
+    std::vector<Gate> one = {{1, 2, 3, Op::And}};
+    auto pd = session::plan_flush(one, {3, 3}, [](uint32_t id) { return id == 1 || id == 2; });
     check(pd.ok && pd.output_ids.size() == 1, "duplicate keep ids dedup to one output");
+
+    std::vector<Gate> duplicate = {
+        {1, 2, 3, Op::And},
+        {1, 2, 3, Op::Xor},
+    };
+    auto pdup = session::plan_flush(duplicate, {3}, [](uint32_t id) { return id <= 2; });
+    check(!pdup.ok && pdup.error != nullptr,
+          "duplicate recorder definitions are rejected");
+
+    std::vector<Gate> forward = {
+        {4, 1, 3, Op::And},
+        {1, 2, 4, Op::Xor},
+    };
+    auto pfwd = session::plan_flush(forward, {3}, [](uint32_t id) { return id <= 2; });
+    check(!pfwd.ok && pfwd.error != nullptr,
+          "forward chunk-local references are rejected");
+
+    std::vector<Gate> null_operand = {{0, 1, 2, Op::And}};
+    auto pnull = session::plan_flush(null_operand, {2}, [](uint32_t id) { return id == 1; });
+    check(!pnull.ok && pnull.error != nullptr,
+          "null recorder operands are rejected");
   }
 
   // drop_chunk clears the chunk and resets the const dedup.
