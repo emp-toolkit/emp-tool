@@ -22,9 +22,10 @@ namespace emp {
 namespace circuit {
 
 // Reusable wire buffer so repeated executions of cached programs (e.g. float
-// builtins) don't reallocate. Caller-owned or thread_local — never one shared
-// mutable process-wide instance (immutable loaded *programs* may be shared, the
-// scratch may not).
+// builtins) don't reallocate. Caller-owned, or thread_local only when Wire values
+// have no context-bound lifetime. A thread_local workspace holding refcounted /
+// context-bound wires must release its live elements before that context dies;
+// vector capacity may remain for the next replay.
 template <class Wire>
 struct CircuitScratch {
 	std::vector<Wire> wires;
@@ -84,6 +85,16 @@ struct ProgramWorkspace {
 	std::vector<Wire> tmp_inputs;              // caller-assembled inputs
 	std::vector<Wire> ba, bb, bo;              // scheduled AND-batch buffers
 	std::vector<uint32_t> bouts;
+
+	// Clear live Wire elements while preserving vector capacities.
+	void release_wire_values() {
+		scratch.wires.clear();
+		out.clear();
+		tmp_inputs.clear();
+		ba.clear();
+		bb.clear();
+		bo.clear();
+	}
 };
 
 // Adapter: drive the in-place IR primitive from a value-return BooleanContext.

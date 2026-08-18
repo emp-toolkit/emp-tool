@@ -1,33 +1,12 @@
 #ifndef EMP_IR_SESSION_CHUNK_RECORDER_H__
 #define EMP_IR_SESSION_CHUNK_RECORDER_H__
 
-// ChunkRecorderCtx — the shared gate recorder for direct/chunked sessions (the
-// ctx_t of AG2PCSession, AGMPCSession, ...). It is a C++20 BooleanContext: gate
-// ops record into the current chunk as recorder ids. It owns ONLY the pending-
-// recording substrate — no crypto, no carried/authenticated state, no I/O. The
-// owning Session holds the materialized state and drives every flush; operand
-// stale-detection is deferred to that flush (session::plan_flush over the
-// Session's carried_), so the gate path stays a pure recorder.
+// ChunkRecorderCtx records pending gates for direct/chunked sessions. Refcounted
+// recorder wires track which logical ids remain in C++ scope; the owning session
+// materializes them at flush boundaries. Id 0 is the null sentinel.
 //
-// LIVENESS IS RAII / SCOPE-TRACKED. The recorder Wire is refcounted: a copy pins
-// and a destroy unpins against a per-context count table, so the context learns
-// when a value leaves C++ scope (in_scope(id)). reveal flushes the wires that are
-// still in scope (materializing them) and drops the rest; checkpoint() prunes to
-// exactly what is in scope — no explicit keep-lists. Optimized for the operator
-// path: the Wire is 4 bytes (just the id), the count table is a plain member
-// vector grown at id-allocation (the release hot pin/unpin is one indexed inc/dec
-// — no guard, no resize; EMP_CONTEXT_CHECKS adds a debug-only bounds/lifetime
-// guard), id 0 is the null sentinel, and gate operands are const-ref (no per-gate
-// operand copy). The function-mode (run) path never touches the recorder.
-//
-// CONSTRAINT: the current recorder is a process-global pointer set in the ctx ctor,
-// so at most one ChunkRecorderCtx records at a time (the usual case — a session owns
-// its recorder for its lifetime). The recorder and its wires are single-threaded:
-// gate ops and value copy/destroy run on the authoring thread, while the crypto
-// engine works on materialized bundles, never on recorder wires — so the hot
-// pin/unpin is a plain global access, not a per-thread lookup. Constructing a second
-// overlapping recorder is a loud error, not silent corruption; run concurrent
-// sessions in separate processes. (Values must not outlive their recorder.)
+// One process-global recorder may be active at a time. Recording and recorder-wire
+// lifetime operations are single-threaded, and values must not outlive the recorder.
 
 #include "emp-tool/ir/program.h"           // circuit::Gate, Op
 #include "emp-tool/ir/context/concept.h"   // BooleanContext
@@ -71,10 +50,7 @@ public:
   std::vector<int> rc_;       // refcount table, indexed by id; rc_.size() == next_id_
 
   ChunkRecorderCtx() {
-    // The 4-byte wire reaches its count table through the process-global current
-    // recorder, so a second overlapping recorder would silently mutate the wrong
-    // table. Make that a loud error rather than corruption. (A value must also not
-    // outlive its recorder — the usual object-lifetime rule.)
+    // Recorder wires reach their count table through the current recorder.
     expecting(g_chunk_rec == nullptr,
               "ChunkRecorderCtx: another chunked-session recorder is already active; "
               "one must be destroyed before another records (use separate processes "
@@ -85,7 +61,6 @@ public:
     g_chunk_rec = this;
   }
   ~ChunkRecorderCtx() {
-#if EMP_CONTEXT_CHECKS
     // A live refcount at teardown means a value still holds a wire into this table;
     // once g_chunk_rec is cleared (or repointed at the next recorder) that wire's
     // dtor would underflow/corrupt the wrong table. Fail loudly on the violation
@@ -94,7 +69,6 @@ public:
       expecting(rc_[id] == 0,
                 "ChunkRecorderCtx: destroyed while a value still holds a recorder wire "
                 "(a value outlived its recorder — RAII lifetime violation)");
-#endif
     if (g_chunk_rec == this) g_chunk_rec = nullptr;
   }
   ChunkRecorderCtx(const ChunkRecorderCtx&) = delete;

@@ -95,6 +95,57 @@ int main() {
 		check(run_bytes(q, in) == run_bytes(dense, in), "compact .empbc roundtrip changed outputs");
 	}
 
+	// ---- dead-on-arrival outputs recycle immediately; a surviving linear output
+	//      may claim that free slot instead of forcing a fresh one ----
+	{
+		BooleanProgram dense;
+		dense.num_inputs = 1;
+		dense.num_wires = 4;
+		dense.gates = {
+			{0, 0, 1, Op::Not},   // dead immediately
+			{0, 0, 2, Op::Not},   // dead immediately
+			{0, 0, 3, Op::Not},   // returned
+		};
+		dense.outputs = {3};
+		BooleanProgram lin = make_compact(dense, WireReuse::Linear).prog;
+		BooleanProgram ful = make_compact(dense, WireReuse::Full).prog;
+		check(lin.num_wires == 2 && ful.num_wires == 2,
+		      "dead linear results should reuse one non-input slot");
+		for (uint8_t bit : {uint8_t{0}, uint8_t{1}}) {
+			std::vector<uint8_t> in{bit};
+			check(run_bytes(lin, in) == run_bytes(dense, in),
+			      "dead-result Linear compaction changed outputs");
+			check(run_bytes(ful, in) == run_bytes(dense, in),
+			      "dead-result Full compaction changed outputs");
+		}
+	}
+
+	// A Linear AND output still needs a never-used slot, even when a dead linear
+	// result made a slot available. Full may reuse it.
+	{
+		BooleanProgram dense;
+		dense.num_inputs = 1;
+		dense.num_wires = 3;
+		dense.gates = {
+			{0, 0, 1, Op::Not},
+			{0, 0, 2, Op::And},
+		};
+		dense.outputs = {2};
+		BooleanProgram lin = make_compact(dense, WireReuse::Linear).prog;
+		BooleanProgram ful = make_compact(dense, WireReuse::Full).prog;
+		check(lin.num_wires == 3 && lin.gates[0].out != lin.gates[1].out,
+		      "Linear AND output should receive a fresh slot");
+		check(ful.num_wires == 2 && ful.gates[0].out == ful.gates[1].out,
+		      "Full AND output should reuse the dead linear slot");
+		for (uint8_t bit : {uint8_t{0}, uint8_t{1}}) {
+			std::vector<uint8_t> in{bit};
+			check(run_bytes(lin, in) == run_bytes(dense, in),
+			      "fresh-AND Linear compaction changed outputs");
+			check(run_bytes(ful, in) == run_bytes(dense, in),
+			      "reused-AND Full compaction changed outputs");
+		}
+	}
+
 	// ---- make_compact rejects a non-dense input and a None target ----
 	{
 		std::mt19937 r3(9);

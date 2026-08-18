@@ -70,7 +70,11 @@ inline CompactResult make_compact(const BooleanProgram& dense, WireReuse target 
 	for (uint32_t gi = 0; gi < dense.num_gate(); ++gi) {
 		const Gate& g = dense.gates[gi];
 		uint32_t out;
-		if (!persist[g.out] && !freelist.empty()) { out = freelist.back(); freelist.pop_back(); }
+		// A Linear AND output needs a never-used slot: a multi-pass backend may
+		// retain per-AND state there. Every other output may take a free slot even
+		// when the new value itself must survive to the program outputs.
+		const bool needs_fresh = target == WireReuse::Linear && g.is_and();
+		if (!needs_fresh && !freelist.empty()) { out = freelist.back(); freelist.pop_back(); }
 		else out = next++;
 		r.nid[g.out] = out;
 		Gate ng; ng.op = g.op; ng.out = out;
@@ -78,6 +82,9 @@ inline CompactResult make_compact(const BooleanProgram& dense, WireReuse target 
 		ng.in1 = (g.is_const() || g.is_not()) ? 0 : r.nid[g.in1];
 		r.prog.gates.push_back(ng);
 		for (uint32_t w : frees[gi]) freelist.push_back(r.nid[w]);   // recycle AFTER the gate
+		// A result with no reader and no output/Linear-AND persistence is dead as
+		// soon as this gate finishes, so make its slot available to the next gate.
+		if (!persist[g.out] && live.last_use[g.out] < 0) freelist.push_back(out);
 	}
 	r.prog.num_wires = next;
 	for (uint32_t w : dense.outputs) r.prog.outputs.push_back(r.nid[w]);
