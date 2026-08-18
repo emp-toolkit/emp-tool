@@ -10,11 +10,14 @@
 // function computed — only the wire ids — so execute_program over the result
 // yields identical outputs (covered by ir tests).
 //
-// Levels (ir/program.h WireReuse): Linear pins And outputs (a multi-pass backend
-// stores their value across passes, so their ids must not be recycled); Full
-// recycles And outputs too (maximal, correct only for single-/recompute-pass
-// execution). Unlike the analysis passes, this is a transform: it produces a new
-// program, so it lives in its own header (passes.h is pure analysis).
+// Levels (ir/program.h WireReuse): Linear gives every And output a fresh slot
+// that no later gate writes (a multi-pass backend stores their value across
+// passes); Full recycles And outputs too (maximal, correct only for single-/
+// recompute-pass execution). Other results, program outputs included, may take
+// recycled slots, so a consumer that maps an output slot to its producer must
+// take the slot's last writer. Unlike the analysis passes, this is a transform:
+// it produces a new program, so it lives in its own header (passes.h is pure
+// analysis).
 
 #include "emp-tool/ir/program.h"
 #include "emp-tool/ir/passes.h"           // liveness_pass, LivenessStats
@@ -70,7 +73,11 @@ inline CompactResult make_compact(const BooleanProgram& dense, WireReuse target 
 	for (uint32_t gi = 0; gi < dense.num_gate(); ++gi) {
 		const Gate& g = dense.gates[gi];
 		uint32_t out;
-		if (!persist[g.out] && !freelist.empty()) { out = freelist.back(); freelist.pop_back(); }
+		// A Linear AND output needs a never-used slot: a multi-pass backend may
+		// retain per-AND state there. Every other output may take a free slot even
+		// when the new value itself must survive to the program outputs.
+		const bool needs_fresh = target == WireReuse::Linear && g.is_and();
+		if (!needs_fresh && !freelist.empty()) { out = freelist.back(); freelist.pop_back(); }
 		else out = next++;
 		r.nid[g.out] = out;
 		Gate ng; ng.op = g.op; ng.out = out;
@@ -78,6 +85,9 @@ inline CompactResult make_compact(const BooleanProgram& dense, WireReuse target 
 		ng.in1 = (g.is_const() || g.is_not()) ? 0 : r.nid[g.in1];
 		r.prog.gates.push_back(ng);
 		for (uint32_t w : frees[gi]) freelist.push_back(r.nid[w]);   // recycle AFTER the gate
+		// A result with no reader and no output/Linear-AND persistence is dead as
+		// soon as this gate finishes, so make its slot available to the next gate.
+		if (!persist[g.out] && live.last_use[g.out] < 0) freelist.push_back(out);
 	}
 	r.prog.num_wires = next;
 	for (uint32_t w : dense.outputs) r.prog.outputs.push_back(r.nid[w]);
