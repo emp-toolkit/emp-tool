@@ -93,7 +93,7 @@ int main() {
 
 	// ---- layout_pass: frees + DCE, by hand ----
 	{
-		LayoutStats s = layout_pass(p, liveness_pass(p));
+		LayoutStats s = layout_pass(p);
 		check(s.frees[0] == std::vector<uint32_t>({0, 1}), "layout_pass: frees[0]");
 		check(s.frees[1] == std::vector<uint32_t>({3}),    "layout_pass: frees[1]");
 		check(s.frees[2] == std::vector<uint32_t>({4}),    "layout_pass: frees[2]");
@@ -124,7 +124,7 @@ int main() {
 		const BooleanProgram& q = rc.finish(outs);
 
 		LivenessStats live = liveness_pass(q);
-		LayoutStats   lay  = layout_pass(q, live);
+		LayoutStats   lay  = layout_pass(q);
 
 		// frees must be the EXACT inverse of last_use restricted to non-outputs:
 		// each such wire appears once, at frees[last_use[w]], and nothing else.
@@ -192,7 +192,21 @@ int main() {
 		check(lin.wire_reuse != WireReuse::None, "make_compact should produce a reuse program");
 		check(dies([&] { liveness_pass(lin); }), "liveness_pass accepted a reuse program");
 		check(dies([&] { schedule_pass(lin); }), "schedule_pass accepted a reuse program");
-		check(dies([&] { layout_pass(lin, LivenessStats{}); }), "layout_pass accepted a reuse program");
+		check(dies([&] { layout_pass(lin); }), "layout_pass accepted a reuse program");
+	}
+
+	// A reachable constant has no operands. In particular, its normalized dummy
+	// in0 == 0 must not make input wire 0 part of the live cone.
+	{
+		BooleanProgram c;
+		c.num_inputs = 1;
+		c.num_wires = 2;
+		c.gates = {{0, 0, 1, Op::Const1}};
+		c.outputs = {1};
+		validate_program(c);
+		LayoutStats lay = layout_pass(c);
+		check(lay.reachable_wire == 1 && lay.reachable_gate == 1,
+		      "layout_pass: constant does not reach dummy wire 0");
 	}
 
 	if (ok) printf("test_passes: all checks passed\n");

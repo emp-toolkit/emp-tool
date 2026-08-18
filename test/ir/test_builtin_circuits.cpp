@@ -2,17 +2,24 @@
 // replay through a BooleanContext bit-for-bit identically to the BooleanContext-
 // native crypto kernels (which are themselves FIPS/NIST-validated by test_crypto_*).
 // Proves the "big circuits -> IR replay" path is faithful, and that the new kernels
-// agree with the shipped assets. C++20.
+// agree with the shipped assets. Also verifies that a structurally valid asset
+// with the wrong persisted signature is rejected before replay. C++20.
 
 #include "emp-tool/ir/context/context.h"
 #include "emp-tool/ir/builtins.h"
+#include "emp-tool/ir/empbc.h"
 #include "emp-tool/circuits/crypto/aes128.h"
 #include "emp-tool/circuits/crypto/sha256.h"
 #include "emp-tool/circuits/crypto/keccak.h"
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
 #include <functional>
 #include <span>
+#include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
@@ -20,6 +27,50 @@ using namespace emp::circuit::crypto;
 namespace ckt = emp::circuit;
 
 static int bad = 0;
+
+template <class F>
+static bool dies(F&& f) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int dn = open("/dev/null", O_WRONLY);
+        if (dn >= 0) dup2(dn, 2);
+        f();
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+
+static void check_wrong_signature_rejected() {
+    char dir_template[] = "/tmp/emp-builtin-shape.XXXXXX";
+    char* dir = mkdtemp(dir_template);
+    if (dir == nullptr) {
+        std::printf("  [FAIL] could not create signature-test directory\n");
+        ++bad;
+        return;
+    }
+
+    ckt::BooleanProgram wrong;
+    wrong.num_inputs = 64;
+    wrong.num_wires = 64;
+    const std::string path = std::string(dir) + "/fp32_add.empbc";
+    ckt::save_empbc_file(path.c_str(), wrong);
+
+    bool rejected = dies([&] {
+        setenv("EMP_CIRCUIT_DIR", dir, 1);
+        (void)ckt::float_circuit(32, "add");
+    });
+    unlink(path.c_str());
+    rmdir(dir);
+
+    if (!rejected) {
+        std::printf("  [FAIL] fp32_add accepted a 64 -> 0 signature\n");
+        ++bad;
+    } else {
+        std::printf("  [ok]   wrong builtin signature rejected before replay\n");
+    }
+}
 
 // Run `live` (a kernel over ClearCtx) and the recorded builtin replayed through
 // ClearCtx on the same random input; require equal (scalar and scheduled replay).
@@ -60,6 +111,10 @@ static void check_builtin(const char* name, int nin, int nout,
 }
 
 int main() {
+    // Run before the first ordinary asset lookup so the forked child initializes
+    // its asset search path from this temporary EMP_CIRCUIT_DIR.
+    check_wrong_signature_rejected();
+
     // aes128: 256 inputs = pt[0..127] ‖ key[128..255] -> 128-bit ciphertext.
     check_builtin("aes128", 256, 128, [](const std::vector<uint8_t>& in, std::vector<uint8_t>& out) {
         ClearCtx cx;
