@@ -8,6 +8,8 @@
 #include "emp-tool/ir/visit.h"
 #include "emp-tool/ir/execute.h"
 #include "emp-tool/ir/empbc.h"
+#include "emp-tool/ir/artifact.h"
+#include "emp-tool/ir/context/digest.h"
 #include <cassert>
 #include <csignal>
 #include <cstdio>
@@ -117,6 +119,9 @@ int main() {
 	{ BooleanProgram b = sample(); b.outputs[0] = 99;    check(throws(validate_program, b), "output bound not enforced"); }
 	{ BooleanProgram b = sample(); b.gates[2].out = 0;   check(throws(validate_program, b), "write-to-input not enforced"); }
 	{ BooleanProgram b = sample(); b.gates[2].out = 2;   check(throws(validate_program, b), "single-definition not enforced"); }
+	{ BooleanProgram b = sample(); b.gates[0].out = 3; b.gates[1].out = 2;
+	  b.gates[2].in0 = 3; b.gates[2].in1 = 2;
+	  check(throws(validate_program, b), "non-canonical dense output numbering not rejected"); }
 	{ BooleanProgram b = sample(); b.gates[0].in0 = 4;   check(throws(validate_program, b), "read-before-define not enforced"); }
 	{ BooleanProgram b = sample(); b.gates[1].in0 = 1;   check(throws(validate_program, b), "non-canonical const operand not rejected"); }  // gate 1 is Const1
 	{ BooleanProgram b; b.num_wires = 2; b.num_inputs = 1; b.gates = { Gate{0, 7, 1, Op::Not} }; b.outputs = {1};
@@ -126,6 +131,78 @@ int main() {
 	  check(throws(validate_program, b), "non-dense program (hole) not rejected"); }
 	{ BooleanProgram b = sample(); b.wire_reuse = (WireReuse)99;
 	  check(throws(validate_program, b), "unknown wire_reuse value not rejected"); }
+
+	// ---- diagnostic identities: gate trace vs complete program structure ----
+	{
+		const uint64_t trace = emp::digest_gate_stream(p);
+		const uint64_t full = emp::digest_program(p);
+
+		BooleanProgram reordered = p;
+		reordered.outputs = {0, 4};
+		validate_program(reordered);
+		check(emp::digest_gate_stream(reordered) == trace,
+		      "gate-stream digest should ignore output selection");
+		check(emp::digest_program(reordered) != full,
+		      "program digest should include ordered outputs");
+
+		BooleanProgram linear = p;
+		linear.wire_reuse = WireReuse::Linear;
+		validate_program(linear);
+		check(emp::digest_program(linear) != full,
+		      "program digest should include wire reuse mode");
+
+		BooleanProgram reused;
+		reused.num_inputs = 1; reused.num_wires = 2;
+		reused.wire_reuse = WireReuse::Full;
+		reused.gates = {Gate{0,0,1,Op::Not}, Gate{1,0,1,Op::Not}};
+		reused.outputs = {1};
+		validate_program(reused);
+		BooleanProgram padded = reused;
+		padded.num_wires = 3;   // valid but structurally distinct unused slot
+		validate_program(padded);
+		check(emp::digest_gate_stream(reused) == emp::digest_gate_stream(padded),
+		      "gate-stream digest should ignore storage dimensions");
+		check(emp::digest_program(reused) != emp::digest_program(padded),
+		      "program digest should include num_wires");
+	}
+
+	// DigestCtx closes the aggregate input prefix at the first emitted gate.
+	check(dies([] {
+		emp::DigestCtx d;
+		uint32_t in = d.external_input(1);
+		d.not_gate(in);
+		d.external_input(1);
+	}), "DigestCtx accepted an input reservation after a gate");
+
+	// ---- artifact signatures use positive-width arguments and return values ----
+	{
+		CircuitArtifact good{p, CircuitSignature{{2}, 2}};
+		check(!dies([&] { validate_artifact(good); }), "valid artifact rejected");
+
+		CircuitArtifact zero_arg = good;
+		zero_arg.signature.arg_widths = {0, 2};
+		check(dies([&] { validate_artifact(zero_arg); }),
+		      "zero-width artifact argument not rejected");
+
+		CircuitArtifact overflow = good;
+		overflow.signature.arg_widths = {UINT32_MAX, 1};
+		check(dies([&] { validate_artifact(overflow); }),
+		      "overflowing artifact input width not rejected");
+
+		BooleanProgram no_output = p;
+		no_output.outputs.clear();
+		CircuitArtifact zero_return{no_output, CircuitSignature{{2}, 0}};
+		check(dies([&] { validate_artifact(zero_return); }),
+		      "zero-width artifact return not rejected");
+
+		BooleanProgram nullary;
+		nullary.num_wires = 1;
+		nullary.gates = {Gate{0,0,0,Op::Const1}};
+		nullary.outputs = {0};
+		CircuitArtifact no_args{nullary, CircuitSignature{{}, 1}};
+		check(!dies([&] { validate_artifact(no_args); }),
+		      "nullary artifact with an empty argument list rejected");
+	}
 
 	// ---- execute_program matches a hand evaluation for all 4 input combos ----
 	for (int a = 0; a < 2; ++a) for (int b = 0; b < 2; ++b) {

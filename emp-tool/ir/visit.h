@@ -3,7 +3,7 @@
 
 // The shared gate-walk primitive: walk gates once, in order, dispatching each to
 // the matching visitor method. Op dispatch is not unique to this file — it also
-// lives in validate.h, schedule.h, passes.h, and digest.h (digest_program); the
+// lives in validate.h, schedule.h, and passes.h; the
 // guarantee is that every such site is a defaultless switch and the build carries
 // -Werror=switch, so adding an Op is a build error at each dispatch site, never a
 // silent fallthrough. (validate.h additionally range-checks the raw op byte of
