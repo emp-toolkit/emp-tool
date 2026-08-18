@@ -106,18 +106,13 @@ inline void validate_program(const BooleanProgram& p) {
 	expecting(NG == non_inputs,
 	          "validate_program: num_wires must equal num_inputs + num_gates (dense program)");
 
-	// A non-input wire is "defined" once its producer has been seen; input
-	// wires are defined up front. Track only non-input wires, not all
-	// num_wires, so a malformed file cannot force allocation proportional to a
-	// huge declared input count during validation.
-	std::vector<char> defined_non_input((size_t)non_inputs, 0);
-
 	size_t gi = 0;
 	auto chk_read = [&](uint32_t w, const char* what) {
 		expecting(w < NW, [&] {
 			return std::string("validate_program: ") + what + " index out of range" + at(gi, w);
 		});
-		expecting(w < p.num_inputs || defined_non_input[w - p.num_inputs], [&] {
+		const uint64_t current_out = (uint64_t)p.num_inputs + gi;
+		expecting(w < current_out, [&] {
 			return std::string("validate_program: ") + what + " read before defined" + at(gi, w);
 		});
 	};
@@ -126,20 +121,15 @@ inline void validate_program(const BooleanProgram& p) {
 		validate_gate_operands(g, gi);
 		if (g.op == Op::And || g.op == Op::Xor) { chk_read(g.in0, "gate in0"); chk_read(g.in1, "gate in1"); }
 		else if (g.op == Op::Not)              { chk_read(g.in0, "gate in0"); }
-		expecting(g.out < NW,
-		          "validate_program: gate out index out of range");
-		expecting(g.out >= p.num_inputs,
-		          "validate_program: gate writes an input wire");
-		const uint32_t out_idx = g.out - p.num_inputs;
-		expecting(!defined_non_input[out_idx],
-		          "validate_program: wire defined more than once");
-		defined_non_input[out_idx] = 1;
+		const uint32_t expected_out = p.num_inputs + (uint32_t)gi;
+		expecting(g.out == expected_out, [&] {
+			return "validate_program: dense gate output must equal num_inputs + gate index" +
+			       at(gi, g.out);
+		});
 	}
 
 	for (uint32_t w : p.outputs) {
 		expecting(w < NW, "validate_program: output index out of range");
-		expecting(w < p.num_inputs || defined_non_input[w - p.num_inputs],
-		          "validate_program: output wire never defined");
 	}
 }
 
