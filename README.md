@@ -397,9 +397,9 @@ std::vector<Ctx::Wire> out =
 
 `execute_program(ctx, program, inputs)` walks the gate list issuing the
 context's value-return gate ops, so the same loaded program runs on the
-plaintext context, the garbled `SH2PCCtx`, or any other context unchanged. A bulk/round-sensitive
-context can consume the AND-depth schedule instead (`make_scheduled_plan` +
-`scheduled_execute_program`).
+plaintext context, the garbled `SH2PCCtx`, or any other context unchanged. A
+bulk/round-sensitive context can move the program into `ScheduledProgram` and
+consume its AND-depth schedule with `scheduled_execute_program`.
 
 ### Circuit statistics and asset manifests
 

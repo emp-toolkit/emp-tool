@@ -15,6 +15,7 @@
 #include "emp-tool/runtime/core/utils.h"   // error()
 #include <cstddef>
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace emp {
@@ -118,7 +119,8 @@ inline std::vector<typename Ctx::Wire> execute_program(
     Ctx& ctx, const circuit::BooleanProgram& p,
     std::span<const typename Ctx::Wire> inputs) {
 	ProgramWorkspace<typename Ctx::Wire> ws;
-	return execute_program(ctx, p, inputs, ws);
+	execute_program(ctx, p, inputs, ws);
+	return std::move(ws.out);
 }
 
 }  // namespace emp
