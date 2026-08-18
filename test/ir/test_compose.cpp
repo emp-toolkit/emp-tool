@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <random>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -55,6 +56,59 @@ int main() {
 	// A unit with ANDs + a const: f(s) = s*3 + 1  (UInt8, truncating).
 	auto unit = cf::compile_linear<R8>([](auto s) { return s * s.constant(3u) + s.constant(1u); });
 	check(unit.program().wire_reuse == circuit::WireReuse::Linear, "unit not Linear");
+
+	// The raw plan stays public. Generic flattening fully validates it before
+	// indexing; these mutations exercise that boundary independently of typed
+	// frontend ownership checks.
+	{
+		auto one_call = [&](auto& ctx, auto s) { return cf::run(ctx, unit, s); };
+		ComposePlan good = cf::compose<R8>(one_call);
+		validate_compose(good);
+		auto rejects = [&](auto mutate, const char* what) {
+			ComposePlan bad = good;
+			mutate(bad);
+			check(dies([&] { (void)flatten_compose(bad); }), what);
+		};
+
+		rejects([](ComposePlan& p) { p.events[0].instance = -2; },
+		        "compose: invalid negative event tag accepted");
+		rejects([](ComposePlan& p) { p.events[0].instance = (int)p.instances.size(); },
+		        "compose: out-of-range instance event accepted");
+		rejects([](ComposePlan& p) { p.events.push_back(p.events[0]); },
+		        "compose: duplicate instance event accepted");
+		rejects([](ComposePlan& p) { p.instances[0].in_ids[0] = p.num_wires; },
+		        "compose: undefined instance input accepted");
+		rejects([](ComposePlan& p) { p.instances[0].out_ids.pop_back(); },
+		        "compose: mismatched instance output width accepted");
+		rejects([](ComposePlan& p) { p.instances[0].unit.reset(); },
+		        "compose: null instance unit accepted");
+		rejects([](ComposePlan& p) { ++p.num_wires; },
+		        "compose: inconsistent num_wires accepted");
+		rejects([](ComposePlan& p) { p.outputs[0] = p.num_wires; },
+		        "compose: undefined plan output accepted");
+		rejects([](ComposePlan& p) {
+			auto invalid = std::make_shared<circuit::BooleanProgram>(*p.instances[0].unit);
+			invalid->outputs[0] = invalid->num_wires;
+			p.instances[0].unit = std::move(invalid);
+		}, "compose: malformed unit program accepted");
+
+		ComposePlan glue;
+		glue.num_inputs = 2;
+		glue.num_wires = 3;
+		glue.events.push_back(ComposeEvent{{0, 1, 2, circuit::Op::Xor}, -1});
+		glue.outputs = {2};
+		validate_compose(glue);
+		glue.events[0].gate.in0 = 3;
+		check(dies([&] { validate_compose_structure(glue); }),
+		      "compose: forward glue input accepted");
+
+		check(dies([] {
+			ComposeCtx ctx;
+			ComposeCtx::Wire input = ctx.external_input(1);
+			ComposeCtx::Wire undefined = input + 1;
+			ctx.finish(std::span<const ComposeCtx::Wire>(&undefined, 1));
+		}), "ComposeCtx::finish accepted an undefined output");
+	}
 
 	// ---- chain: call the unit 3 times, output->input ----
 	{
