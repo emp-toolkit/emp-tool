@@ -35,7 +35,7 @@ static void check(const char* what, bool ok) {
 
 // A kernel that REUSES a constant (public_bit(false) twice). RecordCtx and
 // DigestCtx both have Wire = uint32_t, so one body serves both. Used to
-// check digest_program(recorded) == digest_source(same body).
+// check digest_gate_stream(recorded) == digest_source(same body).
 template <class Ctx>
 static void const_reuse_kernel(Ctx& ctx, const std::vector<uint32_t>& in, std::vector<uint32_t>& out) {
     auto z1 = ctx.public_bit(false);
@@ -123,12 +123,13 @@ int main() {
         DigestCtx d1, d2;
         digest_add16(d1);
         digest_add16(d2);
-        check("digest: deterministic", d1.digest == d2.digest);
-        check("digest: nonzero", d1.digest != 0);
+        const uint64_t v1 = d1.value(), v2 = d2.value();
+        check("digest: deterministic", v1 == v2);
+        check("digest: nonzero", v1 != 0);
     }
 
-    // --- canonical digest: digest_program(recorded) == digest_source(same body),
-    //     including const dedup (the body reuses const0 twice) ---
+    // --- streamed gate digest: digest_gate_stream(recorded) equals the same
+    //     source replay, including const dedup ---
     {
         RecordCtx rc;
         uint32_t base = rc.external_input(2);
@@ -138,7 +139,51 @@ int main() {
         uint64_t ds = digest_source(2, [](DigestCtx& d, const std::vector<uint32_t>& in) {
             std::vector<uint32_t> o; const_reuse_kernel(d, in, o);
         });
-        check("digest_program == digest_source (const reuse)", digest_program(prog) == ds);
+        check("digest_gate_stream == digest_source (const reuse)",
+              digest_gate_stream(prog) == ds);
+    }
+
+    // Multiple argument reservations are one aggregate input prefix in the IR.
+    {
+        RecordCtx rc;
+        uint32_t a = rc.external_input(1);
+        uint32_t b = rc.external_input(1);
+        uint32_t o = rc.xor_gate(a, b);
+        ckt::BooleanProgram prog = rc.finish(std::span<const uint32_t>(&o, 1));
+
+        DigestCtx dc;
+        uint32_t da = dc.external_input(1);
+        uint32_t db = dc.external_input(1);
+        dc.xor_gate(da, db);
+        check("digest: split input reservations match aggregate program prefix",
+              dc.value() == digest_gate_stream(prog));
+    }
+
+    // A nullary source reserves no input window but still has a canonical prefix.
+    {
+        RecordCtx rc;
+        uint32_t one = rc.public_bit(true);
+        ckt::BooleanProgram prog = rc.finish(std::span<const uint32_t>(&one, 1));
+        uint64_t ds = digest_source(0, [](DigestCtx& d, const std::vector<uint32_t>& in) {
+            check("digest: nullary input vector", in.empty());
+            d.public_bit(true);
+        });
+        check("digest: nullary source matches gate stream",
+              ds == digest_gate_stream(prog));
+    }
+
+    // value() seals an input-only trace even when no gate triggered sealing.
+    {
+        ckt::BooleanProgram input_only;
+        input_only.num_wires = 2;
+        input_only.num_inputs = 2;
+        input_only.outputs = {0, 1};
+        ckt::validate_program(input_only);
+
+        DigestCtx dc;
+        dc.external_input(2);
+        check("digest: zero-gate trace finalizes its input prefix",
+              dc.value() == digest_gate_stream(input_only));
     }
 
     printf("test_context: %s\n", bad ? "FAILED" : "all contexts agree — PASS");
