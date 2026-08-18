@@ -1,15 +1,10 @@
 #ifndef EMP_FRONTEND_COMPOSE_H__
 #define EMP_FRONTEND_COMPOSE_H__
 
-// Recording a COMPOSITION. There is no new call verb: you compose by writing an
-// ordinary body that uses run(ctx, unit, args) to call pre-compiled units, wired
-// however you like (chain, SIMD, tree, heterogeneous). run() is opaque on a
-// ComposeCtx (records the unit as a referenced instance, O(width)) and inline on
-// every other context (so the same body inlines on a plaintext/ZK context as its
-// own oracle — see circuits/frontend/circuit_fn.h). compose() records such a body
-// over a ComposeCtx into a ComposePlan (O(#glue gates + #instances); the units are
-// never inlined here), which a flattening backend (emp-ag2pc run_compose) replays
-// on the fly. Units must be WireReuse::Linear for a multi-pass backend (compile_linear).
+// Record a body that calls compiled units with run(ctx, unit, args) into a
+// ComposePlan. ComposeCtx stores each unit reference and its wiring; other
+// contexts inline the same body normally. Backends decide which WireReuse modes
+// they support when consuming the plan.
 
 #include "emp-tool/circuits/frontend/circuit_fn.h"   // Circuit, run, RecordValue
 #include "emp-tool/ir/context/compose.h"             // ComposeCtx, ComposePlan

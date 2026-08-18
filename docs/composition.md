@@ -133,31 +133,30 @@ inline the inner level into each unit and compose the outer level.
 
 ---
 
-## 6. The ag2pc lowering (where reuse becomes the win)
+## 6. EMP-AG lowering
 
 On emp-ag2pc, `sess.run_compose(body, …)`:
 
 1. records `body` once over a `ComposeCtx` → a `ComposePlan` (O(#glue gates + #instances));
-2. lowers it: each instance gets a disjoint slot block (so every instance's AND outputs
-   coexist across the protocol's passes), and each unit's gate stream is replayed **on
-   the fly** through the trust path (no runtime register allocation, cache-hot unit) — no
-   flattened N-copy program is ever built.
+2. lowers it: each instance gets a disjoint slot block, and each unit's gate
+   stream is replayed without constructing a flattened N-copy program.
 
 Requirements/notes:
 
-- Units must be `compile_linear` (the trust path needs AND-pinned wire reuse — see
-  [transform.h](../emp-tool/ir/transform.h) for `make_compact`; the `WireReuse`
-  levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
+- Dense (`WireReuse::None`) and `compile_linear` units are both safe on the current
+  multi-pass backend. Linear units use fewer per-instance slots and are therefore
+  the recommended form. `WireReuse::Full` is rejected because it may recycle an
+  AND-output slot whose state survives across passes. See
+  [transform.h](../emp-tool/ir/transform.h) for `make_compact` and
+  [program.h](../emp-tool/ir/program.h) for the three reuse levels.
+- `ComposeCtx::finish` checks plan-level wiring. Raw-plan consumers validate the
+  structure and every distinct unit before indexing it.
 - `run_tiled(unit, repeats, state)` is one-line sugar over `run_compose` for the common
   state→state chain.
-- In a development benchmark (100M-AND sha chain, 2× m8a.8xlarge, 2026-06;
-  raw outputs not archived in-repo): compose ≈ −11% wall / +12% throughput
-  vs the inline/live baseline, with negligible setup, because the unit is
-  compiled once and replayed by reference rather than materialized.
 
 The plan is also independently materializable (`flatten_compose` in
 [ir/context/compose.h](../emp-tool/ir/context/compose.h)) for a backend with no
-on-the-fly flattener, and as a test oracle.
+on-the-fly flattener.
 
 ---
 
