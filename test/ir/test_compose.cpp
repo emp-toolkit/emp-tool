@@ -7,9 +7,12 @@
 #include "emp-tool/emp-tool.h"
 #include "emp-tool/circuits/frontend/compose.h"
 #include <array>
+#include <cstdlib>
 #include <cstdint>
 #include <cstdio>
 #include <random>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
@@ -28,6 +31,20 @@ static std::vector<uint8_t> run_bytes(const circuit::BooleanProgram& p, const st
 	circuit::CircuitScratch<uint8_t> sc;
 	execute_program<uint8_t>(p, in.data(), in.size(), out.data(), out.size(), sc, ByteD{});
 	return out;
+}
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid < 0) return false;
+	if (pid == 0) {
+		(void)std::freopen("/dev/null", "w", stderr);
+		f();
+		std::_Exit(0);
+	}
+	int status = 0;
+	return waitpid(pid, &status, 0) == pid &&
+	       (!WIFEXITED(status) || WEXITSTATUS(status) != 0);
 }
 
 int main() {
@@ -101,6 +118,24 @@ int main() {
 		auto flat = flatten_compose(plan);
 		check(plan.instances.size() == 3, "lifetime: expected 3 instances");
 		check(run_bytes(flat, in) == want, "lifetime: flatten after unit scope != inline");
+	}
+
+	// A composition body may not return a value from another ComposeCtx. This
+	// is checked once while finishing the plan, not while replaying its gates.
+	{
+		ComposeCtx other;
+		std::array<ComposeCtx::Wire, 8> wires{};
+		ComposeCtx::Wire base = other.external_input(wires.size());
+		for (std::size_t i = 0; i < wires.size(); ++i)
+			wires[i] = base + static_cast<ComposeCtx::Wire>(i);
+		auto foreign = UInt_T<ComposeCtx, 8>::from_wires(other, wires.data());
+		check(dies([&] {
+			(void)cf::compose<R8>([&](auto& ctx, auto value) {
+				(void)ctx;
+				(void)value;
+				return foreign;
+			});
+		}), "compose: foreign-context return accepted");
 	}
 
 	if (ok) printf("test_compose: all checks passed\n");

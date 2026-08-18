@@ -22,6 +22,7 @@
 //                                                //  circuits and for making a
 //                                                //  constant with no anchor arg)
 // A body callable in BOTH forms (e.g. a variadic lambda) is a contract error.
+// Explicit-context bodies accept a mutable context lvalue reference.
 // In the implicit form, make a constant from an argument: a.constant(5). C++20.
 
 #include "emp-tool/ir/context/concept.h"
@@ -77,8 +78,15 @@ struct ret_<Ctx, F, false, true, Args...> {
 template <class Ctx, class F, class... Args>
 struct circuit_fn_traits {
     static constexpr bool implicit_callable = std::is_invocable_v<F&, Args...>;
-    static constexpr bool explicit_callable = std::is_invocable_v<F&, Ctx&, Args...>;
-    static constexpr bool ambiguous = implicit_callable && explicit_callable;
+    static constexpr bool context_lvalue_callable =
+        std::is_invocable_v<F&, Ctx&, Args...>;
+    static constexpr bool context_rvalue_callable =
+        std::is_invocable_v<F&, Ctx&&, Args...>;
+    static constexpr bool explicit_callable =
+        context_lvalue_callable && !context_rvalue_callable;
+    static constexpr bool ambiguous = implicit_callable && context_lvalue_callable;
+    static constexpr bool context_by_value =
+        !implicit_callable && context_lvalue_callable && context_rvalue_callable;
     static constexpr bool callable  = implicit_callable || explicit_callable;
     static constexpr bool wants_ctx = explicit_callable && !implicit_callable;
 
@@ -90,8 +98,13 @@ struct circuit_fn_traits {
     static constexpr bool returns_ref      = std::is_reference_v<raw_return>;
     static constexpr bool returns_void     = std::is_void_v<raw_return>;
     static constexpr bool returns_circuit  = !returns_void && WireBundle<value_return>;
+    static constexpr bool returns_same_context =
+        returns_circuit && requires {
+            requires std::same_as<typename value_return::context_type, Ctx>;
+        };
     static constexpr bool ok = args_are_circuit && callable && !ambiguous &&
-                               !returns_ref && !returns_void && returns_circuit;
+                               !context_by_value && !returns_ref && !returns_void &&
+                               returns_circuit && returns_same_context;
 };
 
 // Single diagnostic site: instantiate `(void)sizeof(circuit_contract<Tr>)` in
@@ -106,7 +119,10 @@ struct circuit_contract<Tr, false> {
     static_assert(!Tr::ambiguous,
         "frontend circuit: body is callable in BOTH implicit and explicit context forms; "
         "disambiguate (take the context explicitly, or not at all)");
-    static_assert(Tr::callable,
+    static_assert(!Tr::context_by_value,
+        "frontend circuit: an explicit context parameter must be a mutable lvalue "
+        "reference (Ctx& or auto&), not a by-value generic parameter");
+    static_assert(Tr::callable || Tr::context_by_value,
         "frontend circuit: body is not callable with prvalue circuit-value arguments — write "
         "[](auto a, auto b){...} or [](auto& ctx, auto a, auto b){...}, taking arguments by value");
     static_assert(!(Tr::callable && !Tr::ambiguous && Tr::returns_ref),
@@ -115,6 +131,9 @@ struct circuit_contract<Tr, false> {
         "frontend circuit must return a circuit value, not void");
     static_assert(!(Tr::callable && !Tr::ambiguous && !Tr::returns_void) || Tr::returns_circuit,
         "frontend circuit must return a circuit value (Bit / UInt / Int / Float / ...), not a plain value");
+    static_assert(!(Tr::callable && !Tr::ambiguous && Tr::returns_circuit) ||
+                      Tr::returns_same_context,
+        "frontend circuit: the return value must use the same context type as the arguments");
 };
 
 // ---------------------------------------------------------------------------
@@ -196,8 +215,32 @@ template <WireBundle RecV>
 RecV make_rec_arg(RecordCtx& rc) {
     RecordCtx::Wire base = rc.external_input((size_t)RecV::width());
     std::array<RecordCtx::Wire, (std::size_t)RecV::width()> win{};
-    for (int i = 0; i < RecV::width(); ++i) win[i] = base + (RecordCtx::Wire)i;
+    for (int i = 0; i < RecV::width(); ++i)
+        win[i] = base + (RecordCtx::Wire)i;
     return RecV::from_wires(rc, win.data());
+}
+
+template <class Tr, class F, class Ctx, class Tuple>
+typename Tr::value_return invoke_circuit_body(F& body, Ctx& ctx, Tuple& args) {
+    if constexpr (Tr::wants_ctx)
+        return std::apply(
+            [&](auto&... a) { return body(ctx, std::move(a)...); }, args);
+    else
+        return std::apply(
+            [&](auto&... a) { return body(std::move(a)...); }, args);
+}
+
+template <class Tr, class F, class Ctx, class... Args>
+typename Tr::value_return invoke_live_body(F& body, Ctx& ctx, Args&&... args) {
+    if constexpr (Tr::wants_ctx)
+        return body(ctx, std::decay_t<Args>(std::forward<Args>(args))...);
+    else
+        return body(std::decay_t<Args>(std::forward<Args>(args))...);
+}
+
+template <class Ctx, class... Vs>
+inline bool all_owned_by(Ctx& ctx, const Vs&... values) {
+    return (true && ... && (values.context() == &ctx));
 }
 }  // namespace detail
 
@@ -214,12 +257,9 @@ detail::compiled_ret_t<Tr, ArgVs...> compile(F&& body) {
         // Reserve inputs + build args, left-to-right (braced-init order), BEFORE
         // any gate (RecordCtx requires all external_input calls up front).
         std::tuple<ArgVs...> args{detail::make_rec_arg<ArgVs>(rc)...};
-        auto ret = [&] {
-            if constexpr (Tr::wants_ctx)
-                return std::apply([&](auto&&... a) { return body(rc, std::move(a)...); }, args);
-            else
-                return std::apply([&](auto&&... a) { return body(std::move(a)...); }, args);
-        }();
+        auto ret = detail::invoke_circuit_body<Tr>(body, rc, args);
+        expecting(ret.context() == &rc,
+                  "compile: body returned a value owned by a different context");
         using Ret = std::decay_t<decltype(ret)>;
         std::array<RecordCtx::Wire, (std::size_t)Ret::width()> ow{};
         ret.pack_wires(ow.data());
@@ -275,14 +315,18 @@ inline void append_wires(std::vector<Wire>& out, const V& v) {
 }
 }  // namespace detail
 
-template <BooleanContext Ctx, WireBundle RetV, WireBundle... ArgVs>
-typename RetV::template rebind<Ctx>
+template <BooleanContext Ctx, RecordValue RetV, RecordValue... ArgVs>
+    requires RebindableWireBundle<RetV, Ctx> &&
+             (RebindableWireBundle<ArgVs, Ctx> && ...)
+wire_bundle_rebind_t<RetV, Ctx>
 run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
-    const typename ArgVs::template rebind<Ctx>&... args) {
+    const wire_bundle_rebind_t<ArgVs, Ctx>&... args) {
     using Wire = typename Ctx::Wire;
     const circuit::BooleanProgram& p = c.program();
     expecting(c.signature().arg_widths.size() == sizeof...(ArgVs),
               "frontend::run: argument count != circuit arity (stale artifact?)");
+    expecting(detail::all_owned_by(ctx, args...),
+              "frontend::run: an argument belongs to a different context");
     std::vector<Wire> inputs;
     inputs.reserve(p.num_inputs);
     (detail::append_wires(inputs, args), ...);
@@ -293,17 +337,18 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
         // Pass the co-owning program handle so the plan outlives this Circuit.
         std::vector<Wire> out =
             ctx.call_unit(c.program_shared(), inputs.data(), inputs.size());
-        return RetV::template rebind<Ctx>::from_wires(ctx, out.data());
+        auto result = wire_bundle_rebind_t<RetV, Ctx>::from_wires(ctx, out.data());
+        expecting(result.context() == &ctx,
+                  "frontend::run: result belongs to a different context");
+        return result;
     } else {
-#if EMP_CONTEXT_CHECKS
-        // Every argument must belong to the context it is being replayed on.
-        { bool ok = true; ((ok = ok && args.context() == &ctx), ...);
-          expecting(ok, "frontend::run: an argument belongs to a different context"); }
-#endif
         ProgramWorkspace<Wire> ws;
         const std::vector<Wire>& ow =
             execute_program(ctx, p, std::span<const Wire>(inputs.data(), inputs.size()), ws);
-        return RetV::template rebind<Ctx>::from_wires(ctx, ow.data());
+        auto result = wire_bundle_rebind_t<RetV, Ctx>::from_wires(ctx, ow.data());
+        expecting(result.context() == &ctx,
+                  "frontend::run: result belongs to a different context");
+        return result;
     }
 }
 
@@ -312,26 +357,50 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
 // (no compile step). Recovers the context from the first argument, so it serves
 // both body forms. (Nullary/explicit-only bodies: call the body directly.)
 // ---------------------------------------------------------------------------
-template <class F, class Arg0, class... Args,
-          class Ctx = typename std::decay_t<Arg0>::context_type,
-          class Tr  = circuit_fn_traits<Ctx, std::decay_t<F>, std::decay_t<Arg0>, std::decay_t<Args>...>,
-          std::enable_if_t<!is_circuit_v<std::decay_t<F>>, int> = 0>
-std::conditional_t<Tr::ok, typename Tr::value_return, invalid_circuit_fn>
-run(F&& body, Arg0&& a0, Args&&... rest) {
-    (void)sizeof(circuit_contract<Tr>);
-    if constexpr (Tr::ok) {
-        Ctx& ctx = *a0.context();
-#if EMP_CONTEXT_CHECKS
-        // All arguments must share the first argument's context.
-        { bool ok = true; ((ok = ok && rest.context() == a0.context()), ...);
-          expecting(ok, "frontend::run: arguments belong to different contexts"); }
-#endif
-        if constexpr (Tr::wants_ctx)
-            return body(ctx, std::forward<Arg0>(a0), std::forward<Args>(rest)...);
-        else
-            return body(std::forward<Arg0>(a0), std::forward<Args>(rest)...);
+template <class F, class Arg0, class... Args>
+    requires (!is_circuit_v<std::decay_t<F>> &&
+              !is_circuit_v<std::decay_t<Arg0>>)
+auto run(F&& body, Arg0&& a0, Args&&... rest) {
+    constexpr bool args_are_circuit =
+        WireBundle<std::decay_t<Arg0>> &&
+        (WireBundle<std::decay_t<Args>> && ...);
+    static_assert(args_are_circuit,
+        "frontend::run: every argument must be a circuit value (Bit / UInt / Int / Float / ...)");
+
+    if constexpr (args_are_circuit) {
+        using Ctx = typename std::decay_t<Arg0>::context_type;
+        constexpr bool same_context_type =
+            (std::same_as<typename std::decay_t<Args>::context_type, Ctx> && ...);
+        static_assert(same_context_type,
+            "frontend::run: all arguments must use the same context type");
+
+        if constexpr (same_context_type) {
+            using Tr = circuit_fn_traits<Ctx, std::decay_t<F>,
+                                         std::decay_t<Arg0>, std::decay_t<Args>...>;
+            (void)sizeof(circuit_contract<Tr>);
+            if constexpr (Tr::ok) {
+                Ctx* ctxp = a0.context();
+                expecting(ctxp != nullptr,
+                          "frontend::run: first argument is uninitialized");
+                expecting((true && ... && (rest.context() == ctxp)),
+                          "frontend::run: arguments belong to different contexts");
+                Ctx& ctx = *ctxp;
+
+				// Match compile() by invoking with owned, decayed values.
+                auto ret = detail::invoke_live_body<Tr>(
+                    body, ctx, std::forward<Arg0>(a0),
+                    std::forward<Args>(rest)...);
+                expecting(ret.context() == &ctx,
+                          "frontend::run: body returned a value owned by a different context");
+                return ret;
+            } else {
+                return invalid_circuit_fn{};
+            }
+        } else {
+            return invalid_circuit_fn{};
+        }
     } else {
-        return {};
+        return invalid_circuit_fn{};
     }
 }
 

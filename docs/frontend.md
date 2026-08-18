@@ -70,6 +70,9 @@ callable in **both** is a contract error (disambiguate).
   };
   ```
 
+  The context parameter must be a mutable lvalue reference (`Ctx&` or
+  `auto&`).
+
 ### The calling contract
 
 One diagnostic site (`circuit_fn_traits` / `circuit_contract` in `circuit_fn.h`):
@@ -81,15 +84,21 @@ non-circuit argument, or being callable in **both** context forms are all
 compile-time errors with a precise message — in `compile<ArgVs...>` and live
 `run` alike.
 
+Live `run` materializes decayed argument values before invocation, matching
+`compile`; an overload on lvalue versus rvalue arguments therefore cannot
+describe different live and compiled circuits. Public `compile`, `run`, and
+`compose` boundaries also check that arguments and results belong to the
+context instance being used. These checks are O(arguments).
+
 A circuit value is anything satisfying the `WireBundle` concept
-(`ir/wire_value.h`): it exposes `Wire`, `context_type`, a static `width()`,
+(`ir/wire_value.h`): it exposes `Wire`, `context_type`, a positive static `width()`,
 `context()`, `pack_wires` / `from_wires`, and a `rebind<Ctx>` that maps the same
 value family onto another context. Adding the clear codec (`clear_t` /
 `encode` / `decode`) makes it the stronger `WireValue` — the form session I/O
 needs; the frontend itself requires only `WireBundle` (a clear codec is not
 needed to compile/run). The five built-in families (`Bit_T`, `BitVec_T`,
-`UInt_T`, `Int_T`, `Float_T` in `circuits/typed.h`) model `WireBundle` at fixed
-width; `Bit_T` / `BitVec_T` / `Float_T` also model `WireValue` at every width,
+`UInt_T`, `Int_T`, `Float_T` in `circuits/typed.h`) model `WireBundle` at positive
+fixed width; `Bit_T` / `BitVec_T` / `Float_T` also model `WireValue` at each supported positive width,
 while `UInt_T` / `Int_T` model `WireValue` only for width <= 64 (their clear
 codecs ride 64-bit integers) — use `BitVec_T` for typed session I/O past 64 bits.
 The runtime-width
@@ -203,9 +212,9 @@ Define a type satisfying the `BooleanContext` concept (a `std::semiregular` `Wir
 plus value-return `public_bit`/`and_gate`/`xor_gate`/`not_gate`). Every compiled
 circuit then replays on it via `run(ctx, circ, …)` with no frontend changes — the
 generic replay walks the gate list issuing the context's gate ops. A
-round-sensitive protocol (e.g. GMW) gets efficiency by consuming the program's
-AND-depth schedule (a `BulkBooleanContext` + `scheduled_execute_program`), not the
-scalar replay.
+round-sensitive protocol (e.g. GMW) gets efficiency by moving the program into
+`ScheduledProgram` and consuming its AND-depth schedule with a
+`BulkBooleanContext` + `scheduled_execute_program`, not the scalar replay.
 
 ## Tests
 

@@ -66,7 +66,11 @@ static std::array<bool, N> message_clear(const uint8_t* bytes) {
 // Feed an N-bit message as a party input through the session.
 template <int N>
 static BitVec_T<Ctx, N> message_bits(ClearSession& sess, const uint8_t* bytes) {
-  return sess.input<BitVec_T<Ctx, N>>(ALICE, message_clear<N>(bytes));
+  if constexpr (N == 0) {
+    return BitVec_T<Ctx, 0>(sess.ctx());
+  } else {
+    return sess.input<BitVec_T<Ctx, N>>(ALICE, message_clear<N>(bytes));
+  }
 }
 
 // In-circuit SHA-256 of a compile-time N-bit message, returned as 32 bytes.
