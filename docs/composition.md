@@ -139,18 +139,23 @@ inner level into each unit and compose the outer level.
 In a backend that lowers composition, `sess.run_compose(body, …)`:
 
 1. records `body` once over a `ComposeCtx` → a `ComposePlan` (O(#glue gates + #instances));
-2. lowers it: each instance gets a disjoint slot block (so every instance's AND outputs
-   coexist across the protocol's passes), and each unit's gate stream is replayed **on
-   the fly** (no runtime register allocation, cache-hot unit) — no flattened N-copy
-   program is ever built.
+2. lowers it: each instance gets a disjoint slot block, and each unit's gate
+   stream is replayed without constructing a flattened N-copy program.
 
-Units must be `compile_linear`: the on-the-fly replay needs AND-pinned wire reuse
-(see [transform.h](../emp-tool/ir/transform.h) for `make_compact`; the `WireReuse`
-levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
+Requirements/notes:
+
+- A multi-pass backend can take dense (`WireReuse::None`) and `compile_linear`
+  units. Linear units use fewer per-instance slots and are therefore the
+  recommended form. A `WireReuse::Full` unit may recycle an AND-output slot
+  whose state must survive across passes, so such a backend rejects it. See
+  [transform.h](../emp-tool/ir/transform.h) for `make_compact` and
+  [program.h](../emp-tool/ir/program.h) for the three reuse levels.
+- `ComposeCtx::finish` checks plan-level wiring. Raw-plan consumers validate the
+  structure and every distinct unit before indexing it.
 
 The plan is also independently materializable (`flatten_compose` in
 [ir/context/compose.h](../emp-tool/ir/context/compose.h)) for a backend with no
-on-the-fly flattener, and as a test oracle.
+on-the-fly flattener.
 
 ---
 
