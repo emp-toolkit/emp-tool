@@ -34,6 +34,7 @@
 #include "emp-tool/runtime/core/utils.h"   // error()
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,13 @@ inline void put_u32(std::vector<uint8_t>& b, uint32_t v) {
 }
 inline void put_idx(std::vector<uint8_t>& b, uint32_t v, int iw) {
 	if (iw == 2) put_u16(b, (uint16_t)v); else put_u32(b, v);
+}
+
+inline uint32_t checked_u32_count(size_t n, const char* what) {
+	expecting(n <= (size_t)std::numeric_limits<uint32_t>::max(), [&] {
+		return std::string("empbc: too many ") + what;
+	});
+	return (uint32_t)n;
 }
 
 // --- bounds-checked little-endian reader over a byte span ---
@@ -82,6 +90,8 @@ struct Reader {
 // validates; we don't silently emit a malformed file).
 inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 	using namespace empbc_detail;
+	const uint32_t num_outputs = checked_u32_count(p.outputs.size(), "outputs");
+	const uint32_t num_gates   = checked_u32_count(p.gates.size(), "gates");
 	// Validate first: a malformed program (e.g. a wire id >= num_wires while
 	// num_wires <= 0xFFFF) would otherwise be silently truncated by the 16-bit
 	// writer. validate_program guarantees every id < num_wires, so the chosen
@@ -98,8 +108,8 @@ inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 	put_u8(b, (uint8_t)p.wire_reuse);   // flags: bits 0-1 = wire_reuse
 	put_u32(b, p.num_wires);
 	put_u32(b, p.num_inputs);
-	put_u32(b, (uint32_t)p.outputs.size());
-	put_u32(b, (uint32_t)p.gates.size());
+	put_u32(b, num_outputs);
+	put_u32(b, num_gates);
 	for (const Gate& g : p.gates) {
 		put_idx(b, g.in0, iw);
 		put_idx(b, g.in1, iw);
@@ -116,6 +126,8 @@ inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 // validate it. error()s (fatal) on any structural problem.
 inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 	using namespace empbc_detail;
+	expecting(bytes != nullptr || len == 0,
+	          "empbc: null buffer with nonzero length");
 	Reader r(bytes, len);
 
 	for (uint8_t m : MAGIC)
@@ -153,8 +165,11 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 		uint8_t op = r.u8();
 		expecting(op <= (uint8_t)Op::Const1, "empbc: unknown op code");
 		g.op = (Op)op;
-		r.u8();                          // reserved
-		if (iw == 4) { r.u8(); r.u8(); }
+		expecting(r.u8() == 0, "empbc: nonzero reserved gate byte");
+		if (iw == 4) {
+			expecting(r.u8() == 0 && r.u8() == 0,
+			          "empbc: nonzero reserved gate byte");
+		}
 		p.gates.push_back(g);
 	}
 	p.outputs.reserve(num_outputs);
@@ -191,9 +206,9 @@ inline void save_empbc_file(const char* path, const BooleanProgram& p) {
 	expecting(f != nullptr, [&] {
 		return std::string("empbc: cannot open for write ") + path;
 	});
-	bool ok = b.empty() || std::fwrite(b.data(), 1, b.size(), f) == b.size();
-	std::fclose(f);
-	expecting(ok, "empbc: short write");
+	const bool wrote_all = b.empty() || std::fwrite(b.data(), 1, b.size(), f) == b.size();
+	const bool closed = std::fclose(f) == 0;
+	expecting(wrote_all && closed, "empbc: write failed");
 }
 
 }  // namespace circuit

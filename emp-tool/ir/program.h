@@ -45,8 +45,9 @@ struct Gate {
 // id can clobber a value a later pass still needs.
 //   None   : dense/SSA — every non-input wire is the output of exactly one gate,
 //            ids monotonic in emission order (num_wires == num_inputs+num_gates).
-//   Linear : ids are reused once dead, but And outputs are never recycled. Safe
-//            for every consumer, including multi-pass backends.
+//   Linear : ids are reused once dead, but an And output takes a slot no gate
+//            has written before and none writes after. Safe for every
+//            consumer, including multi-pass backends.
 //   Full   : any wire id may be reused once dead, And outputs included. Maximal
 //            compaction; correct only for single-/recompute-pass execution.
 enum class WireReuse : uint8_t { None = 0, Linear = 1, Full = 2 };

@@ -44,32 +44,25 @@ inline void validate_program(const BooleanProgram& p) {
 	const uint64_t NW = p.num_wires;
 	expecting(p.num_inputs <= NW,
 	          "validate_program: num_inputs exceeds num_wires");
+	expecting(p.wire_reuse == WireReuse::None ||
+	              p.wire_reuse == WireReuse::Linear ||
+	              p.wire_reuse == WireReuse::Full,
+	          "validate_program: unknown wire_reuse value");
 
 	auto at = [](size_t gi, uint32_t w) {
 		return " (gate " + std::to_string(gi) + ", wire " + std::to_string(w) + ")";
 	};
 
 	if (p.wire_reuse != WireReuse::None) {
-		// Reuse program (Linear/Full are structurally identical — the And-pinning
-		// distinction is a *producer* property this check cannot verify). No
-		// dense-count check and no single-definition check: a wire id is rewritten
-		// on purpose. This proves the program is *executable* (every read sees a
-		// written or input wire), NOT that it is equivalent to its dense source —
-		// liveness-safety of a reuse is the producer's contract (ir/transform.h),
-		// covered by execute-compare + digest tests.
-		//
-		// A reuse program never has MORE distinct wire ids than its dense
-		// equivalent, so num_wires is bounded by num_inputs + num_gates; enforce
-		// that (it also bounds the written[] allocation against a hostile count).
+		// Reuse programs may rewrite slots. Linear reserves every And-output slot
+		// exclusively; Full permits all output slots to be reused.
 		expecting(NW <= p.num_inputs + (uint64_t)p.gates.size(),
 		          "validate_program: reuse program num_wires exceeds num_inputs + num_gates");
-		// Track only NON-input slots, exactly like the dense path: input wires are
-		// "written" up front by definition (w < num_inputs), so a malformed file
-		// cannot force allocation/iteration proportional to a huge declared input
-		// count. Redefinition of a non-input slot is allowed (the point of reuse).
-		std::vector<char> written((size_t)(NW - p.num_inputs), 0);
+		// Non-input slot state: 0 = unwritten, 1 = linear/const output,
+		// 2 = And output.
+		std::vector<char> slot_state((size_t)(NW - p.num_inputs), 0);
 		auto is_written = [&](uint32_t w) {
-			return w < p.num_inputs || written[w - p.num_inputs];
+			return w < p.num_inputs || slot_state[w - p.num_inputs] != 0;
 		};
 		size_t gi = 0;
 		auto chk_read = [&](uint32_t w, const char* what) {
@@ -89,7 +82,15 @@ inline void validate_program(const BooleanProgram& p) {
 			          "validate_program: gate out index out of range");
 			expecting(g.out >= p.num_inputs,
 			          "validate_program: gate writes an input wire");
-			written[g.out - p.num_inputs] = 1;   // safe: g.out in [num_inputs, NW)
+			char& state = slot_state[g.out - p.num_inputs];
+			if (p.wire_reuse == WireReuse::Linear) {
+				expecting(state != 2,
+				          "validate_program: Linear program overwrites an And-output wire");
+				if (g.op == Op::And)
+					expecting(state == 0,
+					          "validate_program: Linear program assigns an And output to a recycled wire");
+			}
+			state = g.op == Op::And ? 2 : 1;
 		}
 		for (uint32_t w : p.outputs) {
 			expecting(w < NW,
