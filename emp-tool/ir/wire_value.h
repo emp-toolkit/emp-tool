@@ -20,10 +20,11 @@
 // through value_traits<T> (circuits/value_traits.h) where a metadata accessor
 // is wanted.
 //
-// FIXED-WIDTH ONLY: WireBundle requires a static `width()`, so a runtime-width
-// value (e.g. UInt_T<Ctx, runtime_width>) models neither concept. Session I/O
-// and circuit compilation need a statically known width / signature;
-// runtime-width values are in-circuit only.
+// POSITIVE FIXED-WIDTH ONLY: WireBundle requires a static `width() > 0`, so a
+// runtime-width value (e.g. UInt_T<Ctx, runtime_width>) and a zero-bit internal
+// helper model neither concept. Session I/O and circuit compilation need a
+// statically known, nonempty width / signature. Runtime-width values remain
+// usable in-circuit and through the separate RuntimeSessionIO surface.
 //
 // The codec may also be narrower than the bundle: UInt_T/Int_T carry their
 // clear value in a 64-bit codec, so UInt_T<Ctx,128> is a WireBundle (usable as
@@ -52,6 +53,7 @@ concept WireBundle =
     // width() is a static, compile-time constant int — so a runtime-width value
     // (whose width() is `requires (N > 0)` and absent at N == 0) is not a WireBundle.
     requires { typename std::integral_constant<int, std::decay_t<V_>::width()>; } &&
+    requires { requires (std::decay_t<V_>::width() > 0); } &&
     std::same_as<typename std::decay_t<V_>::template rebind<typename std::decay_t<V_>::context_type>,
                  std::decay_t<V_>> &&
     requires(const std::decay_t<V_> v, typename std::decay_t<V_>::Wire* out) {
@@ -61,6 +63,23 @@ concept WireBundle =
     requires(typename std::decay_t<V_>::context_type& c, const typename std::decay_t<V_>::Wire* in) {
         { std::decay_t<V_>::from_wires(c, in) } -> std::same_as<std::decay_t<V_>>;
     };
+
+template <class V_, class Ctx>
+using wire_bundle_rebind_t =
+    typename std::decay_t<V_>::template rebind<std::remove_cvref_t<Ctx>>;
+
+// The cross-context half of the WireBundle contract. WireBundle itself checks
+// that rebinding to the current context is stable; frontend replay uses this
+// refinement when it moves a recorded value family onto a live context.
+template <class V_, class Ctx>
+concept RebindableWireBundle =
+    WireBundle<V_> &&
+    BooleanContext<std::remove_cvref_t<Ctx>> &&
+    requires { typename wire_bundle_rebind_t<V_, Ctx>; } &&
+    WireBundle<wire_bundle_rebind_t<V_, Ctx>> &&
+    std::same_as<typename wire_bundle_rebind_t<V_, Ctx>::context_type,
+                 std::remove_cvref_t<Ctx>> &&
+    (wire_bundle_rebind_t<V_, Ctx>::width() == std::decay_t<V_>::width());
 
 // Codec storage follows docs/api_conventions.md's bit-buffer contract:
 // fixed-width typed values encode to std::array<bool, width()>.
