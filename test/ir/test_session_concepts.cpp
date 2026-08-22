@@ -56,6 +56,47 @@ struct Raw3 {
 static_assert(WireBundle<Raw3<ClearCtx>>);
 static_assert(!WireValue<Raw3<ClearCtx>>);
 static_assert(!SessionIO<ClearSession, Raw3<ClearCtx>>);      // no codec, no session I/O
+static_assert(RebindableWireBundle<Raw3<ClearCtx>, RecordCtx>);
+
+// Frontend/session boundaries require a positive fixed width. A zero-bit value
+// may still be useful internally (for example SHA-256 of an empty message), but
+// there is no wire bundle to feed, reveal, or replay.
+template <class Ctx, int Width>
+struct InvalidWidthBundle {
+    using Wire = typename Ctx::Wire;
+    using context_type = Ctx;
+    template <class C2> using rebind = InvalidWidthBundle<C2, Width>;
+    Ctx* ctx_ = nullptr;
+    Wire wire{};
+    Ctx* context() const { return ctx_; }
+    static constexpr int width() { return Width; }
+    void pack_wires(Wire* out) const {
+        if constexpr (Width > 0) out[0] = wire;
+    }
+    static InvalidWidthBundle from_wires(Ctx& c, const Wire* in) {
+        InvalidWidthBundle out;
+        out.ctx_ = &c;
+        if constexpr (Width > 0) out.wire = in[0];
+        return out;
+    }
+};
+static_assert(!WireBundle<BitVec_T<ClearCtx, 0>>);
+static_assert(!WireBundle<InvalidWidthBundle<ClearCtx, -1>>);
+
+// Rebinding must produce a bundle over the target context at the same width.
+// This family intentionally stays attached to its original context.
+template <class Ctx>
+struct Stuck3 : Raw3<Ctx> {
+    template <class C2> using rebind = Stuck3<Ctx>;
+    static Stuck3 from_wires(Ctx& c, const typename Ctx::Wire* in) {
+        Stuck3 r;
+        r.ctx_ = &c;
+        for (int i = 0; i < 3; ++i) r.w[i] = in[i];
+        return r;
+    }
+};
+static_assert(WireBundle<Stuck3<ClearCtx>>);
+static_assert(!RebindableWireBundle<Stuck3<ClearCtx>, RecordCtx>);
 
 // ---- A synthetic value family: a 2-bit value over any BooleanContext. It is a
 // WireValue purely by its own static members, names no existing family, and is

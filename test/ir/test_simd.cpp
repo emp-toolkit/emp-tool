@@ -8,7 +8,10 @@
 #include "emp-tool/runtime/core/block.h"
 #include "emp-tool/runtime/crypto/prg.h"
 #include <cstdio>
+#include <fcntl.h>
 #include <memory>
+#include <sys/wait.h>
+#include <unistd.h>
 using namespace emp;
 using namespace emp::circuit;
 
@@ -30,6 +33,20 @@ static_assert(BulkBooleanContext<BitslicedClearCtx>);
 static int bad = 0;
 static void chk(const char* w, bool ok) { if (!ok) { printf("  [FAIL] %s\n", w); ++bad; } }
 
+template <class F>
+static bool dies(F&& f) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int dn = open("/dev/null", O_WRONLY);
+        if (dn >= 0) dup2(dn, 2);
+        f();
+        _exit(0);
+    }
+    int st = 0;
+    waitpid(pid, &st, 0);
+    return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
 // out = ((a & b) & (c & d)) ^ a  — two AND-depth levels (the first batches two
 // ANDs into one and_many call) plus a linear XOR.
 static BooleanProgram make_prog() {
@@ -48,7 +65,7 @@ static BooleanProgram make_prog() {
 
 int main() {
     BitslicedClearCtx ctx;
-    BooleanProgram p = make_prog();
+    ScheduledProgram scheduled(make_prog());
     PRG prg;
 
     for (int64_t N : {int64_t(1), int64_t(64), int64_t(128), int64_t(200), int64_t(257)}) {
@@ -56,7 +73,7 @@ int main() {
         auto out = std::make_unique<bool[]>((size_t)N);
         prg.random_bool(in.get(), (int)(N * 4));
 
-        simd_execute_program(ctx, p, in.get(), out.get(), N);
+        simd_execute_program(ctx, scheduled, in.get(), out.get(), N);
 
         bool ok = true;
         for (int64_t t = 0; t < N; ++t) {
@@ -69,6 +86,11 @@ int main() {
         char name[32]; snprintf(name, sizeof(name), "simd N=%lld", (long long)N);
         chk(name, ok);
     }
+
+    chk("simd rejects negative N", dies([&] {
+        ProgramWorkspace<block> ws;
+        simd_execute_program(ctx, scheduled, nullptr, nullptr, -1, ws);
+    }));
 
     printf("test_simd: %s\n", bad ? "FAILED" : "PASS");
     return bad ? 1 : 0;

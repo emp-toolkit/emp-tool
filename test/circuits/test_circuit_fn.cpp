@@ -11,9 +11,12 @@
 #include "emp-tool/circuits/frontend/circuit_fn.h"
 #include "emp-tool/circuits/frontend/rec.h"
 #include <array>
+#include <cstdlib>
 #include <cstdint>
 #include <cstdio>
+#include <sys/wait.h>
 #include <type_traits>
+#include <unistd.h>
 
 using namespace emp;
 using Ctx = ClearSession::ctx_t;
@@ -21,6 +24,29 @@ namespace cf = emp::frontend;
 
 static int bad = 0;
 static void chk(const char* what, bool ok) { if (!ok) { printf("  [FAIL] %s\n", what); ++bad; } }
+
+template <class F>
+static bool dies(F&& f) {
+    pid_t pid = fork();
+    if (pid < 0) return false;
+    if (pid == 0) {
+        (void)std::freopen("/dev/null", "w", stderr);
+        f();
+        std::_Exit(0);
+    }
+    int status = 0;
+    return waitpid(pid, &status, 0) == pid &&
+           (!WIFEXITED(status) || WEXITSTATUS(status) != 0);
+}
+
+struct CategorySensitive {
+    template <class V>
+    V operator()(V& v) const { return v.constant(0u); }
+
+    template <class V>
+        requires (!std::is_lvalue_reference_v<V>)
+    std::decay_t<V> operator()(V&& v) const { return v.constant(1u); }
+};
 
 // Decode a value evaluated on Ctx (Wire == uint8_t, 0/1) via its codec.
 template <class V> static auto clear_of(const V& v) {
@@ -99,6 +125,52 @@ int main() {
         auto x = UInt_T<Ctx, 32>::constant(cx, 5u);
         auto y = UInt_T<Ctx, 32>::constant(cx, 9u);
         chk("live run", (uint32_t)clear_of(cf::run(add, x, y)) == 14u);
+    }
+
+    // Live and compiled bodies both receive owned, decayed argument values.
+    // An lvalue/rvalue-overloaded body therefore cannot describe two circuits.
+    {
+        CategorySensitive body;
+        auto category = cf::compile<rec::UInt<32>>(body);
+        auto x = UInt_T<Ctx, 32>::constant(cx, 9u);
+        chk("category: compiled uses by-value invocation",
+            (uint32_t)clear_of(cf::run(cx, category, x)) == 1u);
+        chk("category: live matches compiled invocation",
+            (uint32_t)clear_of(cf::run(body, x)) == 1u);
+    }
+
+    // Context-instance checks are public-boundary checks, not per-gate checks,
+    // and remain active in Release builds.
+    {
+        Ctx other;
+        auto x = UInt_T<Ctx, 32>::constant(cx, 1u);
+        auto y = UInt_T<Ctx, 32>::constant(cx, 2u);
+        auto foreign = UInt_T<Ctx, 32>::constant(other, 3u);
+        chk("compiled run rejects foreign argument",
+            dies([&] { (void)cf::run(cx, c, x, foreign); }));
+        chk("live run rejects foreign argument",
+            dies([&] { (void)cf::run(add, x, foreign); }));
+        chk("live run rejects foreign return",
+            dies([&] {
+                auto returns_foreign = [&](auto) { return foreign; };
+                (void)cf::run(returns_foreign, y);
+            }));
+
+        UInt_T<Ctx, 32> uninitialized;
+        chk("live run rejects uninitialized first argument",
+            dies([&] { (void)cf::run([](auto a) { return a; }, uninitialized); }));
+
+        RecordCtx foreign_rc;
+        std::array<RecordCtx::Wire, 32> wires{};
+        RecordCtx::Wire base = foreign_rc.external_input(wires.size());
+        for (std::size_t i = 0; i < wires.size(); ++i)
+            wires[i] = base + static_cast<RecordCtx::Wire>(i);
+        auto foreign_record = rec::UInt<32>::from_wires(foreign_rc, wires.data());
+        chk("compile rejects foreign return",
+            dies([&] {
+                (void)cf::compile<rec::UInt<32>>(
+                    [&](auto) { return foreign_record; });
+            }));
     }
 
     // 7) BitVec_T circuit (bit-vector value): nibble swap, compiled once, run on Ctx.

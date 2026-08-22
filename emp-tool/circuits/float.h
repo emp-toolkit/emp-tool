@@ -13,7 +13,10 @@
 #include "emp-tool/ir/execute.h"                 // execute_program (replay float .empbc)
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <span>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace emp {
@@ -46,39 +49,57 @@ public:
     // ---- IR-replay helpers over the fp<W>_<op>.empbc builtins ----
     // unary/binary/ternary return W bits; compare/classify circuits emit 8 bits
     // (bit 0 is the result), matching the recorded suite. Replay reuses a
-    // thread_local ProgramWorkspace; the returned reference aliases it and is valid
-    // only until the next replay_<K> call (every caller copies immediately).
+    // thread_local ProgramWorkspace. Trivially copyable wires remain in the
+    // workspace; other wires are moved out and live workspace elements cleared.
+private:
     template <int K>
-    const std::vector<Wire>& replay_(const char* op, const std::array<const Float_T*, K>& ops) const {
+    void replay_(const char* op, const std::array<const Float_T*, K>& ops,
+                 Wire* result, std::size_t result_size) const {
         static thread_local ProgramWorkspace<Wire> ws;
         ws.tmp_inputs.resize((size_t)K * W);
         for (int k = 0; k < K; ++k)
             for (int i = 0; i < W; ++i) ws.tmp_inputs[(size_t)k * W + i] = ops[k]->w[i];
-        return execute_program(*ctx_, circuit::float_circuit(W, op),
-                               std::span<const Wire>(ws.tmp_inputs.data(), (size_t)K * W), ws);
+        const auto& out = execute_program(
+            *ctx_, circuit::float_circuit(W, op),
+            std::span<const Wire>(ws.tmp_inputs.data(), (size_t)K * W), ws);
+        if constexpr (std::is_trivially_copyable_v<Wire>) {
+            if (result_size == 1)
+                result[0] = out[0];
+            else
+                std::memcpy(result, out.data(), (std::size_t)W * sizeof(Wire));
+        } else {
+            if (result_size == 1)
+                result[0] = std::move(ws.out[0]);
+            else
+                for (int i = 0; i < W; ++i)
+                    result[i] = std::move(ws.out[(std::size_t)i]);
+            ws.release_wire_values();
+        }
     }
     Float_T unary_(const char* op) const {
-        const auto& out = replay_<1>(op, {this});
-        Float_T r(*ctx_); for (int i = 0; i < W; ++i) r.w[i] = out[i]; return r;
+        Float_T r(*ctx_); replay_<1>(op, {this}, r.w.data(), r.w.size()); return r;
     }
     Float_T binop_(const char* op, const Float_T& o) const {
         check_same_context(*this, o);
-        const auto& out = replay_<2>(op, {this, &o});
-        Float_T r(*ctx_); for (int i = 0; i < W; ++i) r.w[i] = out[i]; return r;
+        Float_T r(*ctx_); replay_<2>(op, {this, &o}, r.w.data(), r.w.size()); return r;
     }
     Float_T ternary_(const char* op, const Float_T& b, const Float_T& c) const {
         check_same_context(*this, b); check_same_context(*this, c);
-        const auto& out = replay_<3>(op, {this, &b, &c});
-        Float_T r(*ctx_); for (int i = 0; i < W; ++i) r.w[i] = out[i]; return r;
+        Float_T r(*ctx_); replay_<3>(op, {this, &b, &c}, r.w.data(), r.w.size()); return r;
     }
     Bit_T<Ctx> cmp_(const char* op, const Float_T& o) const {
         check_same_context(*this, o);
-        return Bit_T<Ctx>(*ctx_, replay_<2>(op, {this, &o})[0]);
+        std::array<Wire, 1> out{};
+        replay_<2>(op, {this, &o}, out.data(), out.size());
+        return Bit_T<Ctx>(*ctx_, out[0]);
     }
     Bit_T<Ctx> classify_(const char* op) const {
-        return Bit_T<Ctx>(*ctx_, replay_<1>(op, {this})[0]);
+        std::array<Wire, 1> out{};
+        replay_<1>(op, {this}, out.data(), out.size());
+        return Bit_T<Ctx>(*ctx_, out[0]);
     }
 
+public:
     // ---- arithmetic ----
     Float_T operator+(const Float_T& o) const { return binop_("add", o); }
     Float_T operator-(const Float_T& o) const { return binop_("sub", o); }

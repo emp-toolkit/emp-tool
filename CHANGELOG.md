@@ -41,6 +41,10 @@ backported fixes.
 - Every failure is fail-stop through `error()`; the public surface
   raises no exceptions and is `-fno-exceptions`-compatible (enforced by
   `test_no_exceptions`).
+- IR diagnostics now separate a streamed gate trace
+  (`DigestCtx::value()` / `digest_gate_stream`) from the versioned full-program
+  fingerprint (`digest_program`). Code that read `DigestCtx::digest` must call
+  `value()` so the aggregate input frame is sealed.
 - Requires OpenSSL ≥ 3.0 and CMake ≥ 3.25.
 
 ### Security

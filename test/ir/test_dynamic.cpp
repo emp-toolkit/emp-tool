@@ -1,7 +1,8 @@
 // Runtime-width session I/O (RuntimeWidthValue) over ClearSession: input/reveal of
 // UInt_T<Ctx, runtime_width> / Int_T<Ctx, runtime_width> at runtime widths and
-// owners, runtime-width operators, unsigned-vs-signed decode, and the zero-gate
-// fixed<->dynamic conversions (to_dynamic / to_fixed<M> / resize). C++20.
+// owners, runtime-width operators, unsigned-vs-signed decode, malformed-codec /
+// cross-session boundary rejection, and the zero-gate fixed<->dynamic conversions
+// (to_dynamic / to_fixed<M> / resize). C++20.
 
 #include "emp-tool/emp-tool.h"
 #include "emp-tool/circuits/typed.h"
@@ -9,11 +10,59 @@
 #include "emp-tool/ir/session/session_io.h"
 #include <cstdint>
 #include <cstdio>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 using namespace emp;
 
 static int bad = 0;
 static void chk(const char* what, bool ok) { if (!ok) { printf("  [FAIL] %s\n", what); ++bad; } }
+
+template <class F>
+static bool dies(F&& f) {
+    pid_t pid = fork();
+    if (pid < 0) return false;
+    if (pid == 0) {
+        int dn = open("/dev/null", O_WRONLY);
+        if (dn >= 0) dup2(dn, 2);
+        f();
+        _exit(0);
+    }
+    int status = 0;
+    waitpid(pid, &status, 0);
+    return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+
+// Runtime-width codec with a deliberately short encode result. It models the
+// structural concept so the session boundary, rather than template substitution,
+// is what catches the extension bug.
+template <class Ctx>
+struct ShortRuntimeCodec {
+    using Wire = typename Ctx::Wire;
+    using context_type = Ctx;
+    using clear_t = uint8_t;
+    static constexpr bool is_dynamic = true;
+    Ctx* ctx_ = nullptr;
+    std::vector<Wire> wires;
+    int width() const { return (int)wires.size(); }
+    Ctx* context() const { return ctx_; }
+    void pack_wires(Wire* out) const {
+        for (std::size_t i = 0; i < wires.size(); ++i) out[i] = wires[i];
+    }
+    static ShortRuntimeCodec from_wires(Ctx& ctx, const Wire* in, int width) {
+        ShortRuntimeCodec out;
+        out.ctx_ = &ctx;
+        out.wires.assign(in, in + width);
+        return out;
+    }
+    static std::vector<uint8_t> encode(clear_t, int width) {
+        return std::vector<uint8_t>((std::size_t)(width - 1));
+    }
+    static clear_t decode(const uint8_t*, int) { return 0; }
+};
+
+static_assert(RuntimeWidthValue<ShortRuntimeCodec<ClearCtx>>);
 
 // two's-complement of v at runtime width w (the reference decode for Int_T runtime)
 static int64_t twos(int64_t v, int w) {
@@ -39,6 +88,28 @@ int main() {
     static_assert(RuntimeSessionIO<ClearSession, RI>,       "ClearSession supports runtime signed I/O");
 
     ClearSession sess;
+
+    // ---- session boundaries catch ownership and malformed runtime codecs ----
+    chk("fixed reveal rejects a foreign session value", dies([] {
+        ClearSession a, b;
+        auto value = a.input<UInt_T<ClearCtx, 8>>(ALICE, 7);
+        (void)b.reveal(value, PUBLIC);
+    }));
+    chk("runtime reveal rejects a foreign session value", dies([] {
+        ClearSession a, b;
+        auto value = a.input<UInt_T<ClearCtx, runtime_width>>(ALICE, 7, 8);
+        (void)b.reveal(value, PUBLIC);
+    }));
+    chk("runtime reveal rejects a zero-width value", dies([] {
+        ClearSession s;
+        UInt_T<ClearCtx, runtime_width> value(s.ctx(), 1);
+        value.w.clear();
+        (void)s.reveal(value, PUBLIC);
+    }));
+    chk("runtime input rejects a short codec result", dies([] {
+        ClearSession s;
+        (void)s.input<ShortRuntimeCodec<ClearCtx>>(ALICE, 0, 8);
+    }));
 
     // ---- unsigned runtime: input/reveal + ops, several widths and owners ----
     for (int w : {1, 7, 16, 20, 33, 48, 64}) {

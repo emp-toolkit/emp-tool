@@ -155,7 +155,10 @@ static std::vector<uint8_t> sha3_clear(const uint8_t* msg) {
   for (int b = 0; b < Bytes; ++b)
     for (int k = 0; k < 8; ++k) in[b * 8 + k] = ((msg[b] >> k) & 1) != 0;
 
-  auto m = sess.input<Msg>(ALICE, in);   // feed the message bytes as ALICE's input
+  auto m = [&] {
+    if constexpr (Bytes == 0) return Msg(sess.ctx());
+    else return sess.input<Msg>(ALICE, in);
+  }();
   BV256 dig = sha3_256(sess.ctx(), m);
   std::array<bool, 256> bits = sess.reveal(dig, PUBLIC).value();
   return std::vector<uint8_t>(bits.begin(), bits.end());

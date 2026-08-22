@@ -44,6 +44,14 @@ int main() {
 	check(s.stored_num_wires == 5 && s.dense_num_wires == 5,
 	      "dense representation sizes");
 
+	BooleanProgram shared_operand;
+	shared_operand.num_inputs = 1;
+	shared_operand.num_wires = 2;
+	shared_operand.gates = {{0, 0, 1, Op::Xor}};
+	shared_operand.outputs = {1};
+	check(analyze_program(shared_operand).max_fanout == 1,
+	      "one gate using the same operand twice is one consumer");
+
 	BooleanProgram compact = make_compact(dense, WireReuse::Full).prog;
 	ProgramStats c = analyze_program(compact);
 	check(c.wire_reuse == WireReuse::Full, "wire-reuse mode");

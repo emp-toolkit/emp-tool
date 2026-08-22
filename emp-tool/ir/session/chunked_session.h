@@ -18,7 +18,6 @@
 //   bool is_materialized_(id)                                 // id in carried state?
 //   template<class Pred> void prune_carried_(keep)            // drop carried !keep(id)
 //   void materialize_deferred_inputs_()                        // optional normal-operation barrier
-//   int party_()
 //   static constexpr bool kCountsAndsInternally               // optional: skip base scan
 //
 // Derived also defines run(body, ...) (its replay strategy differs) and owns the
@@ -26,6 +25,7 @@
 // reveal / checkpoint / run(circuit) / run_artifact and the flush flow over them.
 
 #include "emp-tool/ir/program.h"                       // circuit::BooleanProgram
+#include "emp-tool/ir/validate.h"                      // circuit::validate_program
 #include "emp-tool/circuits/typed.h"                   // value types
 #include "emp-tool/circuits/frontend/circuit_fn.h"     // frontend::Circuit / RecordValue
 #include "emp-tool/ir/session/chunk_recorder.h"        // ChunkRecorderCtx
@@ -33,6 +33,7 @@
 #include "emp-tool/runtime/core/utils.h"               // error(), PUBLIC
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -129,7 +130,9 @@ public:
     flush_(keep_ids);
     std::vector<uint8_t> bits = self().decode_(vids, recipient);
     constexpr int W = V::width();
-    if ((int)bits.size() != W) return std::nullopt;   // non-recipient
+    if (bits.empty()) return std::nullopt;   // non-recipient
+    expecting(bits.size() == (std::size_t)W,
+              "ChunkedSession::reveal: backend returned the wrong bit count");
     std::array<bool, (std::size_t)W> bb{};
     for (int i = 0; i < W; ++i) bb[(std::size_t)i] = (bool)bits[(std::size_t)i];
     return V::decode(bb.data());
@@ -154,22 +157,29 @@ public:
 
   // ---- COMPILED replay: a stored typed Circuit run standalone over materialized args.
   template <frontend::RecordValue RetV, frontend::RecordValue... ArgVs>
-  typename RetV::template rebind<ctx_t>
+    requires RebindableWireBundle<RetV, ctx_t> &&
+             (RebindableWireBundle<ArgVs, ctx_t> && ...)
+  wire_bundle_rebind_t<RetV, ctx_t>
   run(const frontend::Circuit<RetV, ArgVs...>& c,
-      const typename ArgVs::template rebind<ctx_t>&... args) {
+      const wire_bundle_rebind_t<ArgVs, ctx_t>&... args) {
+    using Out = wire_bundle_rebind_t<RetV, ctx_t>;
     settle_deferred_inputs_();
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
     expecting((uint32_t)in_ids.size() == c.program().num_inputs,
               "ChunkedSession::run: total argument width != circuit input count");
-    return run_program_<typename RetV::template rebind<ctx_t>>(c.program(), in_ids);
+    return run_program_<Out>(c.program(), in_ids);
   }
 
   // ---- typed raw-program runner over materialized args, explicit RetV.
+  // Debug builds validate the raw program before replay.
   template <WireValue RetV, class... Args>
   RetV run_artifact(const circuit::BooleanProgram& prog, const Args&... args) {
     static_assert(std::same_as<typename RetV::context_type, ctx_t>,
         "ChunkedSession::run_artifact<RetV>: RetV must be a value over this session's ctx_t");
+#ifndef NDEBUG
+    circuit::validate_program(prog);
+#endif
     settle_deferred_inputs_();
     std::vector<uint32_t> in_ids;
     (append_arg_ids_(in_ids, args), ...);
@@ -190,6 +200,8 @@ protected:
   // Wrap raw recorder ids in (refcounted) wires to build a value.
   template <class V>
   static V from_ids_(ctx_t& c, const std::vector<uint32_t>& ids) {
+    expecting(ids.size() == (std::size_t)V::width(),
+              "ChunkedSession: value width != recorder id count");
     std::vector<typename ctx_t::Wire> wb(ids.begin(), ids.end());
     return V::from_wires(c, wb.data());
   }
@@ -264,8 +276,10 @@ protected:
     session::FlushPlan plan = session::plan_flush(
         ctx_.chunk_gates(), keep_ids,
         [this](uint32_t id) { return self().is_materialized_(id); });
-    expecting(plan.ok,
-              "ChunkedSession::flush: gate operand has no carried state (stale wire)");
+    expecting(plan.ok, [&] {
+      return std::string("ChunkedSession::flush: ") +
+             (plan.error ? plan.error : "invalid flush plan");
+    });
 
     self().run_program_into_(plan.prog, plan.input_ids, plan.output_ids);
     count_ands_(plan.prog);

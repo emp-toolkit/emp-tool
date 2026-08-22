@@ -61,6 +61,21 @@ int main() {
 
 #elif NEG_CASE == 9   // compile arg is a circuit value but NOT over RecordCtx
     (void)cf::compile<UInt_T<Ctx, 32>>([](auto a) { return a; });
+
+#elif NEG_CASE == 10  // live run argument is not a circuit value
+    (void)cf::run([](auto a) { return a; }, 7);
+
+#elif NEG_CASE == 11  // generic binary callable must not become unary + context
+    (void)cf::compile<rec::UInt<32>>(
+        [](auto possible_ctx, auto value) { (void)possible_ctx; return value; });
+
+#elif NEG_CASE == 12  // live body returns a value of another context type
+    RecordCtx rc;
+    RecordCtx::Wire wires[32];
+    RecordCtx::Wire base = rc.external_input(32);
+    for (int i = 0; i < 32; ++i) wires[i] = base + (RecordCtx::Wire)i;
+    auto foreign = rec::UInt<32>::from_wires(rc, wires);
+    (void)cf::run([&](auto) { return foreign; }, x);
 #endif
     return 0;
 }

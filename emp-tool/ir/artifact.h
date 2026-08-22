@@ -9,7 +9,9 @@
 #include "emp-tool/ir/program.h"
 #include "emp-tool/ir/validate.h"
 #include "emp-tool/runtime/core/utils.h"   // error()
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace emp {
@@ -23,7 +25,13 @@ struct CircuitSignature {
 	uint32_t return_width = 0;
 
 	uint64_t total_input_bits() const {
-		uint64_t s = 0; for (uint32_t w : arg_widths) s += w; return s;
+		uint64_t s = 0;
+		for (uint32_t w : arg_widths) {
+			expecting(w <= UINT32_MAX - s,
+			          "CircuitSignature::total_input_bits: sum exceeds UINT32_MAX");
+			s += w;
+		}
+		return s;
 	}
 };
 
@@ -36,9 +44,14 @@ struct CircuitArtifact {
 // signature matches the program's I/O. error()s (fatal) on mismatch.
 inline void validate_artifact(const CircuitArtifact& a) {
 	validate_program(a.program);
-	const uint64_t ins = a.signature.total_input_bits();   // compared in 64-bit (no truncation)
-	expecting(ins <= UINT32_MAX,
-	          "validate_artifact: total_input_bits exceeds UINT32_MAX");
+	for (std::size_t i = 0; i < a.signature.arg_widths.size(); ++i)
+		expecting(a.signature.arg_widths[i] != 0, [&] {
+			return "validate_artifact: argument " + std::to_string(i) +
+			       " has zero width";
+		});
+	expecting(a.signature.return_width != 0,
+	          "validate_artifact: return width must be positive");
+	const uint64_t ins = a.signature.total_input_bits();
 	expecting(ins == (uint64_t)a.program.num_inputs,
 	          "validate_artifact: sum(arg_widths) != program.num_inputs");
 	expecting((uint64_t)a.signature.return_width ==

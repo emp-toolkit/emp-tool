@@ -68,7 +68,10 @@ public:
         const std::array<bool, (std::size_t)n> bits = V::encode(value);   // stack; width is the type
         std::array<typename ctx_t::Wire, (std::size_t)n> wires{};
         for (int i = 0; i < n; ++i) wires[(std::size_t)i] = ctx_.public_bit(bits[(std::size_t)i]);
-        return V::from_wires(ctx_, wires.data());
+        V out = V::from_wires(ctx_, wires.data());
+        expecting(out.context() == &ctx_,
+                  "ClearSession::input: value codec returned a value bound to a different context");
+        return out;
     }
 
     // Reveal a circuit value to `recipient`, returning std::optional<clear_t>. In
@@ -83,6 +86,8 @@ public:
             "ClearSession::reveal<V>: V must be a value over this session's ctx_t");
         expecting(recipient >= PUBLIC,
                   "ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
+        expecting(value.context() == &ctx_,
+                  "ClearSession::reveal: value belongs to a different session context");
         constexpr int n = V::width();
         std::array<typename ctx_t::Wire, (std::size_t)n> wires{};
         value.pack_wires(wires.data());
@@ -110,10 +115,15 @@ public:
         expecting(width >= 1,
                   "ClearSession::input: runtime width must be >= 1");
         const std::vector<uint8_t> bits = V::encode(value, width);
+        expecting(bits.size() == (std::size_t)width,
+                  "ClearSession::input: runtime codec returned the wrong bit count");
         std::vector<typename ctx_t::Wire> wires((std::size_t)width);
         for (int i = 0; i < width; ++i)
             wires[(std::size_t)i] = ctx_.public_bit(bits[(std::size_t)i] != 0);
-        return V::from_wires(ctx_, wires.data(), width);
+        V out = V::from_wires(ctx_, wires.data(), width);
+        expecting(out.context() == &ctx_ && out.width() == width,
+                  "ClearSession::input: runtime codec returned a value with the wrong context or width");
+        return out;
     }
     template <RuntimeWidthValue V>
     reveal_t<V> reveal(const V& value, int recipient) {
@@ -121,7 +131,11 @@ public:
             "ClearSession::reveal<V>: V must be a value over this session's ctx_t");
         expecting(recipient >= PUBLIC,
                   "ClearSession::reveal: recipient must be PUBLIC or a party id >= 1 (XOR-share reveal is not a plaintext notion)");
+        expecting(value.context() == &ctx_,
+                  "ClearSession::reveal: value belongs to a different session context");
         const int n = value.width();
+        expecting(n >= 1,
+                  "ClearSession::reveal: runtime width must be >= 1");
         std::vector<typename ctx_t::Wire> wires((std::size_t)n);
         value.pack_wires(wires.data());
         std::vector<uint8_t> buf((std::size_t)n);

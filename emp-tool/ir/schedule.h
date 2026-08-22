@@ -11,31 +11,22 @@
 // same-level linears).
 
 #include "emp-tool/ir/program.h"
+#include "emp-tool/ir/validate.h"
 #include "emp-tool/ir/passes.h"        // schedule_pass
 #include "emp-tool/ir/execute.h"       // ProgramWorkspace
 #include "emp-tool/ir/context/concept.h"
-#include "emp-tool/ir/context/digest.h"   // digest_program (plan staleness guard)
 #include "emp-tool/runtime/core/utils.h"       // error()
 #include <span>
+#include <utility>
 #include <vector>
 
 namespace emp {
 
-// A precomputed schedule: gate indices grouped per AND-depth level. Build once
-// with make_scheduled_plan() and reuse across many executions of the same program
-// (e.g. an AG2PC/AG-MPC builtin replayed every call) so the schedule pass and
-// bucket allocation are not repeated per run.
+namespace detail {
+
 struct ScheduledPlan {
     std::vector<std::vector<uint32_t>> bucket;   // gate indices per level (emission order)
     int depth = 0;
-    // Identity of the program this plan was built for. A plan reused against a
-    // DIFFERENT program would silently skip/misorder gates, so execution checks
-    // these: the dimensions are an O(1) always-on guard; the digest is a stronger
-    // debug-only guard (same shape, different gate stream).
-    uint32_t num_inputs = 0;
-    uint32_t num_wires  = 0;
-    size_t   num_gates  = 0;
-    uint64_t digest     = 0;
 };
 
 inline ScheduledPlan make_scheduled_plan(const circuit::BooleanProgram& p) {
@@ -45,32 +36,17 @@ inline ScheduledPlan make_scheduled_plan(const circuit::BooleanProgram& p) {
     plan.bucket.assign((size_t)plan.depth + 1, {});
     for (uint32_t gi = 0; gi < p.gates.size(); ++gi)
         plan.bucket[sched.wire_level[p.gates[gi].out]].push_back(gi);
-    plan.num_inputs = p.num_inputs;
-    plan.num_wires  = p.num_wires;
-    plan.num_gates  = p.gates.size();
-    plan.digest     = digest_program(p);
     return plan;
 }
 
-// Replay using a precomputed plan + reusable workspace (no schedule pass, no
-// allocation per call). Writes outputs into ws.out and returns a reference.
 template <BulkBooleanContext Ctx>
-inline const std::vector<typename Ctx::Wire>& scheduled_execute_program(
+inline const std::vector<typename Ctx::Wire>& execute_scheduled(
     Ctx& ctx, const circuit::BooleanProgram& p, const ScheduledPlan& plan,
     std::span<const typename Ctx::Wire> inputs,
     ProgramWorkspace<typename Ctx::Wire>& ws) {
     using W = typename Ctx::Wire;
-    circuit::require_dense(p, "scheduled_execute_program");
     expecting(inputs.size() == p.num_inputs,
               "scheduled_execute_program: input count != program num_inputs");
-    expecting(plan.num_inputs == p.num_inputs &&
-                  plan.num_wires == p.num_wires &&
-                  plan.num_gates == p.gates.size(),
-              "scheduled_execute_program: plan does not match program (stale plan?)");
-#ifndef NDEBUG
-    expecting(plan.digest == digest_program(p),
-              "scheduled_execute_program: plan digest mismatch (stale plan for a different program)");
-#endif
 
     ws.scratch.ensure(p.num_wires);
     W* w = ws.scratch.wires.data();
@@ -104,22 +80,63 @@ inline const std::vector<typename Ctx::Wire>& scheduled_execute_program(
     return ws.out;
 }
 
+}  // namespace detail
+
+// Owns a validated dense program and its precomputed AND-depth schedule.
+class ScheduledProgram {
+public:
+    explicit ScheduledProgram(circuit::BooleanProgram program)
+        : program_(std::move(program)) {
+        circuit::validate_program(program_);
+        circuit::require_dense(program_, "ScheduledProgram");
+        plan_ = detail::make_scheduled_plan(program_);
+    }
+
+    const circuit::BooleanProgram& program() const { return program_; }
+
+private:
+    circuit::BooleanProgram program_;
+    detail::ScheduledPlan plan_;
+
+    template <BulkBooleanContext Ctx>
+    friend const std::vector<typename Ctx::Wire>& scheduled_execute_program(
+        Ctx&, const ScheduledProgram&,
+        std::span<const typename Ctx::Wire>,
+        ProgramWorkspace<typename Ctx::Wire>&);
+};
+
+// Replay a prepared program using a reusable workspace.
+template <BulkBooleanContext Ctx>
+inline const std::vector<typename Ctx::Wire>& scheduled_execute_program(
+    Ctx& ctx, const ScheduledProgram& scheduled,
+    std::span<const typename Ctx::Wire> inputs,
+    ProgramWorkspace<typename Ctx::Wire>& ws) {
+    return detail::execute_scheduled(ctx, scheduled.program_, scheduled.plan_,
+                                     inputs, ws);
+}
+
 // Convenience: precomputed plan, allocate outputs.
 template <BulkBooleanContext Ctx>
 inline std::vector<typename Ctx::Wire> scheduled_execute_program(
-    Ctx& ctx, const circuit::BooleanProgram& p, const ScheduledPlan& plan,
+    Ctx& ctx, const ScheduledProgram& scheduled,
     std::span<const typename Ctx::Wire> inputs) {
     ProgramWorkspace<typename Ctx::Wire> ws;
-    return scheduled_execute_program(ctx, p, plan, inputs, ws);
+    scheduled_execute_program(ctx, scheduled, inputs, ws);
+    return std::move(ws.out);
 }
 
-// Convenience: build a one-shot plan and replay. For repeated execution of the
-// same program, cache make_scheduled_plan(p) and use the plan overloads above.
+// One-shot convenience. Repeated callers should move the program into a
+// ScheduledProgram so validation and scheduling happen only once.
 template <BulkBooleanContext Ctx>
 inline std::vector<typename Ctx::Wire> scheduled_execute_program(
     Ctx& ctx, const circuit::BooleanProgram& p,
     std::span<const typename Ctx::Wire> inputs) {
-    return scheduled_execute_program(ctx, p, make_scheduled_plan(p), inputs);
+    circuit::validate_program(p);
+    circuit::require_dense(p, "scheduled_execute_program");
+    detail::ScheduledPlan plan = detail::make_scheduled_plan(p);
+    ProgramWorkspace<typename Ctx::Wire> ws;
+    detail::execute_scheduled(ctx, p, plan, inputs, ws);
+    return std::move(ws.out);
 }
 
 }  // namespace emp

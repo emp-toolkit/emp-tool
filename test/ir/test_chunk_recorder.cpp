@@ -6,13 +6,19 @@
 //     (the reason ChunkWire move-steals); in_scope follows C++ object lifetime.
 //   * live_pending_ids as the implicit flush keep-set, and const-bit dedup +
 //     reset on drop_chunk.
+//   * context-bound Float replay releases thread-local workspace wire values
+//     before recorder teardown.
 //   * plan_flush: DCE (incl. a dead gate's private operand), RecordCtx-canonical
-//     compaction, const-only programs, duplicate-keep dedup, and stale detection.
+//     compaction, const-only programs, duplicate-keep dedup, stale detection,
+//     and rejection of malformed recorder streams.
 // C++20.
 
 #include "emp-tool/ir/session/chunk_recorder.h"
 #include "emp-tool/ir/session/flush_plan.h"
+#include "emp-tool/circuits/float.h"
 #include <cstdio>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -23,9 +29,47 @@ static void check(bool ok, const char* what) {
   if (!ok) { std::printf("  BAD: %s\n", what); ++fails; }
 }
 
+template <class F>
+static bool dies(F&& f) {
+  pid_t pid = fork();
+  if (pid < 0) return false;
+  if (pid == 0) {
+    (void)std::freopen("/dev/null", "w", stderr);
+    f();
+    _exit(0);
+  }
+  int status = 0;
+  return waitpid(pid, &status, 0) == pid &&
+         (!WIFEXITED(status) || WEXITSTATUS(status) != 0);
+}
+
 int main() {
   static_assert(BooleanContext<ChunkRecorderCtx>);
   using W = ChunkRecorderCtx::Wire;
+
+  // The teardown guard is always-on, including Release builds where
+  // EMP_CONTEXT_CHECKS defaults off. Continuing here would let the surviving
+  // wire unpin against a later recorder with the same numeric id.
+  check(dies([] {
+    W surviving;
+    {
+      ChunkRecorderCtx recorder;
+      std::vector<uint32_t> ids = recorder.reserve_ids(1);
+      surviving = W(ids[0]);
+    }
+  }), "recorder teardown rejects a surviving wire");
+
+  // Float replay uses a thread-local ProgramWorkspace. Its retained wire values
+  // must be released before this recorder dies; otherwise teardown sees pinned
+  // scratch wires and a later recorder would inherit stale ids.
+  {
+    ChunkRecorderCtx float_ctx;
+    using F16 = Float_T<ChunkRecorderCtx, 16>;
+    F16 a = F16::constant(float_ctx, 1.0f);
+    F16 b = F16::constant(float_ctx, 2.0f);
+    F16 sum = a + b;
+    (void)sum;
+  }
 
   ChunkRecorderCtx ctx;
   // Two materialized-style "input" wires, held by live value wrappers.
@@ -119,10 +163,10 @@ int main() {
   {
     using circuit::Gate; using circuit::Op;
     // DCE: gate 4 is dead; it and its private operand (2) are dropped, keeping 3.
-    std::vector<Gate> chunk = {{0, 1, 3, Op::And}, {0, 2, 4, Op::And}};
-    auto p = session::plan_flush(chunk, {3}, [](uint32_t id) { return id <= 2; });
+    std::vector<Gate> chunk = {{1, 2, 4, Op::And}, {1, 3, 5, Op::And}};
+    auto p = session::plan_flush(chunk, {4}, [](uint32_t id) { return id >= 1 && id <= 3; });
     check(p.ok && p.prog.gates.size() == 1 && p.output_ids.size() == 1 &&
-          p.output_ids[0] == 3 && p.input_ids.size() == 2,
+          p.output_ids[0] == 4 && p.input_ids.size() == 2,
           "DCE drops the dead gate and its private operand");
 
     // Const-only program: a kept Const1 with no inputs.
@@ -133,9 +177,30 @@ int main() {
           "const-only program: no inputs, one gate, one output");
 
     // Duplicate keep ids collapse to a single output.
-    std::vector<Gate> one = {{0, 1, 2, Op::And}};
-    auto pd = session::plan_flush(one, {2, 2}, [](uint32_t id) { return id <= 1; });
+    std::vector<Gate> one = {{1, 2, 3, Op::And}};
+    auto pd = session::plan_flush(one, {3, 3}, [](uint32_t id) { return id == 1 || id == 2; });
     check(pd.ok && pd.output_ids.size() == 1, "duplicate keep ids dedup to one output");
+
+    std::vector<Gate> duplicate = {
+        {1, 2, 3, Op::And},
+        {1, 2, 3, Op::Xor},
+    };
+    auto pdup = session::plan_flush(duplicate, {3}, [](uint32_t id) { return id <= 2; });
+    check(!pdup.ok && pdup.error != nullptr,
+          "duplicate recorder definitions are rejected");
+
+    std::vector<Gate> forward = {
+        {4, 1, 3, Op::And},
+        {1, 2, 4, Op::Xor},
+    };
+    auto pfwd = session::plan_flush(forward, {3}, [](uint32_t id) { return id <= 2; });
+    check(!pfwd.ok && pfwd.error != nullptr,
+          "forward chunk-local references are rejected");
+
+    std::vector<Gate> null_operand = {{0, 1, 2, Op::And}};
+    auto pnull = session::plan_flush(null_operand, {2}, [](uint32_t id) { return id == 1; });
+    check(!pnull.ok && pnull.error != nullptr,
+          "null recorder operands are rejected");
   }
 
   // drop_chunk clears the chunk and resets the const dedup.

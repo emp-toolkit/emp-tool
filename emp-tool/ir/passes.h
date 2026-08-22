@@ -133,8 +133,9 @@ struct LayoutStats {
 	int64_t reachable_and  = 0;
 };
 
-inline LayoutStats layout_pass(const BooleanProgram& p, const LivenessStats& live) {
+inline LayoutStats layout_pass(const BooleanProgram& p) {
 	require_dense(p, "layout_pass");
+	const LivenessStats live = liveness_pass(p);
 	LayoutStats s;
 	// Output wires are roots: they must survive to output assembly, so they are
 	// never freed — even if an internal gate also read them earlier (e.g. a body
@@ -157,8 +158,10 @@ inline LayoutStats layout_pass(const BooleanProgram& p, const LivenessStats& liv
 		if (pg < 0) continue;                  // input wire: no producer to walk
 		const Gate& g = p.gates[(size_t)pg];
 		auto visit = [&](uint32_t v) { if (!reach[v]) { reach[v] = 1; stack.push_back(v); } };
-		visit(g.in0);
-		if (!g.is_not() && !g.is_const()) visit(g.in1);
+		if (!g.is_const()) {
+			visit(g.in0);
+			if (!g.is_not()) visit(g.in1);
+		}
 	}
 	for (uint32_t w = 0; w < p.num_wires; ++w) if (reach[w]) ++s.reachable_wire;
 	for (const auto& g : p.gates) {
