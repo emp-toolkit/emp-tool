@@ -48,7 +48,20 @@ namespace emp {
  */
 
 template<int BatchSize = 8, int ReuseShift = 3>
-class MITCCRH { public:
+class MITCCRH {
+	static_assert(BatchSize > 0, "MITCCRH: BatchSize must be positive");
+
+	template<int K, int H>
+	static constexpr void validate_hash_shape() {
+		static_assert(K > 0, "MITCCRH: K must be positive");
+		static_assert(H > 0, "MITCCRH: H must be positive");
+		if constexpr (K > 0) {
+			static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
+			static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		}
+	}
+
+public:
 	static_assert(ReuseShift >= 0 && ReuseShift < 32, "MITCCRH: ReuseShift out of range");
 	AES_KEY scheduled_key[BatchSize];
 	block keys[BatchSize];
@@ -156,8 +169,7 @@ private:
 	// stores) of the in-place form; otherwise they must not overlap.
 	template<class Tile, int K, int H, bool InPlace>
 	void consume(block * dst, const block * src) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		// Renew when the next K lanes do not fit. With one K per schedule this
 		// is exactly key_used == BatchSize; a caller that mixes K within a
 		// schedule skips the leftover lanes instead of reading past the
