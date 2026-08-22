@@ -119,7 +119,7 @@ class NetIO : public IOChannel { public:
 		                                               socket_options_);
 
 		auto sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
-		sibling->is_server = true;  // preserve sync()'s server/client ordering
+		sibling->is_server = true;
 		sibling->port_ = port_;
 		sibling->socket_options_ = socket_options_;
 		sibling->listener = listener;
@@ -169,19 +169,6 @@ class NetIO : public IOChannel { public:
 
 	void set_nodelay() { tcp::set_nodelay(sock); }
 	void set_delay()   { tcp::set_delay(sock); }
-
-	// 1-byte ping/pong handshake to verify both directions are alive.
-	void sync() override {
-		int tmp = 0;
-		if (is_server) {
-			send_data_internal(&tmp, 1);
-			recv_data_internal(&tmp, 1);
-		} else {
-			recv_data_internal(&tmp, 1);
-			send_data_internal(&tmp, 1);
-			flush_unlocked();
-		}
-	}
 
 	void send_data_internal(const void *data, int64_t len) override {
 		expecting(len >= 0, "NetIO::send_data: negative len");
@@ -237,7 +224,9 @@ private:
 		if (!send_dirty) return;
 		++flushes_count;
 		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
-		fflush(stream);
+		expecting(::fflush(stream) == 0, [&] {
+			return std::string("NetIO: fflush failed: ") + std::strerror(errno);
+		});
 		send_dirty = false;
 	}
 

@@ -7,7 +7,6 @@
 //   send_block / recv_block            block-typed wrapper (inherited)
 //   send_bool / recv_bool              packed via bools_to_bits (inherited)
 //   flush()                            drain outbound coalescing buffer
-//   sync()                             1-byte ping/pong handshake
 //
 // Same flush contract and thread-safety rules as NetIO. This benchmark runs
 // the TLSIO loopback throughput sweep with the same PKI setup as the test.

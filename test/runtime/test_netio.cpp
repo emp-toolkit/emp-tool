@@ -7,7 +7,6 @@
 //   send_block / recv_block            block-typed wrapper
 //   send_bool / recv_bool              packed via bools_to_bits
 //   flush()                            drain outbound only (no peer coupling)
-//   sync()                             1-byte ping/pong handshake
 //   make_sibling()                     more connections on the same port
 //   tcp::SocketOptions                 pre-handshake socket buffer sizing
 //   SocketOptions::for_bandwidth_and_rtt
@@ -16,6 +15,7 @@
 // Test functions below are templated on the IO type so correctness and
 // regression checks can be reused by IO implementations.
 
+#include <csignal>
 #include <cstring>
 #include <cstdint>
 #include <iostream>
@@ -42,6 +42,22 @@ static bool dies(F &&f) {
 	int status = 0;
 	waitpid(pid, &status, 0);
 	return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
+
+static void round_trip_marker(NetIO &io, int party) {
+	const char marker = 0x5a;
+	char received = 0;
+	if (party == ALICE) {
+		io.send_data(&marker, 1);
+		io.flush();
+		io.recv_data(&received, 1);
+	} else {
+		io.recv_data(&received, 1);
+		io.send_data(&marker, 1);
+		io.flush();
+	}
+	expecting(received == marker,
+	          "NetIO test: sibling round-trip marker mismatch");
 }
 
 // -------------------------------------------------------------------------
@@ -217,7 +233,7 @@ static void run_sibling_regression(int port, int party) {
 		for (int round = 0; round < 16; ++round) {
 			NetIO *source = round < 8 ? primary.get() : siblings.front().get();
 			siblings.push_back(source->make_sibling());
-			siblings.back()->sync();
+			round_trip_marker(*siblings.back(), party);
 			if (round == 7) primary.reset();
 		}
 	}
@@ -225,7 +241,7 @@ static void run_sibling_regression(int port, int party) {
 		auto primary = party == ALICE ? NetIO::listen(port, true)
 		                              : NetIO::connect(peer_ip(), port, true);
 		auto sibling = primary->make_sibling();
-		sibling->sync();
+		round_trip_marker(*sibling, party);
 	}
 	if (party == ALICE) cout << "NetIO shared-listener regression: OK\n";
 }
@@ -286,6 +302,20 @@ static void run_socket_options_factory_regression() {
 	}), "NetIO test: unavailable socket buffer was not rejected");
 }
 
+static void run_flush_failure_regression() {
+	expecting(dies([] {
+		int sockets[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+		          "NetIO test: socketpair failed");
+		::signal(SIGPIPE, SIG_IGN);
+		::close(sockets[1]);
+		NetIO io(sockets[0], true);
+		const char byte = 1;
+		io.send_data(&byte, 1);
+		io.flush();
+	}), "NetIO test: fflush failure was ignored");
+}
+
 static void run_socket_options_regression(int port, int party) {
 	tcp::SocketOptions options;
 	options.send_buffer_size = 128 * 1024;
@@ -304,12 +334,12 @@ static void run_socket_options_regression(int port, int party) {
 	}
 
 	auto sibling = primary->make_sibling();
-	sibling->sync();
+	round_trip_marker(*sibling, party);
 	expect_socket_options(*sibling, options);
 	primary.reset();
 
 	auto next = sibling->make_sibling();
-	next->sync();
+	round_trip_marker(*next, party);
 	expect_socket_options(*next, options);
 	if (party == ALICE) cout << "NetIO socket-options regression: OK\n";
 }
@@ -347,6 +377,7 @@ int main(int argc, char **argv) {
 	party = parse_party(argv);
 	port = peer_port();
 	run_socket_options_factory_regression();
+	run_flush_failure_regression();
 
 	// Five contiguous ports: main, two send-only cases, sibling regression,
 	// socket-options regression.

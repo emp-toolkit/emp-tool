@@ -87,10 +87,6 @@ public:
 	// is a no-op for transports with nothing to flush.
 	virtual void flush() {}
 
-	// Optional wire-level handshake (e.g. 1-byte ping/pong). Default
-	// no-op for transports that don't need one.
-	virtual void sync() {}
-
 	// Turn on Fiat-Shamir transcript hashing. `send_first` selects which
 	// of the two H(_‖H(_)) formulas this side computes, so both parties
 	// produce the same digest value — exactly one party should pass true.

@@ -23,10 +23,14 @@
 // deterministic seeds. Test-mode-off → traces are non-reproducible.
 
 #include "emp-tool/runtime/io/io_channel.h"
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fcntl.h>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 
 namespace emp {
 
@@ -34,19 +38,14 @@ class TraceIO : public IOChannel {
 public:
     // `under` is borrowed (not owned). `prefix` selects the trace file
     // names: "<prefix>.send" for outbound bytes, "<prefix>.recv" for
-    // inbound. Files are opened binary-write, truncating.
+    // inbound. Files are opened binary-write, truncating, with mode 0600.
     TraceIO(IOChannel* under, const std::string& prefix)
         : under_(under) {
+        expecting(under_ != nullptr, "TraceIO: underlying channel is null");
         const std::string send_path = prefix + ".send";
         const std::string recv_path = prefix + ".recv";
-        send_fp_ = std::fopen(send_path.c_str(), "wb");
-        expecting(send_fp_ != nullptr, [&] {
-            return "TraceIO: cannot open " + send_path + " for write";
-        });
-        recv_fp_ = std::fopen(recv_path.c_str(), "wb");
-        expecting(recv_fp_ != nullptr, [&] {
-            return "TraceIO: cannot open " + recv_path + " for write";
-        });
+        send_fp_ = open_trace_file(send_path);
+        recv_fp_ = open_trace_file(recv_path);
     }
 
     ~TraceIO() override {
@@ -58,8 +57,7 @@ public:
         expecting(nbyte >= 0,
                   "TraceIO::send_data_internal: negative byte count");
         if (nbyte == 0) return;
-        // Tee first, deliver after, so a crash mid-write still leaves
-        // a trace prefix that matches what the peer didn't yet see.
+        // Record outbound bytes before delivering them to the transport.
         const size_t bytes = static_cast<size_t>(nbyte);
         expecting(std::fwrite(data, 1, bytes, send_fp_) == bytes,
                   "TraceIO: short write to .send");
@@ -78,10 +76,39 @@ public:
                   "TraceIO: short write to .recv");
     }
 
-    void flush() override { under_->flush(); }
-    void sync()  override { under_->sync(); }
+    void flush() override {
+        flush_trace_file(send_fp_, ".send");
+        flush_trace_file(recv_fp_, ".recv");
+        under_->flush();
+    }
 
 private:
+    static std::FILE* open_trace_file(const std::string& path) {
+        int fd;
+        do {
+            fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        } while (fd < 0 && errno == EINTR);
+        expecting(fd >= 0, [&] {
+            return "TraceIO: cannot open " + path + ": " + std::strerror(errno);
+        });
+        expecting(::fchmod(fd, S_IRUSR | S_IWUSR) == 0, [&] {
+            return "TraceIO: cannot secure " + path + ": " + std::strerror(errno);
+        });
+        std::FILE* file = ::fdopen(fd, "wb");
+        expecting(file != nullptr, [&] {
+            return "TraceIO: fdopen failed for " + path + ": " +
+                   std::strerror(errno);
+        });
+        return file;
+    }
+
+    static void flush_trace_file(std::FILE* file, const char* suffix) {
+        expecting(std::fflush(file) == 0, [&] {
+            return std::string("TraceIO: flush ") + suffix + " failed: " +
+                   std::strerror(errno);
+        });
+    }
+
     IOChannel* under_;
     std::FILE* send_fp_ = nullptr;
     std::FILE* recv_fp_ = nullptr;
