@@ -7,7 +7,7 @@
 //   send_block / recv_block            block-typed wrapper
 //   send_bool / recv_bool              packed via bools_to_bits
 //   flush()                            drain outbound only (no peer coupling)
-//   sync()                             1-byte ping/pong handshake
+//   sync()                             barrier: one zero byte each way
 //   make_sibling()                     more connections on the same port
 //   tcp::SocketOptions                 pre-handshake socket buffer sizing
 //   SocketOptions::for_bandwidth_and_rtt
@@ -16,11 +16,13 @@
 // Test functions below are templated on the IO type so correctness and
 // regression checks can be reused by IO implementations.
 
+#include <csignal>
 #include <cstring>
 #include <cstdint>
 #include <iostream>
 #include <limits>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <sys/socket.h>
@@ -370,6 +372,51 @@ static void run_socket_options_factory_regression() {
 	          "NetIO test: over-limit warning for a path is missing or wrong");
 }
 
+// sync() pairs any two channels, whatever their roles: two NetIOs adopted
+// from a socketpair (both is_server == false) would deadlock on a barrier
+// where one side must go first. Its bytes stay out of the byte counters, and
+// a nonzero byte (the peer is mid-message) is reported.
+static void run_sync_regression() {
+	int sockets[2];
+	expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+	          "NetIO test: socketpair failed");
+	{
+		NetIO a(sockets[0], true), b(sockets[1], true);
+		std::thread peer([&] { b.sync(); });
+		a.sync();
+		peer.join();
+		expecting(a.send_counter == 0 && a.recv_counter == 0 &&
+		              b.send_counter == 0 && b.recv_counter == 0,
+		          "NetIO test: sync() bytes were counted");
+	}
+
+	expecting(dies([] {
+		int pair[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
+		          "NetIO test: socketpair failed");
+		NetIO a(pair[0], true), b(pair[1], true);
+		const unsigned char stray = 1;
+		a.send_data(&stray, 1);
+		a.flush();
+		b.sync();
+	}), "NetIO test: sync() accepted a stray byte");
+	cout << "NetIO sync regression: OK\n";
+}
+
+static void run_flush_failure_regression() {
+	expecting(dies([] {
+		int sockets[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+		          "NetIO test: socketpair failed");
+		::signal(SIGPIPE, SIG_IGN);
+		::close(sockets[1]);
+		NetIO io(sockets[0], true);
+		const char byte = 1;
+		io.send_data(&byte, 1);
+		io.flush();
+	}), "NetIO test: fflush failure was ignored");
+}
+
 static void run_socket_options_regression(int port, int party) {
 	tcp::SocketOptions options;
 	options.send_buffer_size = 128 * 1024;
@@ -431,6 +478,8 @@ int main(int argc, char **argv) {
 	party = parse_party(argv);
 	port = peer_port();
 	run_socket_options_factory_regression();
+	run_flush_failure_regression();
+	run_sync_regression();
 
 	// Five contiguous ports: main, two send-only cases, sibling regression,
 	// socket-options regression.

@@ -7,7 +7,7 @@
 //   send_block / recv_block            block-typed wrapper (inherited)
 //   send_bool / recv_bool              packed via bools_to_bits (inherited)
 //   flush()                            drain outbound coalescing buffer
-//   sync()                             1-byte ping/pong handshake
+//   sync()                             barrier (inherited from IOChannel)
 //   TLSConfig::socket_options          pre-handshake socket buffer sizing
 //
 // Same flush contract and thread-safety rules as NetIO. The test
@@ -373,6 +373,7 @@ int main(int argc, char **argv) {
 	TLSIO *io = new TLSIO(party == ALICE ? nullptr : peer_ip(), port, cfg, true);
 	expect_socket_options(*io, cfg.socket_options);
 	run_correctness(io, party);
+	io->sync();  // the IOChannel barrier over TLS
 	run_send_only_regression(port, party);
 	delete io;
 }

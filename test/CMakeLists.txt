@@ -82,6 +82,7 @@ add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case_with_run(runtime test_netio)
 add_test_case_with_run(runtime test_tlsio)
+add_test_case(runtime test_traceio)
 set_tests_properties(test_netio test_tlsio PROPERTIES TIMEOUT 130)
 add_test_case(runtime test_halfgate)         # half-gate garble/eval free functions
 
