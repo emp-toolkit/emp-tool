@@ -66,7 +66,9 @@ public:
 	AES_KEY scheduled_key[BatchSize];
 	block keys[BatchSize];
 	int key_used = BatchSize;
-	block start_point;
+	// Zero only so a fresh object is never indeterminate. An unseeded object is
+	// not a keyed instance: setS() must install the parties' shared random S.
+	block start_point = zero_block;
 	uint64_t gid = 0;
 	// Bucket the current schedule covers (ReuseShift > 0 only); ~0 = none.
 	uint64_t scheduled_bucket = ~0ull;
