@@ -17,10 +17,14 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
@@ -36,6 +40,20 @@ using clk = chrono::high_resolution_clock;
 // so reinterpret_cast<const uint8_t*>(&blk) is a valid byte view.
 static block bytes_to_block(const uint8_t b[16]) {
 	return _mm_loadu_si128(reinterpret_cast<const __m128i *>(b));
+}
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, 2);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
 
 static void openssl_aes128_ecb(const uint8_t key[16], const uint8_t *in,
@@ -250,6 +268,47 @@ static bool check_paraenc_runtime(int K, int N, int trials = 4) {
 	return true;
 }
 
+static bool check_paraenc_runtime_contracts() {
+	block blocks[2] = {makeBlock(1, 2), makeBlock(3, 4)};
+	const block before[2] = {blocks[0], blocks[1]};
+	AES_KEY key;
+	AES_set_encrypt_key(makeBlock(5, 6), &key);
+
+	if (!dies([&] { ParaEnc(blocks, &key, -1, 1); }) ||
+	    !dies([&] { ParaEnc(blocks, &key, 1, -1); }) ||
+	    !dies([&] { AES_ecb_encrypt_blks(blocks, -1, &key); }) ||
+	    !dies([&] {
+		    ParaEnc(blocks, &key, 2, std::numeric_limits<int64_t>::max());
+	    }) ||
+	    !dies([&] {
+		    detail::ParaEnc_runtime_empty(int64_t{1} << 62, 4);
+	    }))
+		return false;
+
+	const int64_t max = std::numeric_limits<int64_t>::max();
+	if (detail::ParaEnc_runtime_empty(max, 1) ||
+	    detail::ParaEnc_runtime_empty(2, max / 2) ||
+	    !detail::ParaEnc_runtime_empty(0, max) ||
+	    !detail::ParaEnc_runtime_empty(max, 0))
+		return false;
+
+	ParaEnc(static_cast<block *>(nullptr), static_cast<const AES_KEY *>(nullptr), 0, 7);
+	ParaEnc(static_cast<block *>(nullptr), static_cast<const AES_KEY *>(nullptr), 7, 0);
+	ParaEnc(static_cast<block *>(nullptr), static_cast<const block *>(nullptr),
+	        static_cast<const AES_KEY *>(nullptr), 0, 7);
+	ParaEnc(static_cast<block *>(nullptr), static_cast<const block *>(nullptr),
+	        static_cast<const AES_KEY *>(nullptr), 7, 0);
+	AES_ecb_encrypt_blks(static_cast<block *>(nullptr), 0,
+	                     static_cast<const AES_KEY *>(nullptr));
+	ParaEnc<0, 1>(static_cast<block *>(nullptr), static_cast<const AES_KEY *>(nullptr));
+	ParaEnc<1, 0>(static_cast<block *>(nullptr), static_cast<const AES_KEY *>(nullptr));
+	AES_opt_key_schedule<0>(static_cast<const block *>(nullptr),
+	                        static_cast<AES_KEY *>(nullptr));
+	aes_ctr_fill_dm<0>(static_cast<block *>(nullptr), 0,
+	                   static_cast<const AES_KEY *>(nullptr));
+	return cmpBlock(blocks, before, 2);
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -262,9 +321,12 @@ static bool run_correctness() {
 	ok &= check_paraenc_template<8, 1>();
 	ok &= check_paraenc_template<8, 4>();
 	ok &= check_paraenc_template<3, 5>();
+	ok &= check_paraenc_template<1, 20>();
+	ok &= check_paraenc_template<1, 32>();
 	ok &= check_paraenc_runtime(1, 1);
 	ok &= check_paraenc_runtime(1, 17);   // exercises 8+4+2+1 dispatcher
 	ok &= check_paraenc_runtime(5, 11);
+	ok &= check_paraenc_runtime_contracts();
 
 	ok &= check_paraenc_template_out_of_place<1, 1>();
 	ok &= check_paraenc_template_out_of_place<1, 2>();
@@ -276,6 +338,8 @@ static bool run_correctness() {
 	ok &= check_paraenc_template_out_of_place<2, 4>();
 	ok &= check_paraenc_template_out_of_place<4, 1>();
 	ok &= check_paraenc_template_out_of_place<4, 4>();
+	ok &= check_paraenc_template_out_of_place<1, 20>();
+	ok &= check_paraenc_template_out_of_place<1, 32>();
 	ok &= check_paraenc_runtime_out_of_place(1, 17);
 	ok &= check_paraenc_runtime_out_of_place(5, 11);
 	return ok;
