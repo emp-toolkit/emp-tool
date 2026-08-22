@@ -18,9 +18,10 @@
 // depend only on per-lane program order, never on cross-thread
 // scheduling, so multi-threaded runs reproduce. ThreadPool::enqueue
 // derives and installs a lane per task automatically; hand-spawned
-// threads wrap their body in test_lane_scope. A second thread drawing
-// from lane 0 aborts: two threads sharing a lane would replay identical
-// "random" streams — silently wrong rather than merely nondeterministic.
+// threads wrap their body in test_lane_scope. A second thread using lane
+// 0 to draw a seed or derive a child lane aborts: two threads sharing a
+// lane would replay identical "random" streams — silently wrong rather
+// than merely nondeterministic.
 
 #include "emp-tool/runtime/core/error.h"
 
@@ -28,6 +29,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <thread>
 
@@ -58,7 +60,7 @@ inline std::atomic<bool>& test_mode_flag() {
     static std::atomic<bool> flag(
         []() {
             const char* v = std::getenv("EMP_TEST_MODE");
-            const bool enabled = v != nullptr && v[0] == '1';
+            const bool enabled = v != nullptr && std::strcmp(v, "1") == 0;
             if (enabled) warn_insecure_test_mode_once();
             return enabled;
         }());
@@ -99,16 +101,31 @@ inline void sync_test_epoch(TestSeedTls& s) {
     }
 }
 
-// Owner token of lane 0: the one thread allowed to draw main-lane
-// seeds. Cleared by reset_test_seed_counter(), so sequential
+// Owner token of lane 0: the one thread allowed to draw main-lane seeds or
+// derive child lanes. Cleared by reset_test_seed_counter(), so sequential
 // independent units may run on different threads.
 inline std::atomic<uint64_t>& lane0_owner() {
     static std::atomic<uint64_t> owner(0);
     return owner;
 }
+inline std::atomic<uint64_t>& next_thread_token() {
+    static std::atomic<uint64_t> next(1);
+    return next;
+}
 inline uint64_t this_thread_token() {
-    // Nonzero hash of the thread id; 0 is the "unowned" sentinel.
-    return (uint64_t)std::hash<std::thread::id>()(std::this_thread::get_id()) | 1ULL;
+    thread_local const uint64_t token =
+        next_thread_token().fetch_add(1, std::memory_order_relaxed);
+    expecting(token != 0, "test mode: thread token space exhausted");
+    return token;
+}
+inline void claim_lane0() {
+    auto& owner = lane0_owner();
+    const uint64_t token = this_thread_token();
+    uint64_t expected = 0;
+    expecting(owner.compare_exchange_strong(expected, token) ||
+                  expected == token,
+              "test mode: a second thread used lane 0; run spawned work "
+              "under emp::test_lane_scope (see docs/test_mode.md)");
 }
 
 // splitmix64 finalizer: full-avalanche 64-bit mix for deriving child
@@ -149,19 +166,7 @@ struct TestSeed {
 inline TestSeed next_test_seed() {
     auto& s = detail::test_seed_tls();
     detail::sync_test_epoch(s);
-    if (s.lane == 0) {
-        // Only one thread may consume main-lane seeds; a second one
-        // would replay the same streams. Always-on: test mode usually
-        // runs under Release/NDEBUG builds.
-        auto& owner = detail::lane0_owner();
-        const uint64_t token = detail::this_thread_token();
-        uint64_t expected = 0;
-        expecting(owner.compare_exchange_strong(expected, token) ||
-                      expected == token,
-                  "test mode: a second thread drew lane-0 randomness; run "
-                  "spawned work under emp::test_lane_scope (see "
-                  "docs/test_mode.md)");
-    }
+    if (s.lane == 0) detail::claim_lane0();
     return {s.lane, s.ctr++};
 }
 
@@ -174,6 +179,7 @@ inline TestSeed next_test_seed() {
 inline uint64_t next_test_child_lane() {
     auto& s = detail::test_seed_tls();
     detail::sync_test_epoch(s);
+    if (s.lane == 0) detail::claim_lane0();
     uint64_t lane = detail::mix64(detail::mix64(s.lane) ^ s.child_ctr++);
     if (lane == 0) lane = 1;  // 0 is reserved for the main thread
     return lane;
@@ -186,6 +192,8 @@ inline uint64_t next_test_child_lane() {
 class test_lane_scope {
 public:
     explicit test_lane_scope(uint64_t lane) : saved_(detail::test_seed_tls()) {
+        expecting(lane != 0,
+                  "test_lane_scope: lane 0 is reserved for the main thread");
         auto& s = detail::test_seed_tls();
         s.lane = lane;
         s.ctr = 0;
@@ -207,10 +215,11 @@ inline uint64_t current_test_seed_epoch() {
     return detail::test_seed_epoch().load();
 }
 
-// Rewind every lane's draw ordinal (lazily, when each thread next
-// draws) and release lane 0. Use before each independent unit (e.g.
-// each protocol in a trace) to make that unit's randomness -- and thus
-// its wire bytes -- independent of whatever consumed seeds before it.
+// Rewind every lane's draw ordinal (lazily, when each thread next draws) and
+// release lane 0. All work that can draw seeds or derive child lanes must be
+// quiescent first. Use before each independent unit (e.g. each protocol in a
+// trace) to make that unit's randomness -- and thus its wire bytes --
+// independent of whatever consumed seeds before it.
 inline void reset_test_seed_counter() {
     detail::test_seed_epoch().fetch_add(1);
     detail::lane0_owner().store(0);

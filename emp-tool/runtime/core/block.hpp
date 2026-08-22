@@ -66,6 +66,8 @@ inline block set_bit(const block & a, int i) {
 }
 
 inline std::string to_hex(const void* data, size_t n) {
+	expecting(n <= std::string{}.max_size() / 2,
+	          "to_hex: input too large");
 	static const char digits[] = "0123456789abcdef";
 	const unsigned char* b = static_cast<const unsigned char*>(data);
 	std::string s(2 * n, '0');

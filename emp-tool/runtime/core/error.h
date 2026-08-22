@@ -24,6 +24,7 @@ inline void error(const char *s,
 				  int line = __builtin_LINE(),
 				  const char *file = __builtin_FILE()) {
 	std::fprintf(stderr, "%s at %s:%d\n", s, file, line);
+	std::fflush(stderr);
 	// _Exit, not exit(): error() can fire from a worker thread while sibling
 	// workers still own heap state. Running destructors/atexit handlers in that
 	// situation races their live work; terminate the process immediately.
