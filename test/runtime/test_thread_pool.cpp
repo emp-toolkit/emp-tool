@@ -11,6 +11,7 @@
 #include <atomic>
 #include <future>
 #include <iostream>
+#include <memory>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -57,14 +58,42 @@ static bool check_destructor_drains_queue() {
 	return completed.load() == 32;
 }
 
+static bool check_move_only_argument() {
+	ThreadPool pool(1);
+	auto value = make_unique<int>(41);
+	auto result = pool.enqueue(
+	    [](unique_ptr<int> input) { return *input + 1; }, std::move(value));
+	return value == nullptr && result.get() == 42;
+}
+
+static int increment(int& value) { return ++value; }
+
+struct LvalueCallable {
+	int operator()() & { return 17; }
+};
+
+static bool check_legacy_invocation() {
+	ThreadPool pool(1);
+	int value = 1;
+	auto by_reference = pool.enqueue(increment, value);
+	LvalueCallable callable;
+	auto lvalue_callable = pool.enqueue(callable);
+	return by_reference.get() == 2 && value == 1 &&
+	       lvalue_callable.get() == 17;
+}
+
 static bool run_correctness() {
 	bool tasks = check_tasks_complete();
 	bool drains = check_destructor_drains_queue();
+	bool move_only = check_move_only_argument();
+	bool legacy = check_legacy_invocation();
 	bool rejects_zero = dies([] { ThreadPool pool(0); });
 	cout << "  tasks complete and size is fixed  " << (tasks ? "OK" : "FAIL") << "\n";
 	cout << "  destructor drains queued work     " << (drains ? "OK" : "FAIL") << "\n";
+	cout << "  move-only arguments are supported " << (move_only ? "OK" : "FAIL") << "\n";
+	cout << "  legacy invocation is preserved    " << (legacy ? "OK" : "FAIL") << "\n";
 	cout << "  zero workers are rejected         " << (rejects_zero ? "OK" : "FAIL") << "\n";
-	return tasks && drains && rejects_zero;
+	return tasks && drains && move_only && legacy && rejects_zero;
 }
 
 int main() {

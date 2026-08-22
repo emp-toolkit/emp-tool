@@ -6,6 +6,7 @@
 #include "emp-tool/runtime/core/simd_tier.h"
 #include <sstream>
 #include <cstddef>//https://gcc.gnu.org/gcc-4.9/porting_to.html
+#include <charconv>
 #include <cstdint>
 #include <cstdlib>   // std::_Exit (fatal abort without running destructors)
 #include <cstring>
@@ -18,6 +19,7 @@
 #define macro_str(a) #a
 
 namespace emp {
+
 using std::chrono::time_point;
 using std::chrono::high_resolution_clock;
 
@@ -26,8 +28,8 @@ inline int peer_port();                              // $EMP_PORT, default 12345
 inline const char * peer_ip();                       // $EMP_PEER_IP, default 127.0.0.1
 
 // Timing related
-inline time_point<high_resolution_clock> clock_start();
-inline double time_from(const time_point<high_resolution_clock>& s);
+inline std::chrono::steady_clock::time_point clock_start();
+inline double time_from(const std::chrono::steady_clock::time_point& s);
 
 
 // --- Bool / bit packing -------------------------------------------------

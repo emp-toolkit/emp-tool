@@ -15,6 +15,7 @@
 //   bytes_to_bits32 / bits32_to_bytes         32 bools <-> 32 bits
 //   bools_to_bits / bits_to_bools             N bools <-> N bits
 
+#include "emp-tool/runtime/core/simd_tier.h"
 #include "emp-tool/emp-tool.h"
 
 #include <chrono>
@@ -32,6 +33,22 @@
 using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
+
+static bool check_direct_simd_tier_include() {
+#if EMP_HAS_AVX2
+	(void)&emp::detail::sse_trans_n128_avx2;
+#endif
+#if EMP_HAS_AVX512BW
+	(void)&emp::detail::sse_trans_n128_avx512bw;
+#endif
+#if EMP_HAS_GFNI256 && !EMP_HAS_GFNI512
+	(void)&emp::detail::sse_trans_n128_gfni256;
+#endif
+#if EMP_HAS_GFNI512
+	(void)&emp::detail::sse_trans_n128_gfni;
+#endif
+	return true;
+}
 
 template <class F>
 static bool dies(F&& f) {
@@ -238,6 +255,35 @@ static bool check_sse_trans_roundtrip() {
 	return true;
 }
 
+static bool check_sse_trans_scalar_reference() {
+	PRG prg;
+	for (uint64_t nrows = 8; nrows <= 128; nrows += 8) {
+		for (uint64_t ncols = 8; ncols <= 256; ncols += 8) {
+			const size_t nbytes = (size_t)(nrows * ncols / 8);
+			const size_t in_stride = (size_t)(ncols / 8);
+			const size_t out_stride = (size_t)(nrows / 8);
+			vector<uint8_t> in(nbytes), got(nbytes, 0xa5), want(nbytes, 0);
+			prg.random_data_unaligned(in.data(), (int64_t)nbytes);
+
+			for (uint64_t row = 0; row < nrows; ++row) {
+				for (uint64_t col = 0; col < ncols; ++col) {
+					const uint8_t bit =
+					    (in[(size_t)row * in_stride + col / 8] >> (col % 8)) & 1;
+					want[(size_t)col * out_stride + row / 8] |= bit << (row % 8);
+				}
+			}
+
+			sse_trans(got.data(), in.data(), nrows, ncols);
+			if (got != want) {
+				cout << "    sse_trans scalar-reference FAIL at "
+				     << nrows << "x" << ncols << "\n";
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 // Parity: the tier-dispatched sse_trans_n128 must match the generic
 // (SSE2-only) sse_trans byte-for-byte. Exercises every variant the build
 // instantiates (SSE2 / AVX2 / AVX-512BW): on x86 the dispatcher picks the
@@ -342,6 +388,7 @@ static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	struct Case { const char *name; bool (*fn)(); };
 	Case cases[] = {
+		{"direct SIMD-tier include",      check_direct_simd_tier_include},
 		{"makeBlock + getLSB",          check_makeBlock_getLSB},
 		{"set_bit",                     check_set_bit},
 		{"sigma linear + formula",      check_sigma_linear_and_formula},
@@ -350,6 +397,7 @@ static bool run_correctness() {
 		{"cmpBlock",                    check_cmpBlock},
 		{"invalid ranges rejected",     check_invalid_ranges_rejected},
 		{"sse_trans round-trip",        check_sse_trans_roundtrip},
+		{"sse_trans scalar reference",  check_sse_trans_scalar_reference},
 		{"sse_trans_n128 parity",       check_sse_trans_n128_parity},
 		{"bytes<->bits32 round-trip",   check_bits_bytes_roundtrip},
 		{"bool/byte-bools<->bits parity", check_bools_bits_roundtrip},
