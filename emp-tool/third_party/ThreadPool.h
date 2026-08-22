@@ -32,8 +32,8 @@ freely, subject to the following restrictions:
 // worker executes the task (see emp-tool/runtime/core/test_mode.h);
 // (2) enqueue-on-stopped-pool reports through emp::error() instead of
 // throwing, keeping the public surface exception-free
-// (docs/api_conventions.md, enforced by test_no_exceptions); (3) tasks use a
-// C++20 capture instead of std::bind, allowing move-only arguments.
+// (docs/api_conventions.md, enforced by test_no_exceptions); (3) queued tasks
+// own their callable and arguments and may therefore contain move-only values.
 
 #include "emp-tool/runtime/core/error.h"
 #include "emp-tool/runtime/core/test_mode.h"
@@ -49,16 +49,46 @@ freely, subject to the following restrictions:
 #include <utility>
 #include <vector>
 
+namespace emp::detail {
+
+template <bool InvokeAsLvalues, class F, class... Args>
+struct thread_pool_stored_result;
+
+template <class F, class... Args>
+struct thread_pool_stored_result<true, F, Args...>
+    : std::invoke_result<std::decay_t<F> &, std::decay_t<Args> &...> {};
+
+template <class F, class... Args>
+struct thread_pool_stored_result<false, F, Args...>
+    : std::invoke_result<std::decay_t<F> &&, std::decay_t<Args> &&...> {};
+
+template <class F, class... Args>
+using thread_pool_stored_result_t = typename thread_pool_stored_result<
+    std::is_invocable_v<std::decay_t<F> &, std::decay_t<Args> &...>, F,
+    Args...>::type;
+
+} // namespace emp::detail
+
 class ThreadPool {
 public:
 	ThreadPool(size_t);
 	template <class F, class... Args>
 	auto enqueue(F &&f, Args &&...args)
-	    -> std::future<typename std::invoke_result<F, Args...>::type>;
+	    -> std::future<emp::detail::thread_pool_stored_result_t<F, Args...>>;
 	~ThreadPool();
 	size_t size() const;
 
 private:
+	struct construction_guard {
+		ThreadPool *pool;
+		~construction_guard() {
+			if (pool != nullptr) pool->stop_and_join();
+		}
+		void release() noexcept { pool = nullptr; }
+	};
+
+	void stop_and_join() noexcept;
+
 	// need to keep track of threads so we can join them
 	std::vector<std::thread> workers;
 	// the task queue
@@ -75,6 +105,8 @@ inline size_t ThreadPool::size() const { return workers.size(); }
 // the constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads) : stop(false) {
 	emp::expecting(threads > 0, "ThreadPool: worker count must be positive");
+	workers.reserve(threads);
+	construction_guard guard{this};
 	for (size_t i = 0; i < threads; ++i)
 		workers.emplace_back([this] {
 			for (;;) {
@@ -91,22 +123,23 @@ inline ThreadPool::ThreadPool(size_t threads) : stop(false) {
 				task();
 			}
 		});
+	guard.release();
 }
 
 // add new work item to the pool
 template <class F, class... Args>
 auto ThreadPool::enqueue(F &&f, Args &&...args)
-    -> std::future<typename std::invoke_result<F, Args...>::type> {
-	using return_type = typename std::invoke_result<F, Args...>::type;
+	    -> std::future<emp::detail::thread_pool_stored_result_t<F, Args...>> {
+	using return_type = emp::detail::thread_pool_stored_result_t<F, Args...>;
 
 	auto task = std::make_shared<std::packaged_task<return_type()>>(
 	    [fn = std::forward<F>(f),
 	     ...bound_args = std::forward<Args>(args)]() mutable -> return_type {
-		    if constexpr (std::is_invocable_v<decltype(fn)&,
-		                                      decltype(bound_args)&...>)
-			    return std::invoke(fn, bound_args...);
-		    else
-			    return std::invoke(std::move(fn), std::move(bound_args)...);
+			    if constexpr (std::is_invocable_v<decltype(fn) &,
+			                                      decltype(bound_args) &...>)
+				    return std::invoke(fn, bound_args...);
+			    else
+				    return std::invoke(std::move(fn), std::move(bound_args)...);
 	    });
 
 	std::future<return_type> res = task->get_future();
@@ -132,8 +165,7 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	return res;
 }
 
-// the destructor joins all threads
-inline ThreadPool::~ThreadPool() {
+inline void ThreadPool::stop_and_join() noexcept {
 	{
 		std::unique_lock<std::mutex> lock(queue_mutex);
 		stop = true;
@@ -141,5 +173,8 @@ inline ThreadPool::~ThreadPool() {
 	condition.notify_all();
 	for (std::thread &worker : workers) worker.join();
 }
+
+// the destructor joins all threads
+inline ThreadPool::~ThreadPool() { stop_and_join(); }
 
 #endif

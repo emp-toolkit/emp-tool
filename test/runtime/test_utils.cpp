@@ -3,13 +3,21 @@
 //
 // What's in utils.h/utils.hpp (the parts worth testing):
 //   clock_start(), time_from(start) monotonic elapsed-time helpers
+//   joinNclean(futures)             wait for every future, including after failure
 //   joinNcleanCheat(futures)        wait for all futures and OR their results
+//   umbrella inclusion              preserve caller-owned generic macro names
 //   parse_party(argv, max_party)    strictly parse a bounded party number
 //   peer_port()                     strictly parse EMP_PORT or use 12345
 //   bool_to_int<T>(const bool *)   pack 8*sizeof(T) bools (LSB-first) into T
 //   bool_to_block(const bool *)    pack 128 bools into a block
 
+#define macro_str(value) 17
+#define macro_xstr(value) 19
 #include "emp-tool/emp-tool.h"
+static_assert(macro_str(user_owned) == 17);
+static_assert(macro_xstr(user_owned) == 19);
+#undef macro_str
+#undef macro_xstr
 
 #include <chrono>
 #include <cstdint>
@@ -17,6 +25,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <sys/wait.h>
 #include <type_traits>
@@ -78,6 +87,41 @@ static bool check_joinNcleanCheat_drains() {
 		return false;
 	}));
 	return joinNcleanCheat(results) && completed == 1 && results.empty();
+}
+
+static bool check_joinNclean_exception_drains() {
+	int completed = 0;
+	vector<future<void>> results;
+	results.push_back(async(launch::deferred, [] {
+		throw runtime_error("first failure");
+	}));
+	results.push_back(async(launch::deferred, [&completed] { ++completed; }));
+	try {
+		joinNclean(results);
+	} catch (const runtime_error& e) {
+		return string(e.what()) == "first failure" && completed == 1 &&
+		       results.empty();
+	}
+	return false;
+}
+
+static bool check_joinNcleanCheat_exception_drains() {
+	int completed = 0;
+	vector<future<bool>> results;
+	results.push_back(async(launch::deferred, []() -> bool {
+		throw runtime_error("cheat failure");
+	}));
+	results.push_back(async(launch::deferred, [&completed] {
+		++completed;
+		return true;
+	}));
+	try {
+		(void)joinNcleanCheat(results);
+	} catch (const runtime_error& e) {
+		return string(e.what()) == "cheat failure" && completed == 1 &&
+		       results.empty();
+	}
+	return false;
 }
 
 static bool check_parse_party() {
@@ -169,6 +213,8 @@ static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool clock = check_elapsed_clock();
 	bool joins = check_joinNcleanCheat_drains();
+	bool join_failure = check_joinNclean_exception_drains();
+	bool cheat_failure = check_joinNcleanCheat_exception_drains();
 	bool party = check_parse_party();
 	bool port = check_peer_port();
 	auto u8  = []{ return check_bool_to_int_random<uint8_t>(64); };
@@ -179,6 +225,8 @@ static bool run_correctness() {
 	auto kn  = []{ return check_bool_to_int_known(); };
 	cout << "  elapsed clock is monotonic             " << (clock ? "OK" : "FAIL") << "\n";
 	cout << "  joinNcleanCheat drains every future    " << (joins ? "OK" : "FAIL") << "\n";
+	cout << "  joinNclean drains after an exception   " << (join_failure ? "OK" : "FAIL") << "\n";
+	cout << "  cheat join drains after an exception   " << (cheat_failure ? "OK" : "FAIL") << "\n";
 	cout << "  parse_party rejects malformed input    " << (party ? "OK" : "FAIL") << "\n";
 	cout << "  peer_port validates EMP_PORT            " << (port ? "OK" : "FAIL") << "\n";
 	bool a = u8();    cout << "  bool_to_int<uint8_t>  random          " << (a ? "OK" : "FAIL") << "\n";
@@ -187,7 +235,8 @@ static bool run_correctness() {
 	bool d = u64();   cout << "  bool_to_int<uint64_t> random          " << (d ? "OK" : "FAIL") << "\n";
 	bool e = blk();   cout << "  bool_to_block         random          " << (e ? "OK" : "FAIL") << "\n";
 	bool f = kn();    cout << "  bool_to_int<*>        known answers   " << (f ? "OK" : "FAIL") << "\n";
-	return clock && joins && party && port && a && b && c && d && e && f;
+	return clock && joins && join_failure && cheat_failure && party && port &&
+	       a && b && c && d && e && f;
 }
 
 int main(int /*argc*/, char ** /*argv*/) {

@@ -12,7 +12,9 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <sys/wait.h>
+#include <type_traits>
 #include <unistd.h>
 #include <vector>
 
@@ -72,6 +74,20 @@ struct LvalueCallable {
 	int operator()() & { return 17; }
 };
 
+struct CategoryOverload {
+	int operator()(int& value) { return value + 1; }
+	string operator()(int&&) { return "wrong overload"; }
+};
+
+struct NotCallable {};
+
+template <class F>
+concept PoolEnqueueable = requires(ThreadPool& pool, F&& fn) {
+	pool.enqueue(std::forward<F>(fn));
+};
+
+static_assert(!PoolEnqueueable<NotCallable>);
+
 static bool check_legacy_invocation() {
 	ThreadPool pool(1);
 	int value = 1;
@@ -82,18 +98,27 @@ static bool check_legacy_invocation() {
 	       lvalue_callable.get() == 17;
 }
 
+static bool check_result_matches_stored_invocation() {
+	ThreadPool pool(1);
+	auto result = pool.enqueue(CategoryOverload{}, 41);
+	static_assert(is_same_v<decltype(result), future<int>>);
+	return result.get() == 42;
+}
+
 static bool run_correctness() {
 	bool tasks = check_tasks_complete();
 	bool drains = check_destructor_drains_queue();
 	bool move_only = check_move_only_argument();
 	bool legacy = check_legacy_invocation();
+	bool stored_result = check_result_matches_stored_invocation();
 	bool rejects_zero = dies([] { ThreadPool pool(0); });
 	cout << "  tasks complete and size is fixed  " << (tasks ? "OK" : "FAIL") << "\n";
 	cout << "  destructor drains queued work     " << (drains ? "OK" : "FAIL") << "\n";
 	cout << "  move-only arguments are supported " << (move_only ? "OK" : "FAIL") << "\n";
 	cout << "  legacy invocation is preserved    " << (legacy ? "OK" : "FAIL") << "\n";
+	cout << "  stored invocation type is exact   " << (stored_result ? "OK" : "FAIL") << "\n";
 	cout << "  zero workers are rejected         " << (rejects_zero ? "OK" : "FAIL") << "\n";
-	return tasks && drains && move_only && legacy && rejects_zero;
+	return tasks && drains && move_only && legacy && stored_result && rejects_zero;
 }
 
 int main() {

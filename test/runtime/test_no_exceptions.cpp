@@ -4,7 +4,8 @@
 // from the public umbrella fails the BUILD, not just the run. The body
 // instantiates the two paths that historically threw: ThreadPool::enqueue
 // (vendored, patched to emp::error) and PRG system-entropy seeding
-// (std::random_device, replaced by getentropy).
+// (std::random_device, replaced by getentropy). It also instantiates the
+// exception-disabled future-draining helpers.
 #include "emp-tool/emp-tool.h"
 #include <cstdio>
 using namespace emp;
@@ -20,6 +21,10 @@ int main() {
 		std::printf("test_no_exceptions: pool result mismatch\n");
 		return 1;
 	}
+	std::vector<std::future<void>> empty;
+	joinNclean(empty);
+	std::vector<std::future<bool>> empty_cheat;
+	if (joinNcleanCheat(empty_cheat)) return 1;
 	std::printf("test_no_exceptions: OK\n");
 	return 0;
 }
