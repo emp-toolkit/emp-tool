@@ -108,8 +108,9 @@ dynamic one). A dynamic integer is not a `WireValue` or `WireBundle`, because it
 has no static width, but it is `RuntimeWidthValue` and can use a session's runtime
 `input`/`reveal` overloads. Bound values require width `>= 1`; wider-than-64
 constants zero-extend for `DynamicUInt_T` and sign-extend for `DynamicInt_T`.
-Default construction creates an unbound assignment target. `resize(width)`
-returns a new value; assignment replaces the target's width and wires.
+Default construction creates an unbound assignment target; moved-from values
+may only be assigned or destroyed. `resize(width)` returns a new value, while
+assignment replaces the target's width and wires.
 - `Float_T<W>` — `+ - * / min max sqrt recip rsqrt fma`, comparisons / `is_nan` /
   `is_inf` / `is_zero`, `abs`/negate/`copysign`/`select`. Arithmetic **replays**
   the recorded `fp<W>_<op>.empbc` builtins through the context.

@@ -117,6 +117,10 @@ int main() {
         ClearSession s;
         (void)DynamicUInt_T<ClearCtx>(s.ctx(), 0);
     }));
+    chk("signed runtime construction rejects zero width", dies([] {
+        ClearSession s;
+        (void)DynamicInt_T<ClearCtx>(s.ctx(), 0);
+    }));
     chk("runtime reveal rejects an unbound value", dies([] {
         ClearSession s;
         DynamicUInt_T<ClearCtx> value;
@@ -126,6 +130,12 @@ int main() {
         ClearSession s;
         auto a = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 7);
         auto b = s.input<DynamicUInt_T<ClearCtx>>(BOB, 2, 8);
+        (void)(a + b);
+    }));
+    chk("signed runtime arithmetic rejects mismatched widths", dies([] {
+        ClearSession s;
+        auto a = s.input<DynamicInt_T<ClearCtx>>(ALICE, -1, 7);
+        auto b = s.input<DynamicInt_T<ClearCtx>>(BOB, 2, 8);
         (void)(a + b);
     }));
     chk("runtime resize rejects zero width", dies([] {
