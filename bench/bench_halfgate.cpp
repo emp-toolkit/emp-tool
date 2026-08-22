@@ -7,16 +7,17 @@ using namespace emp;
 
 int main(void) {
 	constexpr int64_t gates = 2 * 1024 * 1024;
-	block data[2], delta, table[2], w0, w1;
+	block data[2], delta, hash_seed, table[2], w0, w1;
 	MITCCRH<8> mi_gen;
 	PRG prg;
 	prg.random_block(&delta, 1);
 	delta = delta | makeBlock(0x0, 0x1);
-	mi_gen.setS(delta);
+	prg.random_block(&hash_seed, 1);
+	mi_gen.setS(hash_seed);
 
 	block data1[2];
 	MITCCRH<8> mi_eva;
-	mi_eva.setS(delta);
+	mi_eva.setS(hash_seed);
 	block ret;
 
 	cout << "Efficiency: ";

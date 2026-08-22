@@ -40,7 +40,7 @@ public:
 	AES_KEY scheduled_key[BatchSize];
 	block keys[BatchSize];
 	int key_used = BatchSize;
-	block start_point;
+	block start_point = zero_block;
 	uint64_t gid = 0;
 	// Bucket the current schedule covers (ReuseShift > 0 only); ~0 = none.
 	uint64_t scheduled_bucket = ~0ull;
