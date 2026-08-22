@@ -22,6 +22,17 @@ metadata is numeric (see the README's version guidance).
 
 ### Added
 
+- `tcp::SocketOptions` (`runtime/io/tcp_socket.h`): send and receive buffer sizes
+  for `NetIO::listen` / `NetIO::connect` (new overloads) and
+  `TLSConfig::socket_options`, applied before `listen()` / `connect()` so TCP
+  window scaling covers them; accepted sockets inherit them and `make_sibling()`
+  passes them on. `SocketOptions::for_bandwidth_and_rtt(bandwidth, rtt)` sizes both
+  directions for a path: zero, the operating system's own sizing, up to a 4 MiB
+  bandwidth-delay product, and the first power of two above it beyond that. A size
+  above the system's limit (`net.core.rmem_max` / `wmem_max` on Linux, 212,992 bytes
+  unless raised; `kern.ipc.maxsockbuf` on macOS, 8 MiB) is lowered to the limit when
+  that is above 4 MiB and otherwise not made, keeping the operating system's own
+  sizing; one warning per process gives the `sysctl` command that allows it.
 - `vector_inn_prdt_sum_red_x4(res, a, b, n)` (`crypto/f2k.h`): four
   independent GF(2¹²⁸) inner products in one call, with the operands laid
   out term-major (`a[4l + j]` is term `l` of sum `j`). Each SIMD lane

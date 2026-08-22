@@ -87,16 +87,60 @@ are per-direction snapshots for diagnostics. All three assert that
   `make_sibling()`, calling it **serially and in the same order on both
   parties** (its accept/connect pairing is FIFO on the shared listener —
   concurrent `make_sibling()` from multiple threads is not deterministic).
-  Do *not* rely on closing every channel and reopening a new one on the
-  same port as the coordination mechanism. That reopen path is supported
-  and race-free — each connection is only considered established once the
-  peer has actually `accept()`ed it (a one-byte accept acknowledgement in
-  `tcp_socket.h` protects against a `connect()` landing on the previous,
-  now-stale listener) — but the anchor + `make_sibling` pattern is simpler
-  and avoids the reconnect entirely.
+  Closing all channels and reopening the same port is supported, but sibling
+  channels avoid reconnecting.
 - **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
   byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
   wire-equivalence checks; see `test_mode.md`.
+
+## TCP socket buffers
+
+By default emp-tool leaves socket buffers to the operating system, which grows
+them with each connection: on Linux up to `net.ipv4.tcp_wmem` / `tcp_rmem`
+(4 MiB send, 6 MiB receive by default), on macOS up to
+`net.inet.tcp.autosndbufmax` / `autorcvbufmax` (4 MiB). That covers a path whose
+bandwidth-delay product is up to about 4 MiB, such as 1 Gbit/s at 30 ms.
+
+For a longer or faster path, `tcp::SocketOptions` sets the buffer sizes. They are
+applied before `listen()` or `connect()`, so TCP window scaling is negotiated for
+them. When the path's bandwidth and round-trip time are known, the helper picks the
+sizes:
+
+```cpp
+using namespace std::chrono_literals;
+
+auto options = tcp::SocketOptions::for_bandwidth_and_rtt(
+    400'000'000, 100ms);  // 5 MB bandwidth-delay product -> 8 MiB buffers
+auto io = NetIO::connect(peer, port, options);
+```
+
+It leaves both sizes at zero (the operating system's choice) when the
+bandwidth-delay product is at most 4 MiB, and otherwise picks the first power of
+two at or above it. Set the byte fields directly when the two directions need
+different sizes. Pass the same options to `NetIO::listen`; accepted sockets inherit
+them from the listener, and `make_sibling()` passes them to each new connection.
+`TLSIO` takes them through `TLSConfig::socket_options` and applies them before the
+TLS handshake; the adopted-socket TLS constructor requires default options.
+
+An explicit size fixes the buffer, and on Linux it also stops the operating system
+from growing it. The system limits explicit sizes: on Linux to
+`net.core.wmem_max` / `net.core.rmem_max`, 212,992 bytes unless raised, and on macOS
+to `kern.ipc.maxsockbuf`, 8 MiB unless raised; both cap a larger request without
+an error. emp-tool checks the limit first. A request above it is lowered to the
+limit when that is still more than the 4 MiB the operating system reaches on its own
+(macOS by default), and otherwise not made, so the socket keeps the operating
+system's defaults (Linux by default). Either way emp-tool prints one warning per
+process with the command that raises the limit, for example
+
+```
+emp-tool: warning: for the 400 Mbit/s bandwidth and 100 ms round-trip time you gave,
+8 MiB socket buffers would help throughput, but this system allows 208 KiB, so the
+operating system's defaults are kept. To allow 8 MiB buffers, run:
+  sudo sysctl -w net.core.rmem_max=8388608 net.core.wmem_max=8388608
+```
+
+On Linux, put the same settings in a file under `/etc/sysctl.d/` to keep them across
+reboots.
 
 ## TLS variant
 
