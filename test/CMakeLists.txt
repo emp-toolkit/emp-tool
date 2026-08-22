@@ -89,6 +89,32 @@ foreach(neg RANGE 1 4)
         PASS_REGULAR_EXPRESSION "${_expect}" RUN_SERIAL TRUE)
 endforeach()
 
+set(_crypto_neg_msg
+    "MITCCRH: BatchSize must be positive"
+    "MITCCRH: K must be positive"
+    "MITCCRH: H must be positive"
+    "vector_inn_prdt_sum_no_red: size must be non-negative"
+    "vector_inn_prdt_sum_red: size must be non-negative"
+    "vector_inn_prdt_sum_red: size must be non-negative"
+    "vector_self_xor: size must be non-negative"
+    "uni_hash_coeff_gen: size must be positive"
+    "MITCCRH: BatchSize must be positive"
+    "MITCCRH: K must be positive"
+    "MITCCRH: H must be positive"
+    "uni_hash_coeff_gen: size must be positive")
+foreach(neg RANGE 1 12)
+    add_executable(crypto_contract_neg_${neg} EXCLUDE_FROM_ALL runtime/crypto_contract_probes.cpp)
+    target_link_libraries(crypto_contract_neg_${neg} PRIVATE emp-tool::emp-tool)
+    target_compile_definitions(crypto_contract_neg_${neg} PRIVATE CRYPTO_NEG_CASE=${neg})
+    math(EXPR _idx "${neg} - 1")
+    list(GET _crypto_neg_msg ${_idx} _expect)
+    add_test(NAME crypto_contract_neg_${neg}
+             COMMAND ${CMAKE_COMMAND} --build . --target crypto_contract_neg_${neg}
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(crypto_contract_neg_${neg} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${_expect}" RUN_SERIAL TRUE)
+endforeach()
+
 add_test_case(runtime test_test_mode)
 set_tests_properties(test_test_mode PROPERTIES
     ENVIRONMENT "EMP_TEST_MODE=1"
