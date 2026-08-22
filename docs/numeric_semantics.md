@@ -38,20 +38,21 @@ signed-overflow UB is sidestepped — emp-tool wraps deterministically.
   (sign-fill) on `Int_T`.
 - Shift amounts ≥ width yield zero on logical ops, or sign-fill on
   signed `>>`.
-- The static (public constant) form exists on every type. The dynamic
-  (secret) barrel-shift form is fixed-width `UInt_T` / `Int_T` only
-  (`requires N > 0`); `BitVec_T` and runtime-width values provide only
-  the public constant-amount shift. The dynamic amount is an unsigned
-  `UInt_T`.
+- The public-amount form (an `int` shift) exists on every type. The
+  secret-amount barrel shift exists only on the fixed-width `UInt_T` /
+  `Int_T`, and the amount is an unsigned `UInt_T` of the same width;
+  `BitVec_T`, `DynamicUInt_T` and `DynamicInt_T` provide only the
+  public-amount shift.
 
 To do a *logical* right-shift on an `Int_T`:
 `s.as_unsigned() >> k` (then `.as_signed()` if you need the type back).
 
 ## Resize
 
-- `resize(W)` is the runtime-width form (`UInt_T` / `Int_T` at
-  runtime width): zero-extends on `UInt_T`, sign-extends on `Int_T`,
-  truncates by dropping the high bits.
+- `resize(W)` on `DynamicUInt_T` / `DynamicInt_T` returns a value of
+  runtime width `W`, and `to_fixed<M>()` one of fixed width `M`. Both
+  zero-extend the unsigned form, sign-extend the signed form, and
+  truncate by dropping the high bits.
 - For a fixed-width value use the compile-time views `zext<M>()` /
   `trunc<M>()` on `UInt_T` and `sext<M>()` / `trunc<M>()` on `Int_T`.
 - Resize is structural — costs no AND gates.
