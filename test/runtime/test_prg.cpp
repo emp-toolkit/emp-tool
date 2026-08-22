@@ -12,6 +12,8 @@
 
 #include "emp-tool/emp-tool.h"
 
+#include <openssl/evp.h>
+
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -85,6 +87,25 @@ static bool blocks_eq(block a, block b) {
 	return _mm_testz_si128(d, d);
 }
 
+static bool openssl_aes128_ecb(const block& key, const block *in,
+                               block *out, int nblocks) {
+	EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+	if (ctx == nullptr) return false;
+	int outl = 0, finl = 0;
+	bool ok = EVP_EncryptInit_ex(
+		ctx, EVP_aes_128_ecb(), nullptr,
+		reinterpret_cast<const unsigned char *>(&key), nullptr) == 1;
+	ok = ok && EVP_CIPHER_CTX_set_padding(ctx, 0) == 1;
+	ok = ok && EVP_EncryptUpdate(
+		ctx, reinterpret_cast<unsigned char *>(out), &outl,
+		reinterpret_cast<const unsigned char *>(in),
+		nblocks * static_cast<int>(sizeof(block))) == 1;
+	ok = ok && EVP_EncryptFinal_ex(
+		ctx, reinterpret_cast<unsigned char *>(out) + outl, &finl) == 1;
+	EVP_CIPHER_CTX_free(ctx);
+	return ok && outl + finl == nblocks * static_cast<int>(sizeof(block));
+}
+
 static bool check_seed_determinism() {
 	block seed = makeBlock(7, 11);
 	PRG a(&seed), b(&seed);
@@ -107,6 +128,19 @@ static bool check_reseed_resets_counter() {
 	return memcmp(first, second, sizeof(first)) == 0;
 }
 
+static bool check_reseed_invalidates_word_buffer() {
+	block old_seed = makeBlock(19, 23);
+	block new_seed = makeBlock(29, 31);
+	constexpr uint64_t id = 37;
+	PRG reused(&old_seed);
+	(void)reused();
+	reused.reseed(&new_seed, id);
+	PRG fresh(&new_seed, id);
+	for (int i = 0; i < 64; ++i)
+		if (reused() != fresh()) return false;
+	return true;
+}
+
 static bool check_counter_continuity() {
 	// Streaming N blocks at once must match N back-to-back single-block calls.
 	block seed = makeBlock(1, 2);
@@ -119,6 +153,25 @@ static bool check_counter_continuity() {
 			return false;
 	}
 	return true;
+}
+
+static bool check_counter_crosses_signed_boundary() {
+	block seed = makeBlock(9, 10);
+	constexpr int id = 37;
+	constexpr uint64_t base = (uint64_t{1} << 63) - 16;
+	PRG p(&seed, id);
+	p.seek(base);
+
+	block got[32];
+	p.random_block(got, 32);
+
+	block counters[32], expected[32];
+	for (uint64_t i = 0; i < 32; ++i)
+		counters[i] = makeBlock(0, base + i);
+	const block effective_key = seed ^ makeBlock(0, id);
+	return blocks_eq(p.seed(), effective_key) &&
+	       openssl_aes128_ecb(effective_key, counters, expected, 32) &&
+	       cmpBlock(got, expected, 32) && p.position() == base + 32;
 }
 
 static bool check_fork_at_and_seek() {
@@ -172,19 +225,23 @@ static bool check_random_data_matches_block() {
 
 static bool check_random_data_unaligned() {
 	block seed = makeBlock(123, 456);
-	block ref[4];
-	uint8_t *ref_bytes = (uint8_t *)ref;
+	alignas(block) uint8_t ref_bytes[320];
 	{
 		PRG p(&seed);
-		p.random_data_unaligned(ref, 4 * sizeof(block));
+		p.random_data(ref_bytes, sizeof(ref_bytes));
 	}
-	uint8_t buf[64];
+	alignas(block) uint8_t buf[352];
 	for (int offset = 1; offset < 16; ++offset) {
-		for (int len = 1; len < 64 - offset; ++len) {
+		for (int len = 1; len < 320; ++len) {
+			memset(buf, 0xA5, sizeof(buf));
 			uint8_t *unaligned = buf + offset;
 			PRG p(&seed);
 			p.random_data_unaligned(unaligned, len);
 			if (memcmp(unaligned, ref_bytes, len) != 0) return false;
+			for (int i = 0; i < offset; ++i)
+				if (buf[i] != 0xA5) return false;
+			for (size_t i = offset + len; i < sizeof(buf); ++i)
+				if (buf[i] != 0xA5) return false;
 		}
 	}
 	return true;
@@ -193,19 +250,23 @@ static bool check_random_data_unaligned() {
 static bool check_random_data_unaligned_counter() {
 	block seed = makeBlock(789, 101112);
 	alignas(16) uint8_t aligned[320];
-	uint8_t unaligned_storage[336];
-	for (int len : {1, 7, 15, 16, 17, 31, 32, 33, 63, 64,
-	                127, 128, 129, 255, 256, 257}) {
-		PRG a(&seed), b(&seed);
-		uint8_t *unaligned = unaligned_storage + 1;
-		a.random_data(aligned, len);
-		b.random_data_unaligned(unaligned, len);
-		if (memcmp(aligned, unaligned, len) != 0) return false;
+	alignas(block) uint8_t unaligned_storage[336];
+	for (uint64_t start : {uint64_t{0}, ~uint64_t{7}}) {
+		for (int len : {1, 7, 15, 16, 17, 31, 32, 33, 63, 64,
+		                127, 128, 129, 255, 256, 257}) {
+			PRG a(&seed), b(&seed);
+			a.seek(start);
+			b.seek(start);
+			uint8_t *unaligned = unaligned_storage + 1;
+			a.random_data(aligned, len);
+			b.random_data_unaligned(unaligned, len);
+			if (memcmp(aligned, unaligned, len) != 0) return false;
 
-		block next_a, next_b;
-		a.random_block(&next_a, 1);
-		b.random_block(&next_b, 1);
-		if (!blocks_eq(next_a, next_b)) return false;
+			block next_a, next_b;
+			a.random_block(&next_a, 1);
+			b.random_block(&next_b, 1);
+			if (!blocks_eq(next_a, next_b)) return false;
+		}
 	}
 	return true;
 }
@@ -279,6 +340,17 @@ static bool check_negative_lengths_rejected() {
 	    && dies([&] { p.random_block(&b, -1); });
 }
 
+static bool check_zero_lengths_noop() {
+	block seed = makeBlock(13, 14);
+	PRG p(&seed);
+	p.seek(123);
+	p.random_data(nullptr, 0);
+	p.random_data_unaligned(nullptr, 0);
+	p.random_bool(nullptr, 0);
+	p.random_block(nullptr, 0);
+	return p.position() == 123;
+}
+
 static bool check_aligned_apis_reject_unaligned_data() {
 	PRG p;
 	alignas(block) uint8_t storage[sizeof(block) + 1] = {};
@@ -293,7 +365,9 @@ static bool run_correctness() {
 	Case cases[] = {
 		{"seed determinism",                    check_seed_determinism},
 		{"reseed resets counter",               check_reseed_resets_counter},
+		{"reseed invalidates buffered words",    check_reseed_invalidates_word_buffer},
 		{"counter continuity (bulk = singles)", check_counter_continuity},
+		{"counter crosses signed boundary",      check_counter_crosses_signed_boundary},
 		{"fork_at / seek reproduce bulk slice",  check_fork_at_and_seek},
 		{"random_data == random_block (16B)",   check_random_data_matches_block},
 		{"random_data_unaligned vs aligned ref", check_random_data_unaligned},
@@ -303,6 +377,7 @@ static bool run_correctness() {
 		{"random_bool mean ~ 0.5",              check_random_bool_distribution},
 		{"UniformRandomBitGenerator interface", check_uniform_engine},
 		{"negative lengths rejected",           check_negative_lengths_rejected},
+		{"zero lengths are no-ops",              check_zero_lengths_noop},
 		{"aligned APIs reject unaligned data",  check_aligned_apis_reject_unaligned_data},
 	};
 	bool all = true;

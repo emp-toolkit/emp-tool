@@ -26,6 +26,8 @@ inline void AES_opt_key_schedule(const block* user_key, AES_KEY* keys);
 
 // AES-ECB on K * N blocks: keys[k] encrypts blks[k*N..k*N+N) in place
 // (or, for the out-of-place form, dst[k*N..k*N+N) = AES(src[k*N..]).
+// The out-of-place form requires dst and src not to overlap; use the
+// one-pointer form for in-place encryption.
 // All K*N blocks and K*11 round keys are expected to live in SIMD
 // registers simultaneously for the fully-unrolled kernel; sweet spot is
 // K*N <= 16. For larger K*N, use the runtime form below.
