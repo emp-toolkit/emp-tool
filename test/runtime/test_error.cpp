@@ -69,9 +69,20 @@ static bool check_lazy_message_stays_lazy() {
 	return !built;
 }
 
+static bool check_buffered_diagnostic_is_flushed() {
+	DeathResult result = run_child([] {
+		char buffer[4096];
+		if (setvbuf(stderr, buffer, _IOFBF, sizeof(buffer)) != 0) _exit(2);
+		expecting(false, "buffered fatal diagnostic");
+	});
+	return result.died &&
+	       result.stderr_text.find("buffered fatal diagnostic") != string::npos;
+}
+
 static bool run_correctness() {
 	bool once = check_expecting_evaluates_once();
 	bool lazy = check_lazy_message_stays_lazy();
+	bool buffered = check_buffered_diagnostic_is_flushed();
 	DeathResult expectation =
 		run_child([] { expecting(false, "expected expectation failure"); });
 	DeathResult dynamic = run_child([] {
@@ -83,11 +94,12 @@ static bool run_correctness() {
 	bool dynamic_message = dynamic.stderr_text.find("expected lazy failure") != string::npos;
 	cout << "  expecting evaluates once          " << (once ? "OK" : "FAIL") << "\n";
 	cout << "  lazy message stays lazy           " << (lazy ? "OK" : "FAIL") << "\n";
+	cout << "  buffered diagnostic is flushed   " << (buffered ? "OK" : "FAIL") << "\n";
 	cout << "  failed expectation terminates     " << (expectation.died ? "OK" : "FAIL") << "\n";
 	cout << "  expectation reports its message   " << (expectation_message ? "OK" : "FAIL") << "\n";
 	cout << "  expectation reports caller site   " << (caller_location ? "OK" : "FAIL") << "\n";
 	cout << "  lazy failure reports/terminates   " << (dynamic.died && dynamic_message ? "OK" : "FAIL") << "\n";
-	return once && lazy && expectation.died && expectation_message && caller_location &&
+	return once && lazy && buffered && expectation.died && expectation_message && caller_location &&
 	       dynamic.died && dynamic_message;
 }
 
