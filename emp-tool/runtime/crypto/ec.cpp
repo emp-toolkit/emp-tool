@@ -5,6 +5,8 @@
 #include "emp-tool/runtime/crypto/hash.h"   // for the hash-ABI build-consistency marker
 
 #include <openssl/evp.h>
+#include <openssl/err.h>
+#include <openssl/bnerr.h>
 #include <algorithm>
 #include <cstring>
 #include <limits>
@@ -98,6 +100,47 @@ inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 	expecting(BN_mod(u1, u1, p, ctx) != 0, "hash_to_field: BN_mod u1");
 }
 
+// BN_mod_sqrt reports an expected nonsquare through OpenSSL's thread-local
+// error queue. Keep that internal control-flow result from leaking into later
+// OpenSSL operations while leaving any caller-owned errors intact.
+inline bool mod_sqrt_if_square(BIGNUM *out, const BIGNUM *value,
+		const BIGNUM *p, BN_CTX *ctx) {
+	const unsigned long prior_last = ERR_peek_last_error();
+	const bool had_prior_errors = prior_last != 0;
+	if (had_prior_errors) {
+		expecting(ERR_set_mark() == 1, "SSWU: ERR_set_mark");
+	}
+
+	BIGNUM *result = BN_mod_sqrt(out, value, p, ctx);
+	if (result != nullptr) {
+		if (had_prior_errors) {
+			expecting(ERR_peek_last_error() == prior_last,
+			          "SSWU: BN_mod_sqrt succeeded with a new OpenSSL error");
+			expecting(ERR_clear_last_mark() == 1,
+			          "SSWU: ERR_clear_last_mark");
+		} else {
+			expecting(ERR_peek_error() == 0,
+			          "SSWU: BN_mod_sqrt succeeded with an OpenSSL error");
+		}
+		return true;
+	}
+
+	if (had_prior_errors) {
+		const unsigned long error = ERR_peek_last_error();
+		expecting(ERR_GET_LIB(error) == ERR_LIB_BN &&
+		              ERR_GET_REASON(error) == BN_R_NOT_A_SQUARE,
+		          "SSWU: BN_mod_sqrt failed");
+		expecting(ERR_pop_to_mark() == 1, "SSWU: ERR_pop_to_mark");
+	} else {
+		const unsigned long error = ERR_get_error();
+		expecting(ERR_GET_LIB(error) == ERR_LIB_BN &&
+		              ERR_GET_REASON(error) == BN_R_NOT_A_SQUARE &&
+		              ERR_peek_error() == 0,
+		          "SSWU: BN_mod_sqrt failed");
+	}
+	return false;
+}
+
 // Simplified SWU for P-256, A=-3, Z=-10. RFC 9380 §6.6.2 non-optimized
 // version. Uses BN_mod_sqrt (Tonelli-Shanks); not constant-time, but
 // P-256 has p ≡ 3 (mod 4) so OpenSSL takes the fast (p+1)/4 path
@@ -135,7 +178,7 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		expecting(inv && one_plus && negB && Ainv, "SSWU: BN_new");
 		expecting(BN_mod_inverse(inv, tv1, p, ctx) != nullptr,
 		          "SSWU: tv1 not invertible");
-		BN_one(one_plus);
+		expecting(BN_one(one_plus) == 1, "SSWU: BN_one");
 		expecting(BN_mod_add(one_plus, one_plus, inv, p, ctx) == 1
 		          && BN_sub(negB, p, B) == 1,
 		          "SSWU: BN_mod_add/sub (else-branch)");
@@ -155,9 +198,7 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	          && BN_mod_add(gx, gx, B, p, ctx) == 1,
 	          "SSWU: BN_mod_* (gx1)");
 
-	// BN_mod_sqrt's prototype takes BIGNUM* (non-const) for the modulus
-	// even though it doesn't mutate it; the const_cast is safe.
-	if (BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) != NULL) {
+	if (mod_sqrt_if_square(y, gx, p, ctx)) {
 		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
 	} else {
 		// x2 = t * x1 ; gx2 = x2^3 + A*x2 + B
@@ -168,7 +209,7 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		          && BN_mod_add(gx, gx, tmp, p, ctx) == 1
 		          && BN_mod_add(gx, gx, B, p, ctx) == 1,
 		          "SSWU: BN_mod_* (gx2)");
-		expecting(BN_mod_sqrt(y, gx, const_cast<BIGNUM *>(p), ctx) != NULL,
+		expecting(mod_sqrt_if_square(y, gx, p, ctx),
 		          "H2C SSWU: neither candidate square");
 		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
 	}
@@ -188,8 +229,9 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 void sswu_z_for_curve(BIGNUM * z_out, const BIGNUM * p, int curve_nid) {
 	switch (curve_nid) {
 	case NID_X9_62_prime256v1:
-		BN_set_word(z_out, 10);
-		BN_sub(z_out, p, z_out);
+		expecting(BN_set_word(z_out, 10) == 1 &&
+		              BN_sub(z_out, p, z_out) == 1,
+		          "hash_to_point: derive P-256 SSWU Z");
 		return;
 	default:
 		expecting(false,
@@ -208,7 +250,7 @@ Scalar::Scalar() {
 Scalar::Scalar(const Scalar &oth) {
 	n_ = BN_new();
 	expecting(n_ != nullptr, "Scalar: BN_new");
-	BN_copy(n_, oth.n_);
+	expecting(BN_copy(n_, oth.n_) != nullptr, "Scalar: BN_copy");
 }
 Scalar::Scalar(Scalar && oth) noexcept : n_(oth.n_) {
 	oth.n_ = nullptr;
@@ -426,14 +468,15 @@ void ECGroup::resize_scratch(size_t size) {
 Scalar ECGroup::rand_scalar() {
 	Scalar n;
 	if (!is_test_mode()) {
-		expecting(BN_rand_range(n.n(), order_.n()) == 1,
-		          "ECGroup::rand_scalar: BN_rand_range");
+		do {
+			expecting(BN_priv_rand_range(n.n(), order_.n()) == 1,
+			          "ECGroup::rand_scalar: BN_priv_rand_range");
+		} while (BN_is_zero(n.n()));
 		return n;
 	}
-	// Test mode: deterministic uniform sample in [0, order_) via
-	// emp::PRG instead of OpenSSL's BN_rand_range (the only
-	// OpenSSL-randomness leak in the toolkit). Rejection sampling:
-	// draw n_bits-wide random bytes, retry if ≥ order_. P-256's order
+	// Test mode: deterministic uniform sample in [1, order_) via emp::PRG.
+	// Rejection sampling:
+	// draw n_bits-wide random bytes, retry if zero or ≥ order_. P-256's order
 	// is just under 2^256, so the per-iteration reject probability
 	// is ≪ 1.
 	// Long-lived per-thread PRG, but re-seeded whenever the determinism
@@ -456,7 +499,7 @@ Scalar ECGroup::rand_scalar() {
 		buf[0] &= top_mask;
 		expecting(BN_bin2bn(buf.data(), n_bytes, n.n()) != nullptr,
 		          "ECGroup::rand_scalar: BN_bin2bn");
-	} while (BN_cmp(n.n(), order_.n()) >= 0);
+	} while (BN_is_zero(n.n()) || BN_cmp(n.n(), order_.n()) >= 0);
 	return n;
 }
 
@@ -476,6 +519,8 @@ Point ECGroup::mul_gen(const Scalar &m) {
 
 Point ECGroup::hash_to_point(const char * msg, size_t length,
                              const char * dst, size_t dst_len) {
+	expecting(dst_len >= 1 && dst_len <= 255,
+	          "hash_to_point: DST length must be in [1, 255]");
 	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
 	expecting(p && A && B && Z, "hash_to_point: BN_new");
