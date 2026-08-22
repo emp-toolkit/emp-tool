@@ -41,6 +41,10 @@ backported fixes.
 - Every failure is fail-stop through `error()`; the public surface
   raises no exceptions and is `-fno-exceptions`-compatible (enforced by
   `test_no_exceptions`).
+- Runtime-width integers are now explicit `DynamicUInt_T<Ctx>` /
+  `DynamicInt_T<Ctx>` types. Fixed `UInt_T<Ctx,N>` / `Int_T<Ctx,N>` require
+  `N > 0`; migrate former `<Ctx,0>` and `<Ctx,runtime_width>` uses to the
+  dynamic names. `UInt_T::mod_exp` was removed.
 - IR diagnostics now separate a streamed gate trace
   (`DigestCtx::value()` / `digest_gate_stream`) from the versioned full-program
   fingerprint (`digest_program`). Code that read `DigestCtx::digest` must call

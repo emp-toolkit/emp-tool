@@ -49,8 +49,8 @@ To do a *logical* right-shift on an `Int_T`:
 
 ## Resize
 
-- `resize(W)` is the runtime-width form (`UInt_T` / `Int_T` at
-  runtime width): zero-extends on `UInt_T`, sign-extends on `Int_T`,
+- `resize(W)` is provided by `DynamicUInt_T` / `DynamicInt_T`:
+  it zero-extends the unsigned form, sign-extends the signed form,
   truncates by dropping the high bits.
 - For a fixed-width value use the compile-time views `zext<M>()` /
   `trunc<M>()` on `UInt_T` and `sext<M>()` / `trunc<M>()` on `Int_T`.

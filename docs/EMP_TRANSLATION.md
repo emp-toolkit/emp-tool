@@ -88,8 +88,8 @@ when you operate on already-live values, `Ctx` is the concrete context type
 ### 2.1. Width is a type parameter
 
 For the fixed-width forms used throughout this guide, the width is part of
-the type. (In-circuit runtime-width forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>`
-exist — see [docs/frontend.md](frontend.md) — but translated code should
+the type. (`DynamicUInt_T<Ctx>` / `DynamicInt_T<Ctx>` exist for widths known
+only at runtime — see [docs/frontend.md](frontend.md) — but translated code should
 commit to fixed widths.) Make a public constant with `T::constant(ctx, v)`
 (or `a.constant(v)` from an existing value of the same family/context):
 
@@ -619,7 +619,7 @@ UInt_T<Ctx,N>                              // unsigned N-bit (clear: uint64_t, N
   << >> by UInt_T (secret amount)          // barrel shifter, costs ANDs
   slice<Lo,Hi>() extract<B,W>() concat(hi) // compile-time width changes (free)
   zext<M>() trunc<M>()
-  popcount<R>() hamming_weight() leading_zeros() mod_exp(p, q)
+  popcount<R>() hamming_weight() leading_zeros()
   as_signed()                              // reinterpret wires (free)
   operator[i] -> Bit_T (i in [0,N))
   constant(ctx, uint64_t)

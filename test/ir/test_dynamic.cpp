@@ -1,5 +1,5 @@
 // Runtime-width session I/O (RuntimeWidthValue) over ClearSession: input/reveal of
-// UInt_T<Ctx, runtime_width> / Int_T<Ctx, runtime_width> at runtime widths and
+// DynamicUInt_T / DynamicInt_T at runtime widths and
 // owners, runtime-width operators, unsigned-vs-signed decode, malformed-codec /
 // cross-session boundary rejection, and the zero-gate fixed<->dynamic conversions
 // (to_dynamic / to_fixed<M> / resize). C++20.
@@ -64,7 +64,18 @@ struct ShortRuntimeCodec {
 
 static_assert(RuntimeWidthValue<ShortRuntimeCodec<ClearCtx>>);
 
-// two's-complement of v at runtime width w (the reference decode for Int_T runtime)
+template <int N>
+concept HasFixedUInt = requires { typename UInt_T<ClearCtx, N>; };
+template <int N>
+concept HasFixedInt = requires { typename Int_T<ClearCtx, N>; };
+template <int N>
+concept HasBitVec = requires { typename BitVec_T<ClearCtx, N>; };
+
+static_assert(!HasFixedUInt<0> && !HasFixedUInt<-1>);
+static_assert(!HasFixedInt<0> && !HasFixedInt<-1>);
+static_assert(HasBitVec<0> && !HasBitVec<-1>);
+
+// Two's-complement reference decode at runtime width w.
 static int64_t twos(int64_t v, int w) {
     if (w >= 64) return v;
     uint64_t u = (uint64_t)v & ((1ull << w) - 1);
@@ -74,16 +85,18 @@ static int64_t twos(int64_t v, int w) {
 
 int main() {
     using Ctx = ClearSession::ctx_t;
-    using RU  = UInt_T<Ctx, runtime_width>;   // runtime-width unsigned
-    using RI  = Int_T<Ctx, runtime_width>;    // runtime-width signed
+    using RU  = DynamicUInt_T<Ctx>;
+    using RI  = DynamicInt_T<Ctx>;
 
-    // ---- concept guards: fixed path unchanged, runtime path added, disjoint ----
-    static_assert(WireValue<UInt_T<ClearCtx, 32>>,          "fixed UInt is still WireValue");
-    static_assert(WireValue<Int_T<ClearCtx, 32>>,           "fixed Int is still WireValue");
+    // ---- fixed and runtime-width concept guards ----
+    static_assert(WireValue<UInt_T<ClearCtx, 32>>,          "fixed UInt is WireValue");
+    static_assert(WireValue<Int_T<ClearCtx, 32>>,           "fixed Int is WireValue");
     static_assert(!RuntimeWidthValue<UInt_T<ClearCtx, 32>>, "fixed is not RuntimeWidthValue");
     static_assert(RuntimeWidthValue<RU> && RuntimeWidthValue<RI>, "runtime types model RuntimeWidthValue");
+    static_assert(std::default_initializable<RU> && std::default_initializable<RI>,
+                  "dynamic integers have unbound assignment targets");
     static_assert(!WireValue<RU> && !WireValue<RI>,         "runtime types are not WireValue (no static width)");
-    static_assert(SessionIO<ClearSession, UInt_T<ClearCtx, 32>>,  "fixed session I/O intact");
+    static_assert(SessionIO<ClearSession, UInt_T<ClearCtx, 32>>,  "fixed session I/O");
     static_assert(RuntimeSessionIO<ClearSession, RU>,       "ClearSession supports runtime unsigned I/O");
     static_assert(RuntimeSessionIO<ClearSession, RI>,       "ClearSession supports runtime signed I/O");
 
@@ -97,14 +110,57 @@ int main() {
     }));
     chk("runtime reveal rejects a foreign session value", dies([] {
         ClearSession a, b;
-        auto value = a.input<UInt_T<ClearCtx, runtime_width>>(ALICE, 7, 8);
+        auto value = a.input<DynamicUInt_T<ClearCtx>>(ALICE, 7, 8);
         (void)b.reveal(value, PUBLIC);
     }));
-    chk("runtime reveal rejects a zero-width value", dies([] {
+    chk("runtime construction rejects zero width", dies([] {
         ClearSession s;
-        UInt_T<ClearCtx, runtime_width> value(s.ctx(), 1);
-        value.w.clear();
+        (void)DynamicUInt_T<ClearCtx>(s.ctx(), 0);
+    }));
+    chk("signed runtime construction rejects zero width", dies([] {
+        ClearSession s;
+        (void)DynamicInt_T<ClearCtx>(s.ctx(), 0);
+    }));
+    chk("runtime reveal rejects an unbound value", dies([] {
+        ClearSession s;
+        DynamicUInt_T<ClearCtx> value;
         (void)s.reveal(value, PUBLIC);
+    }));
+    chk("runtime arithmetic rejects mismatched widths", dies([] {
+        ClearSession s;
+        auto a = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 7);
+        auto b = s.input<DynamicUInt_T<ClearCtx>>(BOB, 2, 8);
+        (void)(a + b);
+    }));
+    chk("signed runtime arithmetic rejects mismatched widths", dies([] {
+        ClearSession s;
+        auto a = s.input<DynamicInt_T<ClearCtx>>(ALICE, -1, 7);
+        auto b = s.input<DynamicInt_T<ClearCtx>>(BOB, 2, 8);
+        (void)(a + b);
+    }));
+    chk("runtime resize rejects zero width", dies([] {
+        ClearSession s;
+        auto value = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 8);
+        (void)value.resize(0);
+    }));
+    chk("runtime resize rejects negative width", dies([] {
+        ClearSession s;
+        auto value = s.input<DynamicInt_T<ClearCtx>>(ALICE, -1, 8);
+        (void)value.resize(-1);
+    }));
+    chk("unsigned runtime codec rejects zero width", dies([] {
+        (void)DynamicUInt_T<ClearCtx>::encode(7, 0);
+    }));
+    chk("unsigned runtime codec rejects negative width", dies([] {
+        (void)DynamicUInt_T<ClearCtx>::encode(7, -1);
+    }));
+    chk("signed runtime codec rejects zero width", dies([] {
+        uint8_t bit = 0;
+        (void)DynamicInt_T<ClearCtx>::decode(&bit, 0);
+    }));
+    chk("signed runtime codec rejects negative width", dies([] {
+        uint8_t bit = 0;
+        (void)DynamicInt_T<ClearCtx>::decode(&bit, -1);
     }));
     chk("runtime input rejects a short codec result", dies([] {
         ClearSession s;
@@ -155,10 +211,29 @@ int main() {
         chk("to_dynamic width/value", d.width() == 32 && sess.reveal(d, PUBLIC).value() == V);
         auto back = d.to_fixed<32>();
         chk("to_fixed value",         sess.reveal(back, PUBLIC).value() == V);
+        auto narrow = d.to_fixed<16>();
+        chk("to_fixed truncates",      sess.reveal(narrow, PUBLIC).value() == (V & 0xFFFFu));
         RU up = d.resize(40);
         chk("resize zero-extend",     up.width() == 40 && sess.reveal(up, PUBLIC).value() == V);
         RU dn = d.resize(16);
         chk("resize truncate",        dn.width() == 16 && sess.reveal(dn, PUBLIC).value() == (V & 0xFFFFu));
+        chk("dynamic reinterpret round-trip",
+            sess.reveal(d.as_signed().as_unsigned(), PUBLIC).value() == V);
+    }
+
+    // ---- signed fixed <-> dynamic conversions preserve sign extension ----
+    {
+        auto f = sess.input<Int_T<Ctx, 16>>(ALICE, -1234);
+        RI d = f.to_dynamic();
+        chk("signed to_dynamic width/value",
+            d.width() == 16 && sess.reveal(d, PUBLIC).value() == -1234);
+        auto wide = d.to_fixed<32>();
+        chk("signed to_fixed sign-extends", sess.reveal(wide, PUBLIC).value() == -1234);
+        auto narrow = d.to_fixed<8>();
+        chk("signed to_fixed truncates",
+            sess.reveal(narrow, PUBLIC).value() == 46);
+        chk("signed dynamic reinterpret round-trip",
+            sess.reveal(d.as_unsigned().as_signed(), PUBLIC).value() == -1234);
     }
 
     printf("test_dynamic: %s\n", bad ? "FAILED" : "runtime-width session I/O — PASS");

@@ -21,10 +21,10 @@ static_assert(SessionIO<ClearSession, Int_T<ClearCtx, 32>>);
 static_assert(SessionIO<ClearSession, BitVec_T<ClearCtx, 128>>);
 static_assert(!CheckpointingSession<ClearSession>);   // ClearSession has no checkpoint()
 
-// ---- WireValue is fixed-width only: runtime-width values are NOT WireValue ----
+// ---- WireValue is fixed-width only: dynamic values are NOT WireValue ----
 static_assert(WireValue<UInt_T<ClearCtx, 32>>);
-static_assert(!WireValue<UInt_T<ClearCtx, runtime_width>>);   // runtime-width form
-static_assert(!WireValue<Int_T<ClearCtx, runtime_width>>);
+static_assert(!WireValue<DynamicUInt_T<ClearCtx>>);
+static_assert(!WireValue<DynamicInt_T<ClearCtx>>);
 
 // ---- WireBundle vs WireValue: execution needs wires, session I/O needs the
 // codec. The integer clear codec rides a 64-bit scalar, so a wider UInt/Int is
@@ -37,7 +37,9 @@ static_assert(WireBundle<Int_T<ClearCtx, 128>>);
 static_assert(!WireValue<Int_T<ClearCtx, 128>>);
 static_assert(WireValue<UInt_T<ClearCtx, 64>>);               // the codec boundary
 static_assert(WireValue<BitVec_T<ClearCtx, 128>>);            // the wide typed-I/O family
-static_assert(!WireBundle<UInt_T<ClearCtx, runtime_width>>);  // runtime width models neither
+static_assert(!WireBundle<DynamicUInt_T<ClearCtx>>);          // runtime width models neither
+static_assert(RuntimeWidthValue<DynamicUInt_T<ClearCtx>>);
+static_assert(RuntimeWidthValue<DynamicInt_T<ClearCtx>>);
 
 // A codec-less synthetic family: structural members only — a WireBundle (usable
 // by the frontend / execution) that is NOT a WireValue and NOT session-feedable.

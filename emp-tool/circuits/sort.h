@@ -50,8 +50,8 @@ inline void sort(std::vector<V>& v, bool ascending = true) {
 }
 template <class V>
 inline void sort(V* a, std::size_t n, bool ascending = true) {
-    std::vector<V> v(a, a + n); sort(v, ascending);
-    for (std::size_t i = 0; i < n; ++i) a[i] = v[i];
+    batcher_network(n,
+                    [&](std::size_t i, std::size_t j) { compare_swap(a[i], a[j], ascending); });
 }
 
 // Sort `keys` (ascending by default), moving `data[i]` alongside `keys[i]`.
@@ -66,9 +66,10 @@ inline void sort_by_key(std::vector<K>& keys, std::vector<P>& data, bool ascendi
 }
 template <class K, class P>
 inline void sort_by_key(K* keys, P* data, std::size_t n, bool ascending = true) {
-    std::vector<K> kv(keys, keys + n); std::vector<P> dv(data, data + n);
-    sort_by_key(kv, dv, ascending);
-    for (std::size_t i = 0; i < n; ++i) { keys[i] = kv[i]; data[i] = dv[i]; }
+    batcher_network(n,
+                    [&](std::size_t i, std::size_t j) {
+                        compare_swap(keys[i], keys[j], data[i], data[j], ascending);
+                    });
 }
 
 }  // namespace emp
