@@ -67,17 +67,38 @@ static double bench_hash(double sec) {
 }
 
 template <int K, int H, int RS = 3>
-static double bench_hash_cir(double sec) {
+static double bench_hash_cir(double sec, uint64_t initial_gid = 0) {
 	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
 	MITCCRH<8, RS> mit;
 	mit.setS(makeBlock(1, 2));
-	mit.renew_ks(uint64_t{0});
+	mit.renew_ks(initial_gid);
 	block buf[K * H];
 	PRG().random_block(buf, K * H);
 	return run_for(sec, [&]() { mit.template hash_cir<K, H>(buf); }, &buf[0]);
 }
 
+template <int K, int H, int RS = 3>
+static double bench_hash_cir_out_of_place(double sec, uint64_t initial_gid = 0) {
+	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
+	MITCCRH<8, RS> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.renew_ks(initial_gid);
+	block in[K * H], out[K * H];
+	PRG().random_block(in, K * H);
+	return run_for(sec, [&]() { mit.template hash_cir<K, H>(out, in); }, &out[0]);
+}
+
 static void bench(double sec) {
+#if EMP_HAS_VAES512
+	cout << "AES SIMD tier: VAES-512 (4 blocks/vector)\n\n";
+#elif EMP_HAS_VAES256
+	cout << "AES SIMD tier: VAES-256 (2 blocks/vector)\n\n";
+#elif defined(__aarch64__)
+	cout << "AES SIMD tier: ARMv8 Crypto (1 block/vector)\n\n";
+#else
+	cout << "AES SIMD tier: AES-NI (1 block/vector)\n\n";
+#endif
+
 	cout << "=== MITCCRH<8>::hash<K, H>  (default ReuseShift=3: schedule once per 8-gid bucket) ===\n";
 	print_vec("hash<1,1>", bench_hash<1, 1>(sec), 1);
 	print_vec("hash<1,4>", bench_hash<1, 4>(sec), 4);
@@ -104,6 +125,11 @@ static void bench(double sec) {
 	print_vec("hash_cir<2,2>", bench_hash_cir<2, 2>(sec), 4);
 	print_vec("hash_cir<8,1>", bench_hash_cir<8, 1>(sec), 8);
 	print_vec("hash_cir<8,2>", bench_hash_cir<8, 2>(sec), 16);
+
+	cout << "\n=== hash_cir<2,2> call shape and gid alignment ===\n";
+	print_vec("in-place, gid=0", bench_hash_cir<2, 2>(sec, 0), 4);
+	print_vec("out-of-place, gid=0", bench_hash_cir_out_of_place<2, 2>(sec, 0), 4);
+	print_vec("in-place, gid=1", bench_hash_cir<2, 2>(sec, 1), 4);
 }
 
 int main(int argc, char **argv) {

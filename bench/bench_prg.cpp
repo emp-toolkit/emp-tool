@@ -12,6 +12,7 @@
 #include "emp-tool/emp-tool.h"
 
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
@@ -58,6 +59,16 @@ static void print_vec(const string &lbl, double calls, size_t bytes_per_call) {
 static void bench(double sec) {
 	PRG prg;
 
+#if EMP_HAS_VAES512
+	cout << "AES SIMD tier: VAES-512 (4 blocks/vector)\n\n";
+#elif EMP_HAS_VAES256
+	cout << "AES SIMD tier: VAES-256 (2 blocks/vector)\n\n";
+#elif defined(__aarch64__)
+	cout << "AES SIMD tier: ARMv8 Crypto (1 block/vector)\n\n";
+#else
+	cout << "AES SIMD tier: AES-NI (1 block/vector)\n\n";
+#endif
+
 	cout << "=== random_block (sweep N blocks) ===\n";
 	for (int n : {1, 8, 64, 256, 1024, 4096, 16384}) {
 		vector<block> buf(n);
@@ -67,21 +78,38 @@ static void bench(double sec) {
 	}
 
 	cout << "\n=== random_data (16-byte-aligned dest, sweep nbytes) ===\n";
-	for (int nb : {16, 64, 256, 1024, 4096, 16384, 65536}) {
-		vector<uint8_t> buf((nb + 15) & ~15);
-		double calls = run_for(sec, [&]() { prg.random_data(buf.data(), nb); }, buf.data());
+	for (int nb : {1, 15, 16, 17, 31, 32, 33, 64, 256, 1024, 4096,
+	               16384, 65536}) {
+		vector<block> buf((nb + 15) / 16);
+		double calls = run_for(sec, [&]() {
+			prg.random_data(buf.data(), nb);
+		}, buf.data());
 		ostringstream lbl; lbl << "random_data(N=" << nb << ")";
 		print_vec(lbl.str(), calls, (size_t)nb);
 	}
 
-	cout << "\n=== random_data_unaligned (sweep nbytes) ===\n";
-	for (int nb : {16, 64, 256, 1024, 4096, 16384}) {
-		vector<uint8_t> buf(nb + 16);
-		uint8_t *unaligned = buf.data() + 1;  // forced misalign
+	cout << "\n=== random_data_unaligned (offset=1, sweep nbytes) ===\n";
+	for (int nb : {1, 15, 16, 17, 31, 32, 33, 64, 256, 1024, 4096,
+	               16384, 65536}) {
+		vector<block> buf((nb + 30) / 16);
+		uint8_t *unaligned = reinterpret_cast<uint8_t *>(buf.data()) + 1;
 		double calls = run_for(sec, [&]() {
 			prg.random_data_unaligned(unaligned, nb);
 		}, unaligned);
 		ostringstream lbl; lbl << "random_data_unaligned(N=" << nb << ")";
+		print_vec(lbl.str(), calls, (size_t)nb);
+	}
+
+	cout << "\n=== random_data_unaligned (N=4096, offset sweep) ===\n";
+	for (int offset : {1, 7, 15}) {
+		constexpr int nb = 4096;
+		vector<block> buf((nb + 30) / 16);
+		uint8_t *unaligned = reinterpret_cast<uint8_t *>(buf.data()) + offset;
+		double calls = run_for(sec, [&]() {
+			prg.random_data_unaligned(unaligned, nb);
+		}, unaligned);
+		ostringstream lbl;
+		lbl << "random_data_unaligned(offset=" << offset << ")";
 		print_vec(lbl.str(), calls, (size_t)nb);
 	}
 

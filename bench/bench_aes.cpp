@@ -15,6 +15,7 @@
 #include <openssl/evp.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <cstring>
 #include <iomanip>
@@ -82,7 +83,7 @@ static void print_op(const string &lbl, double calls) {
 	     << setw(7) << (3e9 / calls) << " cy/op @3GHz\n";
 }
 
-static void print_vec(const string &lbl, double calls, int blocks_per_call) {
+static void print_vec(const string &lbl, double calls, int64_t blocks_per_call) {
 	double GiBps = calls * (double)blocks_per_call * 16.0 / (1024.0 * 1024.0 * 1024.0);
 	double cy_per_blk = 3e9 / (calls * blocks_per_call);
 	cout << "  " << left << setw(36) << lbl
@@ -109,11 +110,27 @@ static double bench_paraenc_runtime(int K, int N, double sec) {
 	for (int k = 0; k < K; ++k) AES_set_encrypt_key(keys[k], &skeys[k]);
 	vector<block> buf(K * N);
 	PRG().random_block(buf.data(), K * N);
-	return run_for(sec, [&]() { ParaEnc(buf.data(), skeys.data(), K, N); }, buf.data());
+	return run_for(sec, [&]() {
+		// Cross the barrier on every invocation so loop-invariant motion cannot
+		// turn this runtime-dispatch row into a one-time shape check.
+		int call_K = K, call_N = N;
+		asm volatile("" : "+r"(call_K), "+r"(call_N));
+		ParaEnc(buf.data(), skeys.data(), call_K, call_N);
+	}, buf.data());
 }
 
 static void bench(double sec) {
 	PRG prg;
+
+#if EMP_HAS_VAES512
+	cout << "AES SIMD tier: VAES-512 (4 blocks/vector)\n\n";
+#elif EMP_HAS_VAES256
+	cout << "AES SIMD tier: VAES-256 (2 blocks/vector)\n\n";
+#elif defined(__aarch64__)
+	cout << "AES SIMD tier: ARMv8 Crypto (1 block/vector)\n\n";
+#else
+	cout << "AES SIMD tier: AES-NI (1 block/vector)\n\n";
+#endif
 
 	cout << "=== single-shot (latency, serial-dep chain) ===\n";
 	{
