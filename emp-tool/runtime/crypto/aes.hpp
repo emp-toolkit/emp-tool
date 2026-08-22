@@ -7,6 +7,7 @@
 // inside ParaEnc_impl compile out the unavailable tiers.
 
 #include "emp-tool/runtime/core/simd_tier.h"
+#include <limits>
 
 namespace emp {
 
@@ -184,6 +185,9 @@ static inline void apply_grouped(block *dst, const block *src, const AES_KEY *kk
 template<class MemTile, int numKeys, int numEncs>
 EMP_AES_TARGET_ATTR
 static inline void ParaEnc_mem_tiles_impl(block *dst, const block *src, const AES_KEY *keys) {
+	static_assert(numKeys >= 0 && numEncs >= 0,
+	              "ParaEnc: dimensions must be non-negative");
+	if constexpr (numKeys == 0 || numEncs == 0) return;
 #if EMP_HAS_VAES512
 	constexpr int W4 = 4, N4 = numEncs / 4;
 #else
@@ -262,6 +266,13 @@ inline void ParaEnc_mem_tiles_runtime_impl(block *dst, const block *src, const A
 	}
 }
 
+inline bool ParaEnc_runtime_empty(int64_t K, int64_t N) {
+	expecting(K >= 0 && N >= 0, "ParaEnc: dimensions must be non-negative");
+	expecting(N == 0 || K <= std::numeric_limits<int64_t>::max() / N,
+	          "ParaEnc: dimensions overflow int64_t");
+	return K == 0 || N == 0;
+}
+
 EMP_AES_TARGET_ATTR
 inline void ParaEnc_runtime_impl(block *dst, const block *src, const AES_KEY *keys, int64_t K, int64_t N) {
 	ParaEnc_mem_tiles_runtime_impl<AesMemPlainTile>(dst, src, keys, K, N);
@@ -281,7 +292,7 @@ enum class CtrStore { Plain, XorBack };
 
 template <class L, int W, CtrStore St>
 EMP_AES_TARGET_ATTR
-static inline void aes_ctr_fill_lane(block *dst, int64_t counter,
+static inline void aes_ctr_fill_lane(block *dst, uint64_t counter,
                                      const AES_KEY *kk, block tweak) {
 	// Build the tweak broadcast from a compile-time zero on the Plain path so
 	// the per-counter XOR folds away. Threading `tweak` (= zero_block) through
@@ -302,7 +313,7 @@ static inline void aes_ctr_fill_lane(block *dst, int64_t counter,
 
 template <int W, CtrStore St>
 EMP_AES_TARGET_ATTR
-static inline void aes_ctr_fill_impl(block *dst, int64_t counter,
+static inline void aes_ctr_fill_impl(block *dst, uint64_t counter,
                                      const AES_KEY *kk, block tweak) {
 #if EMP_HAS_VAES512
 	if constexpr (W % 4 == 0) { aes_ctr_fill_lane<AesLane<4>, W, St>(dst, counter, kk, tweak); return; }
@@ -315,19 +326,20 @@ static inline void aes_ctr_fill_impl(block *dst, int64_t counter,
 
 template <int W>
 EMP_AES_TARGET_ATTR
-static inline void aes_ctr_fill(block *dst, int64_t counter, const AES_KEY *kk) {
+static inline void aes_ctr_fill(block *dst, uint64_t counter, const AES_KEY *kk) {
 	aes_ctr_fill_impl<W, CtrStore::Plain>(dst, counter, kk, zero_block);
 }
 
 struct CtrFillOp {
-	block *dst; int64_t counter; const AES_KEY *kk;
+	block *dst; uint64_t counter; const AES_KEY *kk;
 	template<int W> EMP_AES_TARGET_ATTR void run() {
-		aes_ctr_fill<W>(dst, counter, kk); dst += W; counter += W;
+		aes_ctr_fill<W>(dst, counter, kk); dst += W;
+		counter += static_cast<uint64_t>(W);
 	}
 };
 
 EMP_AES_TARGET_ATTR
-inline void ParaCtrEnc(block *dst, int64_t counter, const AES_KEY *kk, int64_t n) {
+inline void ParaCtrEnc(block *dst, uint64_t counter, const AES_KEY *kk, int64_t n) {
 	CtrFillOp op{dst, counter, kk};
 	drain_tiles(op, n);
 }
@@ -342,8 +354,10 @@ inline void ParaCtrEnc(block *dst, int64_t counter, const AES_KEY *kk, int64_t n
 // For a secret AES key (regular PRG), use detail::aes_ctr_fill instead.
 template <int W>
 EMP_AES_TARGET_ATTR
-inline void aes_ctr_fill_dm(block *dst, int64_t counter,
+inline void aes_ctr_fill_dm(block *dst, uint64_t counter,
                             const AES_KEY *kk, block tweak = zero_block) {
+	static_assert(W >= 0, "aes_ctr_fill_dm: output width must be non-negative");
+	if constexpr (W == 0) return;
 	detail::aes_ctr_fill_impl<W, detail::CtrStore::XorBack>(dst, counter, kk, tweak);
 }
 
@@ -351,6 +365,8 @@ inline void aes_ctr_fill_dm(block *dst, int64_t counter,
 // Under Standard Assumptions" (https://eprint.iacr.org/2015/751.pdf).
 template<int NumKeys>
 inline void AES_opt_key_schedule(const block* user_key, AES_KEY *keys) {
+	static_assert(NumKeys >= 0, "AES_opt_key_schedule: key count must be non-negative");
+	if constexpr (NumKeys == 0) return;
 	EMP_AES_ASSERT_ALIGNED(user_key);
 	EMP_AES_ASSERT_ALIGNED(keys);
 	block con = _mm_set_epi32(1,1,1,1);
@@ -373,6 +389,7 @@ inline void AES_opt_key_schedule(const block* user_key, AES_KEY *keys) {
 template<int numKeys, int numEncs>
 EMP_AES_TARGET_ATTR
 inline void ParaEnc(block *blks, const AES_KEY *keys) {
+	if constexpr (numKeys == 0 || numEncs == 0) return;
 	EMP_AES_ASSERT_ALIGNED(blks);
 	EMP_AES_ASSERT_ALIGNED(keys);
 	detail::ParaEnc_impl<numKeys, numEncs>(blks, blks, keys);
@@ -383,6 +400,7 @@ EMP_AES_TARGET_ATTR
 inline void ParaEnc(block * __restrict__ dst,
                     const block * __restrict__ src,
                     const AES_KEY *keys) {
+	if constexpr (numKeys == 0 || numEncs == 0) return;
 	EMP_AES_ASSERT_ALIGNED(dst);
 	EMP_AES_ASSERT_ALIGNED(src);
 	EMP_AES_ASSERT_ALIGNED(keys);
@@ -391,6 +409,7 @@ inline void ParaEnc(block * __restrict__ dst,
 
 EMP_AES_TARGET_ATTR
 inline void ParaEnc(block *blks, const AES_KEY *keys, int64_t K, int64_t N) {
+	if (detail::ParaEnc_runtime_empty(K, N)) return;
 	EMP_AES_ASSERT_ALIGNED(blks);
 	EMP_AES_ASSERT_ALIGNED(keys);
 	detail::ParaEnc_runtime_impl(blks, blks, keys, K, N);
@@ -400,6 +419,7 @@ EMP_AES_TARGET_ATTR
 inline void ParaEnc(block * __restrict__ dst,
                     const block * __restrict__ src,
                     const AES_KEY *keys, int64_t K, int64_t N) {
+	if (detail::ParaEnc_runtime_empty(K, N)) return;
 	EMP_AES_ASSERT_ALIGNED(dst);
 	EMP_AES_ASSERT_ALIGNED(src);
 	EMP_AES_ASSERT_ALIGNED(keys);

@@ -278,10 +278,24 @@ static bool check_setS_resets_gid() {
 	return ok;
 }
 
+static bool check_default_seed_is_zero() {
+	MITCCRH<8> implicit_zero, explicit_zero;
+	explicit_zero.setS(zero_block);
+	block implicit_out[8], explicit_out[8];
+	for (int i = 0; i < 8; ++i)
+		implicit_out[i] = explicit_out[i] = makeBlock(i, i + 1);
+	implicit_zero.hash<8, 1>(implicit_out);
+	explicit_zero.hash<8, 1>(explicit_out);
+	bool ok = memcmp(implicit_out, explicit_out, sizeof(implicit_out)) == 0;
+	cout << "  [default S is zero]                            " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
 	ok &= check_setS_resets_gid();
+	ok &= check_default_seed_is_zero();
 	ok &= check_mitccrh_against_paraenc<1, 1>();
 	ok &= check_mitccrh_against_paraenc<1, 4>();
 	ok &= check_mitccrh_against_paraenc<2, 1>();

@@ -22,12 +22,25 @@ namespace emp {
  */
 
 template<int BatchSize = 8, int ReuseShift = 3>
-class MITCCRH { public:
+class MITCCRH {
+	static_assert(BatchSize > 0, "MITCCRH: BatchSize must be positive");
+
+	template<int K, int H>
+	static consteval void validate_hash_shape() {
+		static_assert(K > 0, "MITCCRH: K must be positive");
+		static_assert(H > 0, "MITCCRH: H must be positive");
+		if constexpr (K > 0) {
+			static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
+			static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		}
+	}
+
+public:
 	static_assert(ReuseShift >= 0 && ReuseShift < 32, "MITCCRH: ReuseShift out of range");
 	AES_KEY scheduled_key[BatchSize];
 	block keys[BatchSize];
 	int key_used = BatchSize;
-	block start_point;
+	block start_point = zero_block;
 	uint64_t gid = 0;
 	// Bucket the current schedule covers (ReuseShift > 0 only); ~0 = none.
 	uint64_t scheduled_bucket = ~0ull;
@@ -100,8 +113,7 @@ class MITCCRH { public:
 	// sigma pass over memory.
 	template<int K, int H>
 	void hash_cir(block * blks) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		if(key_used == BatchSize) renew_ks();
 		if constexpr (ReuseShift > 0) {
 			if (scheduled_bucket != ~0ull) {   // uniform batch: every key == key 0
@@ -126,8 +138,7 @@ class MITCCRH { public:
 	// renew_ks(tweaks), never the gid-based renew_ks().
 	template<int K, int H>
 	void hash_cir_fixed(block * blks) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		detail::ParaEnc_mem_tiles_impl<detail::AesMemXorSigmaTile, K, H>(
 			blks, blks, scheduled_key);
 	}
@@ -136,8 +147,7 @@ class MITCCRH { public:
 	// must not overlap. Same fused-sigma tile; no scratch buffer.
 	template<int K, int H>
 	void hash_cir(block * __restrict__ out, const block * __restrict__ in) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		if(key_used == BatchSize) renew_ks();
 		if constexpr (ReuseShift > 0) {
 			if (scheduled_bucket != ~0ull) {   // uniform batch: every key == key 0
@@ -154,8 +164,7 @@ class MITCCRH { public:
 
 	template<int K, int H>
 	void hash(block * blks) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		if(key_used == BatchSize) renew_ks();
 		if constexpr (ReuseShift > 0) {
 			if (scheduled_bucket != ~0ull) {   // uniform batch: every key == key 0
@@ -174,8 +183,7 @@ class MITCCRH { public:
 	// so neither form needs a stack copy or a second XOR-fold pass.
 	template<int K, int H>
 	void hash(block * __restrict__ out, const block * __restrict__ in) {
-		static_assert(K <= BatchSize, "MITCCRH: K must not exceed BatchSize");
-		static_assert(BatchSize % K == 0, "MITCCRH: K must divide BatchSize");
+		validate_hash_shape<K, H>();
 		if(key_used == BatchSize) renew_ks();
 		if constexpr (ReuseShift > 0) {
 			if (scheduled_bucket != ~0ull) {   // uniform batch: every key == key 0

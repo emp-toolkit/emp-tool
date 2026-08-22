@@ -23,6 +23,9 @@ namespace emp {
 //   derive() — a fresh child id for a separately-constructed sub-protocol;
 //              advances the counter.
 //
+// Copying preserves both the identifier and derivation counter, so equal
+// copies produce the same child sequence until advanced independently.
+//
 // The block ctor is implicit so a caller can seed a top-level SessionID
 // from a plain id. Default construction yields the zero id (counter 0).
 class SessionID {
@@ -32,7 +35,7 @@ public:
 
   block value() const { return sid_; }
 
-  SessionID derive() {
+  [[nodiscard]] SessionID derive() {
     AES_KEY k;
     AES_set_encrypt_key(sid_, &k);
     block in = makeBlock(0, counter_++);

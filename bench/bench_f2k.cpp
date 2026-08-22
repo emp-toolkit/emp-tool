@@ -19,6 +19,7 @@
 #include <chrono>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 using namespace emp;
@@ -59,19 +60,34 @@ static void print_op(const string &lbl, double calls) {
 	     << setw(7) << (3e9 / calls) << " cy/op @3GHz\n";
 }
 
-static void print_vec(const string &lbl, double calls, int n) {
-	double GiBps = calls * (double)n * 16.0 / (1024.0 * 1024.0 * 1024.0);
-	double cy_per_blk = 3e9 / (calls * n);
+static void print_vec(const string &lbl, double calls, int n,
+                      int bytes_per_element) {
+	double GiBps = calls * (double)n * bytes_per_element /
+	               (1024.0 * 1024.0 * 1024.0);
+	double cy_per_element = 3e9 / (calls * n);
 	cout << "  " << left << setw(36) << lbl
 	     << fixed << setprecision(2)
 	     << right << setw(8) << GiBps << " GiB/s "
-	     << setw(7) << cy_per_blk << " cy/blk @3GHz\n";
+	     << setw(7) << cy_per_element << " cy/elem @3GHz\n";
 }
 
-static const initializer_list<int> SIZES = {16, 64, 256, 1024, 4096, 16384, 65536};
+static const initializer_list<int> SIZES = {
+	1, 4, 8, 16, 64, 256, 1024, 4096, 16384, 65536
+};
 
 static void bench(double sec) {
 	PRG prg;
+
+#if EMP_HAS_VPCLMUL512
+	cout << "F2K multiply tier: VPCLMUL-512 (4 products/vector)\n";
+#elif EMP_HAS_VPCLMUL256
+	cout << "F2K multiply tier: VPCLMUL-256 (2 products/vector)\n";
+#elif defined(__aarch64__)
+	cout << "F2K multiply tier: ARMv8 PMULL (1 product/vector)\n";
+#else
+	cout << "F2K multiply tier: PCLMULQDQ (1 product/vector)\n";
+#endif
+	cout << "Vector GiB/s counts logical input bytes (output bytes for generators).\n\n";
 
 	cout << "=== single-shot (latency, serial-dep chain) ===\n";
 	{
@@ -98,8 +114,18 @@ static void bench(double sec) {
 		double calls = run_for(sec, [&]() { lo = reduce(lo, hi); }, &lo);
 		print_op("reduce", calls);
 	}
+	{
+		constexpr int n = 256;
+		vector<block> a(n), b(n), out(n);
+		prg.random_block(a.data(), n);
+		prg.random_block(b.data(), n);
+		double calls = run_for(sec, [&]() {
+			for (int i = 0; i < n; ++i) gfmul(a[i], b[i], &out[i]);
+		}, out.data());
+		print_vec("gfmul independent(N=256)", calls, n, 32);
+	}
 
-	cout << "\n=== vector_inn_prdt_sum_red (deferred reduction, 4-way unroll) ===\n";
+	cout << "\n=== vector_inn_prdt_sum_red (deferred reduction) ===\n";
 	for (int n : SIZES) {
 		vector<block> a(n), b(n);
 		prg.random_block(a.data(), n);
@@ -109,7 +135,7 @@ static void bench(double sec) {
 			vector_inn_prdt_sum_red(&r, a.data(), b.data(), n);
 		}, &r);
 		ostringstream lbl; lbl << "vec_inn_prdt_red(N=" << n << ")";
-		print_vec(lbl.str(), calls, n);
+		print_vec(lbl.str(), calls, n, 32);
 	}
 
 	cout << "\n=== vector_inn_prdt_sum_red (bool selector, branchless mask + XOR) ===\n";
@@ -123,7 +149,7 @@ static void bench(double sec) {
 			vector_inn_prdt_sum_red(&r, a.data(), bs.data(), n);
 		}, &r);
 		ostringstream lbl; lbl << "vec_inn_prdt_red(byte-bool, N=" << n << ")";
-		print_vec(lbl.str(), calls, n);
+		print_vec(lbl.str(), calls, n, 17);
 	}
 
 	cout << "\n=== vector_inn_prdt_sum_no_red (256-bit accumulator, no reduce) ===\n";
@@ -136,7 +162,7 @@ static void bench(double sec) {
 			vector_inn_prdt_sum_no_red(r, a.data(), b.data(), n);
 		}, r);
 		ostringstream lbl; lbl << "vec_inn_prdt_no_red(N=" << n << ")";
-		print_vec(lbl.str(), calls, n);
+		print_vec(lbl.str(), calls, n, 32);
 	}
 
 	cout << "\n=== uni_hash_coeff_gen (coeff[i] = seed^(i+1)) ===\n";
@@ -147,7 +173,7 @@ static void bench(double sec) {
 			uni_hash_coeff_gen(coeff.data(), seed, n);
 		}, coeff.data());
 		ostringstream lbl; lbl << "uni_hash_coeff_gen(N=" << n << ")";
-		print_vec(lbl.str(), calls, n);
+		print_vec(lbl.str(), calls, n, 16);
 	}
 
 	cout << "\n=== vector_self_xor (⊕ xs[i]) ===\n";
@@ -159,7 +185,7 @@ static void bench(double sec) {
 			vector_self_xor(&r, a.data(), n);
 		}, &r);
 		ostringstream lbl; lbl << "vector_self_xor(N=" << n << ")";
-		print_vec(lbl.str(), calls, n);
+		print_vec(lbl.str(), calls, n, 16);
 	}
 
 	cout << "\n=== GaloisFieldPacking::packing (fixed N=128) ===\n";

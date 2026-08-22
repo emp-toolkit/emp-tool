@@ -289,6 +289,55 @@ static bool check_vector_self_xor(int sz) {
 	return blocks_eq(got, want);
 }
 
+static bool check_empty_vectors() {
+	block wide[2] = {makeBlock(1, 2), makeBlock(3, 4)};
+	block sum = makeBlock(5, 6);
+	vector_inn_prdt_sum_no_red(wide, nullptr, nullptr, 0);
+	if (!blocks_eq(wide[0], zero_block) || !blocks_eq(wide[1], zero_block))
+		return false;
+	vector_inn_prdt_sum_red(
+		&sum, static_cast<const block *>(nullptr),
+		static_cast<const block *>(nullptr), 0);
+	if (!blocks_eq(sum, zero_block)) return false;
+	sum = makeBlock(7, 8);
+	vector_inn_prdt_sum_red(
+		&sum, static_cast<const block *>(nullptr),
+		static_cast<const bool *>(nullptr), 0);
+	if (!blocks_eq(sum, zero_block)) return false;
+	sum = makeBlock(9, 10);
+	vector_self_xor(&sum, nullptr, 0);
+	if (!blocks_eq(sum, zero_block)) return false;
+
+	wide[0] = makeBlock(11, 12);
+	wide[1] = makeBlock(13, 14);
+	vector_inn_prdt_sum_no_red<0>(wide, nullptr, nullptr);
+	if (!blocks_eq(wide[0], zero_block) || !blocks_eq(wide[1], zero_block))
+		return false;
+	sum = makeBlock(15, 16);
+	vector_inn_prdt_sum_red<0>(
+		&sum, static_cast<const block *>(nullptr),
+		static_cast<const block *>(nullptr));
+	if (!blocks_eq(sum, zero_block)) return false;
+	sum = makeBlock(17, 18);
+	vector_inn_prdt_sum_red<0>(
+		&sum, static_cast<const block *>(nullptr),
+		static_cast<const bool *>(nullptr));
+	if (!blocks_eq(sum, zero_block)) return false;
+	sum = makeBlock(19, 20);
+	vector_self_xor<0>(&sum, nullptr);
+	return blocks_eq(sum, zero_block);
+}
+
+static bool check_negative_vector_sizes_rejected() {
+	block value = zero_block;
+	block wide[2];
+	bool bit = false;
+	return dies([&] { vector_inn_prdt_sum_no_red(wide, &value, &value, -1); })
+	    && dies([&] { vector_inn_prdt_sum_red(&value, &value, &value, -1); })
+	    && dies([&] { vector_inn_prdt_sum_red(&value, &value, &bit, -1); })
+	    && dies([&] { vector_self_xor(&value, &value, -1); });
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool a = check_gf_identities();
@@ -303,8 +352,9 @@ static bool run_correctness() {
 	for (int sz : {1, 4, 16, 1024}) c &= check_uni_hash_coeff_gen(sz);
 	cout << "  uni_hash_coeff_gen             " << (c ? "OK" : "FAIL") << "\n";
 	block coeff = zero_block;
-	bool c2 = dies([&] { uni_hash_coeff_gen(&coeff, zero_block, 0); });
-	cout << "  uni_hash_coeff_gen rejects 0   " << (c2 ? "OK" : "FAIL") << "\n";
+	bool c2 = dies([&] { uni_hash_coeff_gen(&coeff, zero_block, 0); })
+	       && dies([&] { uni_hash_coeff_gen(&coeff, zero_block, -1); });
+	cout << "  uni_hash_coeff_gen rejects <=0 " << (c2 ? "OK" : "FAIL") << "\n";
 	bool d = check_packing();
 	cout << "  GaloisFieldPacking::packing    " << (d ? "OK" : "FAIL") << "\n";
 	bool d2 = check_packing_bool();
@@ -312,7 +362,11 @@ static bool run_correctness() {
 	bool e = true;
 	for (int sz : {1, 4, 17, 1024}) e &= check_vector_self_xor(sz);
 	cout << "  vector_self_xor                " << (e ? "OK" : "FAIL") << "\n";
-	return a && b && b2 && c && c2 && d && d2 && e;
+	bool f = check_empty_vectors();
+	cout << "  empty vectors produce zero     " << (f ? "OK" : "FAIL") << "\n";
+	bool g = check_negative_vector_sizes_rejected();
+	cout << "  negative vector sizes rejected " << (g ? "OK" : "FAIL") << "\n";
+	return a && b && b2 && c && c2 && d && d2 && e && f && g;
 }
 
 int main(int /*argc*/, char ** /*argv*/) {

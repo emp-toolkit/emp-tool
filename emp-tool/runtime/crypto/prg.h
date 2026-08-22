@@ -51,6 +51,7 @@ class PRG { public:
 		key = v;
 		AES_set_encrypt_key(v, &aes);
 		counter = 0;
+		ptr = 32;
 	}
 
 	// Stream position is the CTR block counter. seed() is the effective key
@@ -165,7 +166,7 @@ class PRG { public:
 		          "PRG::random_block: data must be 16-byte aligned");
 		while (nblocks > 0) {
 			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
-			detail::ParaCtrEnc(data, (int64_t)counter, &aes, n);
+			detail::ParaCtrEnc(data, counter, &aes, n);
 			counter += n;
 			data += n;
 			nblocks -= n;
