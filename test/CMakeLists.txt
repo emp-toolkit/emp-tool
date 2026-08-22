@@ -70,6 +70,25 @@ add_test_case(runtime test_hash)
 add_test_case(runtime test_mitccrh)
 add_test_case(runtime test_prg)
 add_test_case(runtime test_prp)
+
+set(_aes_neg_msg
+    "ParaEnc: dimensions must be non-negative"
+    "ParaEnc: dimensions must be non-negative"
+    "AES_opt_key_schedule: key count must be non-negative"
+    "aes_ctr_fill_dm: output width must be non-negative")
+foreach(neg RANGE 1 4)
+    add_executable(aes_contract_neg_${neg} EXCLUDE_FROM_ALL runtime/aes_contract_probes.cpp)
+    target_link_libraries(aes_contract_neg_${neg} PRIVATE emp-tool::emp-tool)
+    target_compile_definitions(aes_contract_neg_${neg} PRIVATE AES_NEG_CASE=${neg})
+    math(EXPR _idx "${neg} - 1")
+    list(GET _aes_neg_msg ${_idx} _expect)
+    add_test(NAME aes_contract_neg_${neg}
+             COMMAND ${CMAKE_COMMAND} --build . --target aes_contract_neg_${neg}
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(aes_contract_neg_${neg} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${_expect}" RUN_SERIAL TRUE)
+endforeach()
+
 add_test_case(runtime test_test_mode)
 set_tests_properties(test_test_mode PROPERTIES
     ENVIRONMENT "EMP_TEST_MODE=1"

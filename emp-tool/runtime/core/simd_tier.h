@@ -123,8 +123,9 @@ struct AesLane<1> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm_xor_si128(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm_aesenc_si128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm_aesenclast_si128(s, k); }
-	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
-		return _mm_xor_si128(_mm_set_epi64x(0, b0 + slot), tw);
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
+		const uint64_t c0 = b0 + static_cast<uint64_t>(slot);
+		return _mm_xor_si128(_mm_set_epi64x(0, static_cast<int64_t>(c0)), tw);
 	}
 	// sigma(a) = swap_halves(a) ^ (a & {hi=~0, lo=0}); see block.hpp.
 	EMP_AES_TARGET_ATTR static vec_t sigma(vec_t a) {
@@ -144,9 +145,11 @@ struct AesLane<2> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm256_xor_si256(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm256_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm256_aesenclast_epi128(s, k); }
-	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
+		const uint64_t c0 = b0 + 2 * static_cast<uint64_t>(slot);
 		return _mm256_xor_si256(
-			_mm256_set_epi64x(0, b0 + 2 * slot + 1, 0, b0 + 2 * slot), tw);
+			_mm256_set_epi64x(0, static_cast<int64_t>(c0 + 1),
+			                    0, static_cast<int64_t>(c0)), tw);
 	}
 	// _mm256_shuffle_epi32 / the broadcast mask are per-128-bit-lane, so this
 	// is sigma() applied independently to each block.
@@ -168,10 +171,13 @@ struct AesLane<4> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm512_aesenclast_epi128(s, k); }
-	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
+	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
+		const uint64_t c0 = b0 + 4 * static_cast<uint64_t>(slot);
 		return _mm512_xor_si512(
-			_mm512_set_epi64(0, b0 + 4 * slot + 3, 0, b0 + 4 * slot + 2,
-			                 0, b0 + 4 * slot + 1, 0, b0 + 4 * slot), tw);
+			_mm512_set_epi64(0, static_cast<int64_t>(c0 + 3),
+			                 0, static_cast<int64_t>(c0 + 2),
+			                 0, static_cast<int64_t>(c0 + 1),
+			                 0, static_cast<int64_t>(c0)), tw);
 	}
 	// _MM_PERM_BADC == 0x4E == 78: the per-128-lane half-swap of sigma().
 	EMP_AES_TARGET_ATTR static vec_t sigma(vec_t a) {
@@ -295,8 +301,9 @@ struct AesLane<1> {
 		uint8x16_t r = vaeseq_u8(vreinterpretq_u8_m128i(s), zero);
 		return _mm_xor_si128(vreinterpretq_m128i_u8(r), k);
 	}
-	static vec_t ctr_xor_tweak(int64_t b0, int slot, vec_t tw) {
-		return _mm_xor_si128(_mm_set_epi64x(0, b0 + slot), tw);
+	static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
+		const uint64_t c0 = b0 + static_cast<uint64_t>(slot);
+		return _mm_xor_si128(_mm_set_epi64x(0, static_cast<int64_t>(c0)), tw);
 	}
 	// Same body as the x86 lane; _mm_* resolve via the sse2neon shim, exactly
 	// as the scalar sigma() in block.hpp already does on aarch64.
