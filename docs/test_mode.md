@@ -56,7 +56,8 @@ emp::set_test_mode(true);  // before any PRG() default-construction
 ```
 
 The env var is read once at first call to `is_test_mode()` and
-cached. `set_test_mode()` overrides it programmatically.
+cached. Only the exact value `1` enables test mode; other values leave it off.
+`set_test_mode()` overrides it programmatically.
 
 The first activation by either mechanism prints a prominent warning to
 `stderr`, once per process, that default PRG seeds and EC scalar randomness are
@@ -64,9 +65,9 @@ deterministic and insecure. The warning happens at activation rather than on
 each random draw, so it adds no work to the randomness hot path. Never process
 real secrets in a process running in test mode.
 
-`reset_test_seed_counter()` rewinds every lane's ordinal and
-releases lane 0 — call it between independent test iterations to
-get reproducible PRG sequences within one process.
+`reset_test_seed_counter()` rewinds every lane's ordinal and releases lane 0.
+Call it between independent test iterations, after joining threads and draining
+pool futures, to get reproducible PRG sequences within one process.
 
 ## Multi-threading: lanes
 
@@ -88,9 +89,12 @@ order is deterministic), never discovered by the worker itself.
   });
   ```
 
-- **Forgetting is loud.** A second thread drawing from lane 0 would
-  replay the main thread's streams byte-for-byte — silently wrong —
-  so test mode aborts with a pointer to this document instead.
+  Manually assigned lane ids must be nonzero and unique among concurrently
+  active work. Lane 0 is reserved for the unscoped main thread.
+
+- **Forgetting is loud.** A second thread drawing from lane 0 or deriving a
+  child lane from it would replay deterministic streams byte-for-byte, so test
+  mode aborts with a pointer to this document instead.
 
 Lanes make the *randomness* reproducible. Byte-identical *traces*
 additionally require that each traced channel has a single writer

@@ -72,6 +72,7 @@ inline size_t ThreadPool::size() const { return workers.size(); }
 
 // the constructor just launches some amount of workers
 inline ThreadPool::ThreadPool(size_t threads) : stop(false) {
+	emp::expecting(threads > 0, "ThreadPool: worker count must be positive");
 	for (size_t i = 0; i < threads; ++i)
 		workers.emplace_back([this] {
 			for (;;) {

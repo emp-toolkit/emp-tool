@@ -16,11 +16,59 @@
 
 #include "emp-tool/emp-tool.h"
 
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <sys/wait.h>
+#include <thread>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
+
+template <class F>
+static int run_child(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
+		f();
+		_exit(0);
+	}
+	if (pid < 0) return -1;
+	int status = 0;
+	if (waitpid(pid, &status, 0) != pid) return -1;
+	return status;
+}
+
+static bool child_died(int status) {
+	return status >= 0 &&
+	       (!WIFEXITED(status) || WEXITSTATUS(status) != 0);
+}
+
+static bool child_succeeded(int status) {
+	return status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+static bool probe_environment(const char* executable, const char* value,
+	                          bool expected) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int env_result = value == nullptr
+		                     ? unsetenv("EMP_TEST_MODE")
+		                     : setenv("EMP_TEST_MODE", value, 1);
+		if (env_result != 0) _exit(127);
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
+		execlp(executable, executable, "--probe-env",
+		       expected ? "on" : "off", static_cast<char*>(nullptr));
+		_exit(127);
+	}
+	if (pid < 0) return false;
+	int status = 0;
+	return waitpid(pid, &status, 0) == pid && child_succeeded(status);
+}
 
 
 // ---------- example ----------
@@ -183,22 +231,102 @@ static bool check_child_lane_derivation_deterministic() {
 	return ok;
 }
 
-static bool run_correctness() {
+static bool check_environment_contract(const char* executable) {
+	bool ok = probe_environment(executable, "1", true) &&
+	          probe_environment(executable, nullptr, false) &&
+	          probe_environment(executable, "", false) &&
+	          probe_environment(executable, "0", false) &&
+	          probe_environment(executable, "10", false) &&
+	          probe_environment(executable, "1x", false) &&
+	          probe_environment(executable, "true", false);
+	cout << "  [EMP_TEST_MODE accepts exactly 1]         " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_lane0_seed_owner() {
+	bool ok = child_died(run_child([] {
+		reset_test_seed_counter();
+		(void)next_test_seed();
+		thread second([] { (void)next_test_seed(); });
+		second.join();
+	}));
+	cout << "  [second lane-0 seed thread is rejected]   " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_lane0_child_owner() {
+	bool ok = child_died(run_child([] {
+		reset_test_seed_counter();
+		(void)next_test_child_lane();
+		thread second([] { (void)next_test_child_lane(); });
+		second.join();
+	}));
+	cout << "  [second lane-0 child creator is rejected] " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_lane0_thread_lifetime() {
+	bool ok = child_died(run_child([] {
+		reset_test_seed_counter();
+		thread first([] { (void)next_test_seed(); });
+		first.join();
+		thread second([] { (void)next_test_seed(); });
+		second.join();
+	}));
+	cout << "  [lane-0 ownership spans thread lifetimes] " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_lane_zero_rejected() {
+	bool ok = child_died(run_child([] { test_lane_scope scope(0); }));
+	cout << "  [test_lane_scope rejects lane 0]          " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_reset_allows_lane0_handoff() {
+	bool ok = child_succeeded(run_child([] {
+		reset_test_seed_counter();
+		TestSeed first_seed{};
+		thread first([&] { first_seed = next_test_seed(); });
+		first.join();
+		if (first_seed.lane != 0 || first_seed.ordinal != 0) _exit(2);
+
+		reset_test_seed_counter();
+		TestSeed second_seed{};
+		thread second([&] { second_seed = next_test_seed(); });
+		second.join();
+		if (second_seed.lane != 0 || second_seed.ordinal != 0) _exit(3);
+	}));
+	cout << "  [reset permits quiescent lane-0 handoff]  " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool run_correctness(const char* executable) {
 	cout << "=== correctness ===\n";
 	bool ok = true;
+	ok &= check_environment_contract(executable);
 	ok &= check_main_lane_sequence();
 	ok &= check_lane_scope_nesting();
+	ok &= check_lane0_seed_owner();
+	ok &= check_lane0_child_owner();
+	ok &= check_lane0_thread_lifetime();
+	ok &= check_lane_zero_rejected();
+	ok &= check_reset_allows_lane0_handoff();
 	ok &= check_pool_determinism();
 	ok &= check_enqueue_order_is_the_lane();
 	ok &= check_child_lane_derivation_deterministic();
 	return ok;
 }
 
-int main(int /*argc*/, char ** /*argv*/) {
+int main(int argc, char** argv) {
+	if (argc == 3 && std::strcmp(argv[1], "--probe-env") == 0) {
+		bool expected = std::strcmp(argv[2], "on") == 0;
+		return is_test_mode() == expected ? 0 : 1;
+	}
 	set_test_mode(true);
 	example();
 	cout << "\n";
-	if (!run_correctness()) {
+	if (!run_correctness(argv[0])) {
 		cerr << "CORRECTNESS FAILURE\n";
 		return 1;
 	}
