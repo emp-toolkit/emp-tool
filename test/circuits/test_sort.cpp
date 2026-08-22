@@ -80,6 +80,41 @@ int main() {
     chk("key+payload", ok);
   }
 
+  // Pointer overloads operate directly on the supplied arrays.
+  {
+    ClearSession sess; using U = UInt_T<Ctx, 16>;
+    U values[] = {
+        sess.input<U>(ALICE, 8), sess.input<U>(ALICE, 2),
+        sess.input<U>(ALICE, 5), sess.input<U>(ALICE, 1)};
+    sort(values, 4);
+    uint16_t want[] = {1, 2, 5, 8};
+    bool ok = true;
+    for (int i = 0; i < 4; ++i)
+      ok = ok && (sess.reveal(values[i], PUBLIC).value() == want[i]);
+    chk("pointer sort", ok);
+  }
+  {
+    ClearSession sess; using U = UInt_T<Ctx, 16>;
+    U keys[] = {
+        sess.input<U>(ALICE, 4), sess.input<U>(ALICE, 1), sess.input<U>(ALICE, 3)};
+    U data[] = {
+        sess.input<U>(ALICE, 40), sess.input<U>(ALICE, 10), sess.input<U>(ALICE, 30)};
+    sort_by_key(keys, data, 3);
+    uint16_t want_keys[] = {1, 3, 4}, want_data[] = {10, 30, 40};
+    bool ok = true;
+    for (int i = 0; i < 3; ++i)
+      ok = ok && (sess.reveal(keys[i], PUBLIC).value() == want_keys[i] &&
+                  sess.reveal(data[i], PUBLIC).value() == want_data[i]);
+    chk("pointer sort_by_key", ok);
+  }
+  {
+    using U = UInt_T<Ctx, 16>;
+    U* empty = nullptr;
+    sort(empty, 0);
+    sort_by_key(empty, empty, 0);
+    chk("empty pointer ranges", true);
+  }
+
   printf("test_sort: %s\n", bad ? "FAILED" : "PASS");
   return bad ? 1 : 0;
 }
