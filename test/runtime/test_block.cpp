@@ -6,6 +6,7 @@
 //   block, makeBlock(hi, lo), zero_block, all_one_block
 //   getLSB(b), set_bit(b, i)
 //   sigma(b)                                  linear orthomorphism (Guo et al.)
+//   to_hex(data, n)                           lowercase byte-order hex
 //   xorBlocks_arr(res, x, y, n)               element-wise XOR
 //   xorBlocks_arr(res, x, y_block, n)         broadcast XOR
 //   xorBlocksTo_arr(dst, src, n)              in-place dst[i] ^= src[i]
@@ -175,6 +176,15 @@ static bool check_xorBlocks_arr() {
 	return true;
 }
 
+static bool check_zero_length_helpers() {
+	block* out = nullptr;
+	const block* in = nullptr;
+	xorBlocks_arr(out, in, in, 0);
+	xorBlocksTo_arr(out, in, 0);
+	xorBlocks_arr(out, in, zero_block, 0);
+	return cmpBlock(in, in, 0) && to_hex(nullptr, 0).empty();
+}
+
 static bool check_cmpBlock() {
 	PRG prg;
 	for (int sz : {1, 4, 33, 257}) {
@@ -201,6 +211,9 @@ static bool check_invalid_ranges_rejected() {
 	    && dies([&] { xorBlocksTo_arr(&out, &a, -1); })
 	    && dies([&] { xorBlocks_arr(&out, &a, b, -1); })
 	    && dies([&] { (void)cmpBlock(&a, &b, -1); })
+	    && dies([&] {
+		    (void)to_hex(nullptr, std::string{}.max_size() / 2 + 1);
+	    })
 	    && dies([&] { bools_to_bits(packed, bits, -1); })
 	    && dies([&] { bits_to_bools(bits, packed, -1); })
 	    && dies([&] { sse_trans(packed, packed, 7, 8); })
@@ -333,6 +346,7 @@ static bool run_correctness() {
 		{"set_bit",                     check_set_bit},
 		{"sigma linear + formula",      check_sigma_linear_and_formula},
 		{"xorBlocks_arr / xorBlocksTo", check_xorBlocks_arr},
+		{"zero-length block helpers",    check_zero_length_helpers},
 		{"cmpBlock",                    check_cmpBlock},
 		{"invalid ranges rejected",     check_invalid_ranges_rejected},
 		{"sse_trans round-trip",        check_sse_trans_roundtrip},
