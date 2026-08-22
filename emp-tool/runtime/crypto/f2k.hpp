@@ -174,6 +174,7 @@ static inline void gf_pack_byte(const block *data, block &lo, block &hi) {
 
 EMP_F2K_TARGET_ATTR
 inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *b, int64_t sz) {
+	expecting(sz >= 0, "vector_inn_prdt_sum_no_red: negative size");
 	block lo = zero_block, hi = zero_block;
 	int64_t i = 0;
 #if EMP_HAS_VPCLMUL512
@@ -190,6 +191,7 @@ inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *
 
 template<int N>
 inline void vector_inn_prdt_sum_no_red(block *res, const block *a, const block *b) {
+	static_assert(N >= 0, "vector_inn_prdt_sum_no_red: size must be non-negative");
 	vector_inn_prdt_sum_no_red(res, a, b, N);
 }
 
@@ -205,6 +207,7 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const block *b, 
 
 template<int N>
 inline void vector_inn_prdt_sum_red(block *res, block const *a, const block *b) {
+	static_assert(N >= 0, "vector_inn_prdt_sum_red: size must be non-negative");
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
@@ -261,6 +264,7 @@ static inline void inn_prdt_x4(block *res, const block *a, const block *b,
 
 EMP_F2K_TARGET_ATTR
 inline void vector_inn_prdt_sum_red_x4(block *res, const block *a, const block *b, int64_t n) {
+	expecting(n >= 0, "vector_inn_prdt_sum_red_x4: negative size");
 #if EMP_HAS_VPCLMUL512
 	detail::inn_prdt_x4<detail::ClmulLane<4>>(res, a, b, n);
 #elif EMP_HAS_VPCLMUL256
@@ -272,6 +276,7 @@ inline void vector_inn_prdt_sum_red_x4(block *res, const block *a, const block *
 
 template<int N>
 inline void vector_inn_prdt_sum_red_x4(block *res, const block *a, const block *b) {
+	static_assert(N >= 0, "vector_inn_prdt_sum_red_x4: size must be non-negative");
 	vector_inn_prdt_sum_red_x4(res, a, b, N);
 }
 
@@ -280,6 +285,7 @@ namespace detail {
 template <typename T>
 inline void vector_inn_prdt_sum_red_bits(block *res, const block *a, const T *b,
                                          int64_t sz) {
+	expecting(sz >= 0, "vector_inn_prdt_sum_red: negative size");
 	block r0 = zero_block, r1 = zero_block, r2 = zero_block, r3 = zero_block;
 	int64_t i = 0;
 	for (; i + 4 <= sz; i += 4) {
@@ -302,6 +308,7 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b,
 
 template<int N>
 inline void vector_inn_prdt_sum_red(block *res, const block *a, const bool *b) {
+	static_assert(N >= 0, "vector_inn_prdt_sum_red: size must be non-negative");
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
@@ -353,6 +360,7 @@ inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz) {
 
 template<int N>
 inline void uni_hash_coeff_gen(block* coeff, block seed) {
+	static_assert(N > 0, "uni_hash_coeff_gen: size must be positive");
 	uni_hash_coeff_gen(coeff, seed, N);
 }
 
@@ -534,6 +542,7 @@ inline void GaloisFieldPacking::packing(block *res, const T *data) {
 }
 
 inline void vector_self_xor(block *sum, block *data, int64_t sz) {
+	expecting(sz >= 0, "vector_self_xor: negative size");
 	block res[4];
 	res[0] = zero_block;
 	res[1] = zero_block;
@@ -554,6 +563,7 @@ inline void vector_self_xor(block *sum, block *data, int64_t sz) {
 
 template<int N>
 inline void vector_self_xor(block *sum, block *data) {
+	static_assert(N >= 0, "vector_self_xor: size must be non-negative");
 	vector_self_xor(sum, data, N);
 }
 

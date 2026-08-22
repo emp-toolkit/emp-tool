@@ -32,7 +32,8 @@ class CCRH: public PRP { public:
 
 	// Runtime-sized, out-of-place: out and in must not overlap.
 	void Hn(block * __restrict__ out, const block * __restrict__ in, int64_t length) {
-		if (length <= 0) return;
+		expecting(length >= 0, "CCRH::Hn: negative length");
+		if (length == 0) return;
 		detail::MemTileOp<detail::AesMemXorSigmaTile> op{out, in, &aes};
 		detail::drain_tiles(op, length);
 	}
@@ -40,7 +41,8 @@ class CCRH: public PRP { public:
 	// Runtime-sized, in-place. Per-tile σ is computed in-register before the
 	// store, so out == in is safe; a shifted overlap is not — copy first.
 	void Hn(block *data, int64_t length) {
-		if (length <= 0) return;
+		expecting(length >= 0, "CCRH::Hn: negative length");
+		if (length == 0) return;
 		detail::MemTileOp<detail::AesMemXorSigmaTile> op{data, data, &aes};
 		detail::drain_tiles(op, length);
 	}

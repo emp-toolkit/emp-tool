@@ -14,15 +14,32 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
+
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, STDERR_FILENO);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
 
 static void example() {
 	cout << "=== example ===\n";
@@ -98,6 +115,21 @@ static bool check_Hn(int n) {
 	return cmpBlock(inplace.data(), ref.data(), n);
 }
 
+static bool check_negative_lengths_rejected() {
+	CCRH ccrh;
+	block input = zero_block;
+	block output = zero_block;
+	return dies([&] { ccrh.Hn(&output, &input, -1); })
+	    && dies([&] { ccrh.Hn(&output, -1); });
+}
+
+static bool check_zero_lengths_noop() {
+	CCRH ccrh;
+	ccrh.Hn(nullptr, nullptr, 0);
+	ccrh.Hn(nullptr, 0);
+	return true;
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -114,6 +146,10 @@ static bool run_correctness() {
 	for (int n : {1, 2, 3, 4, 7, 8, 15, 16, 17, 31, 33, 64, 65, 1024}) c &= check_Hn(n);
 	ok &= c;
 	cout << "  Hn(runtime) matches reference           " << (c ? "OK" : "FAIL") << "\n";
+	bool d = check_negative_lengths_rejected(); ok &= d;
+	cout << "  Hn rejects negative lengths             " << (d ? "OK" : "FAIL") << "\n";
+	bool e = check_zero_lengths_noop(); ok &= e;
+	cout << "  Hn accepts zero-length null views        " << (e ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
