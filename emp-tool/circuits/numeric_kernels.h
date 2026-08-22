@@ -94,15 +94,19 @@ inline typename Ctx::Wire mux(Ctx& c, typename Ctx::Wire sel,
     return c.xor_gate(f, c.and_gate(sel, c.xor_gate(t, f)));
 }
 
-// unsigned a < b: the borrow-out of (a - b). sub_full produces that borrow in one
-// AND per bit (the difference bits are discarded), the size-optimal shape.
+// unsigned a < b: the borrow-out of (a - b), without materializing difference
+// bits. One AND per input bit.
 template <BooleanContext Ctx>
 inline typename Ctx::Wire less_than(Ctx& c, const typename Ctx::Wire* a,
                                     const typename Ctx::Wire* b, int N) {
     using W = typename Ctx::Wire;
-    std::vector<W> diff(N);
-    W borrow;
-    sub_full<Ctx>(c, diff.data(), &borrow, a, b, nullptr, N);
+    W borrow = c.public_bit(false);
+    for (int i = 0; i < N; ++i) {
+        W bxa = c.xor_gate(a[i], b[i]);
+        W bxc = c.xor_gate(borrow, b[i]);
+        W t = c.and_gate(bxa, bxc);
+        borrow = c.xor_gate(borrow, t);
+    }
     return borrow;
 }
 
@@ -111,8 +115,9 @@ template <BooleanContext Ctx>
 inline typename Ctx::Wire equal(Ctx& c, const typename Ctx::Wire* a,
                                 const typename Ctx::Wire* b, int N) {
     using W = typename Ctx::Wire;
-    W acc = c.public_bit(true);
-    for (int i = 0; i < N; ++i)
+    if (N == 0) return c.public_bit(true);
+    W acc = c.not_gate(c.xor_gate(a[0], b[0]));
+    for (int i = 1; i < N; ++i)
         acc = c.and_gate(acc, c.not_gate(c.xor_gate(a[i], b[i])));   // acc & ~(a^b)
     return acc;
 }
@@ -136,9 +141,10 @@ template <BooleanContext Ctx>
 inline void mul_full(Ctx& c, typename Ctx::Wire* dest,
                      const typename Ctx::Wire* op1, const typename Ctx::Wire* op2, int N) {
     using W = typename Ctx::Wire;
-    std::vector<W> sum(N, c.public_bit(false));
+    std::vector<W> sum(N);
     std::vector<W> tmp(N);
-    for (int i = 0; i < N; ++i) {
+    for (int k = 0; k < N; ++k) sum[k] = c.and_gate(op1[k], op2[0]);
+    for (int i = 1; i < N; ++i) {
         for (int k = 0; k < N - i; ++k) tmp[k] = c.and_gate(op1[k], op2[i]);
         add_full<Ctx>(c, sum.data() + i, nullptr, sum.data() + i, tmp.data(), nullptr, N - i);
     }
@@ -151,7 +157,7 @@ template <BooleanContext Ctx>
 inline void div_full(Ctx& c, typename Ctx::Wire* vquot, typename Ctx::Wire* vrem,
                      const typename Ctx::Wire* op1, const typename Ctx::Wire* op2, int N) {
     using W = typename Ctx::Wire;
-    std::vector<W> overflow(N), tmp(N), rem(N), quot(N);
+    std::vector<W> overflow(N), tmp(N), rem(N);
     W b;
     for (int i = 0; i < N; ++i) rem[i] = op1[i];
     overflow[0] = c.public_bit(false);
@@ -160,10 +166,10 @@ inline void div_full(Ctx& c, typename Ctx::Wire* vquot, typename Ctx::Wire* vrem
         sub_full<Ctx>(c, tmp.data(), &b, rem.data() + i, op2, nullptr, N - i);
         b = or_gate(c, b, overflow[i]);
         if_then_else<Ctx>(c, rem.data() + i, rem.data() + i, tmp.data(), N - i, b);
-        quot[i] = c.not_gate(b);
+        overflow[i] = b;
     }
     if (vrem)  for (int i = 0; i < N; ++i) vrem[i]  = rem[i];
-    if (vquot) for (int i = 0; i < N; ++i) vquot[i] = quot[i];
+    if (vquot) for (int i = 0; i < N; ++i) vquot[i] = c.not_gate(overflow[i]);
 }
 
 }  // namespace kernel
