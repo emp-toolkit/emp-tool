@@ -8,7 +8,10 @@
 
 #include "emp-tool/emp-tool.h"
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <vector>
 
 using namespace std;
@@ -27,6 +30,20 @@ static void mframe(vector<unsigned char>& m, uint32_t type,
 }
 enum { T_STR = 1, T_BYTES = 2, T_BLOCK = 3, T_U64 = 4, T_POINT = 5 };
 
+template <class F>
+static bool dies(F&& f) {
+	pid_t pid = fork();
+	if (pid == 0) {
+		int devnull = open("/dev/null", O_WRONLY);
+		if (devnull >= 0) dup2(devnull, 2);
+		f();
+		_exit(0);
+	}
+	int st = 0;
+	waitpid(pid, &st, 0);
+	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
 int main() {
 	ECGroup G;
 	const char* dom = "emp-tool:test:ro";
@@ -37,6 +54,13 @@ int main() {
 	size_t plen = P.size();
 	vector<unsigned char> pbin(plen);
 	P.to_bin(pbin.data(), plen);
+
+	// The domain is also the RFC 9380 DST used by squeeze_point.
+	expecting(dies([&] { RO("", sid); }),
+	          "RO test: empty domain accepted");
+	string long_domain(256, 'd');
+	expecting(dies([&] { RO(long_domain, sid); }),
+	          "RO test: overlong domain accepted");
 
 	// 1. block output: domain + sid + id + block + point + raw bytes.
 	{

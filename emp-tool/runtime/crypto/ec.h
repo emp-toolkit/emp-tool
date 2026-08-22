@@ -10,8 +10,8 @@ namespace emp {
 
 // Owns a BIGNUM. Default-construction allocates a fresh BIGNUM; copy
 // allocates a new BIGNUM and BN_copys; move steals the pointer. Most
-// methods are const-correct; the raw handle is exposed via n() because
-// OpenSSL's API takes BIGNUM* (not const BIGNUM*) almost everywhere.
+// methods are const-correct; the raw handle is exposed via n() for
+// interoperability with OpenSSL.
 class Scalar {
 public:
 	Scalar();
@@ -36,9 +36,8 @@ public:
 	Scalar add_mod(const Scalar & b, const Scalar & m, BN_CTX * ctx) const;
 	Scalar mul_mod(const Scalar & b, const Scalar & m, BN_CTX * ctx) const;
 
-	// OpenSSL-handle accessor. Mutable on purpose — BN_* APIs take
-	// BIGNUM* (non-const) for most operations.
-	BIGNUM * n() const { return n_; }
+	BIGNUM * n() { return n_; }
+	const BIGNUM * n() const { return n_; }
 
 private:
 	BIGNUM * n_ = nullptr;
@@ -106,11 +105,13 @@ public:
 	Point get_generator();
 	Point mul_gen(const Scalar & m);
 
-	// Hash an arbitrary byte string to a curve point per RFC 9380 §6
-	// using the SSWU_RO_ suite. `dst` is the per-protocol domain-
-	// separation tag (RFC 9380 §3.1) — pick one stable string per
-	// protocol; the canonical "QUUX-V01-CS02-with-<suite>" is only for
-	// validating against §J vectors. ECGroup construction guarantees P-256.
+	// Hash an arbitrary public byte string to a curve point per RFC 9380 §6
+	// using the SSWU_RO_ suite. This implementation uses variable-time field
+	// arithmetic and must not be used with secret inputs. `dst` is the
+	// per-protocol domain-separation tag (RFC 9380 §3.1) and must contain
+	// 1..255 bytes. Pick one stable string per protocol; the canonical
+	// "QUUX-V01-CS02-with-<suite>" is only for validating against §J vectors.
+	// ECGroup construction guarantees P-256.
 	Point hash_to_point(const char * msg, size_t length,
 	                    const char * dst, size_t dst_len);
 

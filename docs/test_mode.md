@@ -35,8 +35,8 @@ Two randomness sources in emp-tool reach the wire:
    work (main thread = lane 0), the ordinal counts constructions
    within the lane.
 2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's
-   `BN_rand_range` in the toolkit. Used by P-256 base OTs (PVW,
-   CSW, NP, CO). In test mode, it samples uniform in `[0, order)`
+   `BN_priv_rand_range` in the toolkit. Used by P-256 base OTs (PVW,
+   CSW, NP, CO). In test mode, it samples uniform in `[1, order)`
    via emp::PRG-driven rejection instead of OpenSSL's internal
    CSPRNG.
 
@@ -181,7 +181,7 @@ and may be a useful template for new wire-equivalence tests.
   per-thread-NetIO pattern).
 - **Caller-provided randomness.** A `PRG` constructed with an
   explicit seed bypasses the test-mode hook entirely.
-- **Other OpenSSL randomness.** Only `BN_rand_range` (via
+- **Other OpenSSL randomness.** Only `BN_priv_rand_range` (via
   `ECGroup::rand_scalar`) is intercepted. Direct `RAND_bytes` calls,
   if any code path adds them, would still pull from OpenSSL's
   CSPRNG. As of the framework's introduction, no such call exists
