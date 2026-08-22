@@ -21,15 +21,41 @@ inline double time_from(const std::chrono::steady_clock::time_point& s) {
 // future<T> alike.
 template <typename T>
 inline void joinNclean(std::vector<std::future<T>>& res) {
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+	std::exception_ptr failure;
+	for (auto& v : res) {
+		try {
+			v.get();
+		} catch (...) {
+			if (!failure) failure = std::current_exception();
+		}
+	}
+	res.clear();
+	if (failure) std::rethrow_exception(failure);
+#else
 	for (auto& v : res) v.get();
 	res.clear();
+#endif
 }
 // joinNclean that OR-reduces the bool results (e.g. "did any task flag a cheat?").
 inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
 	bool cheat = false;
+#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
+	std::exception_ptr failure;
+	for (auto& v : res) {
+		try {
+			if (v.get()) cheat = true;
+		} catch (...) {
+			if (!failure) failure = std::current_exception();
+		}
+	}
+	res.clear();
+	if (failure) std::rethrow_exception(failure);
+#else
 	for (auto& v : res)
 		if (v.get()) cheat = true;
 	res.clear();
+#endif
 	return cheat;
 }
 
