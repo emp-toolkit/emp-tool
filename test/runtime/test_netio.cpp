@@ -9,6 +9,9 @@
 //   flush()                            drain outbound only (no peer coupling)
 //   sync()                             1-byte ping/pong handshake
 //   make_sibling()                     more connections on the same port
+//   tcp::SocketOptions                 pre-handshake socket buffer sizing
+//   SocketOptions::for_bandwidth_and_rtt
+//                                      derive buffers from a known path
 //
 // Test functions below are templated on the IO type so correctness and
 // regression checks can be reused by IO implementations.
@@ -16,12 +19,30 @@
 #include <cstring>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <vector>
+
+#include <sys/socket.h>
+#include <sys/wait.h>
 
 #include "emp-tool/emp-tool.h"
 
 using namespace std;
 using namespace emp;
+
+template <class F>
+static bool dies(F &&f) {
+	pid_t pid = fork();
+	expecting(pid >= 0, "NetIO test: fork failed");
+	if (pid == 0) {
+		std::freopen("/dev/null", "w", stderr);
+		f();
+		_exit(0);
+	}
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
 
 // -------------------------------------------------------------------------
 // run_correctness(): byte stream round-trip at unaligned offsets, then bool
@@ -209,6 +230,90 @@ static void run_sibling_regression(int port, int party) {
 	if (party == ALICE) cout << "NetIO shared-listener regression: OK\n";
 }
 
+static int socket_buffer_size(int sock, int option) {
+	int size = 0;
+	socklen_t length = sizeof(size);
+	expecting(::getsockopt(sock, SOL_SOCKET, option, &size, &length) == 0,
+	          "NetIO test: getsockopt failed");
+#ifdef __linux__
+	size /= 2;
+#endif
+	return size;
+}
+
+static void expect_socket_options(const NetIO &io,
+	                              const tcp::SocketOptions &options) {
+	expecting(socket_buffer_size(io.sock, SO_SNDBUF) >= options.send_buffer_size,
+	          "NetIO test: send buffer option was not applied");
+	expecting(socket_buffer_size(io.sock, SO_RCVBUF) >= options.receive_buffer_size,
+	          "NetIO test: receive buffer option was not applied");
+}
+
+static void run_socket_options_factory_regression() {
+	int (*open_listener_legacy)(int) = tcp::open_listener;
+	int (*accept_one_confirmed_legacy)(int) = tcp::accept_one_confirmed;
+	int (*server_listen_legacy)(int) = tcp::server_listen;
+	int (*client_connect_impl_legacy)(const char *, int, bool) =
+	    tcp::client_connect_impl;
+	int (*client_connect_legacy)(const char *, int) = tcp::client_connect;
+	int (*client_connect_confirmed_legacy)(const char *, int) =
+	    tcp::client_connect_confirmed;
+	(void)open_listener_legacy;
+	(void)accept_one_confirmed_legacy;
+	(void)server_listen_legacy;
+	(void)client_connect_impl_legacy;
+	(void)client_connect_legacy;
+	(void)client_connect_confirmed_legacy;
+
+	const auto short_path = tcp::SocketOptions::for_bandwidth_and_rtt(
+	    400'000'000, std::chrono::microseconds(450));
+	expecting(short_path.send_buffer_size == 256 * 1024 &&
+	              short_path.receive_buffer_size == 256 * 1024,
+	          "NetIO test: short-path buffer tier mismatch");
+
+	const auto wan_path = tcp::SocketOptions::for_bandwidth_and_rtt(
+	    400'000'000, std::chrono::milliseconds(100));
+	expecting(wan_path.send_buffer_size == 8 * 1024 * 1024 &&
+	              wan_path.receive_buffer_size == 8 * 1024 * 1024,
+	          "NetIO test: WAN buffer tier mismatch");
+
+	expecting(dies([] {
+		int sock = ::socket(AF_INET, SOCK_STREAM, 0);
+		expecting(sock >= 0, "NetIO test: socket failed");
+		tcp::SocketOptions unavailable;
+		unavailable.send_buffer_size = std::numeric_limits<int>::max();
+		tcp::verify_socket_options(sock, unavailable);
+	}), "NetIO test: unavailable socket buffer was not rejected");
+}
+
+static void run_socket_options_regression(int port, int party) {
+	tcp::SocketOptions options;
+	options.send_buffer_size = 128 * 1024;
+	options.receive_buffer_size = 128 * 1024;
+
+	auto primary = party == ALICE ? NetIO::listen(port, options, true)
+	                              : NetIO::connect(peer_ip(), port, options, true);
+	expect_socket_options(*primary, options);
+	if (party == ALICE) {
+		expecting(socket_buffer_size(primary->listener->fd, SO_SNDBUF) >=
+		              options.send_buffer_size,
+		          "NetIO test: listener send buffer option was not applied");
+		expecting(socket_buffer_size(primary->listener->fd, SO_RCVBUF) >=
+		              options.receive_buffer_size,
+		          "NetIO test: listener receive buffer option was not applied");
+	}
+
+	auto sibling = primary->make_sibling();
+	sibling->sync();
+	expect_socket_options(*sibling, options);
+	primary.reset();
+
+	auto next = sibling->make_sibling();
+	next->sync();
+	expect_socket_options(*next, options);
+	if (party == ALICE) cout << "NetIO socket-options regression: OK\n";
+}
+
 // Zero-length send/recv are documented no-ops (docs/api_conventions.md):
 // no counter, round, or flush-state mutation, no transport call, and a
 // null pointer is fine at count zero. Purely local — both parties run it
@@ -241,8 +346,11 @@ int main(int argc, char **argv) {
 	int port, party;
 	party = parse_party(argv);
 	port = peer_port();
+	run_socket_options_factory_regression();
 
-	// Four contiguous ports: main, two send-only cases, sibling regression.
+	// Five contiguous ports: main, two send-only cases, sibling regression,
+	// socket-options regression.
 	run_suite<NetIO>(port, party, "NetIO");
 	run_sibling_regression(port + 3, party);
+	run_socket_options_regression(port + 4, party);
 }

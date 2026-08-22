@@ -8,6 +8,7 @@
 //   send_bool / recv_bool              packed via bools_to_bits (inherited)
 //   flush()                            drain outbound coalescing buffer
 //   sync()                             1-byte ping/pong handshake
+//   TLSConfig::socket_options          pre-handshake socket buffer sizing
 //
 // Same flush contract and thread-safety rules as NetIO. The test
 // mirrors test_netio.cpp's correctness + send-only regression suite,
@@ -39,8 +40,10 @@
 #include <iostream>
 
 #include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <openssl/evp.h>
@@ -52,6 +55,20 @@
 
 using namespace std;
 using namespace emp;
+
+template <class F>
+static bool dies(F &&f) {
+	pid_t pid = fork();
+	expecting(pid >= 0, "TLSIO test: fork failed");
+	if (pid == 0) {
+		std::freopen("/dev/null", "w", stderr);
+		f();
+		_exit(0);
+	}
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+}
 
 static const char *CA_CERT    = "/tmp/emp_tlsio_test_ca_cert.pem";
 static const char *ALICE_CERT = "/tmp/emp_tlsio_test_alice_cert.pem";
@@ -193,7 +210,39 @@ static TLSConfig make_cfg(int party) {
 	cfg.ca_pem_path   = CA_CERT;       // both trust the same CA
 	cfg.require_peer_cert    = true;   // exercise the mTLS path
 	cfg.insecure_skip_verify = false;
+	cfg.socket_options.send_buffer_size = 128 * 1024;
+	cfg.socket_options.receive_buffer_size = 128 * 1024;
 	return cfg;
+}
+
+static int socket_buffer_size(int sock, int option) {
+	int size = 0;
+	socklen_t length = sizeof(size);
+	expecting(::getsockopt(sock, SOL_SOCKET, option, &size, &length) == 0,
+	          "TLSIO test: getsockopt failed");
+#ifdef __linux__
+	size /= 2;
+#endif
+	return size;
+}
+
+static void expect_socket_options(const TLSIO &io,
+	                              const tcp::SocketOptions &options) {
+	expecting(socket_buffer_size(io.sock, SO_SNDBUF) >= options.send_buffer_size,
+	          "TLSIO test: send buffer option was not applied");
+	expecting(socket_buffer_size(io.sock, SO_RCVBUF) >= options.receive_buffer_size,
+	          "TLSIO test: receive buffer option was not applied");
+}
+
+static void run_adopted_socket_options_rejection() {
+	expecting(dies([] {
+		int sockets[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+		          "TLSIO test: socketpair failed");
+		TLSConfig cfg;
+		cfg.socket_options.receive_buffer_size = 128 * 1024;
+		TLSIO io(sockets[0], true, cfg, true);
+	}), "TLSIO test: adopted socket accepted pre-handshake options");
 }
 
 // -------------------------------------------------------------------------
@@ -309,6 +358,7 @@ int main(int argc, char **argv) {
 	int port, party;
 	party = parse_party(argv);
 	port = peer_port();
+	run_adopted_socket_options_rejection();
 
 	// PKI handoff. ALICE (party 1, the TCP listener) builds the whole
 	// CA + ALICE + BOB PKI in memory and writes 5 PEM files; BOB polls
@@ -321,6 +371,7 @@ int main(int argc, char **argv) {
 	const TLSConfig cfg = make_cfg(party);
 
 	TLSIO *io = new TLSIO(party == ALICE ? nullptr : peer_ip(), port, cfg, true);
+	expect_socket_options(*io, cfg.socket_options);
 	run_correctness(io, party);
 	run_send_only_regression(port, party);
 	delete io;
