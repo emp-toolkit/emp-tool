@@ -27,7 +27,10 @@ signed-overflow UB is sidestepped — emp-tool wraps deterministically.
   representable magnitude, so `signed_int.h` does not guarantee the
   quotient (the current circuit happens to yield `INT_MIN`, but callers
   must not rely on it). Guard it explicitly if the dividend can be `INT_MIN`.
-- Division by zero follows the arithmetic kernel's saturating result.
+- Division by zero does not fault. Unsigned `x / 0` is all ones
+  (`2^N - 1`) and `x % 0` is `x`. Signed `x / 0` is `-1` for `x >= 0`
+  and `1` for `x < 0` (the unsigned all-ones quotient of the magnitudes,
+  re-signed), and `x % 0` is `x`.
   If the divisor is secret and the caller needs a different policy, carry
   a validity `Bit_T` and select a sentinel result explicitly.
 
