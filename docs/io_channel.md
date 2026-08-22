@@ -69,9 +69,6 @@ are per-direction snapshots for diagnostics. All three assert that
 
 ## Other base surface
 
-- **`sync()`**: optional 1-byte ping/pong handshake to confirm both
-  directions are alive. NetIO implements it; the base default is a
-  no-op.
 - **Telemetry**: the base tracks `send_counter` / `recv_counter` /
   `rounds` / `flushes_count`; `get_statistics_string()` renders them
   for logging (`~NetIO` prints it unless constructed `quiet`).

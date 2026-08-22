@@ -124,10 +124,9 @@ in production paths.
 
 `TraceIO` wraps any `IOChannel*` and writes a copy of every wire
 byte to two files: `<prefix>.send` and `<prefix>.recv`. Bytes are
-delivered to the underlying channel either before (recv) or
-synchronously (send) with the file write, so a crash mid-write
-leaves a trace prefix that still matches what the peer didn't yet
-see.
+copied before outbound delivery and after inbound delivery. Trace
+files are created with mode `0600`; `TraceIO::flush()` flushes both
+files before flushing the wrapped channel.
 
 ```cpp
 NetIO* under = new NetIO(...);

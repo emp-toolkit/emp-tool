@@ -7,7 +7,6 @@
 //   send_block / recv_block            block-typed wrapper
 //   send_bool / recv_bool              packed via bools_to_bits
 //   flush()                            drain outbound only (no peer coupling)
-//   sync()                             1-byte ping/pong handshake
 //
 // Benchmark below runs the loopback throughput sweep only. Correctness and
 // regression coverage lives in test/test_netio.cpp.
