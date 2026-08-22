@@ -33,7 +33,11 @@ class RO {
 public:
 	// sid is mandatory — every RO is session-bound. Pass zero_block
 	// explicitly for the (rare) genuinely session-independent oracle.
-	RO(std::string_view domain, block sid) : domain_(domain) {
+	// domain must contain 1..255 bytes so it is also a valid RFC 9380 DST.
+	RO(std::string_view domain, block sid) {
+		expecting(!domain.empty() && domain.size() <= 255,
+		          "RO: domain length must be in [1, 255]");
+		domain_.assign(domain);
 		frame(kStr, domain.data(), domain.size());
 		frame(kBlock, &sid, sizeof(block));
 	}
@@ -57,7 +61,8 @@ public:
 	void squeeze_digest(void* out32) const {
 		Hash::hash_once(out32, buf_.data(), (int64_t)buf_.size());
 	}
-	// hash-to-curve over M, with the domain string as the RFC 9380 DST.
+	// Hash public M to the curve, with the domain string as the RFC 9380 DST.
+	// ECGroup::hash_to_point is variable-time, so M must not contain secrets.
 	Point squeeze_point(ECGroup& g) const {
 		return g.hash_to_point((const char*)buf_.data(), buf_.size(),
 		                       domain_.data(), domain_.size());

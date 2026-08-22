@@ -253,7 +253,7 @@ compatibility but rejects every value except `NID_X9_62_prime256v1`.
 
 ```cpp
 ECGroup G;                                       // P-256 by default
-Scalar a = G.rand_scalar();                      // uniform in [0, order)
+Scalar a = G.rand_scalar();                      // uniform in [1, order)
 Point P = G.mul_gen(a);                          // P = a · G_generator
 
 // Hash to curve, RFC 9380 §6 SSWU_RO_. Each protocol must pick its
