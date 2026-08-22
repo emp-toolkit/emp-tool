@@ -102,7 +102,7 @@ fixed width; `Bit_T` / `BitVec_T` / `Float_T` also model `WireValue` at each sup
 while `UInt_T` / `Int_T` model `WireValue` only for width <= 64 (their clear
 codecs ride 64-bit integers) — use `BitVec_T` for typed session I/O past 64 bits.
 The runtime-width
-forms `UInt_T<Ctx,0>` / `Int_T<Ctx,0>` (width chosen at construction)
+types `DynamicUInt_T<Ctx>` / `DynamicInt_T<Ctx>` (width chosen at construction)
 intentionally do **not** model `WireBundle` — they have no *static* `width()` —
 so they cannot be a `compile` / `run` argument; convert to a fixed
 `UInt_T<Ctx,N>` (`to_fixed<N>()`) first if a runtime-width result must enter the

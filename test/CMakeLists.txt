@@ -156,7 +156,7 @@ add_test_case_cxx20(circuits test_uint)
 add_test_case_cxx20(circuits test_int)
 add_test_case_cxx20(circuits test_float)
 add_test_case_cxx20(circuits test_sort)          # data-oblivious sort over circuit values
-add_test_case_cxx20(circuits test_runtime_int)   # runtime-width UInt_T<Ctx,0> / Int_T<Ctx,0>
+add_test_case_cxx20(circuits test_runtime_int)   # DynamicUInt_T / DynamicInt_T
 add_test_case_cxx20(circuits test_typed)         # typed values (Bit/BitVec/UInt/Int/Float) over Ctx
 add_test_case_cxx20(circuits test_circuit_fn)    # compile-once / run-on-any-context frontend (rec:: value types)
 add_test_case_cxx20(circuits test_crypto_aes)    # AES-128 block over the value layer (vector/record/count)

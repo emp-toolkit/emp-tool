@@ -17,7 +17,7 @@ using Ctx = ClearSession::ctx_t;
 
 using Int32   = Int_T<Ctx, 32>;
 using UInt32  = UInt_T<Ctx, 32>;
-using IntDyn  = Int_T<Ctx, 0>;   // runtime-width form (in-circuit only)
+using IntDyn  = DynamicInt_T<Ctx>;
 
 // ---- local check helpers (no global backend, no raw .w in the examples) ----
 
@@ -32,11 +32,10 @@ static void check_eq(const char* name, int64_t got, int64_t want) {
   }
 }
 // Low-level: read a runtime-width signed clear value straight off the wires
-// (sign-extending the top bit). Runtime values are in-circuit only (not a
-// session I/O type), so this is a deliberate low-level peek, not the user path.
+// (sign-extending the top bit).
 static int64_t rd_dyn(const IntDyn& x) {
   const int n = x.width();
-  uint64_t v = 0; for (int i = 0; i < n; ++i) v |= (uint64_t)(x.w[i] & 1) << i;
+  uint64_t v = 0; for (int i = 0; i < n; ++i) v |= (uint64_t)(x.data()[i] & 1) << i;
   if (n < 64 && ((v >> (n - 1)) & 1)) v |= ~((uint64_t(1) << n) - 1);
   return (int64_t)v;
 }
@@ -200,11 +199,7 @@ static void width_changes() {
   }
 }
 
-// ---- runtime-width Int_T<Ctx,0> ---------------------------------------
-// Runtime-width values are for in-circuit computation, not the session I/O
-// boundary: they are made with ::constant(ctx, width, value) and read with the
-// low-level rd_dyn() peek (which sign-extends the top bit). width ctor,
-// sign-extending resize, signed div/mod, arithmetic shift.
+// ---- runtime-width DynamicInt_T --------------------------------------
 
 static void runtime_width_section() {
   ClearSession sess;

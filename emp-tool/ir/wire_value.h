@@ -21,7 +21,7 @@
 // is wanted.
 //
 // POSITIVE FIXED-WIDTH ONLY: WireBundle requires a static `width() > 0`, so a
-// runtime-width value (e.g. UInt_T<Ctx, runtime_width>) and a zero-bit internal
+// runtime-width value (e.g. DynamicUInt_T<Ctx>) and a zero-bit internal
 // helper model neither concept. Session I/O and circuit compilation need a
 // statically known, nonempty width / signature. Runtime-width values remain
 // usable in-circuit and through the separate RuntimeSessionIO surface.
@@ -50,8 +50,8 @@ concept WireBundle =
     BooleanContext<typename std::decay_t<V_>::context_type> &&
     std::same_as<typename std::decay_t<V_>::Wire,
                  typename std::decay_t<V_>::context_type::Wire> &&
-    // width() is a static, compile-time constant int — so a runtime-width value
-    // (whose width() is `requires (N > 0)` and absent at N == 0) is not a WireBundle.
+    // width() is a static, compile-time constant int, so a dynamic-width value
+    // with only an object-level width() is not a WireBundle.
     requires { typename std::integral_constant<int, std::decay_t<V_>::width()>; } &&
     requires { requires (std::decay_t<V_>::width() > 0); } &&
     std::same_as<typename std::decay_t<V_>::template rebind<typename std::decay_t<V_>::context_type>,
@@ -100,9 +100,9 @@ template <class V> inline constexpr bool is_wire_value_v = WireValue<std::decay_
 // value 0/1) in a runtime-sized std::vector, and the value is SESSION-I/O eligible
 // but NOT compile/run eligible: it has no static width(), so it models neither
 // WireBundle nor WireValue and never enters cf::compile / IR replay. The two
-// instances today are UInt_T<Ctx, runtime_width> and Int_T<Ctx, runtime_width>
-// (runtime_width == the N == 0 mode). Sessions must copy the byte-bools into real
-// `bool` storage at the engine boundary — never reinterpret uint8_t* as bool*.
+// instances today are DynamicUInt_T<Ctx> and DynamicInt_T<Ctx>. Sessions must
+// copy the byte-bools into real `bool` storage at the engine boundary — never
+// reinterpret uint8_t* as bool*.
 template <class V_>
 concept RuntimeWidthValue =
     requires {
