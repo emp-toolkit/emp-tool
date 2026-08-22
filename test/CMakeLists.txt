@@ -62,6 +62,7 @@ endif()
 # ---- runtime/ : core, crypto, io, execution primitives ----
 add_test_case(runtime test_aes)
 add_test_case(runtime test_block)
+add_test_case(runtime test_block_vector)
 add_test_case(runtime test_error)
 add_test_case(runtime test_ccrh)
 add_test_case(runtime test_f2k)

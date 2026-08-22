@@ -12,11 +12,10 @@
 #include <cstring>
 #include "emp-tool/runtime/core/constants.h"
 #include <chrono>
+#include <exception>
 #include <type_traits>
 #include <future>    // joinNclean / joinNcleanCheat: fold a batch of ThreadPool tasks back together
 #include <vector>
-#define macro_xstr(a) macro_str(a)
-#define macro_str(a) #a
 
 namespace emp {
 
