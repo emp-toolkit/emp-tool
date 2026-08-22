@@ -78,10 +78,6 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
                uint64_t ncols) {
   uint64_t rr, cc;
   int i, h;
-  union {
-    __m128i x;
-    uint8_t b[16];
-  } tmp;
   __m128i vec;
   expecting(nrows % 8 == 0 && ncols % 8 == 0,
             "sse_trans: dimensions must be multiples of 8");
@@ -131,45 +127,34 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
   if (rr == nrows)
     return;
 
-  // Remainder: 8x(16n+8) bits (n may be 0), processed as pairs of 8x8.
-  // The non-multiple-of-16 branch uses a scalar variant because the
-  // 16-wide _mm_set_epi16 pattern below requires aligned 16-row strips.
-  if ((ncols % 8 == 0 && ncols % 16 != 0) ||
-      (nrows % 8 == 0 && nrows % 16 != 0)) {
-    for (cc = 0; cc + 16 <= ncols; cc += 16) {
-      for (i = 0; i < 8; ++i) {
-        tmp.b[i] = h = detail::load_u16_unaligned(&INP(rr + i, cc));
-        tmp.b[i + 8] = h >> 8;
-      }
-      for (i = 8; --i >= 0; tmp.x = _mm_slli_epi64(tmp.x, 1)) {
-        OUT(rr, cc + i) = h = _mm_movemask_epi8(tmp.x);
-        OUT(rr, cc + i + 8) = h >> 8;
-      }
-    }
-  } else {
-    for (cc = 0; cc + 16 <= ncols; cc += 16) {
-      vec = _mm_set_epi16(detail::load_u16_unaligned(&INP(rr + 7, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 6, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 5, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 4, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 3, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 2, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 1, cc)),
-                          detail::load_u16_unaligned(&INP(rr + 0, cc)));
-      for (i = 8; --i >= 0; vec = _mm_slli_epi64(vec, 1)) {
-        OUT(rr, cc + i) = h = _mm_movemask_epi8(vec);
-        OUT(rr, cc + i + 8) = h >> 8;
-      }
+  // Exactly 8 rows remain. Process pairs of 8x8 blocks.
+  for (cc = 0; cc + 16 <= ncols; cc += 16) {
+    vec = _mm_set_epi16(detail::load_u16_unaligned(&INP(rr + 7, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 6, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 5, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 4, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 3, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 2, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 1, cc)),
+                        detail::load_u16_unaligned(&INP(rr + 0, cc)));
+    vec = _mm_packus_epi16(_mm_and_si128(vec, _mm_set1_epi16(0xff)),
+                           _mm_srli_epi16(vec, 8));
+    for (i = 8; --i >= 0; vec = _mm_slli_epi64(vec, 1)) {
+      OUT(rr, cc + i) = h = _mm_movemask_epi8(vec);
+      OUT(rr, cc + i + 8) = h >> 8;
     }
   }
   if (cc == ncols)
     return;
 
   //  Do the remaining 8x8 block:
-  for (i = 0; i < 8; ++i)
-    tmp.b[i] = INP(rr + i, cc);
-  for (i = 8; --i >= 0; tmp.x = _mm_slli_epi64(tmp.x, 1))
-    OUT(rr, cc + i) = _mm_movemask_epi8(tmp.x);
+  vec = _mm_set_epi8(0, 0, 0, 0, 0, 0, 0, 0,
+                     INP(rr + 7, cc), INP(rr + 6, cc),
+                     INP(rr + 5, cc), INP(rr + 4, cc),
+                     INP(rr + 3, cc), INP(rr + 2, cc),
+                     INP(rr + 1, cc), INP(rr + 0, cc));
+  for (i = 8; --i >= 0; vec = _mm_slli_epi64(vec, 1))
+    OUT(rr, cc + i) = _mm_movemask_epi8(vec);
 }
 #undef INP
 #undef OUT

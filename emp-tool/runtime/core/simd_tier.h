@@ -1,7 +1,6 @@
 #ifndef EMP_SIMD_TIER_H__
 #define EMP_SIMD_TIER_H__
 
-#include "emp-tool/runtime/core/block.h"
 #include <cstdint>
 
 // Centralized SIMD tier detection + Lane abstractions used by emp-tool's
@@ -100,6 +99,8 @@
 // --- Section 2: SIMD Lane traits -----------------------------------------
 //
 // AesLane<N> lives in emp:: (public). ClmulLane<N> lives in emp::detail.
+
+#include "emp-tool/runtime/core/block.h"
 
 #ifdef __x86_64__
 

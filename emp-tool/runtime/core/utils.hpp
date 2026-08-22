@@ -6,12 +6,14 @@
 
 namespace emp {
 
-inline time_point<high_resolution_clock> clock_start() {
-	return high_resolution_clock::now();
+inline std::chrono::steady_clock::time_point clock_start() {
+	return std::chrono::steady_clock::now();
 }
 
-inline double time_from(const time_point<high_resolution_clock>& s) {
-	return std::chrono::duration_cast<std::chrono::microseconds>(high_resolution_clock::now() - s).count();
+inline double time_from(const std::chrono::steady_clock::time_point& s) {
+	return std::chrono::duration_cast<std::chrono::microseconds>(
+	           std::chrono::steady_clock::now() - s)
+	    .count();
 }
 
 // Wait for every future in `res`, then clear it — a barrier folding a batch of
@@ -25,7 +27,8 @@ inline void joinNclean(std::vector<std::future<T>>& res) {
 // joinNclean that OR-reduces the bool results (e.g. "did any task flag a cheat?").
 inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
 	bool cheat = false;
-	for (auto& v : res) cheat = cheat || v.get();
+	for (auto& v : res)
+		if (v.get()) cheat = true;
 	res.clear();
 	return cheat;
 }
@@ -34,16 +37,34 @@ inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
 // both parties, read from the environment so a two-machine run sets EMP_PORT /
 // EMP_PEER_IP once per host with no source change. One consequence: two runs on
 // the same host share EMP_PORT, so don't launch them concurrently.
+namespace detail {
+inline int parse_bounded_int(const char *text, int lower, int upper,
+                             const char *message) {
+	expecting(text != nullptr && text[0] != '\0', message);
+	int value = 0;
+	const char *end = text + std::strlen(text);
+	auto parsed = std::from_chars(text, end, value);
+	expecting(parsed.ec == std::errc{} && parsed.ptr == end &&
+	              value >= lower && value <= upper,
+	          message);
+	return value;
+}
+}  // namespace detail
+
 inline int parse_party(const char *const * arg, int max_party) {
-	const int p = arg[1] ? atoi(arg[1]) : 0;
-	expecting(p >= ALICE && p <= max_party,
-	          "parse_party: argv[1] (party) is out of range [1, max_party] "
-	          "(default max is BOB=2; multi-party callers pass nP)");
-	return p;
+	const char *text = arg ? arg[1] : nullptr;
+	return detail::parse_bounded_int(
+	    text, ALICE, max_party,
+	    "parse_party: argv[1] (party) must be an integer in [1, max_party] "
+	    "(default max is BOB=2; multi-party callers pass nP)");
 }
 inline int peer_port() {
 	const char * e = std::getenv("EMP_PORT");
-	return (e && e[0]) ? atoi(e) : 12345;
+	return (e && e[0])
+	           ? detail::parse_bounded_int(
+	                 e, 1, 65535,
+	                 "peer_port: EMP_PORT must be an integer in [1, 65535]")
+	           : 12345;
 }
 inline const char * peer_ip() {
 	const char * e = std::getenv("EMP_PEER_IP");
@@ -159,6 +180,8 @@ template <typename T>
 inline T bool_to_int(const bool *data) {
 	static_assert(std::is_integral<T>::value,
 	              "bool_to_int requires an integral type T");
+	static_assert(!std::is_same<typename std::remove_cv<T>::type, bool>::value,
+	              "bool_to_int does not support bool");
 	T ret = 0;
 	bools_to_bits(&ret, data, sizeof(T) * 8);
 	return ret;

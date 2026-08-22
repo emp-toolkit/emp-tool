@@ -32,7 +32,8 @@ freely, subject to the following restrictions:
 // worker executes the task (see emp-tool/runtime/core/test_mode.h);
 // (2) enqueue-on-stopped-pool reports through emp::error() instead of
 // throwing, keeping the public surface exception-free
-// (docs/api_conventions.md, enforced by test_no_exceptions).
+// (docs/api_conventions.md, enforced by test_no_exceptions); (3) tasks use a
+// C++20 capture instead of std::bind, allowing move-only arguments.
 
 #include "emp-tool/runtime/core/error.h"
 #include "emp-tool/runtime/core/test_mode.h"
@@ -45,6 +46,7 @@ freely, subject to the following restrictions:
 #include <queue>
 #include <thread>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 class ThreadPool {
@@ -98,7 +100,14 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	using return_type = typename std::invoke_result<F, Args...>::type;
 
 	auto task = std::make_shared<std::packaged_task<return_type()>>(
-	    std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+	    [fn = std::forward<F>(f),
+	     ...bound_args = std::forward<Args>(args)]() mutable -> return_type {
+		    if constexpr (std::is_invocable_v<decltype(fn)&,
+		                                      decltype(bound_args)&...>)
+			    return std::invoke(fn, bound_args...);
+		    else
+			    return std::invoke(std::move(fn), std::move(bound_args)...);
+	    });
 
 	std::future<return_type> res = task->get_future();
 	// In test mode, the task's lane is derived HERE, on the enqueuing
