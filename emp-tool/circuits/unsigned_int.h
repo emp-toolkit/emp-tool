@@ -141,7 +141,8 @@ public:
     //     natural result width; leading_zeros counts the high zero run. ---
     template <int R> UInt_T<Ctx, R> popcount() const requires (N > 0) {
         UInt_T<Ctx, R> acc = UInt_T<Ctx, R>::constant(*ctx_, 0);
-        for (int i = 0; i < N; ++i) {
+        acc.w[0] = w[0];
+        for (int i = 1; i < N; ++i) {
             UInt_T<Ctx, R> b = UInt_T<Ctx, R>::constant(*ctx_, 0);
             b.w[0] = w[i];
             acc = acc + b;

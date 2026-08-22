@@ -5,6 +5,7 @@
 // Read example() to see how a normal user writes UInt_T code.
 #include "emp-tool/circuits/unsigned_int.h"
 #include "emp-tool/circuits/signed_int.h"
+#include "emp-tool/ir/context/count.h"
 #include "emp-tool/ir/session/clear_session.h"
 #include "emp-tool/runtime/core/constants.h"
 #include <array>
@@ -293,6 +294,85 @@ static void sweep_dynamic() {
   }
 }
 
+// ---- structured-kernel gate costs ----------------------------------------
+
+static void sweep_kernel_costs() {
+  constexpr int N = 8;
+  std::array<CountCtx::Wire, N> a{}, b{}, out{};
+
+  {
+    CountCtx ctx;
+    kernel::equal(ctx, a.data(), b.data(), N);
+    check("equal N-1 ANDs", ctx.ands == N - 1);
+  }
+  {
+    CountCtx ctx;
+    kernel::less_than(ctx, a.data(), b.data(), N);
+    check("less_than N ANDs", ctx.ands == N);
+    check("less_than no difference wires", ctx.xors == 3 * N);
+  }
+  {
+    CountCtx ctx;
+    kernel::mul_full(ctx, out.data(), a.data(), b.data(), N);
+    check("multiply seeds first row", ctx.ands == N * N - N + 1);
+    check("multiply omits zero-row XORs", ctx.xors == 2 * (N - 1) * (N - 1));
+  }
+  CountCtx rem_ctx;
+  kernel::div_full(rem_ctx, nullptr, out.data(), a.data(), b.data(), N);
+  check("remainder skips quotient NOTs", rem_ctx.nots == 0);
+
+  CountCtx quot_ctx;
+  kernel::div_full(quot_ctx, out.data(), nullptr, a.data(), b.data(), N);
+  check("quotient still emits result bits", quot_ctx.nots == N);
+  check("division and remainder share non-NOT gates",
+        quot_ctx.ands == rem_ctx.ands && quot_ctx.xors == rem_ctx.xors &&
+        quot_ctx.consts == rem_ctx.consts);
+
+  {
+    CountCtx ctx;
+    auto value = UInt_T<CountCtx, N>::constant(ctx, 0xA5);
+    (void)value.hamming_weight();
+    check("fixed hamming seeds first bit", ctx.ands == (N - 1) * (kernel::bits_for(N) - 1));
+  }
+}
+
+// Every operand pair at widths 1..4, including zero divisors, and results
+// written over their operands.
+template <int N>
+static void sweep_kernel_exhaustive_at() {
+  ClearSession sess;
+  using U = UInt_T<Ctx, N>;
+  constexpr uint64_t mask = (uint64_t(1) << N) - 1;
+  for (uint64_t x = 0; x <= mask; ++x) {
+    for (uint64_t y = 0; y <= mask; ++y) {
+      auto a = sess.input<U>(ALICE, x);
+      auto b = sess.input<U>(BOB, y);
+      const uint64_t quot = y ? x / y : mask, rem = y ? x % y : x;
+      check("kernel exhaustive equal", sess.reveal(a == b, PUBLIC).value() == (x == y));
+      check("kernel exhaustive less_than", sess.reveal(a < b, PUBLIC).value() == (x < y));
+      check_u("kernel exhaustive multiply", sess.reveal(a * b, PUBLIC).value(), (x * y) & mask);
+      check_u("kernel exhaustive quotient", sess.reveal(a / b, PUBLIC).value(), quot);
+      check_u("kernel exhaustive remainder", sess.reveal(a % b, PUBLIC).value(), rem);
+
+      U product = a;
+      kernel::mul_full(sess.ctx(), product.data(), product.data(), b.data(), N);
+      check_u("kernel multiply into its operand", sess.reveal(product, PUBLIC).value(),
+              (x * y) & mask);
+      U q = a, r = b;
+      kernel::div_full(sess.ctx(), q.data(), r.data(), q.data(), r.data(), N);
+      check_u("kernel quotient into the dividend", sess.reveal(q, PUBLIC).value(), quot);
+      check_u("kernel remainder into the divisor", sess.reveal(r, PUBLIC).value(), rem);
+    }
+  }
+}
+
+static void sweep_kernel_exhaustive() {
+  sweep_kernel_exhaustive_at<1>();
+  sweep_kernel_exhaustive_at<2>();
+  sweep_kernel_exhaustive_at<3>();
+  sweep_kernel_exhaustive_at<4>();
+}
+
 int main() {
   example();
   sweep_arith();
@@ -304,6 +384,8 @@ int main() {
   sweep_views();
   sweep_bitcount_signed();
   sweep_dynamic();
+  sweep_kernel_costs();
+  sweep_kernel_exhaustive();
 
   printf("test_uint: %s\n", g_fail ? "FAILED" : "PASS");
   return g_fail ? 1 : 0;
