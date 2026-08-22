@@ -19,8 +19,10 @@ using namespace emp;
 static int bad = 0;
 static void chk(const char* what, bool ok) { if (!ok) { printf("  [FAIL] %s\n", what); ++bad; } }
 
+// The child ends through error(), which exits with status 1; a crash or a
+// normal return does not count.
 template <class F>
-static bool dies(F&& f) {
+static bool stops(F&& f) {
     pid_t pid = fork();
     if (pid < 0) return false;
     if (pid == 0) {
@@ -31,7 +33,7 @@ static bool dies(F&& f) {
     }
     int status = 0;
     waitpid(pid, &status, 0);
-    return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    return WIFEXITED(status) && WEXITSTATUS(status) == 1;
 }
 
 // Runtime-width codec with a deliberately short encode result. It models the
@@ -103,58 +105,177 @@ int main() {
     ClearSession sess;
 
     // ---- session boundaries catch ownership and malformed runtime codecs ----
-    chk("fixed reveal rejects a foreign session value", dies([] {
+    chk("fixed reveal rejects a foreign session value", stops([] {
         ClearSession a, b;
         auto value = a.input<UInt_T<ClearCtx, 8>>(ALICE, 7);
         (void)b.reveal(value, PUBLIC);
     }));
-    chk("runtime reveal rejects a foreign session value", dies([] {
+    chk("runtime reveal rejects a foreign session value", stops([] {
         ClearSession a, b;
         auto value = a.input<DynamicUInt_T<ClearCtx>>(ALICE, 7, 8);
         (void)b.reveal(value, PUBLIC);
     }));
-    chk("runtime construction rejects zero width", dies([] {
+    chk("runtime construction rejects zero width", stops([] {
         ClearSession s;
         (void)DynamicUInt_T<ClearCtx>(s.ctx(), 0);
     }));
-    chk("runtime reveal rejects an unbound value", dies([] {
+    chk("signed runtime construction rejects zero width", stops([] {
+        ClearSession s;
+        (void)DynamicInt_T<ClearCtx>(s.ctx(), 0);
+    }));
+    chk("runtime reveal rejects an unbound value", stops([] {
         ClearSession s;
         DynamicUInt_T<ClearCtx> value;
         (void)s.reveal(value, PUBLIC);
     }));
-    chk("runtime arithmetic rejects mismatched widths", dies([] {
+    chk("runtime arithmetic rejects mismatched widths", stops([] {
         ClearSession s;
         auto a = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 7);
         auto b = s.input<DynamicUInt_T<ClearCtx>>(BOB, 2, 8);
         (void)(a + b);
     }));
-    chk("runtime resize rejects zero width", dies([] {
+    chk("signed runtime arithmetic rejects mismatched widths", stops([] {
+        ClearSession s;
+        auto a = s.input<DynamicInt_T<ClearCtx>>(ALICE, -1, 7);
+        auto b = s.input<DynamicInt_T<ClearCtx>>(BOB, 2, 8);
+        (void)(a + b);
+    }));
+    chk("runtime resize rejects zero width", stops([] {
         ClearSession s;
         auto value = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 8);
         (void)value.resize(0);
     }));
-    chk("runtime resize rejects negative width", dies([] {
+    chk("runtime resize rejects negative width", stops([] {
         ClearSession s;
         auto value = s.input<DynamicInt_T<ClearCtx>>(ALICE, -1, 8);
         (void)value.resize(-1);
     }));
-    chk("unsigned runtime codec rejects zero width", dies([] {
+    chk("unsigned runtime codec rejects zero width", stops([] {
         (void)DynamicUInt_T<ClearCtx>::encode(7, 0);
     }));
-    chk("unsigned runtime codec rejects negative width", dies([] {
+    chk("unsigned runtime codec rejects negative width", stops([] {
         (void)DynamicUInt_T<ClearCtx>::encode(7, -1);
     }));
-    chk("signed runtime codec rejects zero width", dies([] {
+    chk("signed runtime codec rejects zero width", stops([] {
         uint8_t bit = 0;
         (void)DynamicInt_T<ClearCtx>::decode(&bit, 0);
     }));
-    chk("signed runtime codec rejects negative width", dies([] {
+    chk("signed runtime codec rejects negative width", stops([] {
         uint8_t bit = 0;
         (void)DynamicInt_T<ClearCtx>::decode(&bit, -1);
     }));
-    chk("runtime input rejects a short codec result", dies([] {
+    chk("runtime input rejects a short codec result", stops([] {
         ClearSession s;
         (void)s.input<ShortRuntimeCodec<ClearCtx>>(ALICE, 0, 8);
+    }));
+    chk("runtime input rejects zero width", stops([] {
+        ClearSession s;
+        (void)s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 0);
+    }));
+    chk("runtime input rejects negative width", stops([] {
+        ClearSession s;
+        (void)s.input<DynamicInt_T<ClearCtx>>(ALICE, 1, -3);
+    }));
+    chk("runtime select rejects mismatched widths", stops([] {
+        ClearSession s;
+        auto a = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 7);
+        auto b = s.input<DynamicUInt_T<ClearCtx>>(BOB, 2, 8);
+        (void)a.select(Bit_T<ClearCtx>::constant(s.ctx(), true), b);
+    }));
+    chk("runtime indexing past the width stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 5, 8);
+        (void)value[8];
+    }));
+    chk("runtime negative index stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicInt_T<ClearCtx>>(ALICE, -5, 8);
+        (void)value[-1];
+    }));
+
+    // ---- an unbound or moved-from value stops on any operation ----
+    chk("unbound unsigned resize stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)value.resize(8);
+    }));
+    chk("unbound unsigned to_fixed stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)value.to_fixed<8>();
+    }));
+    chk("unbound unsigned hamming_weight stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)value.hamming_weight();
+    }));
+    chk("unbound unsigned comparison stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)(value == value);
+    }));
+    chk("unbound unsigned indexing stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)value[0];
+    }));
+    chk("unbound unsigned rotate stops", stops([] {
+        DynamicUInt_T<ClearCtx> value;
+        (void)value.rotl(1);
+    }));
+    chk("unbound signed resize stops", stops([] {
+        DynamicInt_T<ClearCtx> value;
+        (void)value.resize(8);
+    }));
+    chk("unbound signed comparison stops", stops([] {
+        DynamicInt_T<ClearCtx> value;
+        (void)(value < value);
+    }));
+    chk("unbound signed division stops", stops([] {
+        DynamicInt_T<ClearCtx> value;
+        (void)(value / value);
+    }));
+    chk("unbound signed negation stops", stops([] {
+        DynamicInt_T<ClearCtx> value;
+        (void)-value;
+    }));
+    chk("moved-from unsigned value stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 5, 8);
+        DynamicUInt_T<ClearCtx> target = std::move(value);
+        (void)target;
+        (void)value.to_fixed<8>();
+    }));
+    chk("moved-from signed value stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicInt_T<ClearCtx>>(ALICE, -5, 8);
+        DynamicInt_T<ClearCtx> target = std::move(value);
+        (void)target;
+        (void)value.resize(16);
+    }));
+    {
+        auto value = sess.input<RU>(ALICE, 5, 8);
+        RU target = std::move(value);
+        value = sess.input<RU>(BOB, 9, 12);
+        chk("moved-to value keeps its wires", sess.reveal(target, PUBLIC).value() == 5);
+        chk("moved-from value takes an assignment",
+            value.width() == 12 && sess.reveal(value, PUBLIC).value() == 9);
+    }
+
+    // ---- reveal past 64 bits returns a value that fits the clear type ----
+    {
+        auto wide = sess.input<RU>(ALICE, 0xFEDCBA9876543210ull, 100);
+        chk("100-bit unsigned reveal that fits",
+            sess.reveal(wide, PUBLIC).value() == 0xFEDCBA9876543210ull);
+        auto low = sess.input<RI>(ALICE, INT64_MIN, 100);
+        chk("100-bit signed reveal of INT64_MIN", sess.reveal(low, PUBLIC).value() == INT64_MIN);
+        auto neg = sess.input<RI>(ALICE, -5, 100);
+        chk("100-bit negative reveal", sess.reveal(neg, PUBLIC).value() == -5);
+    }
+    chk("unsigned reveal of a value past 64 bits stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicUInt_T<ClearCtx>>(ALICE, 1, 100) << 64;
+        (void)s.reveal(value, PUBLIC);
+    }));
+    chk("signed reveal of a value past int64_t stops", stops([] {
+        ClearSession s;
+        auto value = s.input<DynamicInt_T<ClearCtx>>(ALICE, 1, 100) << 63;   // 2^63
+        (void)s.reveal(value, PUBLIC);
     }));
 
     // ---- unsigned runtime: input/reveal + ops, several widths and owners ----

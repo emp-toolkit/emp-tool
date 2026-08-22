@@ -151,6 +151,8 @@ add_test_case_cxx20(circuits test_bit)           # per-type value headers over C
 add_test_case_cxx20(circuits test_bitvec)
 add_test_case_cxx20(circuits test_uint)
 add_test_case_cxx20(circuits test_int)
+add_test_case_cxx20(circuits test_int_context)   # integer operands from another context stop
+target_compile_definitions(test_int_context PRIVATE EMP_CONTEXT_CHECKS=1)
 add_test_case_cxx20(circuits test_float)
 add_test_case_cxx20(circuits test_sort)          # data-oblivious sort over circuit values
 add_test_case_cxx20(circuits test_runtime_int)   # DynamicUInt_T / DynamicInt_T

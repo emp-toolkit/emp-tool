@@ -111,6 +111,7 @@ public:
     }
 
     Int_T operator<<(const UInt_T<Ctx, N>& shamt) const {
+        check_same_context(*this, shamt);
         Int_T res(*this);
         constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
         for (int i = 0; i < use; ++i) res = res.select(shamt[i], res << (1 << i));
@@ -119,6 +120,7 @@ public:
         return res.select(overflow, Int_T::constant(*ctx_, 0));
     }
     Int_T operator>>(const UInt_T<Ctx, N>& shamt) const {
+        check_same_context(*this, shamt);
         Int_T res(*this);
         constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
         for (int i = 0; i < use; ++i) res = res.select(shamt[i], res >> (1 << i));
