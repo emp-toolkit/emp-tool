@@ -3,7 +3,8 @@
 Conventions for the circuit value types under `emp-tool/circuits/`.
 
 The circuit value layer is the **context-bound typed values**: `Bit_T<Ctx>`,
-`UInt_T<Ctx,N>`, `Int_T<Ctx,N>`, `Float_T<Ctx,W>`, and `BitVec_T<Ctx,N>`,
+`UInt_T<Ctx,N>`, `Int_T<Ctx,N>`, `Float_T<Ctx,W>`, and `BitVec_T<Ctx,N>`, plus
+`DynamicUInt_T<Ctx>` / `DynamicInt_T<Ctx>` when width is known only at runtime,
 templated on a `BooleanContext` (`ir/context/concept.h`, re-exported by the
 `ir/context/context.h` umbrella). Static dispatch, no global backend; each value
 carries its own `Ctx*` and issues value-return gates on it.
@@ -18,7 +19,7 @@ Each value type lives in its own header — `circuits/{bit,bitvec,unsigned_int,
 signed_int,float}.h` — over the shared arithmetic in `circuits/numeric_kernels.h`.
 Two umbrellas gather them:
 
-- `circuits/typed.h` — the value types (`#include` it to get all five).
+- `circuits/typed.h` — the fixed value families and dynamic integer siblings.
 - `circuits/circuits.h` — the whole circuits layer: values + `value_traits.h` +
   numeric kernels + sorting (`sort.h`) + the in-circuit crypto
   (`circuits/crypto/crypto.h` = aes128 / sha256 / keccak) + the compile/run frontend.
@@ -29,9 +30,10 @@ primitives, read [EMP_TRANSLATION.md](EMP_TRANSLATION.md).
 
 ## Context-bound values
 
-Each value is a small struct templated on a `BooleanContext` `Ctx`. It holds its
-wires inline (`Wire w;` in `Bit_T`, `std::array<Wire,N> w;` in the rest — a
-`std::vector<Wire>` for the runtime-width `UInt_T<Ctx,0>` / `Int_T<Ctx,0>`) plus a
+Each value is a small struct templated on a `BooleanContext` `Ctx`. Fixed values
+hold wires inline (`Wire w;` in `Bit_T`, `std::array<Wire,N> w;` in the other
+fixed families); `DynamicUInt_T<Ctx>` / `DynamicInt_T<Ctx>` use a private
+`std::vector<Wire>`. Each also holds a
 private `Ctx*` (reached via `context()`); operators issue value-return gates on the
 context. No inheritance, no marker base, no global backend.
 
@@ -87,29 +89,42 @@ party that does not; a plaintext `ClearSession` always populates it.
 - `UInt_T<N>` — `+ - * / %`, comparisons, `& | ^ ~`, public-amount shifts/rotates
   (`<<`/`>>`/`rotl`/`rotr` by `int`), secret-amount shifts (`<<`/`>>` by a
   `UInt_T` — a barrel shifter), `slice`/`extract`/`concat`/`zext`/`trunc`,
-  `hamming_weight`/`popcount<R>`, `leading_zeros`, `mod_exp`, `as_signed`.
+  `hamming_weight`/`popcount<R>` (`R` at least `bits_for(N)`, the width that holds
+  `0..N`), `leading_zeros`, `as_signed`.
 - `Int_T<N>` — two's-complement `+ - * / %` (truncating), `-`(negate), signed
   comparisons, `& | ^ ~`, logical-left / arithmetic-right shifts, `sext`/`trunc`,
   `as_unsigned`.
 
-**Fixed vs runtime width.** `N > 0` is a fixed-width value; for `N <= 64` it is
-a `WireValue` (compile-time width, clear codec, wire layout — the form a session
-feeds through `input`/`reveal` and the frontend compiles). A wider fixed-width
-`UInt_T` / `Int_T` (`N > 64`) has no 64-bit clear codec, so it is only a
-`WireBundle` (frontend-compilable, usable as a circuit argument) but not
-session-I/O-eligible — use `BitVec_T<Ctx,N>` for typed session I/O past 64 bits.
-`N == 0` (the `runtime_width` sentinel) is
-the *same* `UInt_T` / `Int_T` family with the width carried in the wire vector and
-chosen at construction — `UInt_T<Ctx,0>(ctx, width)`, `UInt_T<Ctx,0>::constant(ctx,
-width, v)`. It shares every operator above through the runtime-sized kernels; the
-compile-time-width surface (`slice`/`extract`/`concat`/`zext`/`trunc`, secret-amount
-barrel shifts, the `std::array` clear codec, `popcount<R>`) is `requires (N > 0)` and
-so absent, and it adds `resize(width)` plus fixed↔runtime conversion (`to_dynamic()`
-on a fixed value, `to_fixed<M>()` on a runtime one). A runtime-width value is **not**
-a `WireValue` and cannot be a `compile`/`run` argument; it is a `RuntimeWidthValue`
-(`ir/wire_value.h`, byte-bool clear codec), which a session modeling
-`RuntimeSessionIO` (e.g. `ClearSession`) can `input`/`reveal`. (Width must be `>= 1`;
-wider-than-64 constants zero-extend for `UInt_T` and sign-extend for `Int_T`.)
+**Fixed vs runtime width.** `UInt_T<Ctx,N>` / `Int_T<Ctx,N>` take a positive
+compile-time width; for `N <= 64` they are `WireValue`s (compile-time width, clear
+codec, wire layout — the form a session feeds through `input`/`reveal` and the
+frontend compiles). A wider `UInt_T` / `Int_T` (`N > 64`) has no 64-bit clear
+codec, so it is only a `WireBundle` (frontend-compilable, usable as a circuit
+argument) but not session-I/O-eligible — use `BitVec_T<Ctx,N>` for typed session
+I/O past 64 bits.
+
+A width known only at runtime uses the distinct `DynamicUInt_T<Ctx>` /
+`DynamicInt_T<Ctx>`: the width (`>= 1`) is chosen at construction and the wires
+live in a private vector that `data()` exposes. Each has its fixed counterpart's
+arithmetic, comparisons, bitwise operators, `select` and public-amount shifts
+(`DynamicUInt_T` also its rotates and `hamming_weight()`) over the same
+runtime-sized kernels; the operands of a binary operator must have equal widths.
+The compile-time-width surface (`slice`/`extract`/`concat`/`zext`/`sext`/`trunc`,
+secret-amount shifts, `popcount<R>`, `leading_zeros`) is fixed-width only.
+`resize(width)` returns a new value of the given width, `to_fixed<M>()` zero-extends
+(`DynamicUInt_T`) or sign-extends (`DynamicInt_T`) to `M` bits or keeps the low
+`M`, a fixed value converts with `to_dynamic()`, and `as_signed()` /
+`as_unsigned()` reinterpret between the two dynamic forms. A dynamic integer has
+no static width, so it is neither a `WireValue` nor a `WireBundle` and cannot be a
+`compile`/`run` argument; it is a `RuntimeWidthValue` (`ir/wire_value.h`, byte-bool
+clear codec), which a session modeling `RuntimeSessionIO` (e.g. `ClearSession`) can
+`input`/`reveal`. Constants and encoded values wider than 64 bits zero-extend for
+`DynamicUInt_T` and sign-extend for `DynamicInt_T`; decoding, and so a session
+`reveal`, stops when the value does not fit `uint64_t` / `int64_t`. A
+default-constructed value is unbound: it can only be assigned to or destroyed, and
+operating on it stops the process. A moved-from value may likewise only be assigned
+to or destroyed. Assignment replaces the target's width and wires.
+
 - `Float_T<W>` — `+ - * / min max sqrt recip rsqrt fma`, comparisons / `is_nan` /
   `is_inf` / `is_zero`, `abs`/negate/`copysign`/`select`. Arithmetic **replays**
   the recorded `fp<W>_<op>.empbc` builtins through the context.
@@ -124,7 +139,7 @@ multiply, restoring division, `if_then_else`) live in namespace `emp::kernel` in
 `Ctx::Wire` (no per-bit `Ctx*`). They are LSB-first and size-optimal: one AND per
 full adder (an N-bit add is N−1 ANDs); unsigned `<` is the borrow-out of a
 subtract (one AND/bit). The value-type operators forward to them, passing the width
-as a runtime argument, so the fixed-width and runtime-width (`N == 0`) integers
+as a runtime argument, so the fixed and dynamic integer families
 share one kernel set. `Float_T` is the opposite — every nontrivial op is an
 `.empbc` replay.
 

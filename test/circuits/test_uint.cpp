@@ -18,7 +18,13 @@ using namespace emp;
 using Ctx = ClearSession::ctx_t;
 
 using UInt32  = UInt_T<Ctx, 32>;
-using DynUInt = UInt_T<Ctx, 0>;   // runtime-width form (in-circuit only)
+using DynUInt = DynamicUInt_T<Ctx>;
+
+template <int R>
+concept HasU8Popcount = requires(const UInt_T<Ctx, 8>& value) {
+  value.template popcount<R>();
+};
+static_assert(HasU8Popcount<4> && !HasU8Popcount<3>);
 
 // ---- check helpers -------------------------------------------------------
 
@@ -33,11 +39,10 @@ static void check_u(const char* name, uint64_t got, uint64_t want) {
     ++g_fail;
   }
 }
-// Low-level: read a runtime-width clear value straight off the wires. Runtime
-// values are in-circuit only (not a session I/O type), so this is a deliberate
-// low-level peek, not the user-facing path.
+// Low-level: read a runtime-width clear value straight off the wires, which
+// keeps the arithmetic sweeps independent of session I/O.
 static uint64_t rd_dyn(const DynUInt& u) {
-  uint64_t v = 0; for (int i = 0; i < u.width(); ++i) v |= (uint64_t)(u.w[i] & 1) << i; return v;
+  uint64_t v = 0; for (int i = 0; i < u.width(); ++i) v |= (uint64_t)(u.data()[i] & 1) << i; return v;
 }
 
 // Host references with the kernels' wrap semantics (mod 2^32).
@@ -232,10 +237,7 @@ static void sweep_bitcount_signed() {
   }
 }
 
-// ---- runtime-width form UInt_T<Ctx,0> -------------------------------
-// Runtime-width values are for in-circuit computation, not the session I/O
-// boundary: they are made with ::constant(ctx, width, value) and read with the
-// low-level rd_dyn() peek (or converted to a fixed width and revealed).
+// ---- runtime-width DynamicUInt_T -------------------------------------
 
 static void sweep_dynamic() {
   ClearSession sess;
@@ -268,7 +270,7 @@ static void sweep_dynamic() {
     check_u("fixed->dyn", rd_dyn(back), 0x12345678u);
   }
 
-  // Arithmetic on the runtime-width form, cross-checked at width 32.
+  // DynamicUInt_T arithmetic, cross-checked at width 32.
   std::mt19937_64 r2(0xBADC0DEULL);
   for (int i = 0; i < 2000; ++i) {
     uint32_t ia = (uint32_t)r2(), ib = (uint32_t)r2();
@@ -333,6 +335,12 @@ static void sweep_kernel_costs() {
     auto value = UInt_T<CountCtx, N>::constant(ctx, 0xA5);
     (void)value.hamming_weight();
     check("fixed hamming seeds first bit", ctx.ands == (N - 1) * (kernel::bits_for(N) - 1));
+  }
+  {
+    CountCtx ctx;
+    auto value = DynamicUInt_T<CountCtx>::constant(ctx, N, 0xA5);
+    (void)value.hamming_weight();
+    check("dynamic hamming seeds first bit", ctx.ands == (N - 1) * (kernel::bits_for(N) - 1));
   }
 }
 

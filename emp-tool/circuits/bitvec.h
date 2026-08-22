@@ -16,7 +16,7 @@
 
 namespace emp {
 
-template <BooleanContext Ctx, int N>
+template <BooleanContext Ctx, int N> requires (N >= 0)
 class BitVec_T {
 public:
     using Wire         = typename Ctx::Wire;
@@ -41,7 +41,7 @@ public:
     Bit_T<Ctx> operator[](int i) const { return Bit_T<Ctx>(*ctx_, w[i]); }
 
     // Reinterpret the same wires as an unsigned integer (zero gates).
-    UInt_T<Ctx, N> as_uint() const { return UInt_T<Ctx, N>::from_wires(*ctx_, w.data()); }
+    auto as_uint() const requires (N > 0) { return UInt_T<Ctx, N>::from_wires(*ctx_, w.data()); }
 
     // --- bitwise ops / equality / select / logical shifts (public amount) ---
     BitVec_T operator&(const BitVec_T& o) const { check_same_context(*this, o); BitVec_T r(*ctx_); for (int i = 0; i < N; ++i) r.w[i] = ctx_->and_gate(w[i], o.w[i]); return r; }
