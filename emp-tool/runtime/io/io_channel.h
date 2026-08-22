@@ -87,9 +87,22 @@ public:
 	// is a no-op for transports with nothing to flush.
 	virtual void flush() {}
 
-	// Optional wire-level handshake (e.g. 1-byte ping/pong). Default
-	// no-op for transports that don't need one.
-	virtual void sync() {}
+	// Barrier for tests, benchmarks and setup, not protocol logic: returns
+	// once the peer has entered sync() too. Each side sends one zero byte,
+	// flushes, and then waits for the peer's, so neither has to go first and
+	// any two channels pair up, whatever their roles. It runs on the transport
+	// hooks: the bytes are not counted and not in the Fiat-Shamir transcript,
+	// and a wrapper that tees those hooks (TraceIO) records them. A nonzero
+	// byte means the two sides are out of step, which is reported.
+	void sync() {
+		const unsigned char marker = 0;
+		unsigned char received = 0xff;
+		send_data_internal(&marker, 1);
+		flush();
+		recv_data_internal(&received, 1);
+		expecting(received == marker,
+		          "IOChannel::sync: the peer's next byte is not a sync marker");
+	}
 
 	// Turn on Fiat-Shamir transcript hashing. `send_first` selects which
 	// of the two H(_‖H(_)) formulas this side computes, so both parties

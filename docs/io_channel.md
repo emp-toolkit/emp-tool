@@ -69,9 +69,13 @@ are per-direction snapshots for diagnostics. All three assert that
 
 ## Other base surface
 
-- **`sync()`**: optional 1-byte ping/pong handshake to confirm both
-  directions are alive. NetIO implements it; the base default is a
-  no-op.
+- **`sync()`**: a barrier for tests, benchmarks and setup, not protocol logic.
+  Each side sends one zero byte, flushes, and waits for the peer's, so it returns
+  once both have entered it; neither side has to go first, and it works the same
+  on every `IOChannel` (one implementation in the base). The bytes go through the
+  transport hooks, so they are not counted and not in the Fiat-Shamir transcript;
+  `TraceIO` records them. A nonzero byte means the two sides are out of step, and
+  `sync()` reports it.
 - **Telemetry**: the base tracks `send_counter` / `recv_counter` /
   `rounds` / `flushes_count`; `get_statistics_string()` renders them
   for logging (`~NetIO` prints it unless constructed `quiet`).

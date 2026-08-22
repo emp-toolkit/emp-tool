@@ -40,8 +40,27 @@ metadata is numeric (see the README's version guidance).
   across lanes, and each sum is reduced once at the end, bit-identical to
   `vector_inn_prdt_sum_red` on the de-interleaved operands.
 
+### Changed
+
+- `IOChannel::sync()` is one non-virtual implementation in the base, used by every
+  channel: each side sends one zero byte, flushes, and waits for the peer's, so
+  neither side has to go first and no channel can turn it into a no-op. Two
+  channels adopted from existing sockets (both `is_server == false`) used to
+  deadlock in it, each waiting to receive first. It still stays out of the byte
+  counters and the Fiat-Shamir transcript and sends the same bytes as before, so
+  old and new peers still pair up, and it now reports a nonzero byte as the two
+  sides being out of step. NetIO, TLSIO and TraceIO no longer override it; a
+  custom channel that overrode `sync()` must drop the override, and dependents must
+  be rebuilt, since `IOChannel`'s virtual table changed.
+- `NetIO::flush()` stops the process when the stdio `fflush` fails instead of
+  ignoring it.
+- `TraceIO` rejects a null channel, creates its trace files with mode `0600`,
+  flushes them before the wrapped channel, reports trace write and flush failures,
+  and records the bytes of `sync()`.
+
 ### Removed
 
+- `TLSIO::is_server`, which only chose who went first in the old `sync()`.
 - `MITCCRH::renew_ks(const block*)` and `MITCCRH::hash_cir_fixed`, the
   explicit-tweak mode in which the caller scheduled the keys and owned
   tweak uniqueness. Every hash now goes through the gid stream, which the
