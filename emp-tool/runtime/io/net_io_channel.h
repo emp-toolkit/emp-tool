@@ -41,6 +41,7 @@ class NetIO : public IOChannel { public:
 	// Endpoint info retained so a duplex sibling can be spawned (make_sibling).
 	std::string addr_;              // peer address (empty when this is a server)
 	int port_ = -1;
+	tcp::SocketOptions socket_options_;
 
 	// Send-side state (stdio "wb" stream + app-level coalescing buffer).
 	FILE *stream = nullptr;
@@ -59,7 +60,12 @@ class NetIO : public IOChannel { public:
 	// time per channel; threaded consumers take a sibling channel each
 	// (make_sibling). Races are not detected at runtime — use TSan.
 
-	NetIO(const char *address, int port, bool quiet = false) : quiet(quiet) {
+	NetIO(const char *address, int port, bool quiet = false)
+	    : NetIO(address, port, tcp::SocketOptions{}, quiet) {}
+
+	NetIO(const char *address, int port,
+	      const tcp::SocketOptions &socket_options, bool quiet = false)
+	    : quiet(quiet), socket_options_(socket_options) {
 		expecting(port >= 0 && port <= 65535,
 		          "NetIO: invalid port number");
 
@@ -67,10 +73,13 @@ class NetIO : public IOChannel { public:
 		addr_ = address ? address : "";
 		port_ = port;
 		if (is_server) {
-			listener = std::make_shared<tcp::ListenerHandle>(tcp::open_listener(port));
-			init_from_sock(tcp::accept_one_confirmed(listener->fd));
+			listener = std::make_shared<tcp::ListenerHandle>(
+			    tcp::open_listener(port, socket_options_));
+			init_from_sock(tcp::accept_one_confirmed(listener->fd,
+			                                             socket_options_));
 		} else {
-			init_from_sock(tcp::client_connect_confirmed(address, port));
+			init_from_sock(tcp::client_connect_confirmed(address, port,
+			                                               socket_options_));
 		}
 		if (!quiet) std::cout << "connected\n";
 	}
@@ -82,8 +91,18 @@ class NetIO : public IOChannel { public:
 	static std::unique_ptr<NetIO> listen(int port, bool quiet = false) {
 		return std::make_unique<NetIO>(nullptr, port, quiet);
 	}
+	static std::unique_ptr<NetIO> listen(int port,
+	                                     const tcp::SocketOptions &socket_options,
+	                                     bool quiet = false) {
+		return std::make_unique<NetIO>(nullptr, port, socket_options, quiet);
+	}
 	static std::unique_ptr<NetIO> connect(const char *address, int port, bool quiet = false) {
 		return std::make_unique<NetIO>(address, port, quiet);
+	}
+	static std::unique_ptr<NetIO> connect(
+	    const char *address, int port, const tcp::SocketOptions &socket_options,
+	    bool quiet = false) {
+		return std::make_unique<NetIO>(address, port, socket_options, quiet);
 	}
 
 	// Open another channel to the same peer and port. Related server channels
@@ -92,15 +111,17 @@ class NetIO : public IOChannel { public:
 	// port. The listener closes when the last related server NetIO is destroyed.
 	std::unique_ptr<NetIO> make_sibling() const {
 		if (!is_server)
-			return connect(addr_.c_str(), port_, /*quiet=*/true);
+			return connect(addr_.c_str(), port_, socket_options_, /*quiet=*/true);
 
 		expecting(listener != nullptr,
 		          "NetIO::make_sibling requires a server listener");
-		int sibling_sock = tcp::accept_one_confirmed(listener->fd);
+		int sibling_sock = tcp::accept_one_confirmed(listener->fd,
+		                                               socket_options_);
 
 		auto sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
-		sibling->is_server = true;  // preserve sync()'s server/client ordering
+		sibling->is_server = true;
 		sibling->port_ = port_;
+		sibling->socket_options_ = socket_options_;
 		sibling->listener = listener;
 		return sibling;
 	}
@@ -148,19 +169,6 @@ class NetIO : public IOChannel { public:
 
 	void set_nodelay() { tcp::set_nodelay(sock); }
 	void set_delay()   { tcp::set_delay(sock); }
-
-	// 1-byte ping/pong handshake to verify both directions are alive.
-	void sync() override {
-		int tmp = 0;
-		if (is_server) {
-			send_data_internal(&tmp, 1);
-			recv_data_internal(&tmp, 1);
-		} else {
-			recv_data_internal(&tmp, 1);
-			send_data_internal(&tmp, 1);
-			flush_unlocked();
-		}
-	}
 
 	void send_data_internal(const void *data, int64_t len) override {
 		expecting(len >= 0, "NetIO::send_data: negative len");
@@ -216,7 +224,9 @@ private:
 		if (!send_dirty) return;
 		++flushes_count;
 		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
-		fflush(stream);
+		expecting(::fflush(stream) == 0, [&] {
+			return std::string("NetIO: fflush failed: ") + std::strerror(errno);
+		});
 		send_dirty = false;
 	}
 

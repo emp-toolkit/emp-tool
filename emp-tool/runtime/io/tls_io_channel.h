@@ -40,10 +40,7 @@ namespace emp {
 
 struct TLSConfig {
 	// Role on the TLS handshake. Independent of the address-vs-port
-	// "is_server" bit on NetIO: a TCP-acceptor side could in principle
-	// be a TLS client (reverse-direction handshake), though in practice
-	// the bits track each other. TLSIO defaults to is_tls_server =
-	// (address == nullptr) when constructed via the (addr, port) ctor.
+	// role used to establish the underlying TCP connection.
 	bool is_tls_server = false;
 
 	// PEM file paths. cert_pem_path + key_pem_path are required when
@@ -64,6 +61,8 @@ struct TLSConfig {
 
 	// "" leaves the library default TLS 1.3 ciphersuite list untouched.
 	std::string ciphersuites;
+
+	tcp::SocketOptions socket_options;
 };
 
 namespace tls_detail {
@@ -102,7 +101,7 @@ inline void install_sigpipe_ignore_once() {
 
 class TLSIO : public IOChannel { public:
 	int sock = -1;
-	bool is_server, quiet;
+	bool quiet;
 	bool is_tls_server;
 
 	SSL_CTX *ctx = nullptr;
@@ -124,17 +123,18 @@ class TLSIO : public IOChannel { public:
 	// mutates internal state on every read/write): one thread at a time
 	// per channel. Races are not detected at runtime — use TSan.
 
-	// (addr == nullptr) → TCP listener; otherwise TCP client. is_tls_server
-	// defaults to mirror is_server but TLSConfig overrides if explicitly set.
+	// (addr == nullptr) → TCP listener; otherwise TCP client. The TLS role
+	// comes from TLSConfig and is independent of the TCP role.
 	TLSIO(const char *address, int port, const TLSConfig &cfg, bool quiet = false)
 	    : quiet(quiet) {
 		expecting(port >= 0 && port <= 65535,
 		          "TLSIO: invalid port number");
 		tls_detail::install_sigpipe_ignore_once();
-		is_server = (address == nullptr);
+		const bool is_listener = (address == nullptr);
 		is_tls_server = cfg.is_tls_server;
-		init_from_sock(is_server ? tcp::server_listen(port)
-		                         : tcp::client_connect(address, port),
+		init_from_sock(is_listener ? tcp::server_listen(port, cfg.socket_options)
+		                           : tcp::client_connect(address, port,
+		                                                 cfg.socket_options),
 		               cfg);
 		if (!quiet) std::cout << "TLS connected\n";
 	}
@@ -155,8 +155,10 @@ class TLSIO : public IOChannel { public:
 	TLSIO(int existing_sock, bool is_tls_server,
 	      const TLSConfig &cfg, bool quiet = true)
 	    : quiet(quiet), is_tls_server(is_tls_server) {
+		expecting(cfg.socket_options.send_buffer_size == 0 &&
+		              cfg.socket_options.receive_buffer_size == 0,
+		          "TLSIO: socket buffer options cannot be applied to an already-connected socket");
 		tls_detail::install_sigpipe_ignore_once();
-		is_server = false;
 		init_from_sock(existing_sock, cfg);
 	}
 
@@ -278,19 +280,6 @@ class TLSIO : public IOChannel { public:
 				if (!peer) tls_detail::die("peer presented no certificate");
 				X509_free(peer);
 			}
-		}
-	}
-
-	// 1-byte ping/pong handshake to verify both directions are alive.
-	// is_server (the TCP-acceptor bit) decides who sends first.
-	void sync() override {
-		int tmp = 0;
-		if (is_server) {
-			send_data_internal(&tmp, 1);
-			recv_data_internal(&tmp, 1);
-		} else {
-			recv_data_internal(&tmp, 1);
-			send_data_internal(&tmp, 1);
 		}
 	}
 

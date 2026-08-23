@@ -69,9 +69,6 @@ are per-direction snapshots for diagnostics. All three assert that
 
 ## Other base surface
 
-- **`sync()`**: optional 1-byte ping/pong handshake to confirm both
-  directions are alive. NetIO implements it; the base default is a
-  no-op.
 - **Telemetry**: the base tracks `send_counter` / `recv_counter` /
   `rounds` / `flushes_count`; `get_statistics_string()` renders them
   for logging (`~NetIO` prints it unless constructed `quiet`).
@@ -87,16 +84,49 @@ are per-direction snapshots for diagnostics. All three assert that
   `make_sibling()`, calling it **serially and in the same order on both
   parties** (its accept/connect pairing is FIFO on the shared listener —
   concurrent `make_sibling()` from multiple threads is not deterministic).
-  Do *not* rely on closing every channel and reopening a new one on the
-  same port as the coordination mechanism. That reopen path is supported
-  and race-free — each connection is only considered established once the
-  peer has actually `accept()`ed it (a one-byte accept acknowledgement in
-  `tcp_socket.h` protects against a `connect()` landing on the previous,
-  now-stale listener) — but the anchor + `make_sibling` pattern is simpler
-  and avoids the reconnect entirely.
+  Closing all channels and reopening the same port is supported, but sibling
+  channels avoid reconnecting.
 - **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
   byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
   wire-equivalence checks; see `test_mode.md`.
+
+## TCP socket buffers
+
+`tcp::SocketOptions` sets the send and receive buffer sizes before
+`listen()` or `connect()`:
+
+```cpp
+tcp::SocketOptions options;
+options.send_buffer_size = 16 * 1024 * 1024;
+options.receive_buffer_size = 16 * 1024 * 1024;
+
+auto io = NetIO::connect(peer, port, options);
+```
+
+When the path capacity and round-trip time are known, the helper sizes both
+directions to the first power-of-two tier at or above the bandwidth-delay
+product, with a 256 KiB minimum:
+
+```cpp
+using namespace std::chrono_literals;
+
+auto options = tcp::SocketOptions::for_bandwidth_and_rtt(
+    400'000'000, 100ms);  // 8 MiB
+auto io = NetIO::connect(peer, port, options);
+```
+
+Use the direct byte fields when the two directions need different sizes.
+
+Pass the same options to `NetIO::listen`; `make_sibling()` propagates them to
+each new connection. `TLSIO` takes them through `TLSConfig::socket_options`.
+A listening endpoint applies the options before `listen()` and verifies them
+on each accepted socket. TLSIO applies the options before the TLS handshake.
+The adopted-socket TLS constructor requires default socket options.
+A zero size keeps the operating-system default. An explicit request fails if
+the kernel caps the buffer below the requested size. Larger requests may require
+raising `net.core.wmem_max` / `net.core.rmem_max` on Linux or
+`kern.ipc.maxsockbuf` on macOS. On Linux, setting `SO_RCVBUF` disables TCP
+receive-buffer autotuning for that socket.
 
 ## TLS variant
 
