@@ -44,6 +44,36 @@ int main(void) {
 		}
 	}
 	cout << "check\n";
+
+	// Key-reuse regression (emp-tool issue #212). MITCCRH<8> keys AES per
+	// 8-gid bucket and a half-gate spends gids 2g, 2g+1, so four consecutive
+	// ANDs share one key. Garble AND(a, b) then AND(a, c) in one bucket: if the
+	// hash ignored the gid, the first rows would be H(A0)^H(A1)^pb*delta and
+	// H(A0)^H(A1)^pc*delta, their XOR 0 or delta, and the evaluator would read
+	// delta off the tables. AND(a, a) is the one-gate version:
+	// table[0]^table[1]^A0 would be pa*delta. With the gid in the cipher input
+	// both differences are unstructured.
+	cout << "Bucket key reuse: fan-out rows unstructured ... ";
+	for (int trial = 0; trial < 16; ++trial) {
+		MITCCRH<8> mi;
+		block S, a, b, c, t_ab[2], t_ac[2], t_aa[2];
+		prg.random_block(&S, 1);
+		mi.setS(S);
+		prg.random_block(&a, 1);
+		prg.random_block(&b, 1);
+		prg.random_block(&c, 1);
+		halfgates_garble(a, a ^ delta, b, b ^ delta, delta, t_ab, &mi);
+		halfgates_garble(a, a ^ delta, c, c ^ delta, delta, t_ac, &mi);
+		halfgates_garble(a, a ^ delta, a, a ^ delta, delta, t_aa, &mi);
+		block fan_out = t_ab[0] ^ t_ac[0];
+		block self    = t_aa[0] ^ t_aa[1] ^ a;
+		if (cmpBlock(&fan_out, &zero_block, 1) || cmpBlock(&fan_out, &delta, 1) ||
+		    cmpBlock(&self, &zero_block, 1) || cmpBlock(&self, &delta, 1)) {
+			cout << "LEAK: bucket-shared key without gid tweak\n";
+			abort();
+		}
+	}
+	cout << "check\n";
 	// Throughput measurement lives in ../bench/bench_halfgate.cpp (build-only).
 
 	return 0;

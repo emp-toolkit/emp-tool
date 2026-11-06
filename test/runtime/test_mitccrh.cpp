@@ -1,14 +1,16 @@
-// crypto/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Yang 2019).
-// A batched key schedule + AES-encrypt-then-XOR-input construction used by
-// half-gates garbling. Read example() first; the rest is verification.
+// crypto/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Weng–Yu,
+// eprint 2019/1168). A bucketed-key Davies-Meyer AES hash used by half-gates
+// garbling. Read example() first; the rest is verification.
 //
 // What's in mitccrh.h:
-//   MITCCRH<BatchSize>                       AES_KEY scheduled_key[B], gid, start_point
+//   MITCCRH<BatchSize, ReuseShift>           AES_KEY scheduled_key[B], gid, start_point
 //   setS(s)                                  reset start_point + gid
-//   renew_ks() / renew_ks(gid)               schedule B keys from gid sequence
-//   renew_ks(const block * tweaks)           schedule B keys from explicit tweaks
-//   hash<K, H>(blks)                         consume K scheduled keys, hash K*H blocks
-//   hash_cir<K, H>(blks)                     sigma() each block first, then hash<K,H>
+//   renew_ks() / renew_ks(gid)               schedule B keys from the gid sequence
+//   hash<K, H>(blks)                         consume K lanes, hash K*H blocks:
+//                                              y ^ AES_{S ^ (gid>>RS)}(y), y = x ^ T(gid)
+//   hash_cir<K, H>(blks)                     same with y = sigma(x) ^ T(gid)
+// T(gid) = makeBlock(gid, 0): the gid enters the cipher input, so gids that
+// share one bucket key (RS > 0) still hash the same block to distinct values.
 
 #include "emp-tool/emp-tool.h"
 
@@ -30,8 +32,9 @@ using namespace std;
 static void example() {
 	cout << "=== example ===\n";
 
-	// (1) setS + hash<K, H>: feed K*H blocks, the construction XORs input back
-	// over the encrypted output (TMMO).
+	// (1) setS + hash<K, H>: feed K*H blocks; lane k hashes under the key of
+	// bucket gid_k >> ReuseShift, with T(gid_k) XORed into the cipher input
+	// and kept in the Davies-Meyer XOR-back.
 	const block S = makeBlock(0xdeadbeefULL, 0xcafebabeULL);
 	MITCCRH<8> mit;
 	mit.setS(S);
@@ -50,31 +53,50 @@ static void example() {
 	mit.hash_cir<2, 1>(buf2);
 	cout << "  hash_cir<2,1>[0]    = " << buf2[0] << "\n";
 
-	// (3) renew_ks(tweaks): schedule from explicit tweaks instead of gid.
+	// (3) renew_ks(gid) repositions the gid stream, so a second tweak dimension
+	// can be laid out as gid gaps: here gate 5 uses gids 40..43, one lane per
+	// destination, each a distinct (S, gid) with its bucket and tweak.
 	mit.setS(S);
-	block tweaks[8];
-	for (int i = 0; i < 8; ++i) tweaks[i] = makeBlock(i + 100, 0);
-	mit.renew_ks(tweaks);
-	block buf3[8];
-	for (int i = 0; i < 8; ++i) buf3[i] = makeBlock(i, i);
-	mit.hash<8, 1>(buf3);
-	cout << "  hash<8,1> w/ tweaks[0] = " << buf3[0] << "\n";
+	block buf3[4] = {makeBlock(0, 1), makeBlock(0, 2), makeBlock(0, 3), makeBlock(0, 4)};
+	mit.renew_ks(uint64_t{5} * 8);
+	mit.hash_cir<4, 1>(buf3);
+	cout << "  gate 5 / gid 40 lane 0 = " << buf3[0] << "\n";
 }
 
 // ---------- correctness ----------
 //
-// Reference: keys[i] = S ^ makeBlock((gid0+i) >> RS, 0) — the bucketed tweak
-// (RS = ReuseShift; RS = 0 is the strict one-key-per-gid construction);
-// schedule all B with AES_opt_key_schedule<B>; ParaEnc<K, H> consumes
-// scheduled_key[0..K), then MITCCRH XORs the ciphertext with the original
-// input. gid0 = 7 is deliberately unaligned so RS > 0 exercises the
-// bucket-straddling renewal path.
+// Reference, one block at a time:
+//   ref(x, key, T) = y ^ AES_key(y),  y = (sigma(x) if cir else x) ^ T.
+// key = S ^ makeBlock(gid >> RS, 0) and T = makeBlock(gid, 0); RS = 0 is the
+// one-key-per-gid schedule, T still applied. Each lane k of a hash<K, H> call
+// covers gid (first gid of the schedule) + key_used + k. The reference is
+// independent in the construction (key derivation, tweak placement,
+// Davies-Meyer), not in the cipher: AES_set_encrypt_key / AES_ecb_encrypt_blks
+// are the library's own AES, pinned to the FIPS-197 vector in test_aes.
+
+static block ref_hash(block x, block key, block T, bool cir) {
+	block y = (cir ? sigma(x) : x) ^ T;
+	AES_KEY ak;
+	AES_set_encrypt_key(key, &ak);
+	block c = y;
+	AES_ecb_encrypt_blks<1>(&c, &ak);
+	return c ^ y;
+}
+static block gid_key(block S, uint64_t g, int rs) { return S ^ makeBlock(g >> rs, 0); }
+static block gid_tweak(uint64_t g) { return makeBlock(g, 0); }
+static bool same(block a, block b) { return memcmp(&a, &b, sizeof(block)) == 0; }
 
 static_assert(std::is_same_v<MITCCRH<8>, MITCCRH<8, 3>>,
               "MITCCRH's default ReuseShift is 3 (8x key reuse, 3-bit MI deduction)");
 
+// hash<K, H> from an unaligned gid0 = 7 (RS > 0 exercises the
+// bucket-straddling renewal path), two calls back to back: the second call
+// continues the schedule when K < B, and renews when K == B (into the same
+// bucket when 2^RS > B, taking the cached schedule), against the per-block
+// reference. The gid stream is contiguous across both cases, so lane 0 of
+// the second call is gid0 + K.
 template <int K, int H, int B = 8, int RS = 3>
-static bool check_mitccrh_against_paraenc() {
+static bool check_hash_against_reference() {
 	static_assert(K <= B && B % K == 0, "MITCCRH<B> requires K | B");
 	const block S = makeBlock(0xdeadbeefULL, 0xcafebabeULL);
 	const uint64_t gid0 = 7;
@@ -84,61 +106,73 @@ static bool check_mitccrh_against_paraenc() {
 	mit.gid = gid0;
 	mit.key_used = B;  // force a fresh schedule on first hash()
 
-	block in[K * H];
-	PRG().random_block(in, K * H);
-
-	block emp_out[K * H];
-	memcpy(emp_out, in, sizeof(in));
-	mit.template hash<K, H>(emp_out);
-
-	block ref_keys[B];
-	for (int i = 0; i < B; ++i)
-		ref_keys[i] = S ^ makeBlock((gid0 + (uint64_t)i) >> RS, 0);
-	AES_KEY skeys[B];
-	AES_opt_key_schedule<B>(ref_keys, skeys);
-
-	block ref_out[K * H];
-	memcpy(ref_out, in, sizeof(in));
-	ParaEnc<K, H>(ref_out, skeys);
-	for (int i = 0; i < K * H; ++i) ref_out[i] = ref_out[i] ^ in[i];
-
-	bool ok = memcmp(emp_out, ref_out, sizeof(in)) == 0;
+	bool ok = true;
+	for (int call = 0; call < 2; ++call) {
+		block in[K * H], out[K * H];
+		PRG().random_block(in, K * H);
+		mit.template hash<K, H>(out, in);
+		for (int k = 0; k < K; ++k)
+			for (int h = 0; h < H; ++h) {
+				const uint64_t g = gid0 + (uint64_t)(call * K + k);
+				ok &= same(out[k * H + h],
+				           ref_hash(in[k * H + h], gid_key(S, g, RS), gid_tweak(g), false));
+			}
+	}
 	ostringstream os;
-	os << "  [MITCCRH<" << B << "," << RS << ">::hash<" << K << "," << H << "> = ParaEnc^in]";
+	os << "  [MITCCRH<" << B << "," << RS << ">::hash<" << K << "," << H << "> = reference]";
 	cout << left << setw(46) << os.str() << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
 // Default-shift bucketing across renewals: 8 consecutive hash<2,2> calls
 // advance gid 0..15 = bucket 0 then bucket 1 (two renewals; the second batch
-// goes through the single-bucket schedule-once/replicate path). Every block
-// must equal the bucket-keyed single-AES reference:
-// out = AES_{S ^ (gid>>3)}(in) ^ in.
+// goes through the single-bucket schedule-once path). Every block must equal
+// the bucket-keyed, gid-tweaked reference.
 static bool check_bucket_sequence() {
 	const block S = makeBlock(0x7777ULL, 0x1111ULL);
 	MITCCRH<8> mit;        // default ReuseShift = 3
 	mit.setS(S);
 
 	bool ok = true;
-	for (int call = 0; call < 8; ++call) {     // keys for gids 2*call, 2*call+1
+	for (int call = 0; call < 8; ++call) {     // lanes for gids 2*call, 2*call+1
 		block in[4];
 		PRG().random_block(in, 4);
 		block out[4];
 		mit.hash<2, 2>(out, in);
 		for (int k = 0; k < 2; ++k) {
-			uint64_t g = (uint64_t)(2 * call + k);
-			block key = S ^ makeBlock(g >> 3, 0);
-			AES_KEY ak;
-			AES_set_encrypt_key(key, &ak);
-			for (int j = 0; j < 2; ++j) {
-				block ref = in[k * 2 + j];
-				AES_ecb_encrypt_blks<1>(&ref, &ak);
-				ref = ref ^ in[k * 2 + j];
-				ok &= memcmp(&ref, &out[k * 2 + j], sizeof(block)) == 0;
-			}
+			const uint64_t g = (uint64_t)(2 * call + k);
+			for (int j = 0; j < 2; ++j)
+				ok &= same(out[k * 2 + j],
+				           ref_hash(in[k * 2 + j], gid_key(S, g, 3), gid_tweak(g), false));
 		}
 	}
 	cout << "  [default-shift buckets across renewals]      " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+// The point of T(gid): under the default shift, gids 0..7 share one AES key.
+// Hashing the SAME block at each of them must give eight distinct values, each
+// equal to the reference at its gid. (A bucketed hash without the input tweak
+// returns one value eight times, which lets a half-gates evaluator XOR two
+// gates' rows down to 0 or Delta — see test_halfgate.cpp.)
+static bool check_same_block_distinct_within_bucket() {
+	const block S = makeBlock(0x2468ULL, 0x1357ULL);
+	MITCCRH<8> mit;
+	mit.setS(S);
+	block x;
+	PRG().random_block(&x, 1);
+
+	block out[8];
+	for (int g = 0; g < 8; ++g) {
+		out[g] = x;
+		mit.hash_cir<1, 1>(out + g);
+	}
+	bool ok = true;
+	for (int g = 0; g < 8; ++g) {
+		ok &= same(out[g], ref_hash(x, gid_key(S, (uint64_t)g, 3), gid_tweak((uint64_t)g), true));
+		for (int g2 = 0; g2 < g; ++g2) ok &= !same(out[g], out[g2]);
+	}
+	cout << "  [same block, 8 gids of one bucket: distinct]  " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
@@ -167,52 +201,24 @@ static bool check_hash_cir() {
 	return ok;
 }
 
-// hash_cir_fixed<K,H> contract: hashes under the keys
-// from an explicit renew_ks(tweaks) WITHOUT consuming them. Checks:
-// (1) equivalence with the first consuming hash_cir under the same
-// schedule; (2) repeated fixed calls reproduce the output and leave
-// key_used untouched, so a later hash_cir still starts at key 0;
-// (3) a different tweak vector changes every hashed lane.
-template <int K, int H>
-static bool check_hash_cir_fixed() {
-	const block S = makeBlock(0xf1e2ULL, 0xd3c4ULL);
-	PRG prg(&zero_block);
-	block tweaks[8], tweaks2[8], in[K * H];
-	prg.random_block(tweaks, 8);
-	prg.random_block(tweaks2, 8);
-	prg.random_block(in, K * H);
-
-	MITCCRH<8> a, b, c;
-	a.setS(S); b.setS(S); c.setS(S);
-	a.renew_ks(tweaks);
-	b.renew_ks(tweaks);
-	c.renew_ks(tweaks2);
-
-	block fixed_out[K * H], cir_out[K * H], again[K * H], after[K * H],
-	    other[K * H];
-	memcpy(fixed_out, in, sizeof(in));
-	memcpy(cir_out, in, sizeof(in));
-	memcpy(again, in, sizeof(in));
-	memcpy(after, in, sizeof(in));
-	memcpy(other, in, sizeof(in));
-
-	a.template hash_cir_fixed<K, H>(fixed_out);
-	b.template hash_cir<K, H>(cir_out);
-	bool ok = memcmp(fixed_out, cir_out, sizeof(in)) == 0;
-
-	a.template hash_cir_fixed<K, H>(again);
-	ok &= memcmp(again, fixed_out, sizeof(in)) == 0;
-
-	a.template hash_cir<K, H>(after);
-	ok &= memcmp(after, cir_out, sizeof(in)) == 0;
-
-	c.template hash_cir_fixed<K, H>(other);
-	for (int i = 0; i < K * H; ++i)
-		ok &= memcmp(&other[i], &fixed_out[i], sizeof(block)) != 0;
-
-	ostringstream os;
-	os << "  [hash_cir_fixed<" << K << "," << H << "> contract]";
-	cout << left << setw(46) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+// renew_ks(gid) repositions the stream: afterwards lane k of the next hash is
+// gid + k, bucket key and tweak included — the hook for laying a second tweak
+// dimension out as gid gaps. Checked at a bucket-aligned gid (uniform batch)
+// and at an unaligned one (the batch straddles two buckets).
+static bool check_renew_ks_repositions() {
+	const block S = makeBlock(0x5a5aULL, 0xa5a5ULL);
+	bool ok = true;
+	for (uint64_t g : {uint64_t{40}, uint64_t{1000003}}) {
+		MITCCRH<8> mit;
+		mit.setS(S);
+		block in[4], out[4];
+		PRG().random_block(in, 4);
+		mit.renew_ks(g);
+		mit.hash_cir<4, 1>(out, in);
+		for (int k = 0; k < 4; ++k)
+			ok &= same(out[k], ref_hash(in[k], gid_key(S, g + k, 3), gid_tweak(g + k), true));
+	}
+	cout << "  [renew_ks(gid) repositions the lanes]        " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
@@ -282,22 +288,26 @@ static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
 	ok &= check_setS_resets_gid();
-	ok &= check_mitccrh_against_paraenc<1, 1>();
-	ok &= check_mitccrh_against_paraenc<1, 4>();
-	ok &= check_mitccrh_against_paraenc<2, 1>();
-	ok &= check_mitccrh_against_paraenc<4, 1>();
-	ok &= check_mitccrh_against_paraenc<8, 1>();
-	ok &= check_mitccrh_against_paraenc<8, 4>();
-	ok &= check_mitccrh_against_paraenc<2, 2, 8, 0>();   // strict per-gid construction
-	ok &= check_mitccrh_against_paraenc<8, 2, 8, 0>();
-	ok &= check_mitccrh_against_paraenc<2, 2, 8, 5>();   // bucket spans renewals (cache path)
+	ok &= check_hash_against_reference<1, 1>();
+	ok &= check_hash_against_reference<1, 4>();
+	ok &= check_hash_against_reference<2, 1>();
+	ok &= check_hash_against_reference<4, 1>();
+	ok &= check_hash_against_reference<8, 1>();
+	ok &= check_hash_against_reference<8, 4>();
+	ok &= check_hash_against_reference<2, 2, 8, 0>();   // one-key-per-gid schedule
+	ok &= check_hash_against_reference<8, 2, 8, 0>();
+	ok &= check_hash_against_reference<2, 2, 8, 5>();   // bucket wider than the batch
+	ok &= check_hash_against_reference<8, 2, 8, 5>();   // second renewal reuses the cached bucket schedule
+	ok &= check_hash_against_reference<1, 3, 8, 3>();   // odd lane span
+	ok &= check_hash_against_reference<4, 6, 4, 2>();   // B = 4; 24-block runs (grouped wide tiles on VAES-512)
+	ok &= check_hash_against_reference<1, 4, 1, 3>();   // B = 1 (one lane per schedule)
+	ok &= check_hash_against_reference<16, 1, 16, 3>(); // B = 16: every batch straddles two buckets
 	ok &= check_bucket_sequence();
+	ok &= check_same_block_distinct_within_bucket();
 	ok &= check_hash_cir<2, 1>();
 	ok &= check_hash_cir<2, 2>();
 	ok &= check_hash_cir<8, 1>();
-	ok &= check_hash_cir_fixed<2, 1>();
-	ok &= check_hash_cir_fixed<8, 1>();
-	ok &= check_hash_cir_fixed<8, 2>();
+	ok &= check_renew_ks_repositions();
 	ok &= check_out_of_place<1, 1>();
 	ok &= check_out_of_place<8, 4>();
 	ok &= check_hash_cir_out_of_place<2, 1>();

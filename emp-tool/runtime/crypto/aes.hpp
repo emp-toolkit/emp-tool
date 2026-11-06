@@ -121,10 +121,14 @@ static inline void ks_rounds(AES_KEY* keys, block con, block con3, block mask, i
 	}
 }
 
+// Memory tiles. apply<L, n_tiles>(dst, src, kk, off, aux...) runs n_tiles
+// tiles of L::N blocks under one key; `off` is the index of the first block
+// within the key's run (only tiles that derive a per-block value use it) and
+// `aux...` are the per-key extras a tile declares (see ParaEnc_mem_tiles_impl).
 struct AesMemPlainTile {
 	template<class L, int n_tiles>
 	EMP_AES_TARGET_ATTR
-	static void apply(block *dst, const block *src, const AES_KEY *kk) {
+	static void apply(block *dst, const block *src, const AES_KEY *kk, int /*off*/) {
 		aes_tiles<L, n_tiles>(dst, src, kk);
 	}
 };
@@ -132,7 +136,7 @@ struct AesMemPlainTile {
 struct AesMemXorInputTile {
 	template<class L, int n_tiles>
 	EMP_AES_TARGET_ATTR
-	static void apply(block *dst, const block *src, const AES_KEY *kk) {
+	static void apply(block *dst, const block *src, const AES_KEY *kk, int /*off*/) {
 		aes_tiles_xor_input<L, n_tiles>(dst, src, kk);
 	}
 };
@@ -144,9 +148,53 @@ struct AesMemXorInputTile {
 struct AesMemXorSigmaTile {
 	template<class L, int n_tiles>
 	EMP_AES_TARGET_ATTR
-	static void apply(block *dst, const block *src, const AES_KEY *kk) {
+	static void apply(block *dst, const block *src, const AES_KEY *kk, int /*off*/) {
 		aes_tiles_src<L, n_tiles>(
 			[src](int t) { return L::sigma(L::load(src + (size_t)t * L::N)); },
+			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
+				L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
+			}, kk);
+	}
+};
+
+// Tweaked Davies-Meyer tiles for a key shared by several tweaks (MITCCRH's
+// gid buckets). Block b of the key's run hashes under the public tweak
+// tb[0] + makeBlock(b / Span, 0) — the key's base tweak plus the block's lane
+// index, added as 64-bit lanes — so y = src ⊕ tweak (XorInputTweak) or
+// y = σ(src) ⊕ tweak (XorSigmaTweak) and dst = y ⊕ AES(y). The tweak vector
+// is built in registers: one broadcast of tb[0] per key plus compile-time
+// lane offsets, one add and one XOR per tile. No per-block tweak array in
+// memory, so no narrow store that a wide VAES load would have to forward
+// from. Span == numEncs (one tweak for the whole run) folds the offsets to
+// zero. `tb` is this key's base tweak, the per-key aux value.
+template<int Span>
+struct AesMemXorInputTweakTile {
+	template<class L, int n_tiles>
+	EMP_AES_TARGET_ATTR
+	static void apply(block *dst, const block *src, const AES_KEY *kk, int off, block tb) {
+		const typename L::vec_t base = L::broadcast(tb);
+		aes_tiles_src<L, n_tiles>(
+			[src, base, off](int t) {
+				return L::xorv(L::load(src + (size_t)t * L::N),
+				               L::add64(base, L::template lane_offsets<Span>(off + t * L::N)));
+			},
+			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
+				L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
+			}, kk);
+	}
+};
+
+template<int Span>
+struct AesMemXorSigmaTweakTile {
+	template<class L, int n_tiles>
+	EMP_AES_TARGET_ATTR
+	static void apply(block *dst, const block *src, const AES_KEY *kk, int off, block tb) {
+		const typename L::vec_t base = L::broadcast(tb);
+		aes_tiles_src<L, n_tiles>(
+			[src, base, off](int t) {
+				return L::xorv(L::sigma(L::load(src + (size_t)t * L::N)),
+				               L::add64(base, L::template lane_offsets<Span>(off + t * L::N)));
+			},
 			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
 				L::store(dst + (size_t)t * L::N, L::xorv(x, pt));
 			}, kk);
@@ -159,16 +207,17 @@ struct AesMemXorSigmaTile {
 // Byte-identical to one apply<L,n_tiles>: the blocks are independent, only the
 // AES-pipelining grouping changes. Used for compile-time numEncs > 16, where
 // N4 = numEncs/4 exceeds 4; for n_tiles <= 4 it is a single apply as before.
-template<class MemTile, class L, int n_tiles>
+// `off` advances with the groups; `aux...` are per-key and pass through.
+template<class MemTile, class L, int n_tiles, class... Aux>
 EMP_AES_TARGET_ATTR
-static inline void apply_grouped(block *dst, const block *src, const AES_KEY *kk) {
+static inline void apply_grouped(block *dst, const block *src, const AES_KEY *kk, int off, Aux... aux) {
 	constexpr int G = 4;
 	if constexpr (n_tiles > G) {
-		MemTile::template apply<L, G>(dst, src, kk);
+		MemTile::template apply<L, G>(dst, src, kk, off, aux...);
 		apply_grouped<MemTile, L, n_tiles - G>(
-			dst + (size_t)G * L::N, src + (size_t)G * L::N, kk);
+			dst + (size_t)G * L::N, src + (size_t)G * L::N, kk, off + G * L::N, aux...);
 	} else if constexpr (n_tiles > 0) {
-		MemTile::template apply<L, n_tiles>(dst, src, kk);
+		MemTile::template apply<L, n_tiles>(dst, src, kk, off, aux...);
 	}
 }
 
@@ -181,9 +230,13 @@ static inline void apply_grouped(block *dst, const block *src, const AES_KEY *kk
 // On aarch64 only AesLane<1> exists, so the VAES guards compile out
 // and the body collapses to a single AesLane<1> memory-input tile op
 // call per key.
-template<class MemTile, int numKeys, int numEncs>
+//
+// Every tile call gets the block offset of its chunk within the key's run.
+// `aux...` are per-key arrays (one entry per key); entry k is forwarded by
+// value to MemTile::apply — the tweaked tiles take their base tweak this way.
+template<class MemTile, int numKeys, int numEncs, class... Aux>
 EMP_AES_TARGET_ATTR
-static inline void ParaEnc_mem_tiles_impl(block *dst, const block *src, const AES_KEY *keys) {
+static inline void ParaEnc_mem_tiles_impl(block *dst, const block *src, const AES_KEY *keys, Aux... aux) {
 #if EMP_HAS_VAES512
 	constexpr int W4 = 4, N4 = numEncs / 4;
 #else
@@ -201,12 +254,14 @@ static inline void ParaEnc_mem_tiles_impl(block *dst, const block *src, const AE
 		const block * const ps = src + k * (size_t)numEncs;
 		const AES_KEY * const kk = keys + k;
 #if EMP_HAS_VAES512
-		if constexpr (N4 > 0) apply_grouped<MemTile, AesLane<4>, N4>(pd, ps, kk);
+		if constexpr (N4 > 0) apply_grouped<MemTile, AesLane<4>, N4>(pd, ps, kk, 0, (aux[k])...);
 #endif
 #if EMP_HAS_VAES256
-		if constexpr (N2 > 0) MemTile::template apply<AesLane<2>, N2>(pd + N4 * W4, ps + N4 * W4, kk);
+		if constexpr (N2 > 0) MemTile::template apply<AesLane<2>, N2>(
+			pd + N4 * W4, ps + N4 * W4, kk, N4 * W4, (aux[k])...);
 #endif
-		if constexpr (N1 > 0) MemTile::template apply<AesLane<1>, N1>(pd + N4 * W4 + N2 * W2, ps + N4 * W4 + N2 * W2, kk);
+		if constexpr (N1 > 0) MemTile::template apply<AesLane<1>, N1>(
+			pd + N4 * W4 + N2 * W2, ps + N4 * W4 + N2 * W2, kk, N4 * W4 + N2 * W2, (aux[k])...);
 	}
 }
 
