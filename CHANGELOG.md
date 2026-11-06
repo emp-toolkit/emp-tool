@@ -32,6 +32,14 @@ metadata is numeric (see the README's version guidance).
   input to tell them apart, the same leak one layer up; it must re-derive
   its tweak layout on the gid stream, on both ends, not rename calls.
 
+### Fixed
+
+- `bench_halfgate` measured nothing: with the hashes inlined into `main`
+  and their results unused, the compiler removed them, so the loop timed
+  the PRG and key schedules, and the printed rate divided 128M gates by a
+  2M-gate loop. The outputs are now folded into a printed sink and the
+  count matches the loop.
+
 ## v1.0.0-alpha.1
 
 First tagged alpha of the 1.0 development line. The 0.3.x line
