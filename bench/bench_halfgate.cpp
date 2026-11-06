@@ -1,5 +1,9 @@
 // Half-gate garble/eval throughput. Build-only (not a ctest case); the
 // correctness check lives in ../test/test_halfgate.cpp.
+//
+// Every output of the loop is folded into `sink` and printed: with the hashes
+// inlined into main and their results otherwise unused, the compiler is free
+// to delete them, and then the loop times only the PRG and the key schedules.
 #include "emp-tool/emp-tool.h"
 #include <iostream>
 using namespace std;
@@ -17,10 +21,12 @@ int main(void) {
 	MITCCRH<8> mi_eva;
 	mi_eva.setS(delta);
 	block ret;
+	block sink = zero_block;
 
+	const int64_t gates = 1024 * 1024 * 2;
 	cout << "Efficiency: ";
 	auto start = clock_start();
-	for(int i = 0; i < 1024*1024*2; ++i) {
+	for(int64_t i = 0; i < gates; ++i) {
 		prg.random_block(data, 2);
 		w0 = halfgates_garble(data[0], data[0]^delta, data[1], data[1]^delta, delta, table, &mi_gen);
 		w1 = w0 ^ delta;
@@ -28,8 +34,10 @@ int main(void) {
 		data1[0] = data[0] ^ delta;
 		data1[1] = data[1] ^ delta;
 		ret = halfgates_eval(data1[0], data1[1], table, &mi_eva);
+		sink = sink ^ ret ^ w1 ^ table[0] ^ table[1];
 	}
-	cout << 1024*1024*128/(time_from(start))*1e6 << " gates/second" << endl;
+	double us = time_from(start);
+	cout << (double)gates / us * 1e6 << " gates/second (sink " << sink << ")" << endl;
 
 	return 0;
 }
