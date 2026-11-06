@@ -130,6 +130,17 @@ struct AesLane<1> {
 		return _mm_xor_si128(_mm_shuffle_epi32(a, 78),
 		                     _mm_and_si128(a, makeBlock(0xFFFFFFFFFFFFFFFFull, 0x0ull)));
 	}
+	// 64-bit lane add and the per-lane tweak offsets of the tweaked memory
+	// tiles (aes.hpp): lane j, holding block b0 + j of a key's run, gets
+	// makeBlock((b0 + j) / Span, 0) — its lane index within the run, in the
+	// high qword where the tweak's gid lives — to add onto the broadcast base
+	// tweak. All arguments are compile-time in the unrolled tiles, so this
+	// folds to a constant.
+	EMP_AES_TARGET_ATTR static vec_t add64(vec_t a, vec_t b)          { return _mm_add_epi64(a, b); }
+	template<int Span>
+	EMP_AES_TARGET_ATTR static vec_t lane_offsets(int b0) {
+		return _mm_set_epi64x((int64_t)(b0 / Span), 0);
+	}
 };
 
 #if EMP_HAS_VAES256
@@ -152,6 +163,11 @@ struct AesLane<2> {
 	EMP_AES_TARGET_ATTR static vec_t sigma(vec_t a) {
 		const vec_t m = broadcast(makeBlock(0xFFFFFFFFFFFFFFFFull, 0x0ull));
 		return _mm256_xor_si256(_mm256_shuffle_epi32(a, 78), _mm256_and_si256(a, m));
+	}
+	EMP_AES_TARGET_ATTR static vec_t add64(vec_t a, vec_t b)          { return _mm256_add_epi64(a, b); }
+	template<int Span>
+	EMP_AES_TARGET_ATTR static vec_t lane_offsets(int b0) {
+		return _mm256_set_epi64x((int64_t)((b0 + 1) / Span), 0, (int64_t)(b0 / Span), 0);
 	}
 };
 #endif
@@ -177,6 +193,12 @@ struct AesLane<4> {
 		const vec_t m = broadcast(makeBlock(0xFFFFFFFFFFFFFFFFull, 0x0ull));
 		return _mm512_xor_si512(_mm512_shuffle_epi32(a, _MM_PERM_BADC),
 		                        _mm512_and_si512(a, m));
+	}
+	EMP_AES_TARGET_ATTR static vec_t add64(vec_t a, vec_t b)          { return _mm512_add_epi64(a, b); }
+	template<int Span>
+	EMP_AES_TARGET_ATTR static vec_t lane_offsets(int b0) {
+		return _mm512_set_epi64((int64_t)((b0 + 3) / Span), 0, (int64_t)((b0 + 2) / Span), 0,
+		                        (int64_t)((b0 + 1) / Span), 0, (int64_t)(b0 / Span), 0);
 	}
 };
 #endif
@@ -302,6 +324,12 @@ struct AesLane<1> {
 	static vec_t sigma(vec_t a) {
 		return _mm_xor_si128(_mm_shuffle_epi32(a, 78),
 		                     _mm_and_si128(a, makeBlock(0xFFFFFFFFFFFFFFFFull, 0x0ull)));
+	}
+	// See the x86 AesLane<1>: lane tweak offsets for the tweaked memory tiles.
+	static vec_t add64(vec_t a, vec_t b)                               { return _mm_add_epi64(a, b); }
+	template<int Span>
+	static vec_t lane_offsets(int b0) {
+		return _mm_set_epi64x((int64_t)(b0 / Span), 0);
 	}
 };
 

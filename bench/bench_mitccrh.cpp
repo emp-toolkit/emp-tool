@@ -1,14 +1,14 @@
-// crypto/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Yang 2019).
-// A batched key schedule + AES-encrypt-then-XOR-input construction used by
-// half-gates garbling. Throughput benchmark.
+// crypto/mitccrh.h — Multi-Instance Tweakable CCRH (Guo–Katz–Wang–Weng–Yu,
+// eprint 2019/1168). A bucketed-key Davies-Meyer AES hash used by half-gates
+// garbling. Throughput benchmark.
 //
 // What's in mitccrh.h:
 //   MITCCRH<BatchSize>                       AES_KEY scheduled_key[B], gid, start_point
 //   setS(s)                                  reset start_point + gid
 //   renew_ks() / renew_ks(gid)               schedule B keys from gid sequence
-//   renew_ks(const block * tweaks)           schedule B keys from explicit tweaks
-//   hash<K, H>(blks)                         consume K scheduled keys, hash K*H blocks
-//   hash_cir<K, H>(blks)                     sigma() each block first, then hash<K,H>
+//   hash<K, H>(blks)                         consume K lanes, hash K*H blocks:
+//                                              y ^ AES_{S ^ (gid>>RS)}(y), y = x ^ T(gid)
+//   hash_cir<K, H>(blks)                     same with y = sigma(x) ^ T(gid)
 
 #include "emp-tool/emp-tool.h"
 

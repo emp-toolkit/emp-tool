@@ -3,6 +3,35 @@
 Notable changes to emp-tool. Versions are the git tags. CMake package
 metadata is numeric (see the README's version guidance).
 
+## Unreleased
+
+### Security
+
+- `MITCCRH`: the bucketed key reuse (`ReuseShift > 0`, default 3) now
+  carries the gate id into the cipher input,
+  `H(x, i) = y ⊕ E_{S ⊕ (i >> ReuseShift)}(y)` with `y = σ(x) ⊕ T(i)`,
+  `T(i) = makeBlock(i, 0)`. Previously the gids sharing a bucket key
+  hashed a block to the same value, so a wire label fed to two AND gates
+  of one bucket (or `AND(a, a)`) gave half-gate rows whose XOR was `0` or
+  `Δ`, and the evaluator recovered `Δ`. Affects `v1.0.0-alpha.1`, the
+  first release with the bucketed `ReuseShift` hash; the 0.3.x line keys
+  every gate separately and is unaffected.
+  Every MITCCRH-derived transcript changes; both parties must upgrade
+  together, pinned wire-trace baselines must be regenerated, and every
+  dependent must be rebuilt (the class layout changed). (Issue #212.)
+
+### Removed
+
+- `MITCCRH::renew_ks(const block*)` and `MITCCRH::hash_cir_fixed`, the
+  explicit-tweak mode in which the caller scheduled the keys and owned
+  tweak uniqueness. Every hash now goes through the gid stream, which the
+  class keeps distinct per `(S, gid)`; a second tweak dimension is XORed
+  into the low qword of a random `S` or laid out as gid gaps with
+  `renew_ks(gid)`. A protocol that scheduled its own keys and bucketed on
+  explicit tweaks shared one key across gates with nothing in the cipher
+  input to tell them apart, the same leak one layer up; it must re-derive
+  its tweak layout on the gid stream, on both ends, not rename calls.
+
 ## v1.0.0-alpha.1
 
 First tagged alpha of the 1.0 development line. The 0.3.x line
