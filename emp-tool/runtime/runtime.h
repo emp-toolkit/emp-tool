@@ -35,8 +35,8 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 #include "emp-tool/runtime/crypto/f2k.h"
 #include "emp-tool/runtime/crypto/ec.h"
 #include "emp-tool/runtime/crypto/ro.h"
-// Exported for downstream protocol repos (emp-ag2pc / emp-agmpc thread their
-// passes and mesh IO over it); nothing in runtime/ itself uses ThreadPool.
+// Exported for protocol libraries that thread their passes and IO over it;
+// nothing in runtime/ itself uses ThreadPool.
 #include "emp-tool/third_party/ThreadPool.h"
 
 #include "emp-tool/runtime/execution/half_gate.h"

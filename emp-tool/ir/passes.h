@@ -5,8 +5,8 @@
 // pure function over the program; nothing here caches — a caller that replays
 // repeatedly computes the pass once and keeps the result itself. They describe
 // graph facts every backend can use; a backend reads the ones it needs
-// (ag2pc uses liveness; round-sensitive protocols can use the schedule) and
-// ignores the rest.
+// (a multi-pass backend uses liveness; a round-sensitive protocol can use the
+// schedule) and ignores the rest.
 //
 // Wire ids in the IR are uint32_t, but GATE indices are carried as int64_t
 // where a -1 "none" sentinel is needed (first def / last use) — gate counts up

@@ -8,7 +8,7 @@
 // every other context (so the same body inlines on a plaintext/ZK context as its
 // own oracle — see circuits/frontend/circuit_fn.h). compose() records such a body
 // over a ComposeCtx into a ComposePlan (O(#glue gates + #instances); the units are
-// never inlined here), which a flattening backend (emp-ag2pc run_compose) replays
+// never inlined here), which a flattening backend (a session's run_compose) replays
 // on the fly. Units must be WireReuse::Linear for a multi-pass backend (compile_linear).
 
 #include "emp-tool/circuits/frontend/circuit_fn.h"   // Circuit, run, RecordValue

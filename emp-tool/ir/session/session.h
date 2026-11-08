@@ -19,10 +19,10 @@
 //
 // Settlement (normative): a value returned by reveal is PROVISIONAL until the
 // session's deferred protocol checks covering it have passed; each DirectSession
-// must document its settlement point. The two shipped shapes: settle-at-reveal
-// (checks flush before the cleartext is produced — AG2PCSession) and
-// settle-at-finalize (reveal returns immediately, finalize() runs the closing
-// checks — ZKBoolSession). Plaintext/semi-honest sessions have nothing to settle.
+// must document its settlement point. There are two shapes: settle-at-reveal
+// (checks flush before the cleartext is produced) and settle-at-finalize (reveal
+// returns immediately, finalize() runs the closing checks). Plaintext/semi-honest
+// sessions have nothing to settle.
 // A failed check is a malicious abort and reports through error() — fatal, like
 // every emp-tool failure (docs/api_conventions.md); there is no in-band error
 // channel on reveal, by design.
@@ -52,8 +52,8 @@ concept CheckpointingSession =
     requires(S& s) { s.checkpoint(); };
 
 // Spelling helper so tests/docs can name a session's direct context without a
-// session value alias: UInt_T<ctx_t<SH2PCSession>, 32>. In code that teaches
-// the model, prefer the explicit `using Ctx = SH2PCSession::ctx_t;` form.
+// session value alias: UInt_T<ctx_t<ClearSession>, 32>. In code that teaches
+// the model, prefer the explicit `using Ctx = ClearSession::ctx_t;` form.
 template <class S>
 using ctx_t = typename std::remove_cvref_t<S>::ctx_t;
 

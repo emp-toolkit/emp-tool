@@ -2,7 +2,7 @@
 #define EMP_IR_SESSION_CHUNK_RECORDER_H__
 
 // ChunkRecorderCtx — the shared gate recorder for direct/chunked sessions (the
-// ctx_t of AG2PCSession, AGMPCSession, ...). It is a C++20 BooleanContext: gate
+// ctx_t of every ChunkedSession). It is a C++20 BooleanContext: gate
 // ops record into the current chunk as recorder ids. It owns ONLY the pending-
 // recording substrate — no crypto, no carried/authenticated state, no I/O. The
 // owning Session holds the materialized state and drives every flush; operand

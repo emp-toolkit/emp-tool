@@ -5,9 +5,9 @@
 // detection over the recorded chunk, producing a canonical BooleanProgram plus the
 // recorder-id input/output ordering. No protocol / carried state / sockets, so the
 // trickiest direct-chunk logic is protocol- and party-count-agnostic and unit-
-// testable. The owning Session (e.g. AG2PCSession, AGMPCSession) calls it with an
-// is_materialized predicate over its carried_ before any crypto runs. Shared by
-// every chunked session over ChunkRecorderCtx.
+// testable. The owning Session calls it with an is_materialized predicate over
+// its carried_ before any crypto runs. Shared by every chunked session over
+// ChunkRecorderCtx.
 
 #include "emp-tool/ir/program.h"   // circuit::Gate, BooleanProgram
 #include <cstdint>

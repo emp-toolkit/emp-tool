@@ -11,8 +11,9 @@ is passed explicitly and the gate ops are statically dispatched and inlineable. 
 ## Implementing a backend: a pure context + a session
 
 A protocol provides two pieces. The **context** is pure circuit execution — only
-the four gate ops, no I/O — like emp-sh2pc's `SH2PCCtx`, or the shared
-`ChunkRecorderCtx` that emp-ag2pc / emp-agmpc expose as `ctx_t`:
+the four gate ops, no I/O — such as a garbled context that runs half-gates in
+its `and_gate`, or the shared `ChunkRecorderCtx` that a chunked session exposes
+as `ctx_t`:
 
 - pick a `Wire` (a garbled label, a wire id, …) that is `std::semiregular`;
 - implement the four gate ops (eager crypto, or recording into an IR — whatever the
@@ -47,6 +48,6 @@ ciphertext):
 - [privacy_free.h](../emp-tool/runtime/execution/privacy_free.h) — `privacy_free_garble` /
   `privacy_free_eval`.
 
-`SH2PCCtx` calls `halfgates_garble`/`halfgates_eval` directly inside its `and_gate`;
-a new garbled context does the same. The OT that feeds private inputs lives in the
-protocol libraries (emp-sh2pc / emp-ag2pc / emp-agmpc) over emp-ot.
+A garbled context calls `halfgates_garble`/`halfgates_eval` directly inside its
+`and_gate`. The OT that feeds private inputs lives in the protocol library, not
+in emp-tool.

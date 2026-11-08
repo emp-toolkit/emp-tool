@@ -7,7 +7,7 @@
 // a pre-compiled unit records a reference + its wiring (O(width)) instead of inlining
 // the unit's gates, so a composition of N units records O(N) instances, never the flattened
 // N*gates program. A backend that wants the flat circuit replays each instance's
-// gate stream on the fly (e.g. emp-ag2pc's trust path) — nothing is materialized.
+// gate stream on the fly — nothing is materialized.
 //
 // Like RecordCtx: reserve inputs via external_input() BEFORE any gate/call, then
 // finish(outputs). Wires are uint32_t logical ids in the composition's own space.
@@ -115,9 +115,9 @@ static_assert(BooleanContext<ComposeCtx>);
 // Materialize a ComposePlan into a flat dense BooleanProgram by inlining every
 // instance's unit (each instance renumbered into a fresh dense block; unit inputs
 // alias the wired composition ids; reused unit ids densify naturally). This is the
-// generic fallback for a backend with no on-the-fly flattener, and the oracle the
-// trust path is checked against. It DOES materialize (O(total gates)) — the win
-// path (emp-ag2pc) consumes the plan directly instead.
+// generic fallback for a backend with no on-the-fly flattener, and the oracle an
+// on-the-fly flattener is checked against. It DOES materialize (O(total gates));
+// a backend with an on-the-fly flattener consumes the plan directly instead.
 inline circuit::BooleanProgram flatten_compose(const ComposePlan& plan) {
 	circuit::BooleanProgram d;
 	d.num_inputs = plan.num_inputs;

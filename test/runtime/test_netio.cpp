@@ -179,10 +179,10 @@ static void run_correctness(IO *io, int party, const char *tag) {
 // protocol step (no recv on the same IO to trigger an auto-flush, no
 // volume large enough to overflow the 32 KiB user-space staging buffer
 // or the 1 MiB stdio stream buffer) must still deliver its tail bytes to
-// the peer. Mirrors the IKNP receiver-role pattern where setup_recv ends
-// with ~4 KiB of OTCO::send writes and rcot_recv_end ends with check_x +
-// check_t — both ranges are below NETWORK_STAGING_BUFFER_SIZE (32 KiB), so the
-// only things that can move the bytes are an explicit flush() or ~IO.
+// the peer. This is the shape of a protocol step that ends with a few KiB
+// of sends and then waits on another channel: the batch is below
+// NETWORK_STAGING_BUFFER_SIZE (32 KiB), so the only things that can move the
+// bytes are an explicit flush() or ~IO.
 // Two checks, on two short-lived IOs that don't pollute the main channel:
 //   (a) explicit io.flush() drains a send-only batch.
 //   (b) ~IO drains a send-only batch.
@@ -372,10 +372,9 @@ static void run_socket_options_factory_regression() {
 	          "NetIO test: over-limit warning for a path is missing or wrong");
 }
 
-// sync() pairs any two channels, whatever their roles: two NetIOs adopted
-// from a socketpair (both is_server == false) would deadlock on a barrier
-// where one side must go first. Its bytes stay out of the byte counters, and
-// a nonzero byte (the peer is mid-message) is reported.
+// sync() pairs any two channels, whatever their roles, such as two NetIOs
+// adopted from a socketpair (both is_server == false). Its bytes stay out of
+// the byte counters, and a nonzero byte (the peer is mid-message) is reported.
 static void run_sync_regression() {
 	int sockets[2];
 	expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,

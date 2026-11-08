@@ -40,9 +40,9 @@ concept SessionIO =
 // RuntimeSessionIO<S,V> — the runtime-width sibling of SessionIO: a DirectSession S
 // can feed (input, with an explicit runtime width) and open (reveal) a
 // RuntimeWidthValue V. reveal needs no width — it reads V::width() off the value.
-// A session models this only if it supports runtime-width I/O (e.g. ClearSession,
-// ZKBoolSession); fixed-only sessions (sh2pc / ag2pc) do not, which makes the
-// capability a discoverable trait rather than a dead method.
+// A session models this only if it supports runtime-width I/O (e.g. ClearSession);
+// a session with fixed-width I/O only does not, which makes the capability a
+// discoverable trait rather than a dead method.
 template <class S, class V>
 concept RuntimeSessionIO =
     DirectSession<S> &&
