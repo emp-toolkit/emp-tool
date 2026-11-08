@@ -120,6 +120,7 @@ struct AesLane<1> {
 	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return k; }
 	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm_loadu_si128((const __m128i *)p); }
 	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm_storeu_si128((__m128i *)p, v); }
+	EMP_AES_TARGET_ATTR static vec_t load_per_block(const block *p)   { return load(p); }
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm_xor_si128(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm_aesenc_si128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm_aesenclast_si128(s, k); }
@@ -152,6 +153,13 @@ struct AesLane<2> {
 	using vec_t = __m256i;
 	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return _mm256_broadcastsi128_si256(k); }
 	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm256_loadu_si256((const __m256i *)p); }
+	// One 16-byte load per block. Blocks the caller has just written with
+	// 16-byte stores are forwarded from those stores; a single 32-byte load
+	// spanning them cannot be, and waits until the stores reach the cache.
+	EMP_AES_TARGET_ATTR static vec_t load_per_block(const block *p) {
+		return _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)p)),
+		                               _mm_loadu_si128((const __m128i *)(p + 1)), 1);
+	}
 	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm256_storeu_si256((__m256i *)p, v); }
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm256_xor_si256(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm256_aesenc_epi128(s, k); }
@@ -183,6 +191,15 @@ struct AesLane<4> {
 	using vec_t = __m512i;
 	EMP_AES_TARGET_ATTR static vec_t broadcast(__m128i k)             { return _mm512_broadcast_i32x4(k); }
 	EMP_AES_TARGET_ATTR static vec_t load(const block *p)             { return _mm512_loadu_si512((const __m512i *)p); }
+	// One 16-byte load per block, for the reason given at AesLane<2>, joined as
+	// two independent halves so the inserts form a two-step chain.
+	EMP_AES_TARGET_ATTR static vec_t load_per_block(const block *p) {
+		const __m256i lo = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)p)),
+		                                           _mm_loadu_si128((const __m128i *)(p + 1)), 1);
+		const __m256i hi = _mm256_inserti128_si256(_mm256_castsi128_si256(_mm_loadu_si128((const __m128i *)(p + 2))),
+		                                           _mm_loadu_si128((const __m128i *)(p + 3)), 1);
+		return _mm512_inserti64x4(_mm512_castsi256_si512(lo), hi, 1);
+	}
 	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm512_storeu_si512((__m512i *)p, v); }
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
@@ -322,6 +339,7 @@ struct AesLane<1> {
 	static vec_t broadcast(__m128i k)                                  { return k; }
 	static vec_t load(const block *p)                                  { return _mm_loadu_si128((const __m128i *)p); }
 	static void  store(block *p, vec_t v)                              { _mm_storeu_si128((__m128i *)p, v); }
+	static vec_t load_per_block(const block *p)                        { return load(p); }
 	static vec_t xorv(vec_t a, vec_t b)                                { return _mm_xor_si128(a, b); }
 	static vec_t aesenc(vec_t s, vec_t k) {
 		const uint8x16_t zero = vdupq_n_u8(0);

@@ -127,6 +127,13 @@ public:
 		key_used = 0;
 	}
 
+	// On VAES builds all four entry points below read their input one block
+	// at a time (AesLane::load_per_block). That suits input the caller has just
+	// written block by block, as half-gate garbling does. It does not suit
+	// chained calls: when the input was just written by full-width stores, such
+	// as the previous call's output hashed again in place, the per-block loads
+	// lengthen that chain and run slower than one wide load would.
+	//
 	// In-place: blks[k*H + h] = y ^ AES_{key(lane k)}(y), y = sigma(blks[k*H + h]) ^ T(gid of lane k).
 	// sigma and the tweak are fused into the AES tile source
 	// (AesMemXorSigmaTweakTile): the tweak vector is built in registers from
