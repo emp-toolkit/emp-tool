@@ -28,8 +28,8 @@ static_assert(!WireValue<Int_T<ClearCtx, runtime_width>>);
 
 // ---- WireBundle vs WireValue: execution needs wires, session I/O needs the
 // codec. The integer clear codec rides a 64-bit scalar, so a wider UInt/Int is
-// a WireBundle (a fine circuit argument) but cleanly NOT a WireValue — instead
-// of the former passing concept + instantiation-time static_assert bomb.
+// a WireBundle (a fine circuit argument) but NOT a WireValue: the concept
+// rejects it rather than accepting it and failing at instantiation.
 static_assert(WireBundle<UInt_T<ClearCtx, 32>>);              // every WireValue is a WireBundle
 static_assert(WireBundle<UInt_T<ClearCtx, 128>>);
 static_assert(!WireValue<UInt_T<ClearCtx, 128>>);             // no 128-bit clear codec

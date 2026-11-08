@@ -1,9 +1,8 @@
 # Roadmap
 
 Tracked, not-yet-implemented work. Each entry states the current
-behavior, the gap, the proposed design, and the acceptance bar. Nothing
-here blocks a first alpha; these are improvements on top of shipping
-behavior.
+behavior, the gap, the proposed design, and the acceptance bar. These
+are improvements on top of shipping behavior.
 
 ## Circuit-asset reproducibility and semantic verification
 
@@ -14,7 +13,7 @@ gate/AND counts, and AND-depth per asset, `empbc-tool check-manifest`
 verifies the shipped files against it, and CI checks the manifest set
 byte-for-byte. What the tree does not ship is a **reproducible
 generation harness** — the assets were produced by an external
-SoftFloat-derived / CBMC-GC-era pipeline that is not checked in.
+SoftFloat-derived / CBMC-GC pipeline that is not checked in.
 
 **Gap.** Two things the manifests cannot provide. First, *provenance*: a
 consumer cannot regenerate an asset from source to confirm it is what the
@@ -105,9 +104,9 @@ on the microarchitecture, not just the ISA. Measured example: at the
 AVX2 tier, the 128×N bit-transpose at the cache-resident shapes N=8192
 and N=16384 runs ~12% faster with a single-lane *blocked* kernel than
 with the wide x2-unpack kernel on an Intel Xeon 6 (Granite Rapids), but
-~14% *slower* with the blocked kernel on an AMD EPYC 9R45 (Zen 5). A
-`ncols==8192||16384 → blocked` special-case was tried and reverted for
-exactly this reason: it helps one vendor and regresses the other.
+~14% *slower* with the blocked kernel on an AMD EPYC 9R45 (Zen 5), so a
+`ncols==8192||16384 → blocked` special case helps one vendor and
+regresses the other.
 
 **Gap.** The difference is a uarch/register-file/cache-behavior effect,
 so a vendor `if` (Intel vs AMD) is a crude proxy that overfits the two

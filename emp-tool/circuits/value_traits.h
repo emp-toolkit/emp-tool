@@ -4,8 +4,8 @@
 // the value type's own static members; this trait just exposes them uniformly
 // (width, clear codec, rebind<Ctx>) for circuits-layer call sites
 // (compile()/run() signature deduction). Session I/O code reads the value's
-// members directly (V::width()/encode/decode — see ir/session/session_io.h's
-// encode_value_bits); ir/ never includes this header.
+// members directly (V::width()/encode/decode — see the SessionIO concept in
+// ir/session/session_io.h); ir/ never includes this header.
 #include "emp-tool/ir/context/concept.h"   // BooleanContext
 #include <vector>
 namespace emp {

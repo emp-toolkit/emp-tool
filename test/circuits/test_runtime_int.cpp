@@ -102,8 +102,9 @@ int main() {
     chk("i const >64 sign-extends", one);
   }
 
-  // (Runtime width must be >= 1; a zero/negative width calls error() -> exit(1),
-  // so it is a hard precondition rather than an in-process-catchable check.)
+  // (Runtime width must be >= 1; a zero/negative width calls error(), which
+  // ends the process with _Exit(1), so it is a hard precondition rather than
+  // an in-process-catchable check.)
 
   printf("test_runtime_int: %s\n", bad ? "FAILED" : "PASS");
   return bad ? 1 : 0;

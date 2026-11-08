@@ -1,7 +1,6 @@
 // crypto/hash.h — streaming hash, templated on the algorithm (HashT<opt>:
 // OpenSSL SHA-256 default, vendored BLAKE3 opt-in). Read example() first;
-// the rest is verification. (EC-point KDF moved to crypto/ro.h,
-// covered by test_ro.cpp.)
+// the rest is verification.
 //
 // What's in hash.h:
 //   Hash::put(p, n)                           feed n bytes

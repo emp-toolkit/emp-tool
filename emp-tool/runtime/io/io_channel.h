@@ -249,7 +249,7 @@ public:
 	}
 
 	// Pack 8 bools per wire byte via bools_to_bits / bits_to_bools (LSB-first
-	// within each byte, see utils/block.h). Streamed in 8 KiB-of-bools chunks
+	// within each byte, see core/utils.h). Streamed in 8 KiB-of-bools chunks
 	// so the staging buffer fits comfortably on the stack regardless of the
 	// caller's buffer size.
 	//

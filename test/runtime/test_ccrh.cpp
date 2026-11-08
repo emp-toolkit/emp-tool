@@ -140,8 +140,8 @@ static bool run_correctness() {
 	      && check_batched<17>() && check_batched<32>() && check_batched<64>();
 	ok &= b;
 	cout << "  template H<n> matches reference         " << (b ? "OK" : "FAIL") << "\n";
-	// Widths straddle the 16/8/4/2/1 tile boundaries to exercise every lane
-	// and the new VAES-512 16-block tile.
+	// Widths straddle the 16/8/4/2/1 tile boundaries to exercise every lane,
+	// the VAES-512 16-block tile included.
 	bool c = true;
 	for (int n : {1, 2, 3, 4, 7, 8, 15, 16, 17, 31, 33, 64, 65, 1024}) c &= check_Hn(n);
 	ok &= c;

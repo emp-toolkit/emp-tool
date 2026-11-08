@@ -527,7 +527,7 @@ Before declaring a translation done, verify each of:
       on a representative input set.
 - [ ] Count ANDs (via `CountCtx` or a recorded program) and confirm the
       gate count is sane (orders of magnitude: ~31 ANDs per 32-bit add,
-      ~1000 per 32-bit mul, ~1000 per 32-bit div, ~10⁴–10⁵ per Float op).
+      ~1000 per 32-bit mul, ~1000 per 32-bit div, ~10³–10⁴ per 32-bit Float op).
 
 ---
 
@@ -587,7 +587,7 @@ Notes on what changed:
 * `if x > bob_y: total += x` became `zero.select(x > y, x)` (i.e.
   `(x > y) ? x : 0`) then an unconditional `+`. Both branches happen for
   every `i`.
-* `total = 0` became `S32::constant(ctx, 0)`. The accumulator is a circuit
+* `total = 0` became `S32::constant(sess.ctx(), 0)`. The accumulator is a circuit
   value, not an `int`, after the first iteration.
 * The function returns an `int32_t` only because `sess.reveal(total, PUBLIC)`
   was called at the end. All intermediate state is `S32`.

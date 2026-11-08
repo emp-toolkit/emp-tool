@@ -1,5 +1,5 @@
 // Half-gate garble/eval throughput. Build-only (not a ctest case); the
-// correctness check lives in ../test/test_halfgate.cpp.
+// correctness check lives in test/runtime/test_halfgate.cpp.
 //
 // Every output of the loop is folded into `sink` and printed: with the hashes
 // inlined into main and their results otherwise unused, the compiler is free

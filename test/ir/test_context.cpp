@@ -1,5 +1,5 @@
 // Cross-context test for the BooleanContext contract (emp-tool/ir/context/context.h):
-// one templated kernel run through Record/Count/Clear/Digest/Backend contexts and
+// one templated kernel run through Record/Count/Clear/Digest contexts and
 // the value-return replay bridge — all must agree. C++20.
 
 #include "emp-tool/ir/context/context.h"

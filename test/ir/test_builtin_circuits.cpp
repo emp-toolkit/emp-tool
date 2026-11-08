@@ -1,8 +1,8 @@
 // Verify the recorded large-circuit builtins (aes128 / sha256_256 / sha3_256_256)
 // replay through a BooleanContext bit-for-bit identically to the BooleanContext-
 // native crypto kernels (which are themselves FIPS/NIST-validated by test_crypto_*).
-// Proves the "big circuits -> IR replay" path is faithful, and that the new kernels
-// agree with the shipped assets. C++20.
+// Proves the "big circuits -> IR replay" path is faithful, and that the live
+// kernels agree with the shipped assets. C++20.
 
 #include "emp-tool/ir/context/context.h"
 #include "emp-tool/ir/builtins.h"

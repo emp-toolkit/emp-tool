@@ -84,9 +84,8 @@ class PRG { public:
 		}
 	}
 
-	// Unpacks 8 bools per random byte (= 128 bools per AES block) instead of
-	// consuming a full byte for one bit, an 8x cut in AES work. Inner unpack
-	// uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
+	// Unpacks 8 bools per random byte (= 128 bools per AES block). The inner
+	// unpack uses bits32_to_bytes (SIMD) to expand 4 bytes → 32 bools per call.
 	void random_bool(bool * data, int64_t length) {
 		random_bool_impl_(data, length);
 	}
@@ -232,4 +231,4 @@ private:
 };
 
 }
-#endif// PRP_H__
+#endif// PRG_H__

@@ -190,8 +190,8 @@ class HashT { public:
 #endif
 		} else {
 			// Per-thread persistent EVP_MD_CTX. The dominant cost of a transient
-			// context on small inputs is EVP_MD_CTX_new/free (~700-1000 cy each);
-			// reusing one drops that to a single EVP_DigestInit_ex.
+			// context on small inputs is EVP_MD_CTX_new/free; reusing one drops
+			// that to a single EVP_DigestInit_ex.
 			struct Holder {
 				EVP_MD_CTX * c;
 				Holder() : c(EVP_MD_CTX_new()) {
@@ -229,7 +229,7 @@ private:
 	}
 };
 
-// Default-algorithm alias so the whole codebase keeps writing `Hash` unchanged;
+// Default-algorithm alias: `Hash` is the build's default (EMP_HASH_DEFAULT);
 // a site that wants to pin an algorithm names HashT<HashOption::blake3>.
 using Hash = HashT<>;
 

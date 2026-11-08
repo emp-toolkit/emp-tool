@@ -81,7 +81,7 @@ are per-direction snapshots for diagnostics. All three assert that
   `rounds` / `flushes_count`; `get_statistics_string()` renders them
   for logging (`~NetIO` prints it unless constructed `quiet`).
 - **NetIO factories**: `NetIO::listen(port)` / `NetIO::connect(addr,
-  port)` are named, ownership-returning replacements for the
+  port)` are named, ownership-returning alternatives to the
   nullptr-means-server constructor; repeated `make_sibling()` calls on the
   primary or any related sibling open additional duplex channels to the same
   peer on the same port. Related server channels share listener ownership; the

@@ -247,8 +247,8 @@ gfmul(a, b, &c);                                 // c = a · b in GF(2^128)
 ### Elliptic curves
 
 `ECGroup` wraps an OpenSSL P-256 `EC_GROUP` + `BN_CTX`. P-256 is the only
-supported curve; the legacy NID constructor parameter is retained for source
-compatibility but rejects every value except `NID_X9_62_prime256v1`.
+supported curve; the constructor takes a NID for source compatibility and
+rejects every value except `NID_X9_62_prime256v1`.
 `Scalar` and `Point` are the corresponding handles.
 
 ```cpp
@@ -489,7 +489,7 @@ determinism contract, and limitations.
 | Implementing a `BooleanContext` / session backend | [docs/backend.md](docs/backend.md) |
 | IOChannel contract (flush, threads, Fiat–Shamir) | [docs/io_channel.md](docs/io_channel.md) |
 | API conventions and failure model | [docs/api_conventions.md](docs/api_conventions.md) |
-| Old emp-tool API → this tree | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
+| Translating C++ / Python to circuits | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
 | Floating-point circuit assets | [docs/floating_point_circuits.md](docs/floating_point_circuits.md) |
 | Test mode / wire-byte determinism | [docs/test_mode.md](docs/test_mode.md) |
 | Test and benchmark conventions | [docs/test_conventions.md](docs/test_conventions.md), [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |

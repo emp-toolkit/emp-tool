@@ -3,7 +3,7 @@
 
 // Umbrella for the BooleanContext value layer: Bit_T / UInt_T / Int_T / Float_T /
 // BitVec_T. Each type lives in its own header; include this to get them all, or
-// include just the one you need. See circuit.h for the values + crypto umbrella.
+// include just the one you need. circuits.h is the values + crypto umbrella.
 
 #include "emp-tool/circuits/bit.h"
 #include "emp-tool/circuits/unsigned_int.h"

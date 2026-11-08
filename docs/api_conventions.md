@@ -23,7 +23,7 @@ Why one fatal path:
 - Unwinding past half-settled protocol state (a partly garbled circuit,
   a half-consumed OT batch) is never safe to resume from, and `exit()`'s
   destructor/atexit cleanup races still-live ThreadPool workers
-  (see `utils.hpp` for the `_Exit` rationale).
+  (see `error.h` for the `_Exit` rationale).
 - Exceptions buy recoverability only if some caller can meaningfully
   recover; in a two-party protocol binary there is no such caller — the
   process is the session.
@@ -70,9 +70,9 @@ expecting(f != nullptr,
 ```
 
 Use `expecting(false, message)` for an unconditional fatal/default case. Keep
-direct `error()` calls inside the failure primitive itself only; it remains a
-public compatibility sink for downstream code while new call sites consistently
-express the expected condition.
+direct `error()` calls inside the failure primitive itself only; `error()` is
+public so code outside emp-tool can call it, but emp-tool call sites state the
+expected condition.
 
 Replacing `assert(condition)` with `expecting(condition, message)` makes the
 check survive `NDEBUG`. This is appropriate when violating the condition would
@@ -105,7 +105,7 @@ const uint8_t*          // + length; the byte-bool codec reads this
 Each input byte represents one bit: zero is false and any nonzero value
 is true. APIs that produce byte-bools normalize their output to `0` or
 `1`. The bit packing, packed-bool I/O, PRG, and GF bit-vector helpers
-accept `uint8_t*` directly alongside their existing `bool*` overloads.
+accept `uint8_t*` directly alongside their `bool*` overloads.
 
 Do not use `std::vector<bool>` in emp-tool library/protocol code. It is
 bit-packed, has proxy references, has no real `bool*`, and forces

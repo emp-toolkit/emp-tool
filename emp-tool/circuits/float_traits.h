@@ -3,7 +3,7 @@
 
 // Per-width IEEE-754 parameters (FloatTraits<W>) + host <-> bit-pattern codec, and
 // the on-disk fp<W>_* circuit loader (circuit::float_circuit). These are the only
-// float pieces the context-bound Float_T<Ctx,W> (circuits/typed.h) depends on, so
+// float pieces the context-bound Float_T<Ctx,W> (circuits/float.h) depends on, so
 // they live here, free of any wire-bound value-class headers. Widths 16/32/64 map
 // to the binary16/binary32/binary64 .empbc suites (prefix fp16/fp32/fp64). The
 // host value type is `float` for fp16/fp32 and `double` for fp64; fp16 has no

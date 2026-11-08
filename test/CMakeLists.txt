@@ -137,7 +137,7 @@ add_test_case(ir test_boolean_program)
 add_test_case_cxx20(ir test_passes)              # ir/passes.h: count/liveness/schedule/layout
 add_test_case_cxx20(ir test_analysis)            # aggregate scalar metrics for tooling/manifests
 add_test_case_cxx20(ir test_transform)           # ir/transform.h: make_compact/uncompact (wire-id reuse)
-add_test_case_cxx20(ir test_compose)             # frontend/compose.h: invoke + ComposePlan + flatten
+add_test_case_cxx20(ir test_compose)             # frontend/compose.h: opaque run() + ComposePlan + flatten
 add_test_case_cxx20(ir test_context)             # BooleanContext concept + contexts cross-check
 add_test_case_cxx20(ir test_session_concepts)    # Session/DirectSession/SessionIO + WireValue
 add_test_case_cxx20(ir test_chunk_recorder)        # shared chunk recorder: RAII wire + plan_flush
@@ -160,7 +160,7 @@ add_test_case_cxx20(circuits test_crypto_sha256) # SHA-256 compression + full-ha
 add_test_case_cxx20(circuits test_crypto_keccak) # Keccak-f[1600] + SHA3-256 wrapper
 
 # Circuit-function contract probes (circuits/frontend). The positive case compiles
-# + runs; the eight negative cases must fail to compile with the EXPECTED contract
+# + runs; the nine negative cases must fail to compile with the EXPECTED contract
 # diagnostic. Each test builds the case and its output must match the per-case
 # message (PASS_REGULAR_EXPRESSION) — so a build that succeeds (contract stopped
 # rejecting) OR fails with a different/changed message both fail the test, which

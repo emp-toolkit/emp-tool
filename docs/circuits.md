@@ -103,12 +103,13 @@ the *same* `UInt_T` / `Int_T` family with the width carried in the wire vector a
 chosen at construction — `UInt_T<Ctx,0>(ctx, width)`, `UInt_T<Ctx,0>::constant(ctx,
 width, v)`. It shares every operator above through the runtime-sized kernels; the
 compile-time-width surface (`slice`/`extract`/`concat`/`zext`/`trunc`, secret-amount
-barrel shifts, the clear codec, `popcount<R>`) is `requires (N > 0)` and so absent,
-and it adds `resize(width)` plus fixed↔runtime conversion (`to_dynamic()` on a fixed
-value, `to_fixed<M>()` on a runtime one). A runtime-width value is **not** a
-`WireValue` — it is for data-driven in-circuit computation, not the frontend
-`input`/`compile` boundary. (Width must be `>= 1`; wider-than-64 constants
-zero-extend for `UInt_T` and sign-extend for `Int_T`.)
+barrel shifts, the `std::array` clear codec, `popcount<R>`) is `requires (N > 0)` and
+so absent, and it adds `resize(width)` plus fixed↔runtime conversion (`to_dynamic()`
+on a fixed value, `to_fixed<M>()` on a runtime one). A runtime-width value is **not**
+a `WireValue` and cannot be a `compile`/`run` argument; it is a `RuntimeWidthValue`
+(`ir/wire_value.h`, byte-bool clear codec), which a session modeling
+`RuntimeSessionIO` (e.g. `ClearSession`) can `input`/`reveal`. (Width must be `>= 1`;
+wider-than-64 constants zero-extend for `UInt_T` and sign-extend for `Int_T`.)
 - `Float_T<W>` — `+ - * / min max sqrt recip rsqrt fma`, comparisons / `is_nan` /
   `is_inf` / `is_zero`, `abs`/negate/`copysign`/`select`. Arithmetic **replays**
   the recorded `fp<W>_<op>.empbc` builtins through the context.

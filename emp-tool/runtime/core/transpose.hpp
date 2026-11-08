@@ -162,9 +162,9 @@ inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
 // Specialization of sse_trans for nrows=128. Same algorithm as the generic
 // sse_trans's nrows%16==0 && ncols%128==0 fast path, but with nrows=128
 // constant-folded so the outer 8-iteration "rr" loop unrolls and bpr_out=16
-// becomes a constant. On x86 a runtime/compile-time tier dispatch picks the
-// widest available kernel (AVX-512BW > AVX2 > SSE2); on non-x86 the function
-// dispatches into the generic sse_trans.
+// becomes a constant. These are the unpack tiers (SSE2 / AVX2 / AVX-512BW);
+// sse_trans_n128 at the end of this file picks the widest tier the build
+// compiles, GFNI and NEON included (see the file header for the order).
 //
 // Wide variants process N consecutive 128-bit "col_blocks" (each a 16-byte
 // column-slice of the output) per tile: SSE2 N=1, AVX2 N=2, AVX-512BW N=4.
@@ -640,11 +640,11 @@ inline void sse_trans_n128_gfni256(block *out, const block *inp,
 #endif  // EMP_HAS_GFNI256 && !EMP_HAS_GFNI512
 
 #ifdef __aarch64__
-// Native NEON tier. The pre-existing aarch64 path fell through to the generic
-// sse_trans, whose movemask bit-peel ladder is pathological under the sse2neon
-// shim (_mm_movemask_epi8 emulates to a multi-instruction reduction, run 8x
-// per 16-byte group). This kernel uses only native single-instruction NEON
-// ops and, like the x86 GFNI tier, writes each output block exactly once.
+// Native NEON tier. The generic sse_trans does not suit aarch64: its movemask
+// bit-peel ladder is pathological under the sse2neon shim (_mm_movemask_epi8
+// emulates to a multi-instruction reduction, run 8x per 16-byte group). This
+// kernel uses only native single-instruction NEON ops and, like the x86 GFNI
+// tier, writes each output block exactly once.
 //
 // Per 128x128 tile, two passes through a 2 KiB L1-resident stage:
 //   pass 1  per 8-row slab s: a 3-round zip tree gathers byte-columns (qword
