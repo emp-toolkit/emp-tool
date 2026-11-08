@@ -27,6 +27,7 @@
 #include <sstream>
 #include <string>
 #include <sys/wait.h>
+#include <type_traits>
 #include <unistd.h>
 #include <vector>
 
@@ -34,21 +35,21 @@ using namespace emp;
 using namespace std;
 using clk = chrono::high_resolution_clock;
 
-static bool check_direct_simd_tier_include() {
+// simd_tier.h is included first on purpose: these kernels are declared only if
+// simd_tier.h defines its tier macros before block.h pulls in transpose.hpp, so
+// this file stops compiling if that order breaks.
 #if EMP_HAS_AVX2
-	(void)&emp::detail::sse_trans_n128_avx2;
+static_assert(std::is_function_v<decltype(emp::detail::sse_trans_n128_avx2)>);
 #endif
 #if EMP_HAS_AVX512BW
-	(void)&emp::detail::sse_trans_n128_avx512bw;
+static_assert(std::is_function_v<decltype(emp::detail::sse_trans_n128_avx512bw)>);
 #endif
 #if EMP_HAS_GFNI256 && !EMP_HAS_GFNI512
-	(void)&emp::detail::sse_trans_n128_gfni256;
+static_assert(std::is_function_v<decltype(emp::detail::sse_trans_n128_gfni256)>);
 #endif
 #if EMP_HAS_GFNI512
-	(void)&emp::detail::sse_trans_n128_gfni;
+static_assert(std::is_function_v<decltype(emp::detail::sse_trans_n128_gfni)>);
 #endif
-	return true;
-}
 
 template <class F>
 static bool dies(F&& f) {
@@ -388,7 +389,6 @@ static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	struct Case { const char *name; bool (*fn)(); };
 	Case cases[] = {
-		{"direct SIMD-tier include",      check_direct_simd_tier_include},
 		{"makeBlock + getLSB",          check_makeBlock_getLSB},
 		{"set_bit",                     check_set_bit},
 		{"sigma linear + formula",      check_sigma_linear_and_formula},
