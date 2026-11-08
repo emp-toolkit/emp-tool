@@ -88,6 +88,32 @@ static double bench_hash_cir_out_of_place(double sec, uint64_t initial_gid = 0) 
 	return run_for(sec, [&]() { mit.template hash_cir<K, H>(out, in); }, &out[0]);
 }
 
+// The rows above hash one buffer in place, so each call's input is the
+// previous call's output. A half-gate caller instead writes each call's input
+// block by block from labels it has just read; these rows do the same, drawing
+// every block from a different slot of a table that stays in cache.
+template <int K, int H, bool Cir>
+static double bench_gathered(double sec) {
+	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
+	constexpr int N = K * H;
+	constexpr uint64_t kLabels = 1 << 12;
+	vector<block> labels(kLabels);
+	PRG().random_block(labels.data(), (int64_t)kLabels);
+	MITCCRH<8> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.renew_ks(uint64_t{0});
+	block buf[N], sink = zero_block;
+	uint64_t call = 0;
+	return run_for(sec, [&]() {
+		for (int i = 0; i < N; ++i)
+			buf[i] = labels[(call * N + (uint64_t)i * 1031) & (kLabels - 1)];
+		++call;
+		if constexpr (Cir) mit.template hash_cir<K, H>(buf);
+		else mit.template hash<K, H>(buf);
+		for (int i = 0; i < N; ++i) sink = sink ^ buf[i];
+	}, &sink);
+}
+
 static void bench(double sec) {
 #if EMP_HAS_VAES512
 	cout << "AES SIMD tier: VAES-512 (4 blocks/vector)\n\n";
@@ -130,6 +156,13 @@ static void bench(double sec) {
 	print_vec("in-place, gid=0", bench_hash_cir<2, 2>(sec, 0), 4);
 	print_vec("out-of-place, gid=0", bench_hash_cir_out_of_place<2, 2>(sec, 0), 4);
 	print_vec("in-place, gid=1", bench_hash_cir<2, 2>(sec, 1), 4);
+
+	cout << "\n=== input written block by block before each call ===\n";
+	print_vec("hash_cir<2,2> gathered", bench_gathered<2, 2, true>(sec), 4);
+	print_vec("hash_cir<2,1> gathered", bench_gathered<2, 1, true>(sec), 2);
+	print_vec("hash_cir<1,4> gathered", bench_gathered<1, 4, true>(sec), 4);
+	print_vec("hash_cir<8,2> gathered", bench_gathered<8, 2, true>(sec), 16);
+	print_vec("hash<8,2> gathered", bench_gathered<8, 2, false>(sec), 16);
 }
 
 int main(int argc, char **argv) {
