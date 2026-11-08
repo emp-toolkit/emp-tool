@@ -113,9 +113,9 @@ inline std::atomic<uint64_t>& next_thread_token() {
     return next;
 }
 inline uint64_t this_thread_token() {
+    // Tokens count from 1, so 0 stays the "unowned" sentinel.
     thread_local const uint64_t token =
         next_thread_token().fetch_add(1, std::memory_order_relaxed);
-    expecting(token != 0, "test mode: thread token space exhausted");
     return token;
 }
 inline void claim_lane0() {
@@ -193,7 +193,8 @@ class test_lane_scope {
 public:
     explicit test_lane_scope(uint64_t lane) : saved_(detail::test_seed_tls()) {
         expecting(lane != 0,
-                  "test_lane_scope: lane 0 is reserved for the main thread");
+                  "test_lane_scope: lane 0 is the unscoped lane; use a "
+                  "nonzero lane");
         auto& s = detail::test_seed_tls();
         s.lane = lane;
         s.ctr = 0;

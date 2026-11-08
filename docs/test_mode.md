@@ -90,7 +90,8 @@ order is deterministic), never discovered by the worker itself.
   ```
 
   Manually assigned lane ids must be nonzero and unique among concurrently
-  active work. Lane 0 is reserved for the unscoped main thread.
+  active work. Lane 0 is the unscoped lane: the first unscoped thread to draw
+  a seed or derive a child lane owns it until `reset_test_seed_counter()`.
 
 - **Forgetting is loud.** A second thread drawing from lane 0 or deriving a
   child lane from it would replay deterministic streams byte-for-byte, so test
