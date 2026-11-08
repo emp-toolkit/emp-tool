@@ -17,8 +17,8 @@
 #include "emp-tool/emp-tool.h"
 
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
+#include <string>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -51,23 +51,44 @@ static bool child_succeeded(int status) {
 	return status >= 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
 
-static bool probe_environment(const char* executable, const char* value,
-	                          bool expected) {
+// Runs f in a forked child with stdout closed and stderr captured into *err.
+// Returns whether the child exited 0.
+template <class F>
+static bool run_child_capturing_stderr(F&& f, string* err) {
+	int fds[2];
+	if (pipe(fds) != 0) return false;
 	pid_t pid = fork();
 	if (pid == 0) {
-		int env_result = value == nullptr
-		                     ? unsetenv("EMP_TEST_MODE")
-		                     : setenv("EMP_TEST_MODE", value, 1);
-		if (env_result != 0) _exit(127);
+		close(fds[0]);
+		dup2(fds[1], STDERR_FILENO);
+		close(fds[1]);
 		close(STDOUT_FILENO);
-		close(STDERR_FILENO);
-		execlp(executable, executable, "--probe-env",
-		       expected ? "on" : "off", static_cast<char*>(nullptr));
-		_exit(127);
+		f();
+		_exit(0);
 	}
-	if (pid < 0) return false;
+	close(fds[1]);
+	char buf[256];
+	ssize_t n;
+	while (pid > 0 && (n = read(fds[0], buf, sizeof(buf))) > 0)
+		err->append(buf, static_cast<size_t>(n));
+	close(fds[0]);
 	int status = 0;
-	return waitpid(pid, &status, 0) == pid && child_succeeded(status);
+	return pid > 0 && waitpid(pid, &status, 0) == pid && child_succeeded(status);
+}
+
+// EMP_TEST_MODE is read once, at the first is_test_mode() call. Each probe sets
+// it in a forked child that then makes that call, so main() probes before this
+// process reads it; a value cached earlier would fail the "1" or unset probe.
+// The insecurity warning must appear exactly when test mode turns on.
+static bool probe_environment(const char* value, bool expected) {
+	string err;
+	bool exited = run_child_capturing_stderr([&] {
+		int env_result = value == nullptr ? unsetenv("EMP_TEST_MODE")
+		                                  : setenv("EMP_TEST_MODE", value, 1);
+		if (env_result != 0 || is_test_mode() != expected) _exit(1);
+	}, &err);
+	bool warned = err.find("WARNING: EMP TEST MODE ENABLED") != string::npos;
+	return exited && warned == expected;
 }
 
 
@@ -231,16 +252,16 @@ static bool check_child_lane_derivation_deterministic() {
 	return ok;
 }
 
-static bool check_environment_contract(const char* executable) {
-	bool ok = probe_environment(executable, "1", true) &&
-	          probe_environment(executable, nullptr, false) &&
-	          probe_environment(executable, "", false) &&
-	          probe_environment(executable, "0", false) &&
-	          probe_environment(executable, "10", false) &&
-	          probe_environment(executable, "1x", false) &&
-	          probe_environment(executable, "true", false);
-	cout << "  [EMP_TEST_MODE accepts exactly 1]         " << (ok ? "OK" : "FAIL") << "\n";
-	return ok;
+static bool probe_environment_contract() {
+	return probe_environment("1", true) && probe_environment(nullptr, false) &&
+	       probe_environment("", false) && probe_environment("0", false) &&
+	       probe_environment("10", false) && probe_environment("1x", false) &&
+	       probe_environment("true", false);
+}
+
+static bool check_environment_contract(bool probed) {
+	cout << "  [only EMP_TEST_MODE=1 enables and warns]  " << (probed ? "OK" : "FAIL") << "\n";
+	return probed;
 }
 
 static bool check_lane0_seed_owner() {
@@ -301,10 +322,10 @@ static bool check_reset_allows_lane0_handoff() {
 	return ok;
 }
 
-static bool run_correctness(const char* executable) {
+static bool run_correctness(bool environment_ok) {
 	cout << "=== correctness ===\n";
 	bool ok = true;
-	ok &= check_environment_contract(executable);
+	ok &= check_environment_contract(environment_ok);
 	ok &= check_main_lane_sequence();
 	ok &= check_lane_scope_nesting();
 	ok &= check_lane0_seed_owner();
@@ -318,15 +339,12 @@ static bool run_correctness(const char* executable) {
 	return ok;
 }
 
-int main(int argc, char** argv) {
-	if (argc == 3 && std::strcmp(argv[1], "--probe-env") == 0) {
-		bool expected = std::strcmp(argv[2], "on") == 0;
-		return is_test_mode() == expected ? 0 : 1;
-	}
+int main() {
+	const bool environment_ok = probe_environment_contract();  // see probe_environment
 	set_test_mode(true);
 	example();
 	cout << "\n";
-	if (!run_correctness(argv[0])) {
+	if (!run_correctness(environment_ok)) {
 		cerr << "CORRECTNESS FAILURE\n";
 		return 1;
 	}
