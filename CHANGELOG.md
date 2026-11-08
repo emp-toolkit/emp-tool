@@ -153,6 +153,14 @@ metadata is numeric (see the README's version guidance).
   thread-local error queue, where a later OpenSSL call would see it. The queue
   is now restored to what the caller had, and a `BN_mod_sqrt` failure for any
   other reason stops the process.
+- On VAES builds (x86 with AVX2 or AVX-512), `MITCCRH::hash` and `hash_cir`
+  read each tile of their input with one 32- or 64-byte load. When the caller
+  had just written those blocks one at a time, as half-gate garbling and
+  evaluation do, the load could not be forwarded from the 16-byte stores and
+  waited for them to reach the cache, so consecutive calls ran one after
+  another. The input is now read 16 bytes per block. Output is unchanged, and
+  builds with 1-block AES lanes (AES-NI only, ARM) compile the same code as
+  before.
 
 ## v1.0.0-alpha.1
 

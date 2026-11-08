@@ -167,6 +167,11 @@ struct AesMemXorSigmaTile {
 // memory, so no narrow store that a wide VAES load would have to forward
 // from. Span == numEncs (one tweak for the whole run) folds the offsets to
 // zero. `tb` is this key's base tweak, the per-key aux value.
+// The source is read with load_per_block: a run's blocks are usually written
+// one at a time just before the hash, and a load as wide as the tile could not
+// be forwarded from those stores. The cost falls on chained calls, whose source
+// was just written by full-width stores: there the per-block loads add latency
+// to the chain that a single wide load avoids.
 template<int Span>
 struct AesMemXorInputTweakTile {
 	template<class L, int n_tiles>
@@ -175,7 +180,7 @@ struct AesMemXorInputTweakTile {
 		const typename L::vec_t base = L::broadcast(tb);
 		aes_tiles_src<L, n_tiles>(
 			[src, base, off](int t) {
-				return L::xorv(L::load(src + (size_t)t * L::N),
+				return L::xorv(L::load_per_block(src + (size_t)t * L::N),
 				               L::add64(base, L::template lane_offsets<Span>(off + t * L::N)));
 			},
 			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
@@ -192,7 +197,7 @@ struct AesMemXorSigmaTweakTile {
 		const typename L::vec_t base = L::broadcast(tb);
 		aes_tiles_src<L, n_tiles>(
 			[src, base, off](int t) {
-				return L::xorv(L::sigma(L::load(src + (size_t)t * L::N)),
+				return L::xorv(L::sigma(L::load_per_block(src + (size_t)t * L::N)),
 				               L::add64(base, L::template lane_offsets<Span>(off + t * L::N)));
 			},
 			[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
