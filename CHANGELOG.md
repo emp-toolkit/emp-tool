@@ -57,6 +57,39 @@ metadata is numeric (see the README's version guidance).
 - `TraceIO` rejects a null channel, creates its trace files with mode `0600`,
   flushes them before the wrapped channel, reports trace write and flush failures,
   and records the bytes of `sync()`.
+- `EMP_TEST_MODE` turns test mode on only for the exact value `1`; values such
+  as `10` or `1x` used to turn it on.
+- Test mode stops the process in more of the cases where deterministic streams
+  would repeat. Deriving a child lane on lane 0, as `ThreadPool::enqueue` does,
+  now claims lane 0 just as drawing a seed does, so a second unscoped thread
+  that enqueues pool work must run under its own `test_lane_scope`. Lane 0's
+  owner is a per-thread token rather than a hash of `std::thread::id`, so a
+  thread started after the owner exits can no longer reuse its id and replay
+  its seeds. `test_lane_scope(0)` stops the process; on lane 0's owner it
+  restarted lane 0's ordinals and repeated the seeds already drawn.
+- `parse_party` and `peer_port` stop the process unless the value is plain
+  decimal digits within range (`EMP_PORT` must be in [1, 65535]). They used
+  `atoi`, which read `2x` or `+2` as 2 and passed any `EMP_PORT`, such as `0` or
+  `70000`, through unchecked.
+- `clock_start` / `time_from` use `std::chrono::steady_clock`, which does not
+  jump when the system clock is set. On libstdc++, where
+  `high_resolution_clock` is `system_clock`, their type changes: code that
+  stores `clock_start()` in a `time_point<high_resolution_clock>` must use
+  `auto` or `steady_clock::time_point`.
+- `ThreadPool(0)` stops the process; such a pool accepted tasks that never ran,
+  so their futures never became ready. A worker thread that fails to start no
+  longer ends in `std::terminate`.
+- `ThreadPool::enqueue` stores its arguments without `std::bind`. They are
+  passed as lvalues, as before, or as rvalues when the callable cannot take
+  lvalues, so a function taking a move-only argument by value can be enqueued;
+  the future's type is the result of that call, which can differ from
+  `invoke_result_t<F, Args...>` for a callable overloaded on value category.
+  `std::bind`'s special cases are gone: a `std::reference_wrapper` argument is
+  no longer unwrapped, so a generic parameter sees the wrapper (a `T&`
+  parameter still binds through its conversion), and a nested bind expression
+  is passed as is instead of being called.
+- `bool_to_int<bool>` no longer compiles; it wrote eight packed bits into a
+  `bool`, which may only hold 0 or 1.
 
 ### Removed
 
@@ -70,6 +103,8 @@ metadata is numeric (see the README's version guidance).
   explicit tweaks shared one key across gates with nothing in the cipher
   input to tell them apart, the same leak one layer up; it must re-derive
   its tweak layout on the gid stream, on both ends, not rename calls.
+- `macro_xstr` / `macro_str`, which `utils.h` defined for every file that
+  includes it, although emp-tool does not use them.
 
 ### Fixed
 
@@ -78,6 +113,16 @@ metadata is numeric (see the README's version guidance).
   the PRG and key schedules, and the printed rate divided 128M gates by a
   2M-gate loop. The outputs are now folded into a printed sink and the
   count matches the loop.
+- `joinNcleanCheat` stopped calling `get()` once a task returned `true`, so it
+  could return while later tasks were still running. It now waits for every
+  future.
+- `error()` flushes `stderr` before exiting, so a diagnostic written to a
+  buffered `stderr` is no longer lost.
+- A translation unit that included `runtime/core/simd_tier.h` before
+  `runtime/core/block.h` compiled `sse_trans` without its AVX2 / AVX-512 / GFNI
+  kernels. Linked with translation units that included them in the usual order,
+  the program had two definitions of the same inline functions, and the linker
+  could pick the slower one for every call that was not inlined.
 
 ## v1.0.0-alpha.1
 
