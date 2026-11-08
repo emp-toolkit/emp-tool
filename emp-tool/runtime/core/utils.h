@@ -12,7 +12,6 @@
 #include <cstring>
 #include "emp-tool/runtime/core/constants.h"
 #include <chrono>
-#include <exception>
 #include <type_traits>
 #include <future>    // joinNclean / joinNcleanCheat: fold a batch of ThreadPool tasks back together
 #include <vector>
