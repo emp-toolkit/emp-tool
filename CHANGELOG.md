@@ -90,6 +90,29 @@ metadata is numeric (see the README's version guidance).
   is passed as is instead of being called.
 - `bool_to_int<bool>` no longer compiles; it wrote eight packed bits into a
   `bool`, which may only hold 0 or 1.
+- Negative sizes stop the process where they used to be silent no-ops or zero
+  results: the runtime `ParaEnc` / `AES_ecb_encrypt_blks` forms (also when
+  `K * N` overflows `int64_t`), `CCRH::Hn`, and the F2K helpers
+  `vector_inn_prdt_sum_no_red`, `vector_inn_prdt_sum_red` (block, `bool` and
+  `uint8_t` selectors), `vector_inn_prdt_sum_red_x4` and `vector_self_xor`.
+  Their compile-time forms, `AES_opt_key_schedule<N>` and `aes_ctr_fill_dm<W>`
+  reject a negative size with a `static_assert`, `uni_hash_coeff_gen<N>`
+  requires `N > 0`, and `MITCCRH` requires `BatchSize`, `K` and `H` to be
+  positive. Zero sizes stay no-ops.
+- The AES-CTR counter (`aes_ctr_fill_dm`, `detail::ParaCtrEnc`,
+  `detail::AesLane<N>::ctr_xor_tweak`) is `uint64_t` instead of `int64_t`, so
+  counter arithmetic is defined across block 2^63; existing call sites convert
+  implicitly.
+- `ECGroup::rand_scalar()` samples `[1, order)` instead of `[0, order)`,
+  through `BN_priv_rand_range`.
+- `ECGroup::hash_to_point` requires a DST of 1 to 255 bytes (an empty one was
+  accepted), and `RO(domain, sid)` requires the same of `domain`.
+- On a `const Scalar`, `n()` returns `const BIGNUM*`; a non-const overload
+  returns `BIGNUM*`. Code that passes a const `Scalar`'s handle to an OpenSSL
+  call taking `BIGNUM*` no longer compiles.
+- `SessionID::derive()` is `[[nodiscard]]`.
+- `MITCCRH::start_point` starts as `zero_block` instead of indeterminate. It is
+  a placeholder: `setS()` must still install the parties' shared random seed.
 
 ### Removed
 
@@ -123,6 +146,13 @@ metadata is numeric (see the README's version guidance).
   kernels. Linked with translation units that included them in the usual order,
   the program had two definitions of the same inline functions, and the linker
   could pick the slower one for every call that was not inlined.
+- `PRG::reseed()` kept the words buffered for `operator()`, so a PRG used as a
+  `UniformRandomBitGenerator` returned up to 31 words of the old stream after a
+  reseed.
+- `ECGroup::hash_to_point` could leave `BN_R_NOT_A_SQUARE` in OpenSSL's
+  thread-local error queue, where a later OpenSSL call would see it. The queue
+  is now restored to what the caller had, and a `BN_mod_sqrt` failure for any
+  other reason stops the process.
 
 ## v1.0.0-alpha.1
 
