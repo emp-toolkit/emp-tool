@@ -4,8 +4,8 @@
 // Inline definitions for f2k.h's API. Included via f2k.h; do not include
 // directly. ClmulLane<N> for N ∈ {1, 2, 4} lives in simd_tier.h; only
 // specializations the build can emit are defined, so the VPCLMUL
-// guards inside vector_inn_prdt_sum_no_red compile out the unavailable
-// tiers. ClmulLane<1> is always present on both x86_64 (PCLMUL) and
+// guards inside vector_inn_prdt_sum_no_red and vector_inn_prdt_sum_red_x4
+// compile out the unavailable tiers. ClmulLane<1> is always present on both x86_64 (PCLMUL) and
 // aarch64 (NEON poly64), so it serves as the universal tail drain.
 
 #include "emp-tool/runtime/core/simd_tier.h"
@@ -206,6 +206,73 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const block *b, 
 template<int N>
 inline void vector_inn_prdt_sum_red(block *res, block const *a, const block *b) {
 	vector_inn_prdt_sum_red(res, a, b, N);
+}
+
+namespace detail {
+
+// reduce() on every 128-bit lane: each lane holds an unreduced 256-bit value
+// (lo, hi), and the result is lo + hi·x^128 mod x^128 + x^7 + x^2 + x + 1.
+// With g = x^7 + x^2 + x + 1 ≡ x^128 and hi = h0 + h1·x^64,
+//   hi·x^128 ≡ h0·g + t1·x^64, with t1 = h1·g of at most 71 bits.
+// The low 64 bits of t1 land below x^128; its top 7 bits wrap once more as
+// (t1 >> 64)·g, of at most 14 bits. The remainder is unique, so this agrees
+// with reduce() bit for bit. Only the same-half selectors appear, since they
+// mean the same thing on every target.
+template <class L>
+EMP_F2K_TARGET_ATTR
+static inline typename L::vec_t reduce_lanes(typename L::vec_t lo,
+                                             typename L::vec_t hi) {
+	using V = typename L::vec_t;
+	const V g  = L::broadcast(makeBlock(0x87, 0x87));
+	const V t0 = L::clmul_lo_lo(hi, g);   // h0·g
+	const V t1 = L::clmul_hi_hi(hi, g);   // h1·g
+	const V t2 = L::clmul_hi_hi(t1, g);   // (t1 >> 64)·g
+	return L::xorv(L::xor3(lo, t0, L::bslli_8(t1)), t2);
+}
+
+// Four n-term inner products laid out term-major (see
+// vector_inn_prdt_sum_red_x4). Lane j of the accumulators belongs to sum j,
+// so 4 / L::N vectors carry the four sums and no lanes are folded together.
+template <class L>
+EMP_F2K_TARGET_ATTR
+static inline void inn_prdt_x4(block *res, const block *a, const block *b,
+                               int64_t n) {
+	using V = typename L::vec_t;
+	constexpr int kVecs = 4 / L::N;
+	V lo[kVecs], hi[kVecs], mid[kVecs];
+	for (int v = 0; v < kVecs; ++v) lo[v] = hi[v] = mid[v] = L::zero();
+	for (int64_t l = 0; l < n; ++l) {
+		for (int v = 0; v < kVecs; ++v) {
+			const V av = L::loadu(a + 4 * l + v * L::N);
+			const V bv = L::loadu(b + 4 * l + v * L::N);
+			lo[v]  = L::xorv(lo[v], L::clmul_lo_lo(av, bv));
+			hi[v]  = L::xorv(hi[v], L::clmul_hi_hi(av, bv));
+			mid[v] = L::xor3(mid[v], L::clmul_hi_lo(av, bv), L::clmul_lo_hi(av, bv));
+		}
+	}
+	for (int v = 0; v < kVecs; ++v) {
+		const V lo2 = L::xorv(lo[v], L::bslli_8(mid[v]));
+		const V hi2 = L::xorv(hi[v], L::bsrli_8(mid[v]));
+		L::storeu(res + v * L::N, reduce_lanes<L>(lo2, hi2));
+	}
+}
+
+}  // namespace detail
+
+EMP_F2K_TARGET_ATTR
+inline void vector_inn_prdt_sum_red_x4(block *res, const block *a, const block *b, int64_t n) {
+#if EMP_HAS_VPCLMUL512
+	detail::inn_prdt_x4<detail::ClmulLane<4>>(res, a, b, n);
+#elif EMP_HAS_VPCLMUL256
+	detail::inn_prdt_x4<detail::ClmulLane<2>>(res, a, b, n);
+#else
+	detail::inn_prdt_x4<detail::ClmulLane<1>>(res, a, b, n);
+#endif
+}
+
+template<int N>
+inline void vector_inn_prdt_sum_red_x4(block *res, const block *a, const block *b) {
+	vector_inn_prdt_sum_red_x4(res, a, b, N);
 }
 
 namespace detail {

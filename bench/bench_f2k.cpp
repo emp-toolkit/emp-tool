@@ -8,6 +8,7 @@
 //   gfmul_reflect(a, b, &r)          same, with bit-reflected I/O (GHASH form)
 //   vector_inn_prdt_sum_no_red(...)  Σ a[i]*b[i] left unreduced (256-bit out)
 //   vector_inn_prdt_sum_red(...)     Σ a[i]*b[i] reduced once at the end
+//   vector_inn_prdt_sum_red_x4(...)  four such sums at once, term-major
 //   vector_inn_prdt_sum_red(...,bool*) same when b[i] ∈ {0,1} (no PCLMUL)
 //   uni_hash_coeff_gen(coeff, s, n)  coeff[i] = s^(i+1)
 //   GaloisFieldPacking().packing(&r, vec128)   Σ vec[i] * X^i in GF(2^128)
@@ -110,6 +111,24 @@ static void bench(double sec) {
 		}, &r);
 		ostringstream lbl; lbl << "vec_inn_prdt_red(N=" << n << ")";
 		print_vec(lbl.str(), calls, n);
+	}
+
+	cout << "\n=== four 10-term sums: one term-major x4 call vs four calls ===\n";
+	{
+		constexpr int n = 10;
+		vector<block> a(4 * n), b(4 * n);
+		prg.random_block(a.data(), 4 * n);
+		prg.random_block(b.data(), 4 * n);
+		block r[4];
+		double calls = run_for(sec, [&]() {
+			for (int j = 0; j < 4; ++j)
+				vector_inn_prdt_sum_red(&r[j], a.data() + j * n, b.data() + j * n, n);
+		}, r);
+		print_op("4 x vec_inn_prdt_red(N=10)", calls);
+		calls = run_for(sec, [&]() {
+			vector_inn_prdt_sum_red_x4(r, a.data(), b.data(), n);
+		}, r);
+		print_op("vec_inn_prdt_red_x4(N=10)", calls);
 	}
 
 	cout << "\n=== vector_inn_prdt_sum_red (bool selector, branchless mask + XOR) ===\n";

@@ -8,6 +8,7 @@
 //   gfmul_reflect(a, b, &r)          same, with bit-reflected I/O (GHASH form)
 //   vector_inn_prdt_sum_no_red(...)  Σ a[i]*b[i] left unreduced (256-bit out)
 //   vector_inn_prdt_sum_red(...)     Σ a[i]*b[i] reduced once at the end
+//   vector_inn_prdt_sum_red_x4(...)  four such sums at once, term-major
 //   vector_inn_prdt_sum_red(...,bool*) same when b[i] ∈ {0,1} (no PCLMUL)
 //   uni_hash_coeff_gen(coeff, s, n)  coeff[i] = s^(i+1)
 //   GaloisFieldPacking().packing(&r, vec128)   Σ vec[i] * X^i in GF(2^128)
@@ -93,12 +94,35 @@ static void example() {
 	block pack_bool;
 	pkr.packing(&pack_bool, packed_bits);
 	cout << "  packing(bool[bit0|7|64]) = " << pack_bool << "\n";
+
+	// (8) Four inner products at once, term-major: term i of sum j is
+	// a4[4*i + j] * b4[4*i + j].
+	block a4[4 * N], b4[4 * N], dots[4];
+	prg.random_block(a4, 4 * N);
+	prg.random_block(b4, 4 * N);
+	vector_inn_prdt_sum_red_x4(dots, a4, b4, N);
+	cout << "  4 inner products: sum 3  = " << dots[3] << "\n";
 }
 
 // ---------- scalar reference (ground truth) ----------
 //
 // Bit-by-bit GF(2^128) multiplication using the same irreducible polynomial
 // as f2k.h's reduce(): x^128 + x^7 + x^2 + x + 1 (GHASH polynomial).
+static block ref_reduce_words(uint64_t z[4]) {
+	static const int pp[4] = {0, 1, 2, 7};  // x^7 + x^2 + x + 1
+	for (int i = 255; i >= 128; --i) {
+		int word = i / 64, sh = i % 64;
+		if (!((z[word] >> sh) & 1)) continue;
+		z[word] ^= 1ULL << sh;
+		int j = i - 128;
+		for (int k = 0; k < 4; ++k) {
+			int p = j + pp[k];
+			z[p / 64] ^= 1ULL << (p % 64);
+		}
+	}
+	return makeBlock(z[1], z[0]);
+}
+
 static block ref_gfmul(block a, block b) {
 	uint64_t a_lo = ((uint64_t *)&a)[0], a_hi = ((uint64_t *)&a)[1];
 	uint64_t b_lo = ((uint64_t *)&b)[0], b_hi = ((uint64_t *)&b)[1];
@@ -116,18 +140,15 @@ static block ref_gfmul(block a, block b) {
 			z[word + 2] ^= a_hi >> (64 - sh);
 		}
 	}
-	static const int pp[4] = {0, 1, 2, 7};  // x^7 + x^2 + x + 1
-	for (int i = 255; i >= 128; --i) {
-		int word = i / 64, sh = i % 64;
-		if (!((z[word] >> sh) & 1)) continue;
-		z[word] ^= 1ULL << sh;
-		int j = i - 128;
-		for (int k = 0; k < 4; ++k) {
-			int p = j + pp[k];
-			z[p / 64] ^= 1ULL << (p % 64);
-		}
-	}
-	return makeBlock(z[1], z[0]);
+	return ref_reduce_words(z);
+}
+
+// Bit-by-bit reduction of a whole 256-bit value lo + hi·x^128 (every bit,
+// including ones no product reaches).
+static block ref_reduce(block lo, block hi) {
+	uint64_t z[4] = {((uint64_t *)&lo)[0], ((uint64_t *)&lo)[1],
+	                 ((uint64_t *)&hi)[0], ((uint64_t *)&hi)[1]};
+	return ref_reduce_words(z);
 }
 
 // ---------- correctness ----------
@@ -200,6 +221,70 @@ static bool check_vector_inn_prdt(int sz) {
 		want2[1] = want2[1] ^ hi;
 	}
 	return blocks_eq(got2[0], want2[0]) && blocks_eq(got2[1], want2[1]);
+}
+
+// Four term-major sums against four scalar gfmul sums.
+static bool check_vector_inn_prdt_x4(int n) {
+	PRG prg;
+	vector<block> a(4 * n + 1), b(4 * n + 1);   // +1: n = 0 still has storage
+	prg.random_block(a.data(), 4 * n);
+	prg.random_block(b.data(), 4 * n);
+	block got[4];
+	vector_inn_prdt_sum_red_x4(got, a.data(), b.data(), n);
+	for (int j = 0; j < 4; ++j) {
+		block want = zero_block, t;
+		for (int l = 0; l < n; ++l) {
+			gfmul(a[4 * l + j], b[4 * l + j], &t);
+			want = want ^ t;
+		}
+		if (!blocks_eq(got[j], want)) return false;
+	}
+	return true;
+}
+
+// One SIMD tier L directly: the per-lane reduce against the bit-by-bit
+// reference on arbitrary 256-bit values, and the x4 kernel against gfmul
+// sums. The public entry point only runs the widest compiled tier.
+template <class L>
+static bool check_x4_tier(int n) {
+	PRG prg;
+	block lo[4], hi[4], got[4];
+	for (int t = 0; t < 64; ++t) {
+		prg.random_block(lo, 4);
+		prg.random_block(hi, 4);
+		if (t == 0) for (int j = 0; j < 4; ++j) hi[j] = makeBlock(~0ULL, ~0ULL);
+		for (int c = 0; c < 4; c += L::N)
+			L::storeu(got + c, detail::reduce_lanes<L>(L::loadu(lo + c), L::loadu(hi + c)));
+		for (int j = 0; j < 4; ++j)
+			if (!blocks_eq(got[j], ref_reduce(lo[j], hi[j]))) return false;
+	}
+	vector<block> a(4 * n + 1), b(4 * n + 1);
+	prg.random_block(a.data(), 4 * n);
+	prg.random_block(b.data(), 4 * n);
+	detail::inn_prdt_x4<L>(got, a.data(), b.data(), n);
+	for (int j = 0; j < 4; ++j) {
+		block want = zero_block, t;
+		for (int l = 0; l < n; ++l) {
+			gfmul(a[4 * l + j], b[4 * l + j], &t);
+			want = want ^ t;
+		}
+		if (!blocks_eq(got[j], want)) return false;
+	}
+	return true;
+}
+
+static bool check_x4_tiers() {
+	bool ok = true;
+	for (int n : {0, 1, 10, 33}) {
+		ok &= check_x4_tier<detail::ClmulLane<1>>(n);
+#if EMP_HAS_VPCLMUL256
+		ok &= check_x4_tier<detail::ClmulLane<2>>(n);
+#endif
+#if EMP_HAS_VPCLMUL512
+		ok &= check_x4_tier<detail::ClmulLane<4>>(n);
+#endif
+	}
+	return ok;
 }
 
 static bool check_uni_hash_coeff_gen(int sz) {
@@ -296,6 +381,11 @@ static bool run_correctness() {
 	bool b = true;
 	for (int sz : {1, 7, 64, 1024}) b &= check_vector_inn_prdt(sz);
 	cout << "  vector_inn_prdt_sum_*          " << (b ? "OK" : "FAIL") << "\n";
+	bool b3 = true;
+	for (int n : {0, 1, 7, 10, 64}) b3 &= check_vector_inn_prdt_x4(n);
+	cout << "  vector_inn_prdt_sum_red_x4     " << (b3 ? "OK" : "FAIL") << "\n";
+	bool b4 = check_x4_tiers();
+	cout << "  x4 + lane reduce, every tier   " << (b4 ? "OK" : "FAIL") << "\n";
 	bool b2 = true;
 	for (int sz : {1, 7, 64, 1024}) b2 &= check_vector_inn_prdt_bool(sz);
 	cout << "  vector_inn_prdt_sum_red(bits)  " << (b2 ? "OK" : "FAIL") << "\n";
@@ -312,7 +402,7 @@ static bool run_correctness() {
 	bool e = true;
 	for (int sz : {1, 4, 17, 1024}) e &= check_vector_self_xor(sz);
 	cout << "  vector_self_xor                " << (e ? "OK" : "FAIL") << "\n";
-	return a && b && b2 && c && c2 && d && d2 && e;
+	return a && b && b2 && b3 && b4 && c && c2 && d && d2 && e;
 }
 
 int main(int /*argc*/, char ** /*argv*/) {

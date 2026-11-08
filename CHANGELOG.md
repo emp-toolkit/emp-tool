@@ -20,6 +20,15 @@ metadata is numeric (see the README's version guidance).
   together, pinned wire-trace baselines must be regenerated, and every
   dependent must be rebuilt (the class layout changed). (Issue #212.)
 
+### Added
+
+- `vector_inn_prdt_sum_red_x4(res, a, b, n)` (`crypto/f2k.h`): four
+  independent GF(2¹²⁸) inner products in one call, with the operands laid
+  out term-major (`a[4l + j]` is term `l` of sum `j`). Each SIMD lane
+  carries one sum, so the 512- and 256-bit VPCLMULQDQ tiers fold nothing
+  across lanes, and each sum is reduced once at the end, bit-identical to
+  `vector_inn_prdt_sum_red` on the de-interleaved operands.
+
 ### Removed
 
 - `MITCCRH::renew_ks(const block*)` and `MITCCRH::hash_cir_fixed`, the

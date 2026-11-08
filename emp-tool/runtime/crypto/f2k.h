@@ -33,6 +33,15 @@ inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b, 
 template<int N>
 inline void vector_inn_prdt_sum_red(block* res, const block* a, const block* b);
 
+// Four independent inner products at once: res[j] = Σ_{l<n} a[4l+j] * b[4l+j]
+// for j = 0..3, so term l of all four sums is contiguous (term-major). Each
+// SIMD lane carries one sum, so nothing is folded across lanes, and each
+// result is reduced once at the end: equal to vector_inn_prdt_sum_red on each
+// de-interleaved pair of operands.
+inline void vector_inn_prdt_sum_red_x4(block* res, const block* a, const block* b, int64_t n);
+template<int N>
+inline void vector_inn_prdt_sum_red_x4(block* res, const block* a, const block* b);
+
 // Σ a[i] * b[i] in GF(2^128) where b[i] ∈ {0, 1}. Each contribution is
 // either 0 or a[i], so no carryless multiply is needed — branchless
 // mask + XOR per element. Stable timing for adversarial b.

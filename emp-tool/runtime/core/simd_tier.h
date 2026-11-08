@@ -211,8 +211,12 @@ namespace emp { namespace detail {
 // vector. <1> = scalar PCLMULQDQ (universal on x86_64), <2> = ymm
 // VPCLMULQDQ + AVX2, <4> = zmm VPCLMULQDQ + AVX-512. The four
 // clmul_*_* methods bake the imm8 selector at compile time (the
-// intrinsic requires a constant). fold_to_xmm reduces the lane-wide
-// accumulator to a single xmm via halving XOR-reductions.
+// intrinsic requires a constant). clmul_lo_lo / clmul_hi_hi multiply the
+// matching halves of both operands; clmul_hi_lo and clmul_lo_hi are only
+// meaningful as a pair (their sum is the cross term), since x86 and aarch64
+// assign their operand halves the opposite way round. broadcast copies one
+// block into every lane. fold_to_xmm reduces the lane-wide accumulator to a
+// single xmm via halving XOR-reductions.
 template<int N> struct ClmulLane;
 
 template<>
@@ -220,7 +224,9 @@ struct ClmulLane<1> {
 	static constexpr int N = 1;
 	using vec_t = block;
 	EMP_F2K_TARGET_ATTR static vec_t zero()                            { return _mm_setzero_si128(); }
+	EMP_F2K_TARGET_ATTR static vec_t broadcast(block k)                { return k; }
 	EMP_F2K_TARGET_ATTR static vec_t loadu(const block *p)             { return _mm_loadu_si128((const __m128i *)p); }
+	EMP_F2K_TARGET_ATTR static void  storeu(block *p, vec_t v)         { _mm_storeu_si128((__m128i *)p, v); }
 	EMP_F2K_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)            { return _mm_xor_si128(a, b); }
 	EMP_F2K_TARGET_ATTR static vec_t xor3(vec_t a, vec_t b, vec_t c)   { return _mm_xor_si128(a, _mm_xor_si128(b, c)); }
 	EMP_F2K_TARGET_ATTR static vec_t clmul_lo_lo(vec_t a, vec_t b)     { return _mm_clmulepi64_si128(a, b, 0x00); }
@@ -238,7 +244,9 @@ struct ClmulLane<2> {
 	static constexpr int N = 2;
 	using vec_t = __m256i;
 	EMP_F2K_TARGET_ATTR static vec_t zero()                            { return _mm256_setzero_si256(); }
+	EMP_F2K_TARGET_ATTR static vec_t broadcast(block k)                { return _mm256_broadcastsi128_si256(k); }
 	EMP_F2K_TARGET_ATTR static vec_t loadu(const block *p)             { return _mm256_loadu_si256((const __m256i *)p); }
+	EMP_F2K_TARGET_ATTR static void  storeu(block *p, vec_t v)         { _mm256_storeu_si256((__m256i *)p, v); }
 	EMP_F2K_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)            { return _mm256_xor_si256(a, b); }
 	// Three-way XOR. AVX-512VL would let us use _mm256_ternarylogic_epi64
 	// here, but VPCLMULQDQ + AVX2 hosts typically lack AVX-512VL.
@@ -262,7 +270,9 @@ struct ClmulLane<4> {
 	static constexpr int N = 4;
 	using vec_t = __m512i;
 	EMP_F2K_TARGET_ATTR static vec_t zero()                            { return _mm512_setzero_si512(); }
+	EMP_F2K_TARGET_ATTR static vec_t broadcast(block k)                { return _mm512_broadcast_i32x4(k); }
 	EMP_F2K_TARGET_ATTR static vec_t loadu(const block *p)             { return _mm512_loadu_si512((const __m512i *)p); }
+	EMP_F2K_TARGET_ATTR static void  storeu(block *p, vec_t v)         { _mm512_storeu_si512((__m512i *)p, v); }
 	EMP_F2K_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)            { return _mm512_xor_si512(a, b); }
 	// vpternlogq with truth table 0x96 fuses the mid-accumulator update
 	// (mid ^= p10 ^ p01) into one instruction.
@@ -346,7 +356,9 @@ struct ClmulLane<1> {
 	static constexpr int N = 1;
 	using vec_t = block;
 	static vec_t zero()                                                { return _mm_setzero_si128(); }
+	static vec_t broadcast(block k)                                    { return k; }
 	static vec_t loadu(const block *p)                                 { return _mm_loadu_si128((const __m128i *)p); }
+	static void  storeu(block *p, vec_t v)                             { _mm_storeu_si128((__m128i *)p, v); }
 	static vec_t xorv(vec_t a, vec_t b)                                { return _mm_xor_si128(a, b); }
 	static vec_t xor3(vec_t a, vec_t b, vec_t c)                       { return _mm_xor_si128(a, _mm_xor_si128(b, c)); }
 	static vec_t clmul_lo_lo(vec_t a, vec_t b) {
