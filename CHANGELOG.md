@@ -39,6 +39,25 @@ metadata is numeric (see the README's version guidance).
   carries one sum, so the 512- and 256-bit VPCLMULQDQ tiers fold nothing
   across lanes, and each sum is reduced once at the end, bit-identical to
   `vector_inn_prdt_sum_red` on the de-interleaved operands.
+- `ScheduledProgram` (`ir/schedule.h`) owns a dense `BooleanProgram` and its
+  AND-depth schedule, validated and scheduled once in the constructor.
+  `scheduled_execute_program` and `simd_execute_program` take it in place of a
+  program plus a separately built plan.
+- `RebindableWireBundle<V, Ctx>` and `wire_bundle_rebind_t<V, Ctx>`
+  (`ir/wire_value.h`): the cross-context half of the `WireBundle` contract
+  (`V::rebind<Ctx>` is a `WireBundle` over `Ctx` at the same width), required of
+  every argument and return family by `frontend::run(ctx, circuit, …)`,
+  `frontend::compose` and `ChunkedSession::run(circuit, …)`.
+- `validate_compose_structure` and `validate_compose` (`ir/context/compose.h`):
+  plan-level and full validation of a `ComposePlan`. `ComposeCtx::finish` runs
+  the first on the plan it returns; `flatten_compose` runs the second.
+- `digest_gate_stream(program)` (`ir/context/digest.h`), the stored-program
+  counterpart of a `DigestCtx` trace.
+- `ProgramWorkspace::release_wire_values()` (`ir/execute.h`) clears the
+  workspace's wire vectors and keeps their capacity, for a thread-local
+  workspace that holds context-bound wires.
+- `FlushPlan::error` (`ir/session/flush_plan.h`) names the reason `plan_flush`
+  rejected a recorded stream.
 
 ### Changed
 
@@ -113,6 +132,85 @@ metadata is numeric (see the README's version guidance).
 - `SessionID::derive()` is `[[nodiscard]]`.
 - `MITCCRH::start_point` starts as `zero_block` instead of indeterminate. It is
   a placeholder: `setS()` must still install the parties' shared random seed.
+- `WireBundle` requires a positive static `width()`. `BitVec_T<Ctx, 0>` and
+  other zero-width values are no longer frontend arguments, return values or
+  session I/O values; they can still be built inside circuit code.
+- An explicit-context circuit body takes the context as a mutable lvalue
+  reference (`Ctx&` or `auto&`). A generic by-value or forwarding-reference
+  (`auto&&`) first parameter, and a body that returns a value over a different
+  context type than its arguments, are compile-time errors.
+- Live `frontend::run(body, args…)` passes decayed, owned argument values, as
+  `compile` does, so a body overloaded on lvalue versus rvalue arguments
+  describes one circuit. `compile`, both `run` forms and `compose` stop the
+  process when an argument or the result belongs to another context instance,
+  in every build (the `run` argument check used to exist only under
+  `EMP_CONTEXT_CHECKS`), and `run` stops on a default-constructed first
+  argument.
+- `frontend::run(ctx, circuit, args…)` and
+  `ChunkedSession::run(const frontend::Circuit<…>&, args…)` are constrained by
+  `RebindableWireBundle` and spelled with `wire_bundle_rebind_t`. A session that
+  derives from `ChunkedSession` and redeclares that `run` must give it the same
+  constraint and spelling, or calls to it become ambiguous.
+- `validate_program` rejects an unknown `wire_reuse` value. Under
+  `WireReuse::Linear` an And output takes a slot no gate has written and no
+  later gate writes (`Full` allows both); under `WireReuse::None` gate `i` must
+  write wire `num_inputs + i`. A dense program with out-of-order outputs, or a
+  Linear one that places an And output in a recycled slot, used to load and is
+  rejected now, `.empbc` files included.
+- Scheduled and SIMD replay take a `ScheduledProgram`. The one-shot
+  `scheduled_execute_program(ctx, program, inputs)` remains and validates its
+  program on every call, and `simd_execute_program` stops on a negative
+  instance count. Code that cached a `ScheduledPlan` constructs a
+  `ScheduledProgram` from the program instead.
+- IR diagnostics separate a streamed gate trace (`DigestCtx::value()`,
+  `digest_gate_stream`) from the versioned full-program fingerprint
+  (`digest_program`). `DigestCtx` seals its input prefix once, at the first gate
+  or at `value()`, and stops on `external_input` after a gate; code that read
+  `DigestCtx::digest` calls `value()`. `digest_program` mixes a domain tag, a
+  format version, `wire_reuse`, `num_wires`, the gate count and the ordered
+  outputs, so its value changes for every program (the `stored_program_digest`
+  and `dense_program_digest` fields of `empbc-tool inspect --json` change; the
+  checked-in manifests carry neither). Code that compared a `DigestCtx` trace or
+  `digest_source` with `digest_program` compares with `digest_gate_stream`.
+- `session::plan_flush` rejects a malformed recorded stream instead of
+  compacting it with zero operands: recorder id 0, the null sentinel, as a gate
+  operand, output or keep id; a Not or constant gate with non-canonical
+  operands; an unknown op; two gates producing one id; a chunk-local operand
+  read before its producer; a stale keep id; and counts that do not fit
+  `uint32_t`. `ok` is false and `error` names the reason, which
+  `ChunkedSession` includes in its stop. Debug builds validate the compacted
+  program.
+- `ChunkedSession::reveal` treats only an empty decode as "not a recipient" and
+  stops on a nonempty decode of the wrong width. `run_artifact` validates the
+  raw program in Debug builds and trusts it in Release.
+- `builtin_circuit` accepts only `aes128`, `sha256_256` and `sha3_256_256`, and
+  `float_circuit` only widths 16, 32 and 64 with the shipped operations; both
+  check the loaded program's input and output counts before caching it.
+- `load_empbc` rejects a null buffer with a nonzero length and a nonzero
+  reserved gate byte, and `save_empbc` stops when the output or gate count does
+  not fit the 32-bit header field.
+- `validate_artifact` rejects a zero argument or return width, and
+  `CircuitSignature::total_input_bits` stops when the sum exceeds `UINT32_MAX`.
+- `ComposeCtx::finish` validates the plan's wiring; `flatten_compose` validates
+  the plan and every distinct unit and bounds the flattened wire count before
+  indexing; `ComposeCtx::call_unit` stops on a null input array and on index or
+  wire-id overflow. A glue event is tagged `instance == -1` exactly.
+- `~ChunkRecorderCtx` stops the process when a recorder wire is still pinned, in
+  every build; the check used to run only under `EMP_CONTEXT_CHECKS`.
+- `ClearSession::input` and `reveal` stop on a value from another session's
+  context, on a runtime-width codec whose `encode` returns the wrong number of
+  bits or whose `from_wires` returns the wrong context or width, and on
+  revealing a runtime-width value of width 0.
+- `Float_T`'s IR-replay helpers (`replay_`, `unary_`, `binop_`, `ternary_`,
+  `cmp_`, `classify_`) are private.
+- `make_compact` recycles a slot as soon as its value has no reader and is
+  neither a program output nor a Linear And output, and lets a program output
+  take a recycled slot; only Linear And outputs insist on a never-written slot.
+  A consumer that maps an output slot to its producer takes the slot's last
+  writer. Linear and Full programs it produces can have fewer wires than
+  before, and their `digest_program` values change.
+- `execute_program(ctx, program, inputs)` moves the output vector out of its
+  workspace instead of copying it.
 
 ### Removed
 
@@ -128,6 +226,13 @@ metadata is numeric (see the README's version guidance).
   its tweak layout on the gid stream, on both ends, not rename calls.
 - `macro_xstr` / `macro_str`, which `utils.h` defined for every file that
   includes it, although emp-tool does not use them.
+- `ScheduledPlan` and `make_scheduled_plan` from the public namespace (they are
+  `emp::detail`), the `scheduled_execute_program` / `simd_execute_program`
+  overloads that took a `BooleanProgram` plus a plan, and the
+  `simd_execute_program` forms over a bare `BooleanProgram`.
+- `layout_pass`'s `LivenessStats` parameter; `layout_pass(program)` computes its
+  own liveness.
+- `DigestCtx`'s public data members (`digest`, `next_id`, `c0`, `c1`).
 
 ### Fixed
 
@@ -161,6 +266,16 @@ metadata is numeric (see the README's version guidance).
   another. The input is now read 16 bytes per block. Output is unchanged, and
   builds with 1-block AES lanes (AES-NI only, ARM) compile the same code as
   before.
+- `Float_T` replay kept the last replay's wires in its thread-local
+  `ProgramWorkspace`. Over a context with refcounted wires they stayed pinned
+  after their recorder was destroyed, and a later recorder could inherit them as
+  stale ids. The helpers move the outputs out and release the workspace's wires.
+- `layout_pass` marked input wire 0 reachable whenever a constant gate was
+  reachable (through its normalized operand), overstating `reachable_wires` in
+  `empbc-tool inspect`, and `analyze_program` counted a gate that reads the same
+  wire twice as two consumers in `max_fanout`.
+- `save_empbc_file` reports a failed `fclose`; a write that failed at close used
+  to report success.
 
 ## v1.0.0-alpha.1
 
