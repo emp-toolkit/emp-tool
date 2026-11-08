@@ -66,8 +66,8 @@ inline void aes_tiles_src(Source&& src, Store&& store, const AES_KEY *kk) {
 }
 
 // Convenience overload for the plain-store case: writes AES output to
-// dst[t * L::N..(t+1) * L::N) and ignores the plaintext. Kept so existing
-// callers that don't need DM stay terse.
+// dst[t * L::N..(t+1) * L::N) and ignores the plaintext, so callers that
+// don't need DM stay terse.
 template <class L, int n_tiles, class Source>
 EMP_AES_TARGET_ATTR
 inline void aes_tiles_src(block *dst, Source&& src, const AES_KEY *kk) {
@@ -142,9 +142,9 @@ struct AesMemXorInputTile {
 };
 
 // Davies-Meyer-over-σ tile: dst = AES(σ(src)) ⊕ σ(src). σ is applied in the
-// tile source, so σ(src) stays live in-register as the XOR-back operand —
-// no σ stash buffer and no second pass. Shared by CCRH's compile-time H<n>
-// (via ParaEnc_mem_tiles_impl) and runtime Hn (via MemTileOp + drain_tiles).
+// tile source, so σ(src) stays live in-register as the XOR-back operand.
+// Shared by CCRH's compile-time H<n> (via ParaEnc_mem_tiles_impl) and runtime
+// Hn (via MemTileOp + drain_tiles).
 struct AesMemXorSigmaTile {
 	template<class L, int n_tiles>
 	EMP_AES_TARGET_ATTR
@@ -210,7 +210,7 @@ struct AesMemXorSigmaTweakTile {
 // instead of the serial fallback that a single n_tiles>4 call would take.
 // Byte-identical to one apply<L,n_tiles>: the blocks are independent, only the
 // AES-pipelining grouping changes. Used for compile-time numEncs > 16, where
-// N4 = numEncs/4 exceeds 4; for n_tiles <= 4 it is a single apply as before.
+// N4 = numEncs/4 exceeds 4; for n_tiles <= 4 it is a single apply.
 // `off` advances with the groups; `aux...` are per-key and pass through.
 template<class MemTile, class L, int n_tiles, class... Aux>
 EMP_AES_TARGET_ATTR
@@ -355,8 +355,9 @@ static inline void aes_ctr_fill_lane(block *dst, uint64_t counter,
                                      const AES_KEY *kk, block tweak) {
 	// Build the tweak broadcast from a compile-time zero on the Plain path so
 	// the per-counter XOR folds away. Threading `tweak` (= zero_block) through
-	// as a runtime value instead leaves a live XOR that ~halves single-block
-	// random_block on the VAES-512 target. XorBack genuinely needs the tweak.
+	// as a runtime value instead leaves a live XOR on every counter, which
+	// markedly slows single-block random_block on the VAES-512 target. XorBack
+	// genuinely needs the tweak.
 	aes_tiles_src<L, W / L::N>(
 		[&](int t) {
 			if constexpr (St == CtrStore::XorBack)

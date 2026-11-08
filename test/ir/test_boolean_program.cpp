@@ -1,4 +1,4 @@
-// Test for circuits/boolean_program.h + circuits/empbc.h — the canonical IR,
+// Test for ir/program.h + ir/empbc.h — the canonical IR,
 // its validator, the for_each_gate / execute_program execution split, and the
 // .empbc codec (u16/u32 roundtrip + malformed rejection). No backend needed:
 // these are pure data-structure / serialization checks.
@@ -17,7 +17,7 @@
 
 using namespace emp::circuit;
 
-// Rejection is fatal by design — error() _Exit(1)s the process (utils.hpp) —
+// Rejection is fatal by design — error() _Exit(1)s the process (core/error.h) —
 // so "this input is rejected" shows up as child-process death, not an
 // exception. Run `f` in a fork with stderr silenced (the diagnostic is
 // expected) and report whether the child exited nonzero.

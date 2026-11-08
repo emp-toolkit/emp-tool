@@ -198,8 +198,8 @@ static TLSConfig make_cfg(int party) {
 
 // -------------------------------------------------------------------------
 // bench(): loopback throughput sweep. Same shape as bench_netio.
-// Expect TLS overhead to drop to a few % at 16+ KiB messages and be more
-// pronounced on small messages (per-record AEAD).
+// TLS overhead is largest on small messages (per-record AEAD) and shrinks as
+// messages grow.
 // -------------------------------------------------------------------------
 static void bench(TLSIO *io, int party) {
 	if (party == ALICE) cout << "--- TLSIO bench ---\n";

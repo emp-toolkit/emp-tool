@@ -16,7 +16,7 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-# emp-tool's runtime and SIMD layers are intentionally POSIX-only today. Fail
+# emp-tool's runtime and SIMD layers are intentionally POSIX-only. Fail
 # during configuration instead of reaching obscure socket/intrinsic errors.
 if(NOT CMAKE_SYSTEM_NAME MATCHES "^(Linux|Darwin)$")
     message(FATAL_ERROR
@@ -48,7 +48,7 @@ option(EMP_TOOL_INSTALL           "Generate install / export rules"    ${PROJECT
 option(EMP_TOOL_NATIVE_ARCH       "Build for the host CPU (-march=native/-mcpu=native). OFF produces a portable baseline binary." ON)
 
 # Hash backend for emp::Hash (runtime/crypto/hash.h). sha256 = OpenSSL (default);
-# blake3 = vendored BLAKE3 (third_party/blake3), ~3-4x faster per byte. Selecting
+# blake3 = vendored BLAKE3 (third_party/blake3), faster per byte. Selecting
 # blake3 changes the Fiat-Shamir / commitment transcript, so it is a protocol-wide
 # choice inherited by every consumer that links this emp-tool build.
 set(EMP_HASH_BACKEND "sha256" CACHE STRING "Default emp::Hash backend: sha256 or blake3")

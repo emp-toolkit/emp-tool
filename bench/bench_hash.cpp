@@ -1,13 +1,14 @@
-// crypto/hash.h — SHA-256 wrapper around OpenSSL EVP. Throughput benchmark.
-// EC-point KDF moved to crypto/ro.h and is covered by test_ro.cpp.
+// crypto/hash.h — streaming hash, templated on the algorithm (HashT<opt>:
+// OpenSSL SHA-256 default, vendored BLAKE3 opt-in). Throughput benchmark of
+// `Hash`, the build's default backend.
 //
 // What's in hash.h:
 //   Hash::put(p, n)                           feed n bytes
 //   Hash::put_block(b, n=1)                   feed n blocks
 //   Hash::digest(out, reset_after=true)       finalize (or snapshot)
 //   Hash::reset()                             reinit context
-//   Hash::hash_once(out, p, n)                one-shot SHA-256
-//   Hash::hash_for_block(p, n)                first 16 bytes of SHA-256, as block
+//   Hash::hash_once(out, p, n)                one-shot digest
+//   Hash::hash_for_block(p, n)                first 16 bytes of the digest, as block
 
 #include "emp-tool/emp-tool.h"
 

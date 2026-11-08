@@ -47,8 +47,8 @@ three shapes recur.
   drive a `void run_correctness(IO*, party, …)` that fails fast through
   `expecting()` instead of returning `bool`, and have no `example()`.
 
-A few older runtime files (`test_ro`, `test_ecc`, `test_halfgate`) are
-flat `main()`-plus-assert. Use the first shape for a genuinely new
+A few runtime files (`test_ro`, `test_ecc`, `test_halfgate`) are a flat
+`main()` of fail-fast checks. Use the first shape for a new
 single-process primitive test.
 
 ### The demonstration (`example()`)

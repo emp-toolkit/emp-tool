@@ -286,11 +286,11 @@ static bool check_sse_trans_scalar_reference() {
 }
 
 // Parity: the tier-dispatched sse_trans_n128 must match the generic
-// (SSE2-only) sse_trans byte-for-byte. Exercises every variant the build
-// instantiates (SSE2 / AVX2 / AVX-512BW): on x86 the dispatcher picks the
-// widest; on aarch64 it falls through to sse_trans. Sweep covers AVX-512BW
-// bulk multiples (mult of 512 cols = 4 col_blocks), AVX2 multiples (256 cols
-// = 2 col_blocks), and tail sizes 1/2/3 col_blocks past those.
+// (SSE2-only) sse_trans byte-for-byte. It runs whichever tier the build
+// dispatches to (GFNI512 / GFNI256 / AVX-512BW / AVX2 / SSE2 on x86, NEON
+// on aarch64; see transpose.hpp). Sweep covers AVX-512BW bulk multiples
+// (mult of 512 cols = 4 col_blocks), AVX2 multiples (256 cols = 2
+// col_blocks), and tail sizes 1/2/3 col_blocks past those.
 static bool check_sse_trans_n128_parity() {
 	PRG prg;
 	const uint64_t ncols_list[] = {

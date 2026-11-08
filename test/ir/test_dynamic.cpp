@@ -28,7 +28,7 @@ int main() {
     using RU  = UInt_T<Ctx, runtime_width>;   // runtime-width unsigned
     using RI  = Int_T<Ctx, runtime_width>;    // runtime-width signed
 
-    // ---- concept guards: fixed path unchanged, runtime path added, disjoint ----
+    // ---- concept guards: the fixed and runtime-width paths are disjoint ----
     static_assert(WireValue<UInt_T<ClearCtx, 32>>,          "fixed UInt is still WireValue");
     static_assert(WireValue<Int_T<ClearCtx, 32>>,           "fixed Int is still WireValue");
     static_assert(!RuntimeWidthValue<UInt_T<ClearCtx, 32>>, "fixed is not RuntimeWidthValue");
@@ -79,7 +79,7 @@ int main() {
     // ---- zero-gate fixed <-> dynamic conversions ----
     {
         const uint32_t V = 0xABCD1234u;
-        auto f = sess.input<UInt_T<Ctx, 32>>(ALICE, V);   // fixed input (unchanged path)
+        auto f = sess.input<UInt_T<Ctx, 32>>(ALICE, V);   // fixed-width input
         RU d = f.to_dynamic();
         chk("to_dynamic width/value", d.width() == 32 && sess.reveal(d, PUBLIC).value() == V);
         auto back = d.to_fixed<32>();

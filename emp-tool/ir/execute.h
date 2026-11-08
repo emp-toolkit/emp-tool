@@ -72,9 +72,9 @@ inline void execute_program(const BooleanProgram& p,
 }  // namespace circuit
 
 // ---------------------------------------------------------------------------
-// Reusable replay workspace — avoids per-call allocation once protocols depend
-// on replay. `tmp_inputs` is for callers that assemble an input vector before
-// replay (e.g. Float::binop_ concatenates 2*W operand wires).
+// Reusable replay workspace — avoids per-call allocation across repeated
+// replays. `tmp_inputs` is for callers that assemble an input vector before
+// replay (e.g. Float_T::binop_ concatenates 2*W operand wires).
 // ---------------------------------------------------------------------------
 template <class Wire>
 struct ProgramWorkspace {

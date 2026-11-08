@@ -146,7 +146,7 @@ public:
 	}
 
 	// Out-of-place: out[i] = y ^ AES(y), y = sigma(in[i]) ^ T. out and in
-	// must not overlap. Same fused tile; no scratch buffer.
+	// must not overlap. Same fused tile.
 	template<int K, int H>
 	void hash_cir(block * __restrict__ out, const block * __restrict__ in) {
 		consume<detail::AesMemXorSigmaTweakTile<H>, K, H, false>(out, in);

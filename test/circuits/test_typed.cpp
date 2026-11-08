@@ -1,5 +1,5 @@
 // Typed values over a BooleanContext (emp-tool/circuits/typed.h): exercise
-// UInt/SignedInt arithmetic+compare and Float arithmetic (IR replay) on
+// UInt/Int arithmetic+compare and Float arithmetic (IR replay) on
 // Ctx vs host, plus a record->replay round-trip. C++20.
 
 #include "emp-tool/emp-tool.h"
@@ -52,7 +52,7 @@ int main() {
         chk("uint %",  read_bits<32>(a % b) == (uint32_t)(A % B));
     }
 
-    // ---- SignedInt32: +, -, unary-, signed < ----
+    // ---- Int32: +, -, unary-, signed < ----
     {
         const int32_t X = -1000000, Y = 2000000;
         auto x = Int_T<Ctx, 32>::constant(cx, X);

@@ -80,8 +80,8 @@ template <class V> inline constexpr bool is_wire_value_v = WireValue<std::decay_
 // object (a runtime int, not the type), the clear codec rides BYTE-BOOLS (uint8_t,
 // value 0/1) in a runtime-sized std::vector, and the value is SESSION-I/O eligible
 // but NOT compile/run eligible: it has no static width(), so it models neither
-// WireBundle nor WireValue and never enters cf::compile / IR replay. The two
-// instances today are UInt_T<Ctx, runtime_width> and Int_T<Ctx, runtime_width>
+// WireBundle nor WireValue and never enters cf::compile / IR replay. Its two
+// instances are UInt_T<Ctx, runtime_width> and Int_T<Ctx, runtime_width>
 // (runtime_width == the N == 0 mode). Sessions must copy the byte-bools into real
 // `bool` storage at the engine boundary — never reinterpret uint8_t* as bool*.
 template <class V_>

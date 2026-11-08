@@ -10,7 +10,7 @@
 //   sync()                             barrier: one zero byte each way
 //
 // Benchmark below runs the loopback throughput sweep only. Correctness and
-// regression coverage lives in test/test_netio.cpp.
+// regression coverage lives in test/runtime/test_netio.cpp.
 
 #include <cassert>
 #include <cstring>

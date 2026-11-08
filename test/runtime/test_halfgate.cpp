@@ -106,7 +106,7 @@ int main(void) {
 	bool batch_invariant = check_batch_size_invariance(prg, delta, hash_seed);
 	cout << "BatchSize-invariant transcript ... "
 	     << (batch_invariant ? "check" : "FAIL") << "\n";
-	// Throughput measurement lives in ../bench/bench_halfgate.cpp (build-only).
+	// Throughput measurement lives in bench/bench_halfgate.cpp (build-only).
 
 	return batch_invariant ? 0 : 1;
 }

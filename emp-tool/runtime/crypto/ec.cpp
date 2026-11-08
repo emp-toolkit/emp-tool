@@ -348,8 +348,8 @@ size_t Point::size() const {
 void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
 	expecting(g != nullptr, "Point::from_bin: null group");
 	// If already initialized against a different group, drop the old
-	// point and re-allocate against `g`. Without this, the silent
-	// fall-through used the prior group's curve while ignoring `g`.
+	// point and re-allocate against `g`; otherwise the decode would run
+	// on the prior group's curve and silently ignore `g`.
 	if (point_ != nullptr && group_ != g) {
 		EC_POINT_free(point_);
 		point_ = nullptr;

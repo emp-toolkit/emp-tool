@@ -5,10 +5,9 @@ This extends [frontend.md](frontend.md) (which covers writing a circuit body and
 compiling/replaying it); read that first. Everything here is about *one* verb —
 `run` — and the difference between **copying** a circuit in and **referencing** it.
 
-> Status: this documents a programming pattern that is implemented but still being
-> refined. emp-tool provides the mechanism (`ComposeCtx`, `ComposePlan`,
+> emp-tool provides the mechanism (`ComposeCtx`, `ComposePlan`,
 > `flatten_compose`); the composition/reuse path (`run_compose`) is a session
-> method, lowered by a protocol backend.
+> method, lowered by a protocol backend. Open items are in §7.
 
 ---
 
@@ -130,8 +129,8 @@ inner structure of `unit` was fixed when `unit` was compiled:
   subunit baked in.
 - Only the `run` calls **directly in the `run_compose` body** are the reuse boundary.
 
-Multi-level (a unit that is itself a live composition) is not supported yet — for now,
-inline the inner level into each unit and compose the outer level.
+Multi-level (a unit that is itself a live composition) is not supported: inline the
+inner level into each unit and compose the outer level.
 
 ---
 

@@ -242,9 +242,9 @@ protected:
   }
 
   // A protocol may defer input authentication while assembling a distinct
-  // execution mode (for example an offline-prepared run).  Every ordinary
-  // ChunkedSession boundary settles those descriptors first.  Sessions without
-  // the hook compile to exactly their former code.
+  // execution mode (for example an offline-prepared run). Every ordinary
+  // ChunkedSession boundary settles those descriptors first. For a session
+  // without the hook the call compiles to nothing.
   void settle_deferred_inputs_() {
     if constexpr (requires(Derived& d) { d.materialize_deferred_inputs_(); })
       self().materialize_deferred_inputs_();

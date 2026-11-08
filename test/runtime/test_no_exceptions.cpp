@@ -2,9 +2,9 @@
 // (docs/api_conventions.md "error(), never exceptions"). This TU compiles
 // with -fno-exceptions (see test/CMakeLists.txt), so any `throw` reachable
 // from the public umbrella fails the BUILD, not just the run. The body
-// instantiates the two paths that historically threw: ThreadPool::enqueue
-// (vendored, patched to emp::error) and PRG system-entropy seeding
-// (std::random_device, replaced by getentropy).
+// instantiates the two paths whose usual implementations throw:
+// ThreadPool::enqueue (the vendored copy reports through emp::error) and PRG
+// system-entropy seeding (getentropy; std::random_device can throw).
 #include "emp-tool/emp-tool.h"
 #include <cstdio>
 using namespace emp;

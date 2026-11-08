@@ -43,7 +43,7 @@ abs neg copysign
 
 Notes:
 
-- Predicate/classifier circuits currently output 8 bits; bit 0 is the result.
+- Predicate/classifier circuits output 8 bits; bit 0 is the result.
 - `add` / `sub` / `mul` / `div` / `min` / `max` are correctly rounded
   (round-to-nearest-even; `test_float` verifies them bit-exactly against
   the host). `sqrt` / `recip` / `rsqrt` are iterative kernels verified to
@@ -87,7 +87,7 @@ For floating-point assets specifically:
 - Unary inputs are `A`, binary inputs are `A||B`, and ternary inputs are
   `A||B||C`, each operand LSB-first.
 - Non-predicate outputs are one LSB-first float payload of the same width.
-- Predicate/classifier outputs are currently 8 bits, with bit 0 holding the
+- Predicate/classifier outputs are 8 bits, with bit 0 holding the
   boolean result.
 
 For non-floating-point generated circuits, prefer the same shape: choose a
@@ -164,7 +164,7 @@ instructions for the current checked-in files.
   explicitly.
 - Implement pure rewiring operations directly in EMP. `abs`, `neg`, and
   `copysign` do not need a gate generator or `.empbc` asset.
-- Compose circuits for intentionally unfused operations. Current `fma` is
+- Compose circuits for intentionally unfused operations. `fma` is
   `add(mul(a, b), c)` and `rsqrt` is `1 / sqrt(x)`, so composition is clearer
   than asking the generator for a larger fused-looking expression.
 - For heavy ops, a low CBMC-GC minimization time limit, usually `1`, avoided SAT
@@ -265,8 +265,6 @@ Before replacing a checked-in `.empbc`, confirm all of the following:
 5. AND counts have been compared with the table above, and any increase has a
    clear correctness or maintainability reason.
 6. emp-tool's `test_float` passes.
-7. The downstream protocol test that exercises float circuits passes, when that
-   protocol supports the current float API.
 
 ## Third-Party Provenance
 

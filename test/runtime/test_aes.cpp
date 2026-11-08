@@ -181,8 +181,8 @@ static bool check_paraenc_template() {
 }
 
 // Two-pointer ParaEnc<K,N>(dst, src, keys): byte-identical to the in-place
-// form. Validates that the new overload doesn't perturb output and that
-// callers can rely on dst[i] == in-place-encrypt(src)[i].
+// form. Validates that the out-of-place overload doesn't perturb output and
+// that callers can rely on dst[i] == in-place-encrypt(src)[i].
 template <int K, int N>
 static bool check_paraenc_template_out_of_place() {
 	PRG prg;
@@ -196,10 +196,10 @@ static bool check_paraenc_template_out_of_place() {
 
 	block ref[K * N];
 	memcpy(ref, in, sizeof(in));
-	ParaEnc<K, N>(ref, skeys);                // existing one-pointer baseline
+	ParaEnc<K, N>(ref, skeys);                // one-pointer baseline
 
 	block oop[K * N];
-	ParaEnc<K, N>(oop, in, skeys);            // new two-pointer overload
+	ParaEnc<K, N>(oop, in, skeys);            // two-pointer overload
 
 	bool ok = cmpBlock(ref, oop, K * N);
 	ostringstream os;

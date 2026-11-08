@@ -27,16 +27,16 @@ orders, which breaks any peer running on the unchanged code.
 
 Two randomness sources in emp-tool reach the wire:
 
-1. **`PRG()` default-construction** — used pervasively by base OTs,
-   PPRF roots, Δ sampling, malicious-mode consistency check seeds,
-   etc. In test mode, `PRG()` pulls a deterministic `(lane, ordinal)`
+1. **`PRG()` default-construction** — used pervasively for keys,
+   Δ sampling, masks, check seeds, and other protocol randomness.
+   In test mode, `PRG()` pulls a deterministic `(lane, ordinal)`
    seed from `next_test_seed()` instead of OS entropy
    (`/dev/urandom`): the lane names the logical unit of
    work (main thread = lane 0), the ordinal counts constructions
    within the lane.
 2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's
-   `BN_priv_rand_range` in the toolkit. Used by P-256 base OTs (PVW,
-   CSW, NP, CO). In test mode, it samples uniform in `[1, order)`
+   `BN_priv_rand_range` in emp-tool, used by elliptic-curve
+   protocols. In test mode, it samples uniform in `[1, order)`
    via emp::PRG-driven rejection instead of OpenSSL's internal
    CSPRNG.
 

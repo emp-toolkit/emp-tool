@@ -16,10 +16,6 @@ To **reuse** a compiled circuit across many calls without materializing each cop
 (replay one unit by reference instead of inlining it), see
 [composition.md](composition.md) — the `run` / `run_compose` inline-vs-reuse pattern.
 
-This is the BooleanContext frontend: it compiles and replays over the typed
-context-bound values (`Bit_T<Ctx>` / `UInt_T<Ctx,N>` / …), with the context
-passed explicitly and no global backend.
-
 For the typed values it builds on, read [circuits.md](circuits.md); for the
 gate-context concept it replays over, read the header of `ir/context/context.h`;
 for the session that owns I/O around it, read `ir/session/session.h`.
