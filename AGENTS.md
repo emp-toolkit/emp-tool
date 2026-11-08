@@ -7,8 +7,8 @@ file first, then load only the subdocs relevant to your task.
 
 emp-tool is the foundation of the EMP toolkit: a header-mostly C++20
 library in three layers (`circuits` → `ir` → `runtime`, each with its
-own umbrella header) that the higher-level emp-ot, emp-sh2pc, emp-ag2pc,
-emp-agmpc protocols build on:
+own umbrella header) that higher-level OT and MPC protocol libraries
+build on:
 
 - `runtime/` — the substrate: `block`, crypto utilities (AES, hash, PRG,
   group ops), IO channels (`NetIO`, `TLSIO`), and the per-gate garbling

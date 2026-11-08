@@ -11,9 +11,10 @@ in sends, before returning to the caller or blocking on anything other
 than a recv on the same NetIO. The auto-flush only fires when the same
 NetIO does a recv (recv_data_internal drains pending sends via
 `flush_unlocked()` before blocking on the read); a
-NetIO whose step is purely sends — e.g. the IKNP receiver-role channel
-during `setup_recv` — strands its tail bytes in the user-space
-`send_buf` until something else moves them.
+NetIO whose step is purely sends — e.g. a receiver that ends a setup
+step with a few KiB of sends and then waits on another channel —
+strands its tail bytes in the user-space `send_buf` until something
+else moves them.
 
 `~NetIO` flushes, so pure send-then-destruct works. Long-lived NetIOs
 with a mid-life send-only step do not: the destructor only runs at

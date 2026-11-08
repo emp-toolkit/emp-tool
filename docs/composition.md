@@ -6,8 +6,9 @@ compiling/replaying it); read that first. Everything here is about *one* verb �
 `run` — and the difference between **copying** a circuit in and **referencing** it.
 
 > Status: this documents a programming pattern that is implemented but still being
-> refined. The composition/reuse path (`run_compose`) currently lowers only on the
-> emp-ag2pc backend; the mechanism (`ComposeCtx`, `ComposePlan`) is in emp-tool.
+> refined. emp-tool provides the mechanism (`ComposeCtx`, `ComposePlan`,
+> `flatten_compose`); the composition/reuse path (`run_compose`) is a session
+> method, lowered by a protocol backend.
 
 ---
 
@@ -28,7 +29,7 @@ into "reuse the one compiled copy" — the only way to avoid materializing N cop
 |---|---|
 | `template<BooleanContext Ctx> auto f(Ctx&, …)` | a **kernel** — logic, rebuilt every time it's called |
 | `compile<ArgVs…>(body)` | freeze a body into a **`Circuit`** (a context-free artifact + signature) |
-| `compile_linear<ArgVs…>(body)` | same, but compacted to `WireReuse::Linear` — the form a multi-pass backend (ag2pc) can replay cheaply; use this for a **unit** you intend to compose |
+| `compile_linear<ArgVs…>(body)` | same, but compacted to `WireReuse::Linear` — the form a multi-pass backend can replay cheaply; use this for a **unit** you intend to compose |
 | `run(ctx, circuit, args…)` | **replay** a compiled circuit on `ctx` |
 | `run_compose(body, args…)` (session) | run a body whose `run` calls are recorded **by reference** (not inlined) and replayed on the fly |
 
@@ -111,7 +112,8 @@ It does **not** help (and you should use a plain path) when:
   circuit; there's no repetition to share, and `run_compose` only adds plan overhead.
 - **Live body replay** `sess.run(body)` with `run` inside — there `ctx` is a backend
   pass, so `run` inlines (per replay). To get reuse you must switch to `run_compose`.
-- **Plaintext / non-ag2pc backends** — `run` inlines (correct, materialized).
+- **Plaintext, or a backend that does not lower composition** — `run` inlines
+  (correct, materialized).
 
 The win scales with how much work is in reused units versus glue, and with how many
 instances amortize compiling each unit once.
@@ -133,27 +135,19 @@ inline the inner level into each unit and compose the outer level.
 
 ---
 
-## 6. The ag2pc lowering (where reuse becomes the win)
+## 6. The backend lowering (where reuse becomes the win)
 
-On emp-ag2pc, `sess.run_compose(body, …)`:
+In a backend that lowers composition, `sess.run_compose(body, …)`:
 
 1. records `body` once over a `ComposeCtx` → a `ComposePlan` (O(#glue gates + #instances));
 2. lowers it: each instance gets a disjoint slot block (so every instance's AND outputs
    coexist across the protocol's passes), and each unit's gate stream is replayed **on
-   the fly** through the trust path (no runtime register allocation, cache-hot unit) — no
-   flattened N-copy program is ever built.
+   the fly** (no runtime register allocation, cache-hot unit) — no flattened N-copy
+   program is ever built.
 
-Requirements/notes:
-
-- Units must be `compile_linear` (the trust path needs AND-pinned wire reuse — see
-  [transform.h](../emp-tool/ir/transform.h) for `make_compact`; the `WireReuse`
-  levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
-- `run_tiled(unit, repeats, state)` is one-line sugar over `run_compose` for the common
-  state→state chain.
-- In a development benchmark (100M-AND sha chain, 2× m8a.8xlarge, 2026-06;
-  raw outputs not archived in-repo): compose ≈ −11% wall / +12% throughput
-  vs the inline/live baseline, with negligible setup, because the unit is
-  compiled once and replayed by reference rather than materialized.
+Units must be `compile_linear`: the on-the-fly replay needs AND-pinned wire reuse
+(see [transform.h](../emp-tool/ir/transform.h) for `make_compact`; the `WireReuse`
+levels are defined in [ir/program.h](../emp-tool/ir/program.h)).
 
 The plan is also independently materializable (`flatten_compose` in
 [ir/context/compose.h](../emp-tool/ir/context/compose.h)) for a backend with no
@@ -165,7 +159,7 @@ on-the-fly flattener, and as a test oracle.
 
 - Multi-level (nested) composition — compositions as units of larger compositions.
 - A batch/SIMD sugar (independent inputs, all outputs) over `run_compose`.
-- Lowering the compose path on backends other than ag2pc.
+- Lowering the compose path on more backends.
 
 ---
 

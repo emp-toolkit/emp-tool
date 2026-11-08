@@ -24,7 +24,7 @@ context-bound typed values (`Bit_T<Ctx>` / `BitVec_T<Ctx,N>` /
 `UInt_T<Ctx,N>` / `Int_T<Ctx,N>` / `Float_T<Ctx,W>`) with a compile-once /
 run-on-any-context frontend. A `BooleanContext` is the execution target: plaintext evaluation
 (`ClearCtx`), program recording (`RecordCtx`), and protocol contexts such as
-emp-sh2pc's garbled `SH2PCCtx`.
+a garbled two-party context.
 
 ## Requirements
 
@@ -106,7 +106,7 @@ context** via `ctx()` (`Session` / `DirectSession` in `ir/session/`). Circuit
 values are context-bound (`UInt_T<ctx_t,N>` etc.), so a session names no value
 family and adding a value family needs no session edit — `input`/`reveal` are
 generic over any `WireValue`. `ClearSession` is the trivial plaintext session;
-protocol libraries (emp-sh2pc, emp-ag2pc) provide their own over a garbled context.
+protocol libraries provide their own over a garbled context.
 
 ## Layout
 
@@ -354,8 +354,9 @@ auto y = sess.input<UInt_T<Ctx,32>>(BOB,   5);
 auto z = cf::run(sess.ctx(), circ, x, y);                      // replay -> UInt_T<Ctx,32> (== 12)
 ```
 
-The same `circ` runs identically on the plaintext session, the garbled `SH2PCCtx`, and
-future contexts — user circuits are as portable as the built-in `.empbc` files.
+The same `circ` runs identically on the plaintext session, a protocol's garbled
+context, and future contexts — user circuits are as portable as the built-in
+`.empbc` files.
 Arguments are named by the recording value types (`rec::UInt<32>`, `rec::Bit`,
 `rec::Float<32>`, …); the compiled `Circuit` holds a validated `BooleanProgram` +
 signature. Bodies are C++20: an implicit-context form (`[](auto a, auto b){…}`,
@@ -397,7 +398,7 @@ std::vector<Ctx::Wire> out =
 
 `execute_program(ctx, program, inputs)` walks the gate list issuing the
 context's value-return gate ops, so the same loaded program runs on the
-plaintext context, the garbled `SH2PCCtx`, or any other context unchanged. A bulk/round-sensitive
+plaintext context, a protocol's garbled context, or any other context unchanged. A bulk/round-sensitive
 context can consume the AND-depth schedule instead (`make_scheduled_plan` +
 `scheduled_execute_program`).
 

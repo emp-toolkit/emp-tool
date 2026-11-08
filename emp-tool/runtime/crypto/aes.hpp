@@ -163,10 +163,9 @@ struct AesMemXorSigmaTile {
 // index, added as 64-bit lanes — so y = src ⊕ tweak (XorInputTweak) or
 // y = σ(src) ⊕ tweak (XorSigmaTweak) and dst = y ⊕ AES(y). The tweak vector
 // is built in registers: one broadcast of tb[0] per key plus compile-time
-// lane offsets, one add and one XOR per tile. No per-block tweak array in
-// memory, so no narrow store that a wide VAES load would have to forward
-// from. Span == numEncs (one tweak for the whole run) folds the offsets to
-// zero. `tb` is this key's base tweak, the per-key aux value.
+// lane offsets, one add and one XOR per tile. Span == numEncs (one tweak for
+// the whole run) folds the offsets to zero. `tb` is this key's base tweak, the
+// per-key aux value.
 // The source is read with load_per_block: a run's blocks are usually written
 // one at a time just before the hash, and a load as wide as the tile could not
 // be forwarded from those stores. The cost falls on chained calls, whose source

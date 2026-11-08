@@ -254,7 +254,8 @@ detail::compiled_ret_t<Tr, ArgVs...> compile_at_(F&& body) {
 
 // compile_linear<ArgVs...>(body): WireReuse::Linear (AND outputs pinned). This is
 // the form to use for a UNIT that will be composed (called via run() inside a
-// run_compose body) on a multi-pass backend (ag2pc): Linear is what its trust path consumes.
+// run_compose body) on a multi-pass backend: Linear is the form its on-the-fly
+// replay consumes.
 template <class... ArgVs, class F>
 auto compile_linear(F&& body) { return compile_at_<circuit::WireReuse::Linear, ArgVs...>(std::forward<F>(body)); }
 
@@ -262,7 +263,7 @@ auto compile_linear(F&& body) { return compile_at_<circuit::WireReuse::Linear, A
 // run(ctx, circuit, args...): use a compiled circuit on a live context. On most
 // contexts it INLINES (replays the gates here). On a ComposeCtx it instead records
 // the circuit as an OPAQUE instance (its wiring only) — so the SAME body composes
-// units when recorded for a flattening backend (ag2pc run_compose) and inlines
+// units when recorded for a flattening backend (a session's run_compose) and inlines
 // everywhere else. There is no separate "invoke": run IS the verb, opaque or inline
 // by context, exactly like every other context-polymorphic op. Args by const-ref.
 // ---------------------------------------------------------------------------

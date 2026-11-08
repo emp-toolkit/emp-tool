@@ -1,5 +1,5 @@
 // Unit test for the shared chunked-session recorder (ir/session/chunk_recorder.h)
-// and planner (ir/session/flush_plan.h) — the substrate AG2PCSession / AGMPCSession
+// and planner (ir/session/flush_plan.h) — the substrate the chunked sessions
 // build on. No crypto, no protocol. Covers:
 //   * RAII/scope-tracked refcounting: copy pins, destroy unpins, move steals,
 //     self-assignment is safe, and refcounts survive std::vector reallocation

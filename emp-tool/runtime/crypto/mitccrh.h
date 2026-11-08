@@ -12,7 +12,7 @@ namespace emp {
  * tweak i (the gate id). Scheduling a key per gid dominates its cost, so this
  * class amortizes the schedule over a BUCKET of 2^ReuseShift consecutive gids
  * that share the key S ⊕ (i >> ReuseShift), and moves the part of the tweak
- * the key no longer carries into the cipher input:
+ * the key does not carry into the cipher input:
  *
  *   H(x, i) = y ⊕ E_{S ⊕ (i >> ReuseShift)}(y),  y = σ(x) ⊕ T(i),  T(i) = makeBlock(i, 0)
  *
@@ -139,7 +139,7 @@ public:
 	// (AesMemXorSigmaTweakTile): the tweak vector is built in registers from
 	// one broadcast of the first lane's T per key plus compile-time lane
 	// offsets, and y stays live in-register as the Davies-Meyer XOR-back
-	// operand — no tweak array and no separate pass over memory.
+	// operand.
 	template<int K, int H>
 	void hash_cir(block * blks) {
 		consume<detail::AesMemXorSigmaTweakTile<H>, K, H, true>(blks, blks);
@@ -159,8 +159,7 @@ public:
 	}
 
 	// Out-of-place: out[i] = y ^ AES(y), y = in[i] ^ T. out and in must not
-	// overlap. Feeds `in` straight through the fused tile, so neither form
-	// needs a stack copy or a second XOR-fold pass.
+	// overlap. Feeds `in` straight through the fused tile.
 	template<int K, int H>
 	void hash(block * __restrict__ out, const block * __restrict__ in) {
 		consume<detail::AesMemXorInputTweakTile<H>, K, H, false>(out, in);

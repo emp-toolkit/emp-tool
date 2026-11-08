@@ -8,10 +8,10 @@
 // -Werror=switch, so adding an Op is a build error at each dispatch site, never a
 // silent fallthrough. (validate.h additionally range-checks the raw op byte of
 // loaded files — the one sanctioned out-of-range path.) A consumer with a
-// different wire model (e.g. ag2pc, which replays the same program once per
-// garbling phase against a swapped backend and threads wire IDs rather than
-// values) calls for_each_gate directly; ir/execute.h is the value wrapper most
-// callers want.
+// different wire model (e.g. a multi-pass backend, which replays the same
+// program once per garbling phase against a swapped backend and threads wire
+// IDs rather than values) calls for_each_gate directly; ir/execute.h is the
+// value wrapper most callers want.
 
 #include "emp-tool/ir/program.h"
 

@@ -2,12 +2,12 @@
 #define EMP_IR_SESSION_CHUNKED_SESSION_H__
 
 // ChunkedSession<Derived> — the shared DIRECT/chunked session flow for crypto
-// sessions over ChunkRecorderCtx (AG2PCSession, AGMPCSession, ...). It owns the
-// gate recorder, the typed input/reveal/checkpoint/run surface, RAII scope-based
-// liveness, and the flush machinery — everything that is NOT protocol-specific.
+// sessions over ChunkRecorderCtx. It owns the gate recorder, the typed
+// input/reveal/checkpoint/run surface, RAII scope-based liveness, and the flush
+// machinery — everything that is NOT protocol-specific.
 //
-// It is deliberately PURELY ID-BASED: it never names a SecureWires bundle or a
-// per-wire CarriedState. All protocol/crypto state lives in Derived, reached
+// It is deliberately PURELY ID-BASED: it never names a protocol's wire bundle or
+// its per-wire carried state. All protocol/crypto state lives in Derived, reached
 // through a small set of CRTP hooks that speak only in recorder-id lists:
 //
 //   void authenticate_into_(owner, bits, ids)                 // protocol input  -> carried[ids]
@@ -22,7 +22,7 @@
 //   static constexpr bool kCountsAndsInternally               // optional: skip base scan
 //
 // Derived also defines run(body, ...) (its replay strategy differs) and owns the
-// protocol/engine members + CarriedState. The base provides input / input_batch /
+// protocol/engine members + carried state. The base provides input / input_batch /
 // reveal / checkpoint / run(circuit) / run_artifact and the flush flow over them.
 
 #include "emp-tool/ir/program.h"                       // circuit::BooleanProgram
@@ -195,9 +195,10 @@ protected:
   }
   template <class V>
   std::vector<uint32_t> value_ids_(const V& v) const {
-    // ag2pc and agmpc both alias ChunkRecorderCtx, so the compile-time ctx_t check
-    // cannot tell two live sessions apart. This is a session-boundary check, not a
-    // gate-path check, so keep the single pointer comparison in every build.
+    // Every ChunkedSession has ChunkRecorderCtx as its ctx_t, so the compile-time
+    // ctx_t check cannot tell two live sessions apart. This is a session-boundary
+    // check, not a gate-path check, so keep the single pointer comparison in every
+    // build.
     expecting(v.context() == &ctx_,
               "ChunkedSession: value is bound to a different session's context");
     std::vector<typename ctx_t::Wire> wb((std::size_t)V::width());

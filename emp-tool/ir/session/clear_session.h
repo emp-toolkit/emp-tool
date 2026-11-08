@@ -2,13 +2,13 @@
 #define EMP_SESSION_CLEAR_SESSION_H__
 
 // ClearSession — the plaintext-evaluation session. A session owns the I/O boundary
-// (input / reveal) and a direct gate context. Protocol sessions (SH2PCSession,
-// AG2PCSession) own the same surface plus IO, party id, OT / preprocessing, and
-// batching / checkpoint state; ClearSession is the trivial case — it owns a pure
-// ClearCtx, and since there are no secrets in the clear, input is just public wires
-// and reveal reads the wire values back.
+// (input / reveal) and a direct gate context. A protocol session owns the same
+// surface plus IO, party id, OT / preprocessing, and batching / checkpoint state;
+// ClearSession is the trivial case — it owns a pure ClearCtx, and since there are
+// no secrets in the clear, input is just public wires and reveal reads the wire
+// values back.
 //
-// User shape (identical across clear / sh2pc / ag2pc except the constructor):
+// User shape (identical across sessions except the constructor):
 //   ClearSession sess;
 //   using Ctx = ClearSession::ctx_t;     // the gate context values are built over
 //   using UInt32 = UInt_T<Ctx, 32>;

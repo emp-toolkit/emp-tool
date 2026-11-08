@@ -6,7 +6,7 @@ write the logic over the context-bound typed values
 (`Bit_T<Ctx>` / `BitVec_T<Ctx,N>` / `UInt_T<Ctx,N>` / `Int_T<Ctx,N>` /
 `Float_T<Ctx,W>`, [typed.h](../emp-tool/circuits/typed.h)) — usually as a
 `template<class Ctx>` circuit body — and the same code runs on any
-`BooleanContext`: `ClearCtx` (plaintext), the garbled `SH2PCCtx`, etc.
+`BooleanContext`: `ClearCtx` (plaintext), a protocol's garbled context, etc.
 
 If you read only one section, read **§1 The hard rule** and **§4
 Translation patterns**. The rest is type detail.
@@ -23,9 +23,9 @@ EMP evaluates a fixed boolean circuit (AND / XOR / NOT gates over wires)
 once. Each input is owned by exactly one party — `ALICE`, `BOB`, or
 `PUBLIC` (everyone agrees) — and each output is revealed to a chosen
 party. The same circuit body runs on every `BooleanContext` — `ClearCtx`
-for plaintext / cost analysis, the garbled `SH2PCCtx` (from emp-sh2pc) for
-semi-honest 2PC, and other protocol contexts — with nothing about the
-circuit changing per context.
+for plaintext / cost analysis, a garbled context for semi-honest 2PC, and
+other protocol contexts — with nothing about the circuit changing per
+context.
 
 ---
 
@@ -83,7 +83,7 @@ The value types are templated on a `BooleanContext`. In a reusable circuit
 body, leave `Ctx` generic (`template<class Ctx>` or a lambda taking
 `auto`-typed arguments) so the same body `compile`s and `run`s on any context;
 when you operate on already-live values, `Ctx` is the concrete context type
-(`ClearCtx`, `SH2PCCtx`, …).
+(`ClearCtx`, a protocol's garbled context, …).
 
 ### 2.1. Width is a type parameter
 
@@ -134,7 +134,7 @@ emp-tool's `ClearSession` as the reference. `sess` below is that session.
 ### 3.1. Feeding input values
 
 ```cpp
-using Ctx = SH2PCSession::ctx_t;
+using Ctx = ClearSession::ctx_t;                 // or the protocol session's ctx_t
 using S32 = Int_T<Ctx, 32>;
 using U32 = UInt_T<Ctx, 32>;
 auto a = sess.input<S32>(ALICE,  alice_value);   // owned by Alice
@@ -167,8 +167,8 @@ it wasn't asked for.
 
 The same source file is compiled once and run as both parties (e.g.
 `./prog 1 12345` for Alice, `./prog 2 12345` for Bob). The party identity is a
-runtime int, typically read from `argv[1]`, and passed to the session
-constructor (`SH2PCSession sess(&io, party)`). Both invocations call the same
+runtime int, typically read from `argv[1]`, and passed to the protocol
+session's constructor along with the channel. Both invocations call the same
 `sess.input<T>(ALICE, …)` / `sess.input<T>(BOB, …)` — each process supplies its
 own real value where it owns the input and a placeholder elsewhere.
 Translators should preserve this symmetry.
@@ -420,38 +420,42 @@ count over a recorded `BooleanProgram` (`ir/passes.h`). To capture the
 circuit as a native `.empbc` file, `compile` the body and serialize its
 program (see [frontend.md](frontend.md)).
 
-### 6.2. Semi-honest 2PC
+### 6.2. Under a protocol
 
-For end-to-end semi-honest 2PC use **emp-sh2pc**'s `SH2PCSession`. It owns the
-protocol state (IO / OT / Delta / PRG / half-gate) and exposes the same surface
-as `ClearSession` — `input` / `reveal` for the I/O boundary and `ctx()` for
-the garbled `SH2PCCtx` gate context that value construction and `frontend::run` use:
+A protocol library provides its own session with the same surface as
+`ClearSession` — `input` / `reveal` for the I/O boundary and `ctx()` for the
+gate context that value construction and `frontend::run` use. It owns the
+protocol state (channel, party id, OT, preprocessing) and is constructed from
+a channel and the party id (§3.3), e.g. over
+`NetIO io(party == ALICE ? nullptr : "127.0.0.1", port)`. Code written
+against that surface runs on either session:
 
 ```cpp
-NetIO io(party == ALICE ? nullptr : "127.0.0.1", port);
-SH2PCSession sess(&io, party);                  // owns the protocol state + I/O boundary
-using Ctx = SH2PCSession::ctx_t;
-using U32 = UInt_T<Ctx, 32>;
-
-auto a = sess.input<U32>(ALICE, av);                   // private inputs
-auto b = sess.input<U32>(BOB,   bv);
-auto k = U32::constant(sess.ctx(), kv);                // public constant
-auto c = a + b + k;                                     // or frontend::run(sess.ctx(), circ, ...)
-uint32_t r = (uint32_t)sess.reveal(c, PUBLIC).value();
-sess.finalize();
+template <class Session>
+uint32_t add3(Session& sess, uint32_t av, uint32_t bv, uint32_t kv) {
+    using U32 = UInt_T<typename Session::ctx_t, 32>;
+    auto a = sess.template input<U32>(ALICE, av);      // private inputs
+    auto b = sess.template input<U32>(BOB,   bv);
+    auto k = U32::constant(sess.ctx(), kv);            // public constant
+    auto c = a + b + k;                                // or frontend::run(sess.ctx(), circ, ...)
+    return (uint32_t)sess.reveal(c, PUBLIC).value();
+}
 ```
+
+(`sess.template input<…>` because `sess`'s type is a template parameter.)
+Under a malicious-secure protocol a revealed value is provisional until the
+session's deferred checks pass; the session documents where that happens —
+at `reveal`, or at a closing call such as `finalize()`
+(`ir/session/session.h`).
 
 Because the body is written over a generic context, the **same** circuit
 function (e.g. `[](auto a, auto b){ return a + b; }`) compiled once with
-`frontend::compile` runs unchanged on `ClearCtx` (plaintext) and `SH2PCCtx`
-(garbled). **This is the point** — write once, run on whichever context the
-caller wants. `sess.num_and()` reports the ANDs garbled so far.
+`frontend::compile` runs unchanged on `ClearCtx` (plaintext) and on a
+protocol's garbled context. **This is the point** — write once, run on
+whichever context the caller wants.
 
 `NetIO` satisfies the `IOChannel` contract; it is not thread-safe — see
 [docs/io_channel.md](io_channel.md).
-
-For malicious-secure 2PC use **emp-ag2pc**; for malicious-secure
-multi-party (n ≥ 3) use **emp-agmpc** (a sibling repository).
 
 ---
 
@@ -540,26 +544,26 @@ def f(alice_xs, bob_y):
     return total                        # revealed to both
 ```
 
-**EMP translation (C++), over the garbled `SH2PCSession`:**
+**EMP translation (C++), generic over the session:**
 
 ```cpp
 #include "emp-tool/emp-tool.h"
 #include "emp-tool/circuits/typed.h"
-#include "emp-sh2pc/emp-sh2pc.h"
+#include <iostream>
 using namespace emp;
 
 constexpr size_t N = 16;                       // public
-using Ctx = SH2PCSession::ctx_t;
-using S32 = Int_T<Ctx, 32>;                    // x and y are int32
 
-int32_t f(SH2PCSession& sess, const int32_t alice_xs[N], int32_t bob_y_value) {
-    auto y     = sess.input<S32>(BOB, bob_y_value);
+template <class Session>
+int32_t f(Session& sess, const int32_t alice_xs[N], int32_t bob_y_value) {
+    using S32 = Int_T<typename Session::ctx_t, 32>;   // x and y are int32
+    auto y     = sess.template input<S32>(BOB, bob_y_value);
     auto total = S32::constant(sess.ctx(), 0);
     auto zero  = S32::constant(sess.ctx(), 0);
 
     for (size_t i = 0; i < N; ++i) {
         // Each party feeds its own value; the other passes a dummy.
-        auto x      = sess.input<S32>(ALICE, alice_xs[i]);
+        auto x      = sess.template input<S32>(ALICE, alice_xs[i]);
         auto gt     = x > y;                     // signed comparison -> Bit_T
         auto addend = zero.select(gt, x);        // gt ? x : 0
         total = total + addend;
@@ -567,17 +571,14 @@ int32_t f(SH2PCSession& sess, const int32_t alice_xs[N], int32_t bob_y_value) {
     return (int32_t)sess.reveal(total, PUBLIC).value();
 }
 
-int main(int argc, char** argv) {
-    int party = std::atoi(argv[1]);
-    NetIO io(party == ALICE ? nullptr : "127.0.0.1", 12345);
-    SH2PCSession sess(&io, party);
-
-    int32_t alice_xs[N] = { /* Alice's real values; Bob's process passes 0s here */ };
-    int32_t bob_y       = /* Bob's real value;       Alice's process passes 0   */;
-
-    int32_t r = f(sess, alice_xs, bob_y);
-    sess.finalize();
-    std::cout << r << "\n";
+int main() {
+    ClearSession sess;                         // plaintext: one process holds both inputs
+    int32_t alice_xs[N] = { /* Alice's values */ };
+    int32_t bob_y       = 0;                   // Bob's value
+    std::cout << f(sess, alice_xs, bob_y) << "\n";
+    // Under a protocol, main builds that library's session from a NetIO and the
+    // party id (§3.3, §6.2) and calls the same f; each process passes its own
+    // real values and 0s for the other party's.
 }
 ```
 
@@ -592,8 +593,10 @@ Notes on what changed:
   was called at the end. All intermediate state is `S32`.
 * `for x in alice_xs` works because `N` is public and known at
   translation time.
-* To test in plaintext first, write the loop body over a generic `Ctx` (or
-  `compile` it once) and run it on `ClearCtx` before standing up two parties.
+* `f` is generic over the session, so `main` tests the translation in
+  plaintext with `ClearSession` and a protocol session runs the same `f`
+  unchanged. (`sess.template input<S32>` because `sess`'s type is a
+  template parameter.)
 
 ---
 
@@ -661,8 +664,8 @@ are plain `int`; widths are template parameters.
 
 The context is passed explicitly — there is no global backend.
 `ClearCtx` (plaintext), `RecordCtx` (records a `BooleanProgram`), `CountCtx` /
-`DigestCtx` (gate-count / determinism analysis), and emp-sh2pc's `SH2PCCtx`
-(garbled 2PC) are all `BooleanContext`s; the same typed body runs on each.
+`DigestCtx` (gate-count / determinism analysis), and a protocol library's
+garbled context are all `BooleanContext`s; the same typed body runs on each.
 
 The crypto circuits live in `emp::circuit::crypto` (`circuits/crypto/aes128.h` /
 `sha256.h` / `keccak.h`) as context-generic kernels with `BitVec_T` message/block
@@ -684,14 +687,12 @@ of the README).
   `execute_program(ctx, prog, inputs)` for replaying a loaded program.
 * `emp-tool/circuits/frontend/circuit_fn.h` + `circuits/frontend/rec.h` — `compile` / `run`
   for pure circuit functions; see [frontend.md](frontend.md).
-* `emp-sh2pc/emp-sh2pc/sh2pc_session.h` — `SH2PCSession`, the garbled 2PC
-  session: typed `input` / `reveal` over its `SH2PCCtx` gate context (`sess.ctx()`).
+* `emp-tool/ir/session/session.h` + `clear_session.h` — the session contract
+  (`input` / `reveal` / `ctx()`, settlement) and the plaintext `ClearSession`.
 * `test/circuits/test_typed.cpp` — tutorial for the context-bound value types over
   `ClearCtx`.
 * `test/circuits/test_circuit_fn.cpp` — compile-once / run-on-any-context, both body
   forms, a nullary circuit, the 31-AND adder, deterministic recording.
-* `emp-sh2pc/test/test_circuit_fn_sh2pc.cpp` — the same compiled circuit run
-  two-party over `SH2PCCtx`.
 * `test/ir/test_builtin_circuits.cpp` — the prebuilt `.empbc` crypto builtins
   replayed through `ClearCtx` and checked against the native kernels.
 * `test/circuits/test_crypto_{aes,sha256,keccak}.cpp` — the BooleanContext-native AES /

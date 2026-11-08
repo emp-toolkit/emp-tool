@@ -169,9 +169,9 @@ contains bytes the application consumed, so it can miss trailing bytes a
 refactor sends that the peer never reads. The two `.send` files together
 cover the full wire.
 
-A reference harness lives in emp-ot at
-[`test/trace_equiv.cpp`](https://github.com/emp-toolkit/emp-ot/blob/main/test/trace_equiv.cpp)
-and may be a useful template for new wire-equivalence tests.
+[`test/runtime/test_traceio.cpp`](../test/runtime/test_traceio.cpp) shows
+`TraceIO` in use; its `example()` is a starting point for new
+wire-equivalence tests.
 
 ## What test mode does NOT cover
 
@@ -184,9 +184,9 @@ and may be a useful template for new wire-equivalence tests.
 - **Other OpenSSL randomness.** Only `BN_priv_rand_range` (via
   `ECGroup::rand_scalar`) is intercepted. Direct `RAND_bytes` calls,
   if any code path adds them, would still pull from OpenSSL's
-  CSPRNG. As of the framework's introduction, no such call exists
-  in emp-tool or emp-ot; `grep -rn "RAND_bytes\|BN_rand"` over
-  both repos finds the single intercepted site.
+  CSPRNG. emp-tool makes no such call:
+  `grep -rn "RAND_bytes\|rand_range" emp-tool` finds only the
+  intercepted `BN_priv_rand_range`.
 - **Non-determinism from outside the toolkit.** Wall-clock time,
   PIDs, system-state-dependent paths — none of these affect wire
   bytes, but are flagged for completeness.

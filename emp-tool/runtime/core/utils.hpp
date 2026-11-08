@@ -25,7 +25,8 @@ inline void joinNclean(std::vector<std::future<T>>& res) {
 	res.clear();
 }
 // joinNclean that OR-reduces the bool results (e.g. "did any task flag a
-// cheat?"). It waits for every future, not only up to the first true.
+// cheat?"). It waits for every future, so no task is still running when it
+// returns.
 inline bool joinNcleanCheat(std::vector<std::future<bool>>& res) {
 	bool cheat = false;
 	for (auto& v : res)

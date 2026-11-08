@@ -115,10 +115,10 @@ chips measured and can be wrong on an untested one (Zen 3/4, older
 Intel). There is no principled per-shape kernel choice today.
 
 **Proposed design.** Pick the kernel by *measurement*, not by a
-hand-written CPU table — the same approach as emp-ot's per-build-directory
-auto-tuner (microbenchmark the candidate kernels on the build/first-run
-host, cache the winner per shape, select at runtime from the cached
-result). This generalizes to every microarchitecture with no guessing and
+hand-written CPU table, with a per-build-directory auto-tuner
+(microbenchmark the candidate kernels on the build/first-run host, cache
+the winner per shape, select at runtime from the cached result). This
+generalizes to every microarchitecture with no guessing and
 composes with the runtime ISA dispatch above (measure only within the
 tier the host actually runs). The candidates must be output-identical
 (the transpose kernels already are), so selection can never change

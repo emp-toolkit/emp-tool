@@ -9,7 +9,7 @@
 // via the rec:: aliases in frontend/rec.h.
 //
 // The context is passed explicitly; there is no global backend. This is the
-// frontend downstream protocols (ag2pc / agmpc / zk) build on.
+// frontend protocol libraries build on.
 
 #include "emp-tool/circuits/frontend/circuit_fn.h"
 #include "emp-tool/circuits/frontend/rec.h"

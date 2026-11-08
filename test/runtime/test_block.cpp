@@ -296,9 +296,9 @@ static bool check_sse_trans_n128_parity() {
 	const uint64_t ncols_list[] = {
 		128, 256, 384, 512, 640, 768, 896, 1024,    // 1..8 col_blocks
 		1280, 1536, 1664,                            // odd boundaries
-		2048, 4096, 8192, 16384,                     // typical SoftSpoken sizes
-		131072,                                      // SoftSpoken k=8 at kChunkBlocks=1024
-		74240                                        // Ferret bootstrap (kChunkBlocks=580)
+		2048, 4096, 8192, 16384,                     // typical OT-extension batches
+		131072,                                      // 1024 * 128: a large power of two
+		74240                                        // 580 * 128: large, not a power of two
 	};
 	for (uint64_t ncols : ncols_list) {
 		const size_t n_bytes = (128 * ncols) / 8;

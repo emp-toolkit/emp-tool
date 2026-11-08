@@ -4,8 +4,8 @@
 // Validation for the Boolean-circuit IR. ONE path, run at construction / load /
 // before executing an externally supplied program — never inside the execution
 // hot loop. error()s (fatal, see utils.hpp) on the first violation. Enforces the IR's
-// invariants so every downstream consumer (frontend replay, float builtins,
-// ag2pc) may trust the structure without re-checking.
+// invariants so every consumer (frontend replay, float builtins, protocol
+// backends) may trust the structure without re-checking.
 
 #include "emp-tool/ir/program.h"
 #include "emp-tool/runtime/core/utils.h"   // error()

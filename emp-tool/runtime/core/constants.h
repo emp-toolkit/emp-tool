@@ -32,8 +32,8 @@ const static size_t IO_BOOL_CHUNK_SIZE = 8 * 1024;
 //   PUBLIC (= 0)             every party: a public input / reveal-to-all.
 //   XOR    (= -1)            reveal-recipient sentinel only: "leave as
 //                            XOR-shares, reveal to no one". Only sessions that
-//                            document XOR-share reveal support it (e.g.
-//                            SH2PCSession); all others reject it loudly.
+//                            document XOR-share reveal support it; all others
+//                            reject it loudly.
 enum Party : int { XOR = -1, PUBLIC = 0, ALICE = 1, BOB = 2 };
 
 // Upper bound on a group point's serialized length on the wire.

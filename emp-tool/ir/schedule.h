@@ -23,7 +23,7 @@ namespace emp {
 
 // A precomputed schedule: gate indices grouped per AND-depth level. Build once
 // with make_scheduled_plan() and reuse across many executions of the same program
-// (e.g. an AG2PC/AG-MPC builtin replayed every call) so the schedule pass and
+// (e.g. a builtin replayed on every call) so the schedule pass and
 // bucket allocation are not repeated per run.
 struct ScheduledPlan {
     std::vector<std::vector<uint32_t>> bucket;   // gate indices per level (emission order)

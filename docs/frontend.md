@@ -40,7 +40,7 @@ I/O stays the session's job, around the circuit:
 
 ```cpp
 ClearSession sess;                                    // session owns the I/O boundary
-using Ctx = ClearSession::ctx_t;                      // a protocol session (e.g. SH2PCSession) exposes the same surface
+using Ctx = ClearSession::ctx_t;                      // a protocol session exposes the same surface
 using UInt32 = UInt_T<Ctx, 32>;
 auto a = sess.input<UInt32>(ALICE, av);               // session feeds inputs
 auto b = sess.input<UInt32>(BOB,   bv);
@@ -149,7 +149,7 @@ auto z = cf::run(sess.ctx(), circ, x, y);                     // replay -> UInt_
   types over `RecordCtx`; use the `rec::` aliases). `run(ctx, circ, args...)`
   replays it on the live `ctx` (args **by const-ref**, rebound to that ctx; the
   context is **explicit** — no global backend). The same `Circuit` runs
-  identically on the plaintext session's context, `SH2PCCtx`, etc. — user circuits are as portable as
+  identically on the plaintext session's context, a protocol's garbled context, etc. — user circuits are as portable as
   the built-in `.empbc` files.
 - **live** — `run(body, args...)` invokes the body directly on already-live typed
   values (it recovers the context from the first argument). Same contract.
@@ -214,5 +214,3 @@ scalar replay.
   plus the size-optimal 31-AND adder and deterministic recording.
 - `test/circuits/circuit_fn_contract_probes.cpp` — the contract's positive case +
   the negative cases that must fail to compile with the expected message.
-- `emp-sh2pc/test/test_circuit_fn_sh2pc.cpp` — the same compiled `Circuit` run
-  two-party over the garbled `SH2PCCtx` (uint32 + fp32).
