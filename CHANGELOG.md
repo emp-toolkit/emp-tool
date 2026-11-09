@@ -58,6 +58,13 @@ metadata is numeric (see the README's version guidance).
   workspace that holds context-bound wires.
 - `FlushPlan::error` (`ir/session/flush_plan.h`) names the reason `plan_flush`
   rejected a recorded stream.
+- `DynamicUInt_T<Ctx>` and `DynamicInt_T<Ctx>` (`circuits/unsigned_int.h`,
+  `circuits/signed_int.h`) hold integers whose width (`>= 1`) is chosen at
+  construction. They have the fixed types' arithmetic, comparisons, bitwise
+  operators, `select` and public-amount shifts, plus `resize(width)`,
+  `to_fixed<M>()` and `as_signed()` / `as_unsigned()`, and `DynamicUInt_T` has
+  `hamming_weight()`. They are the `RuntimeWidthValue`s that a `RuntimeSessionIO`
+  session inputs and reveals.
 
 ### Changed
 
@@ -211,6 +218,29 @@ metadata is numeric (see the README's version guidance).
   before, and their `digest_program` values change.
 - `execute_program(ctx, program, inputs)` moves the output vector out of its
   workspace instead of copying it.
+- `UInt_T<Ctx, N>` and `Int_T<Ctx, N>` require `N > 0`; their runtime-width forms
+  are the separate types `DynamicUInt_T<Ctx>` and `DynamicInt_T<Ctx>`. Replace
+  `UInt_T<Ctx, 0>` with `DynamicUInt_T<Ctx>` and `Int_T<Ctx, 0>` with
+  `DynamicInt_T<Ctx>`, whether the width is spelled `0` or `runtime_width`, and
+  read their wires through `data()`, since the wire vector is private. A dynamic
+  value stops the process when it is used unbound (default-constructed or
+  moved-from) or indexed out of range, and its `decode`, so a session `reveal`,
+  stops when the value does not fit `uint64_t` / `int64_t` instead of returning
+  its low 64 bits. A zero-width `slice` / `extract` / `trunc` and
+  `BitVec_T<Ctx, 0>::as_uint()` no longer compile; they used to produce a
+  zero-width runtime value.
+- `popcount<R>()` requires `R >= bits_for(N)`, the width that holds `0..N`; a
+  narrower `R` used to return the count modulo `2^R`.
+- Integer circuits emit fewer gates. `==` / `!=` take `N - 1` AND gates instead of
+  `N`; `*` takes `N² - N + 1` instead of `N²`, because it starts from its first
+  partial-product row instead of adding that row to zero; and `popcount` /
+  `hamming_weight` / `leading_zeros` likewise start from the first bit. `<`, `<=`,
+  `>`, `>=`, `/` and `%` keep their AND gates and emit fewer XOR and NOT gates.
+  Results are unchanged, but compiled programs, gate counts and `digest_program`
+  values change, and so do pinned transcripts of circuits whose AND gates changed.
+- `Int_T`'s secret-amount shifts check, under `EMP_CONTEXT_CHECKS`, that the
+  shift amount belongs to the value's context, as the other binary integer
+  operators do.
 
 ### Removed
 
@@ -233,6 +263,10 @@ metadata is numeric (see the README's version guidance).
 - `layout_pass`'s `LivenessStats` parameter; `layout_pass(program)` computes its
   own liveness.
 - `DigestCtx`'s public data members (`digest`, `next_id`, `c0`, `c1`).
+- `UInt_T::mod_exp`. It reduced each `N`-bit product modulo `2^N` before reducing
+  it modulo `q`, so its result was wrong whenever a product reached `2^N`.
+- `runtime_width`, and the `is_dynamic` member of `UInt_T` / `Int_T`
+  (`RuntimeWidthValue` requires it, as `true`, of a runtime-width type).
 
 ### Fixed
 
