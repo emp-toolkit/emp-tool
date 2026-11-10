@@ -298,49 +298,55 @@ static void sweep_dynamic() {
 
 // ---- structured-kernel gate costs ----------------------------------------
 
-static void sweep_kernel_costs() {
-  constexpr int N = 8;
+template <int N>
+static uint64_t and_count(void (*build)(CountCtx&, CountCtx::Wire*, CountCtx::Wire*, CountCtx::Wire*)) {
   std::array<CountCtx::Wire, N> a{}, b{}, out{};
+  CountCtx ctx;
+  build(ctx, a.data(), b.data(), out.data());
+  return ctx.ands;
+}
 
-  {
-    CountCtx ctx;
-    kernel::equal(ctx, a.data(), b.data(), N);
-    check("equal N-1 ANDs", ctx.ands == N - 1);
-  }
-  {
-    CountCtx ctx;
-    kernel::less_than(ctx, a.data(), b.data(), N);
-    check("less_than N ANDs", ctx.ands == N);
-    check("less_than no difference wires", ctx.xors == 3 * N);
-  }
-  {
-    CountCtx ctx;
-    kernel::mul_full(ctx, out.data(), a.data(), b.data(), N);
-    check("multiply seeds first row", ctx.ands == N * N - N + 1);
-    check("multiply omits zero-row XORs", ctx.xors == 2 * (N - 1) * (N - 1));
-  }
-  CountCtx rem_ctx;
-  kernel::div_full(rem_ctx, nullptr, out.data(), a.data(), b.data(), N);
-  check("remainder skips quotient NOTs", rem_ctx.nots == 0);
+template <int N>
+static void sweep_kernel_costs_at() {
+  using U = UInt_T<CountCtx, N>;
+  using I = Int_T<CountCtx, N>;
+  using W = CountCtx::Wire;
+  constexpr uint64_t n = N;
+  check("equal N-1 ANDs", and_count<N>([](CountCtx& c, W* a, W* b, W*) { kernel::equal(c, a, b, N); }) == n - 1);
+  check("less_than N ANDs", and_count<N>([](CountCtx& c, W* a, W* b, W*) { kernel::less_than(c, a, b, N); }) == n);
+  check("signed < N ANDs", and_count<N>([](CountCtx& c, W* a, W* b, W*) { (void)(I::from_wires(c, a) < I::from_wires(c, b)); }) == n);
+  check("negate N-2 ANDs", and_count<N>([](CountCtx& c, W* a, W*, W*) { (void)-I::from_wires(c, a); }) == n - 2);
+  check("hamming weight N - popcount(N) ANDs",
+        and_count<N>([](CountCtx& c, W* a, W*, W*) { (void)U::from_wires(c, a).hamming_weight(); }) == n - (uint64_t)__builtin_popcount(N));
+  check("leading_zeros N-1 ANDs", and_count<N>([](CountCtx& c, W* a, W*, W*) { (void)U::from_wires(c, a).leading_zeros(); }) == n - 1);
+  check("quotient N(N+1)/2 + 2N - 3 ANDs",
+        and_count<N>([](CountCtx& c, W* a, W* b, W* o) { kernel::div_full(c, o, nullptr, a, b, N); }) == n * (n + 1) / 2 + 2 * n - 3);
+  check("remainder adds 2N - 1 ANDs",
+        and_count<N>([](CountCtx& c, W* a, W* b, W* o) { kernel::div_full(c, nullptr, o, a, b, N); }) == n * (n + 1) / 2 + 4 * n - 4);
+  check("signed / adds three N-1 conditional negations",
+        and_count<N>([](CountCtx& c, W* a, W* b, W*) { (void)(I::from_wires(c, a) / I::from_wires(c, b)); }) == n * (n + 1) / 2 + 5 * n - 6);
+}
 
-  CountCtx quot_ctx;
-  kernel::div_full(quot_ctx, out.data(), nullptr, a.data(), b.data(), N);
-  check("quotient still emits result bits", quot_ctx.nots == N);
-  check("division and remainder share non-NOT gates",
-        quot_ctx.ands == rem_ctx.ands && quot_ctx.xors == rem_ctx.xors &&
-        quot_ctx.consts == rem_ctx.consts);
-
+static void sweep_kernel_costs() {
+  sweep_kernel_costs_at<8>();
+  sweep_kernel_costs_at<16>();
+  sweep_kernel_costs_at<32>();
+  sweep_kernel_costs_at<64>();
+  using W = CountCtx::Wire;
+  // Schoolbook below the short-product threshold, short product / Karatsuba above.
+  check("multiply 8-bit N^2 - N + 1 ANDs", and_count<8>([](CountCtx& c, W* a, W* b, W* o) { kernel::mul_full(c, o, a, b, 8); }) == 57);
+  check("multiply 16-bit N^2 - N + 1 ANDs", and_count<16>([](CountCtx& c, W* a, W* b, W* o) { kernel::mul_full(c, o, a, b, 16); }) == 241);
+  check("multiply 32-bit 931 ANDs", and_count<32>([](CountCtx& c, W* a, W* b, W* o) { kernel::mul_full(c, o, a, b, 32); }) == 931);
+  check("multiply 64-bit 3347 ANDs", and_count<64>([](CountCtx& c, W* a, W* b, W* o) { kernel::mul_full(c, o, a, b, 64); }) == 3347);
+  // Secret-amount shifts: barrel stages plus a top stage that absorbs the overflow test.
+  check("<< by secret 32-bit 203 ANDs", and_count<32>([](CountCtx& c, W* a, W* b, W*) { (void)(UInt_T<CountCtx, 32>::from_wires(c, a) << UInt_T<CountCtx, 32>::from_wires(c, b)); }) == 203);
+  check(">> by secret 32-bit 203 ANDs", and_count<32>([](CountCtx& c, W* a, W* b, W*) { (void)(UInt_T<CountCtx, 32>::from_wires(c, a) >> UInt_T<CountCtx, 32>::from_wires(c, b)); }) == 203);
+  check("signed >> by secret 32-bit 198 ANDs", and_count<32>([](CountCtx& c, W* a, W* b, W*) { (void)(Int_T<CountCtx, 32>::from_wires(c, a) >> UInt_T<CountCtx, 32>::from_wires(c, b)); }) == 198);
   {
     CountCtx ctx;
-    auto value = UInt_T<CountCtx, N>::constant(ctx, 0xA5);
+    auto value = DynamicUInt_T<CountCtx>::constant(ctx, 8, 0xA5);
     (void)value.hamming_weight();
-    check("fixed hamming seeds first bit", ctx.ands == (N - 1) * (kernel::bits_for(N) - 1));
-  }
-  {
-    CountCtx ctx;
-    auto value = DynamicUInt_T<CountCtx>::constant(ctx, N, 0xA5);
-    (void)value.hamming_weight();
-    check("dynamic hamming seeds first bit", ctx.ands == (N - 1) * (kernel::bits_for(N) - 1));
+    check("dynamic hamming N - popcount(N) ANDs", ctx.ands == 8 - 1);
   }
 }
 

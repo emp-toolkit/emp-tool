@@ -49,14 +49,11 @@ public:
 
     Int_T operator+(const Int_T& o) const { check_same_context(*this, o); Int_T r(*ctx_); kernel::ripple_add<Ctx>(*ctx_, data(), o.data(), r.data(), N); return r; }
     Int_T operator-(const Int_T& o) const { check_same_context(*this, o); Int_T r(*ctx_); kernel::ripple_sub<Ctx>(*ctx_, data(), o.data(), r.data(), N); return r; }
-    Int_T operator-() const { return zeros_() - *this; }
+    Int_T operator-() const { Int_T r(*ctx_); kernel::negate<Ctx>(*ctx_, r.data(), data(), N); return r; }
 
     Bit_T<Ctx> operator<(const Int_T& o) const {
         check_same_context(*this, o);
-        Wire ub = kernel::less_than<Ctx>(*ctx_, data(), o.data(), N);
-        Wire sa = w[(std::size_t)(N - 1)], sb = o.w[(std::size_t)(N - 1)];
-        Wire diff = ctx_->xor_gate(sa, sb);
-        return Bit_T<Ctx>(*ctx_, kernel::mux(*ctx_, diff, sa, ub));
+        return Bit_T<Ctx>(*ctx_, kernel::signed_less_than<Ctx>(*ctx_, data(), o.data(), N));
     }
     Bit_T<Ctx> operator>(const Int_T& o) const { return o < *this; }
     Bit_T<Ctx> operator==(const Int_T& o) const { check_same_context(*this, o); return Bit_T<Ctx>(*ctx_, kernel::equal<Ctx>(*ctx_, data(), o.data(), N)); }
@@ -70,19 +67,27 @@ public:
     Int_T operator|(const Int_T& o) const { check_same_context(*this, o); Int_T r(*ctx_); for (int i = 0; i < N; ++i) r.w[(std::size_t)i] = kernel::or_gate(*ctx_, w[(std::size_t)i], o.w[(std::size_t)i]); return r; }
     Int_T operator~() const               { Int_T r(*ctx_); for (int i = 0; i < N; ++i) r.w[(std::size_t)i] = ctx_->not_gate(w[(std::size_t)i]); return r; }
 
+    // Divide the magnitudes, then give the quotient the sign sa ^ sb and the
+    // remainder the dividend's sign (each conditional negation N-1 ANDs).
     Int_T operator/(const Int_T& o) const {
         check_same_context(*this, o);
-        Bit_T<Ctx> sa = (*this)[N - 1], sb = o[N - 1];
-        Int_T ua = this->select(sa, -*this), ub = o.select(sb, -o);
-        Int_T uq(*ctx_); kernel::div_full<Ctx>(*ctx_, uq.data(), nullptr, ua.data(), ub.data(), N);
-        return uq.select(sa != sb, -uq);
+        const Wire sa = w[(std::size_t)(N - 1)], sb = o.w[(std::size_t)(N - 1)];
+        Int_T ua(*ctx_), ub(*ctx_), q(*ctx_);
+        kernel::cond_negate<Ctx>(*ctx_, ua.data(), data(), N, sa);
+        kernel::cond_negate<Ctx>(*ctx_, ub.data(), o.data(), N, sb);
+        kernel::div_full<Ctx>(*ctx_, q.data(), nullptr, ua.data(), ub.data(), N);
+        kernel::cond_negate<Ctx>(*ctx_, q.data(), q.data(), N, ctx_->xor_gate(sa, sb));
+        return q;
     }
     Int_T operator%(const Int_T& o) const {
         check_same_context(*this, o);
-        Bit_T<Ctx> sa = (*this)[N - 1], sb = o[N - 1];
-        Int_T ua = this->select(sa, -*this), ub = o.select(sb, -o);
-        Int_T ur(*ctx_); kernel::div_full<Ctx>(*ctx_, nullptr, ur.data(), ua.data(), ub.data(), N);
-        return ur.select(sa, -ur);
+        const Wire sa = w[(std::size_t)(N - 1)], sb = o.w[(std::size_t)(N - 1)];
+        Int_T ua(*ctx_), ub(*ctx_), r(*ctx_);
+        kernel::cond_negate<Ctx>(*ctx_, ua.data(), data(), N, sa);
+        kernel::cond_negate<Ctx>(*ctx_, ub.data(), o.data(), N, sb);
+        kernel::div_full<Ctx>(*ctx_, nullptr, r.data(), ua.data(), ub.data(), N);
+        kernel::cond_negate<Ctx>(*ctx_, r.data(), r.data(), N, sa);
+        return r;
     }
 
     Int_T select(const Bit_T<Ctx>& sel, const Int_T& t) const {
@@ -112,23 +117,13 @@ public:
 
     Int_T operator<<(const UInt_T<Ctx, N>& shamt) const {
         check_same_context(*this, shamt);
-        Int_T res(*this);
-        constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
-        for (int i = 0; i < use; ++i) res = res.select(shamt[i], res << (1 << i));
-        Bit_T<Ctx> overflow = Bit_T<Ctx>::constant(*ctx_, false);
-        for (int i = use; i < N; ++i) overflow = overflow | shamt[i];
-        return res.select(overflow, Int_T::constant(*ctx_, 0));
+        Int_T r(*ctx_); kernel::shift_by<Ctx>(*ctx_, r.data(), data(), shamt.data(), N, kernel::ShiftKind::Left);
+        return r;
     }
     Int_T operator>>(const UInt_T<Ctx, N>& shamt) const {
         check_same_context(*this, shamt);
-        Int_T res(*this);
-        constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
-        for (int i = 0; i < use; ++i) res = res.select(shamt[i], res >> (1 << i));
-        Bit_T<Ctx> overflow = Bit_T<Ctx>::constant(*ctx_, false);
-        for (int i = use; i < N; ++i) overflow = overflow | shamt[i];
-        Int_T allsign(*ctx_);
-        for (int i = 0; i < N; ++i) allsign.w[(std::size_t)i] = w[(std::size_t)(N - 1)];
-        return res.select(overflow, allsign);
+        Int_T r(*ctx_); kernel::shift_by<Ctx>(*ctx_, r.data(), data(), shamt.data(), N, kernel::ShiftKind::ArithmeticRight);
+        return r;
     }
 
     template <int M>
@@ -165,11 +160,6 @@ public:
 
 private:
     Ctx* ctx_ = nullptr;
-    Int_T zeros_() const {
-        Int_T r(*ctx_); Wire z = ctx_->public_bit(false);
-        for (int i = 0; i < N; ++i) r.w[(std::size_t)i] = z;
-        return r;
-    }
 };
 
 template <BooleanContext Ctx>
@@ -213,14 +203,11 @@ public:
 
     DynamicInt_T operator+(const DynamicInt_T& o) const { check_operand_(o); DynamicInt_T r(*ctx_, width()); kernel::ripple_add<Ctx>(*ctx_, data(), o.data(), r.data(), width()); return r; }
     DynamicInt_T operator-(const DynamicInt_T& o) const { check_operand_(o); DynamicInt_T r(*ctx_, width()); kernel::ripple_sub<Ctx>(*ctx_, data(), o.data(), r.data(), width()); return r; }
-    DynamicInt_T operator-() const { return zeros_() - *this; }
+    DynamicInt_T operator-() const { bound_(); DynamicInt_T r(*ctx_, width()); kernel::negate<Ctx>(*ctx_, r.data(), data(), width()); return r; }
 
     Bit_T<Ctx> operator<(const DynamicInt_T& o) const {
         check_operand_(o);
-        Wire ub = kernel::less_than<Ctx>(*ctx_, data(), o.data(), width());
-        Wire sa = w_.back(), sb = o.w_.back();
-        Wire diff = ctx_->xor_gate(sa, sb);
-        return Bit_T<Ctx>(*ctx_, kernel::mux(*ctx_, diff, sa, ub));
+        return Bit_T<Ctx>(*ctx_, kernel::signed_less_than<Ctx>(*ctx_, data(), o.data(), width()));
     }
     Bit_T<Ctx> operator>(const DynamicInt_T& o) const { return o < *this; }
     Bit_T<Ctx> operator==(const DynamicInt_T& o) const { check_operand_(o); return Bit_T<Ctx>(*ctx_, kernel::equal<Ctx>(*ctx_, data(), o.data(), width())); }
@@ -236,17 +223,25 @@ public:
 
     DynamicInt_T operator/(const DynamicInt_T& o) const {
         check_operand_(o);
-        Bit_T<Ctx> sa = (*this)[width() - 1], sb = o[width() - 1];
-        DynamicInt_T ua = this->select(sa, -*this), ub = o.select(sb, -o);
-        DynamicInt_T uq(*ctx_, width()); kernel::div_full<Ctx>(*ctx_, uq.data(), nullptr, ua.data(), ub.data(), width());
-        return uq.select(sa != sb, -uq);
+        const int n = width();
+        const Wire sa = w_.back(), sb = o.w_.back();
+        DynamicInt_T ua(*ctx_, n), ub(*ctx_, n), q(*ctx_, n);
+        kernel::cond_negate<Ctx>(*ctx_, ua.data(), data(), n, sa);
+        kernel::cond_negate<Ctx>(*ctx_, ub.data(), o.data(), n, sb);
+        kernel::div_full<Ctx>(*ctx_, q.data(), nullptr, ua.data(), ub.data(), n);
+        kernel::cond_negate<Ctx>(*ctx_, q.data(), q.data(), n, ctx_->xor_gate(sa, sb));
+        return q;
     }
     DynamicInt_T operator%(const DynamicInt_T& o) const {
         check_operand_(o);
-        Bit_T<Ctx> sa = (*this)[width() - 1], sb = o[width() - 1];
-        DynamicInt_T ua = this->select(sa, -*this), ub = o.select(sb, -o);
-        DynamicInt_T ur(*ctx_, width()); kernel::div_full<Ctx>(*ctx_, nullptr, ur.data(), ua.data(), ub.data(), width());
-        return ur.select(sa, -ur);
+        const int n = width();
+        const Wire sa = w_.back(), sb = o.w_.back();
+        DynamicInt_T ua(*ctx_, n), ub(*ctx_, n), r(*ctx_, n);
+        kernel::cond_negate<Ctx>(*ctx_, ua.data(), data(), n, sa);
+        kernel::cond_negate<Ctx>(*ctx_, ub.data(), o.data(), n, sb);
+        kernel::div_full<Ctx>(*ctx_, nullptr, r.data(), ua.data(), ub.data(), n);
+        kernel::cond_negate<Ctx>(*ctx_, r.data(), r.data(), n, sa);
+        return r;
     }
 
     DynamicInt_T select(const Bit_T<Ctx>& sel, const DynamicInt_T& t) const {
@@ -329,11 +324,6 @@ private:
         bound_(); o.bound_();
         check_same_context(*this, o);
         expecting(width() == o.width(), "DynamicInt_T: operands have different widths");
-    }
-    DynamicInt_T zeros_() const {
-        bound_(); DynamicInt_T r(*ctx_, width()); Wire z = ctx_->public_bit(false);
-        for (int i = 0; i < width(); ++i) r.w_[(std::size_t)i] = z;
-        return r;
     }
 };
 
