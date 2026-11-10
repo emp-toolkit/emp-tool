@@ -210,8 +210,8 @@ transformation; on a big-endian host you'd byte-swap before feeding.
 ### Exceptions / things that flip
 
 - **Some published cryptographic circuits use MSB-first per-byte notation.** The
-  Boyar–Peralta AES S-box formulas in
-  [aes128.h](../emp-tool/circuits/crypto/aes128.h) (`emp::circuit::crypto::aes_sbox`) are
+  AES S-box straight-line program in
+  [aes128.h](../emp-tool/circuits/crypto/aes128.h) (`emp::circuit::crypto::aes_sbox`) is
   written with `U[0]` = MSB of the byte. The function does a one-time index flip
   (`U[i] = U_lsb[7-i]`) at entry and exit so callers see the LSB-first convention.
   The flip emits zero gates — it's pure renaming.
