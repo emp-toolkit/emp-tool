@@ -156,8 +156,11 @@ as NetIO; the only difference is the wire — TLS 1.3 over OpenSSL
 instead of raw TCP. Pin both ends of the protocol-version range to
 TLS 1.3 (no negotiation surface), use the default socket BIO (we
 already coalesce above SSL_write so `BIO_f_buffer` would just double-
-buffer), and do a two-phase `SSL_shutdown` from the destructor so
-buffered records actually leave the box before FIN.
+buffer). The destructor flushes, sends close_notify and closes without
+waiting for the peer's close_notify, so channels can be destroyed in any
+order, as with NetIO. A TLSIO server sends no session tickets (TLSIO
+never resumes a session), so a send-only peer has no unread bytes that
+would turn its close into a connection reset.
 
 Cert / key / CA material is caller-supplied via `TLSConfig` (PEM file
 paths). mTLS is on by default — each side verifies the peer's

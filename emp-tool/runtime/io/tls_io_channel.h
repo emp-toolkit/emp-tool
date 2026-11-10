@@ -157,14 +157,12 @@ public:
 		flush();
 		if (!quiet)
 			std::cout << get_statistics_string();
-		// Two-phase shutdown: first call sends close_notify, returning
-		// 0 means the peer hasn't yet sent its close_notify. A second
-		// call drains it if it's there. We do NOT loop on WANT_*: a
-		// destructor that hangs (e.g. peer is gone) is a worse bug
-		// than a dirty shutdown, and the second call is best-effort.
+		// Send close_notify without waiting for the peer's. Waiting would
+		// block until the peer destroys its end, so teardown orders that
+		// complete over NetIO would deadlock here. Every recv has an exact
+		// length, so a stream cut short already stops the process.
 		if (ssl) {
-			int r = SSL_shutdown(ssl);
-			if (r == 0) (void)SSL_shutdown(ssl);
+			(void)SSL_shutdown(ssl);
 			SSL_free(ssl);
 			ssl = nullptr;
 		}
@@ -252,6 +250,13 @@ private:
 
 		ctx = SSL_CTX_new(TLS_method());
 		if (!ctx) tls_detail::die("SSL_CTX_new failed");
+		// TLSIO never resumes a session, so a server sends no session
+		// tickets: nothing arrives after the handshake for a send-only peer
+		// to leave unread, and unread bytes at close() make the kernel
+		// reset the connection, which can discard data its peer has not
+		// read yet.
+		if (SSL_CTX_set_num_tickets(ctx, 0) != 1)
+			tls_detail::die("set_num_tickets");
 
 		// Pin both ends of the version range to TLS 1.3 — known cipher
 		// set, known post-handshake semantics, no surprise downgrade.
