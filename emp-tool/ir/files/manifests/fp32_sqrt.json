@@ -1,9 +1,9 @@
 {
   "name": "fp32_sqrt.empbc",
-  "sha256": "c3dcf2b855776b4a16cc16ff565ce286b6b63b503fe7dd87f6b61644778e496a",
+  "sha256": "e56d87154de3a0c817781cd148d14314bf25c1173738570e4f1881e471857e2d",
   "num_inputs": 32,
   "num_outputs": 32,
-  "num_gates": 20034,
-  "num_and": 5699,
-  "and_depth": 1577
+  "num_gates": 2827,
+  "num_and": 570,
+  "and_depth": 317
 }

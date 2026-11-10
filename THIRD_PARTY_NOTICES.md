@@ -12,9 +12,9 @@ emp-tool contains or distributes the following third-party material.
   deterministic test-lane integration, the exception-free enqueue error path
   (`emp::expecting` instead of `throw`) and the move into `namespace emp` are
   marked as alterations in that file.
-- **Berkeley SoftFloat 3e-derived generated circuit assets** — BSD 3-Clause.
-  The complete notice is installed beside the `.empbc` assets in
-  `emp-tool/ir/files/README.md`.
+- **Berkeley SoftFloat 3e** — BSD 3-Clause. Earlier generated circuit assets
+  were derived from it; the complete notice is kept beside the `.empbc` assets
+  in `emp-tool/ir/files/README.md`.
 - **AES S-box circuit** — the straight-line program
   `aes-sbox-a28-ad4-g131-gd32-xx103-47` from the NIST Circuit Complexity
   repository (github.com/usnistgov/Circuits), contributed by Milad Nasr, used
