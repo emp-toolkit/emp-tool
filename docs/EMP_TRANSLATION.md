@@ -306,20 +306,21 @@ those don't cover.
 ### 4.10. Sorting (oblivious)
 
 An oblivious sort is a public network of compare-swaps, each
-`(x, y) -> (min, max)` built from one comparison and two `select`s:
+`(x, y) -> (min, max)` built from one comparison and one `select`; for values
+with `^` the other output is free, since `x ^ y ^ lo` equals `y.select(gt, x)`:
 
 ```cpp
 auto swap = [](auto& x, auto& y) {        // ascending compare-swap
     Bit_T<Ctx> gt = x > y;
-    auto lo = x.select(gt, y);
-    auto hi = y.select(gt, x);
+    auto lo = x.select(gt, y);            // one AND per bit
+    auto hi = x ^ y ^ lo;                 // no AND
     x = lo; y = hi;
 };
 ```
 
 Drive it from a fixed (public) Batcher odd-even schedule (the network the
-built-in `sort` uses). Cost is O(N log² N) compare-swaps; each is O(W)
-gates.
+built-in `sort` uses). Cost is O(N log² N) compare-swaps; each is one
+W-bit comparison plus W ANDs.
 
 ### 4.11. Floats
 
