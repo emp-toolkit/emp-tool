@@ -228,9 +228,9 @@ static int socket_buffer_size(int sock, int option) {
 
 static void expect_socket_options(const TLSIO &io,
 	                              const tcp::SocketOptions &options) {
-	expecting(socket_buffer_size(io.sock, SO_SNDBUF) >= options.send_buffer_size,
+	expecting(socket_buffer_size(io.fd(), SO_SNDBUF) >= options.send_buffer_size,
 	          "TLSIO test: send buffer option was not applied");
-	expecting(socket_buffer_size(io.sock, SO_RCVBUF) >= options.receive_buffer_size,
+	expecting(socket_buffer_size(io.fd(), SO_RCVBUF) >= options.receive_buffer_size,
 	          "TLSIO test: receive buffer option was not applied");
 }
 

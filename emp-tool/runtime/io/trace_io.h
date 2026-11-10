@@ -54,6 +54,13 @@ public:
         if (recv_fp_ != nullptr) std::fclose(recv_fp_);
     }
 
+    void flush() override {
+        flush_trace_file(send_fp_, ".send");
+        flush_trace_file(recv_fp_, ".recv");
+        under_->flush();
+    }
+
+protected:
     void send_data_internal(const void* data, int64_t nbyte) override {
         expecting(nbyte >= 0,
                   "TraceIO::send_data_internal: negative byte count");
@@ -75,12 +82,6 @@ public:
         const size_t bytes = static_cast<size_t>(nbyte);
         expecting(std::fwrite(data, 1, bytes, recv_fp_) == bytes,
                   "TraceIO: short write to .recv");
-    }
-
-    void flush() override {
-        flush_trace_file(send_fp_, ".send");
-        flush_trace_file(recv_fp_, ".recv");
-        under_->flush();
     }
 
 private:

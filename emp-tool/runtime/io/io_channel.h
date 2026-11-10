@@ -35,7 +35,10 @@ namespace emp {
 //
 // Off by default.
 
+class TraceIO;
+
 class IOChannel {
+	friend class TraceIO;  // tees a wrapped channel's transport hooks
 public:
 	uint64_t send_counter = 0;  // bytes sent
 	uint64_t recv_counter = 0;  // bytes received
@@ -80,8 +83,14 @@ public:
 		return s;
 	}
 
+protected:
+	// The transport: move nbyte raw bytes. Only the helpers below and sync()
+	// call them, so every protocol byte passes the counters and the
+	// Fiat-Shamir transcript.
 	virtual void send_data_internal(const void *data, int64_t nbyte) = 0;
 	virtual void recv_data_internal(void *data, int64_t nbyte) = 0;
+
+public:
 
 	// Drain any outbound buffer to the underlying transport. Default
 	// is a no-op for transports with nothing to flush.

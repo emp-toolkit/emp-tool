@@ -279,9 +279,9 @@ static int socket_buffer_size(int sock, int option) {
 
 static void expect_socket_options(const NetIO &io,
 	                              const tcp::SocketOptions &options) {
-	expecting(socket_buffer_size(io.sock, SO_SNDBUF) >= options.send_buffer_size,
+	expecting(socket_buffer_size(io.fd(), SO_SNDBUF) >= options.send_buffer_size,
 	          "NetIO test: send buffer option was not applied");
-	expecting(socket_buffer_size(io.sock, SO_RCVBUF) >= options.receive_buffer_size,
+	expecting(socket_buffer_size(io.fd(), SO_RCVBUF) >= options.receive_buffer_size,
 	          "NetIO test: receive buffer option was not applied");
 }
 
@@ -425,10 +425,10 @@ static void run_socket_options_regression(int port, int party) {
 	                              : NetIO::connect(peer_ip(), port, options, true);
 	expect_socket_options(*primary, options);
 	if (party == ALICE) {
-		expecting(socket_buffer_size(primary->listener->fd, SO_SNDBUF) >=
+		expecting(socket_buffer_size(primary->listener_fd(), SO_SNDBUF) >=
 		              options.send_buffer_size,
 		          "NetIO test: listener send buffer option was not applied");
-		expecting(socket_buffer_size(primary->listener->fd, SO_RCVBUF) >=
+		expecting(socket_buffer_size(primary->listener_fd(), SO_RCVBUF) >=
 		              options.receive_buffer_size,
 		          "NetIO test: listener receive buffer option was not applied");
 	}
