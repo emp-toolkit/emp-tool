@@ -15,10 +15,25 @@ metadata is numeric (see the README's version guidance).
   of one bucket (or `AND(a, a)`) gave half-gate rows whose XOR was `0` or
   `Δ`, and the evaluator recovered `Δ`. Affects `v1.0.0-alpha.1`, the
   first release with the bucketed `ReuseShift` hash; the 0.3.x line keys
-  every gate separately and is unaffected.
+  every gate separately and is unaffected by this leak.
   Every MITCCRH-derived transcript changes; both parties must upgrade
   together, pinned wire-trace baselines must be regenerated, and every
   dependent must be rebuilt (the class layout changed). (Issue #212.)
+- `MITCCRH`: an instance that hashed with more than one `K` (for example
+  `hash<1, 1>` and then `hash<2, 1>`) read past its key schedule. It renewed
+  the schedule only once exactly `BatchSize` lanes were used, so a mix of `K`
+  stepped over that point, hashed under round keys read from the memory after
+  the schedule, and never re-keyed again. It now starts a new schedule whenever
+  the next `K` lanes do not fit, skipping the leftover gids. Affects
+  `v1.0.0-alpha.1` and the 0.3.x line; an instance used with one `K`, or with
+  `setS` called before each change of `K`, never reached the over-read.
+- Deterministic test mode is a build option, `-DEMP_TEST_MODE=ON`, instead of
+  the `EMP_TEST_MODE` environment variable and `set_test_mode()`. Setting the
+  variable made every default PRG seed and EC scalar of any build, Release
+  included, predictable. A normal build now compiles the deterministic paths
+  out, and test-mode and normal objects cannot be linked into one program.
+  Wire-trace tests need a test-mode build of emp-tool and of the code under
+  test.
 
 ### Added
 
@@ -83,8 +98,6 @@ metadata is numeric (see the README's version guidance).
 - `TraceIO` rejects a null channel, creates its trace files with mode `0600`,
   flushes them before the wrapped channel, reports trace write and flush failures,
   and records the bytes of `sync()`.
-- `EMP_TEST_MODE` turns test mode on only for the exact value `1`; values such
-  as `10` or `1x` used to turn it on.
 - Test mode stops the process in more of the cases where deterministic streams
   would repeat. Deriving a child lane on lane 0, as `ThreadPool::enqueue` does,
   now claims lane 0 just as drawing a seed does, so a second unscoped thread
@@ -241,10 +254,42 @@ metadata is numeric (see the README's version guidance).
 - `Int_T`'s secret-amount shifts check, under `EMP_CONTEXT_CHECKS`, that the
   shift amount belongs to the value's context, as the other binary integer
   operators do.
+- `ThreadPool` is `emp::ThreadPool`, so it cannot collide with another copy of
+  the upstream file. Code outside `namespace emp` that names it unqualified,
+  without `using namespace emp`, must qualify it.
+- `NetIO` and `TLSIO` keep their socket, `FILE*` / `SSL` handles, buffers and
+  `init_from_sock` private. `fd()` returns the connected socket and
+  `NetIO::listener_fd()` a server channel's listening socket. `IOChannel`'s
+  `send_data_internal` / `recv_data_internal` are protected: channels still
+  override them, and callers use `send_data` / `recv_data`, so every byte
+  passes the counters and the Fiat-Shamir transcript.
+- `MITCCRH` keeps its schedule state private. `start_point()` returns the `S`
+  installed by `setS`, and `next_gid()` the gid the next hash's first lane
+  takes; `setS` and `renew_ks(gid)` are the only ways to change the state.
+- Length and count parameters that were `size_t`, `uint64_t` or `uint32_t` are
+  `int64_t`, as `docs/api_conventions.md` requires, and a negative value stops
+  the process instead of wrapping to a huge count: `Scalar::to_bin_padded` /
+  `from_bin`, `Point::to_bin` / `from_bin`, `ECGroup::hash_to_point`,
+  `ECGroup::resize_scratch`, `RO::absorb(const void*, n)`, `to_hex`,
+  `load_empbc(bytes, len)`, `sse_trans`, `sse_trans_n128`, the counts of
+  `circuit::execute_program`, `external_input` on `RecordCtx` / `ComposeCtx` /
+  `DigestCtx`, `ComposeCtx::call_unit`, `ChunkRecorderCtx::reserve_ids`,
+  `digest_source`, `batcher_network`, the pointer forms of `sort` /
+  `sort_by_key`, and the count of `BulkBooleanContext::and_many`. Callers
+  passing `size_t` still compile, and a backend whose `and_many` takes
+  `size_t` still satisfies the concept. Circuit widths stay `int`.
+- `ChunkedSession::reveal` takes only the value and the recipient. Its trailing
+  `keep...` values could not change the flush, since every value still in scope
+  is kept anyway; they were only checked to belong to the session. To drop
+  values that are still in scope, call `checkpoint(keep...)` first.
 
 ### Removed
 
 - `TLSIO::is_server`, which only chose who went first in the old `sync()`.
+- `set_test_mode()` and the `EMP_TEST_MODE` environment variable; test mode is
+  a build option (see Security).
+- `MITCCRH::renew_ks()` without an argument, which renewed from the stored gid;
+  `renew_ks(gid)` remains.
 - `MITCCRH::renew_ks(const block*)` and `MITCCRH::hash_cir_fixed`, the
   explicit-tweak mode in which the caller scheduled the keys and owned
   tweak uniqueness. Every hash now goes through the gid stream, which the
@@ -310,6 +355,25 @@ metadata is numeric (see the README's version guidance).
   wire twice as two consumers in `max_fanout`.
 - `save_empbc_file` reports a failed `fclose`; a write that failed at close used
   to report success.
+- `Float_T` addition, subtraction and `fma` returned `-0` for an exact zero
+  such as `x - x`, where round-to-nearest-even gives `+0`, so `1 / (x - x)` was
+  `-inf`. The shipped `fp{16,32,64}_{add,sub,fma}` circuits now break a
+  magnitude tie toward the positive operand. Their AND counts and AND depth are
+  unchanged, but programs that use them get new `digest_program` values and
+  transcripts.
+- `execute_program(ctx, program, inputs, ws)` resized `ws.out` before reading
+  `inputs`, so passing the outputs of an earlier call on the same workspace
+  read freed or destroyed elements. It now reads the inputs first.
+- `session::plan_flush` accepted a recorded gate that reads its own output in
+  Release builds, giving a program that reads a wire before writing it, and
+  stopped the process in Debug builds instead of returning `ok = false`. It now
+  rejects the gate with "gate reads its own output".
+- `~TLSIO` waited for the peer's `close_notify`, so it blocked until the peer
+  destroyed its end of the channel, and two parties that destroyed their
+  channels in different orders, as NetIO allows, deadlocked. It now sends
+  `close_notify` and closes without waiting. A TLSIO server also sends no
+  session tickets, which TLSIO never uses, so a send-only peer has no unread
+  bytes that would turn its close into a connection reset.
 
 ## v1.0.0-alpha.1
 
