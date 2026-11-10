@@ -361,8 +361,8 @@ UB-avoidance dance will produce extra gates for no reason.
   matches `int{N}_t` on x86 / arm. C calls signed overflow UB; emp-tool
   is deterministic. Don't insert `__builtin_add_overflow` checks.
 * **Division by zero saturates**: `a / 0` and `a % 0` return the
-  saturating result of the restoring-division circuit (it does **not**
-  follow C's UB). The caller should still ensure the divisor is nonzero
+  saturating result defined in [numeric_semantics.md](numeric_semantics.md)
+  (unsigned: all ones and `a`; it does **not** follow C's UB). The caller should still ensure the divisor is nonzero
   where the source program does; if the divisor is secret, guard with a
   `select` that picks a sentinel result and a "valid" `Bit_T<Ctx>`.
 * **Signed `/` / `%`**: truncate toward zero; the remainder takes the
