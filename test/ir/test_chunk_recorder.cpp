@@ -197,6 +197,15 @@ int main() {
     check(!pfwd.ok && pfwd.error != nullptr,
           "forward chunk-local references are rejected");
 
+    // A gate that reads its own output, through either operand or a Not.
+    for (const Gate& self : {Gate{3, 1, 3, Op::And}, Gate{1, 3, 3, Op::Xor},
+                             Gate{3, 0, 3, Op::Not}}) {
+      std::vector<Gate> loop = {self};
+      auto ps = session::plan_flush(loop, {3}, [](uint32_t id) { return id <= 2; });
+      check(!ps.ok && ps.error != nullptr,
+            "a gate that reads its own output is rejected");
+    }
+
     std::vector<Gate> null_operand = {{0, 1, 2, Op::And}};
     auto pnull = session::plan_flush(null_operand, {2}, [](uint32_t id) { return id == 1; });
     check(!pnull.ok && pnull.error != nullptr,

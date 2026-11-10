@@ -84,6 +84,10 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
       fail("gate writes the null recorder id");
       return plan;
     }
+    if (g.in0 == g.out || g.in1 == g.out) {
+      fail("gate reads its own output");
+      return plan;
+    }
     if (!wire_to_gate.emplace(g.out, static_cast<uint32_t>(gi)).second) {
       fail("recorder id is produced by more than one gate");
       return plan;
@@ -170,12 +174,14 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
   for (std::size_t gi = 0; gi < G; ++gi) {
     if (!needed[gi]) continue;
     const circuit::Gate& g = chunk_gates[gi];
-    uint32_t out_c = cid++;
-    remap.emplace(g.out, out_c);
+    // Operands resolve before the gate's own output is mapped, so a gate can
+    // only read wires that earlier gates or inputs define.
     uint32_t ni0 = 0;
     uint32_t ni1 = 0;
     if (!g.is_const() && !mapped(g.in0, ni0)) return plan;
     if (!g.is_const() && !g.is_not() && !mapped(g.in1, ni1)) return plan;
+    uint32_t out_c = cid++;
+    remap.emplace(g.out, out_c);
     plan.prog.gates.push_back({ni0, ni1, out_c, g.op});
   }
   plan.prog.num_inputs = num_inputs;
