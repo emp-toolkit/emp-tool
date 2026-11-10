@@ -34,27 +34,8 @@ namespace emp {
 // Rule of thumb: if the next thing on this NetIO isn't a recv, flush
 // first.
 
-class NetIO : public IOChannel { public:
-	int sock = -1;
-	std::shared_ptr<tcp::ListenerHandle> listener;  // shared by related server channels
-	bool is_server, quiet;
-	// Endpoint info retained so a duplex sibling can be spawned (make_sibling).
-	std::string addr_;              // peer address (empty when this is a server)
-	int port_ = -1;
-	tcp::SocketOptions socket_options_;
-
-	// Send-side state (stdio "wb" stream + app-level coalescing buffer).
-	FILE *stream = nullptr;
-	char *stream_buf = nullptr;     // backing store for setvbuf, lifetime tied to stream
-	char *send_buf = nullptr;       // 32 KiB coalescing staging
-	size_t send_ptr = 0;
-	bool send_dirty = false;
-
-	// Recv-side state (raw read() into a 32 KiB staging buffer).
-	char *recv_buf = nullptr;
-	size_t recv_ptr = 0;            // next byte to deliver to the caller
-	size_t recv_fill = 0;           // bytes available in recv_buf
-
+class NetIO : public IOChannel {
+public:
 	// Byte counts and flush count live on the IOChannel base.
 	// NOT thread-safe (unlocked send-buffer coalescing): one thread at a
 	// time per channel; threaded consumers take a sibling channel each
@@ -153,22 +134,17 @@ class NetIO : public IOChannel { public:
 		flush_unlocked();
 	}
 
-	void init_from_sock(int new_sock) {
-		sock = new_sock;
-		tcp::set_nodelay(sock);
-		stream_buf = new char[NETWORK_STREAM_BUFFER_SIZE];
-		send_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
-		recv_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
-		stream = fdopen(sock, "wb");
-		expecting(stream != nullptr, [&] {
-			return std::string("NetIO: fdopen failed: ") + std::strerror(errno);
-		});
-		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
-	}
-
 	void set_nodelay() { tcp::set_nodelay(sock); }
 	void set_delay()   { tcp::set_delay(sock); }
 
+	// The connected socket, for socket options and diagnostics. Reading or
+	// writing it directly bypasses the channel's buffers and corrupts the
+	// stream.
+	int fd() const { return sock; }
+	// A server channel's listening socket (shared with its siblings), or -1.
+	int listener_fd() const { return listener ? listener->fd : -1; }
+
+protected:
 	void send_data_internal(const void *data, int64_t len) override {
 		expecting(len >= 0, "NetIO::send_data: negative len");
 		if (len == 0) return;
@@ -219,6 +195,39 @@ class NetIO : public IOChannel { public:
 	}
 
 private:
+	int sock = -1;
+	std::shared_ptr<tcp::ListenerHandle> listener;  // shared by related server channels
+	bool is_server, quiet;
+	// Endpoint info retained so a duplex sibling can be spawned (make_sibling).
+	std::string addr_;              // peer address (empty when this is a server)
+	int port_ = -1;
+	tcp::SocketOptions socket_options_;
+
+	// Send-side state (stdio "wb" stream + app-level coalescing buffer).
+	FILE *stream = nullptr;
+	char *stream_buf = nullptr;     // backing store for setvbuf, lifetime tied to stream
+	char *send_buf = nullptr;       // 32 KiB coalescing staging
+	size_t send_ptr = 0;
+	bool send_dirty = false;
+
+	// Recv-side state (raw read() into a 32 KiB staging buffer).
+	char *recv_buf = nullptr;
+	size_t recv_ptr = 0;            // next byte to deliver to the caller
+	size_t recv_fill = 0;           // bytes available in recv_buf
+
+	void init_from_sock(int new_sock) {
+		sock = new_sock;
+		tcp::set_nodelay(sock);
+		stream_buf = new char[NETWORK_STREAM_BUFFER_SIZE];
+		send_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
+		recv_buf   = new char[NETWORK_STAGING_BUFFER_SIZE];
+		stream = fdopen(sock, "wb");
+		expecting(stream != nullptr, [&] {
+			return std::string("NetIO: fdopen failed: ") + std::strerror(errno);
+		});
+		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
+	}
+
 	void flush_unlocked() {
 		if (!send_dirty) return;
 		++flushes_count;

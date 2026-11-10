@@ -99,24 +99,8 @@ inline void install_sigpipe_ignore_once() {
 
 }  // namespace tls_detail
 
-class TLSIO : public IOChannel { public:
-	int sock = -1;
-	bool quiet;
-	bool is_tls_server;
-
-	SSL_CTX *ctx = nullptr;
-	SSL     *ssl = nullptr;
-
-	// Send-side staging — same shape as NetIO's send_buf path.
-	char *send_buf = nullptr;
-	size_t send_ptr = 0;
-	bool send_dirty = false;
-
-	// Recv-side staging — same shape as NetIO's recv_buf path.
-	char *recv_buf = nullptr;
-	size_t recv_ptr = 0;
-	size_t recv_fill = 0;
-
+class TLSIO : public IOChannel {
+public:
 	// Byte counts and flush count live on the IOChannel base.
 
 	// NOT thread-safe (unlocked send-buffer coalescing, and an SSL*
@@ -199,6 +183,66 @@ class TLSIO : public IOChannel { public:
 	void flush() override {
 		flush_unlocked();
 	}
+
+	// The connected socket, for socket options and diagnostics. Reading or
+	// writing it directly bypasses TLS and corrupts the stream.
+	int fd() const { return sock; }
+
+protected:
+	void send_data_internal(const void *data, int64_t len) override {
+		expecting(len >= 0, "TLSIO::send_data: negative len");
+		if (len == 0) return;
+		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
+			memcpy(send_buf + send_ptr, data, len);
+			send_ptr += len;
+		} else {
+			if (send_ptr) { ssl_write_all(send_buf, send_ptr); send_ptr = 0; }
+			ssl_write_all(data, len);
+		}
+		send_dirty = true;
+	}
+
+	void recv_data_internal(void *data, int64_t len) override {
+		expecting(len >= 0, "TLSIO::recv_data: negative len");
+		if (len == 0) return;
+		// Drain pending sends before blocking on the peer's reply, else
+		// any send-then-recv pattern would deadlock with our bytes still
+		// staged. SSL_read goes straight to the socket BIO, no implicit
+		// drain, so this has to be explicit.
+		flush_unlocked();
+		int64_t got = 0;
+		while (got < len) {
+			if (recv_ptr == recv_fill) {
+				size_t n = ssl_read_some(recv_buf, NETWORK_STAGING_BUFFER_SIZE);
+				if (n == 0) tls_detail::die("recv_data: peer closed");
+				recv_ptr = 0;
+				recv_fill = n;
+			}
+			int64_t take = recv_fill - recv_ptr;
+			if (take > len - got) take = len - got;
+			memcpy((char *)data + got, recv_buf + recv_ptr, take);
+			recv_ptr += take;
+			got += take;
+		}
+	}
+
+private:
+	int sock = -1;
+	bool quiet;
+	bool is_tls_server;
+
+	SSL_CTX *ctx = nullptr;
+	SSL     *ssl = nullptr;
+
+	// Send-side staging — same shape as NetIO's send_buf path.
+	char *send_buf = nullptr;
+	size_t send_ptr = 0;
+	bool send_dirty = false;
+
+	// Recv-side staging — same shape as NetIO's recv_buf path.
+	char *recv_buf = nullptr;
+	size_t recv_ptr = 0;
+	size_t recv_fill = 0;
 
 	void init_from_sock(int new_sock, const TLSConfig &cfg) {
 		sock = new_sock;
@@ -283,44 +327,6 @@ class TLSIO : public IOChannel { public:
 		}
 	}
 
-	void send_data_internal(const void *data, int64_t len) override {
-		expecting(len >= 0, "TLSIO::send_data: negative len");
-		if (len == 0) return;
-		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
-			memcpy(send_buf + send_ptr, data, len);
-			send_ptr += len;
-		} else {
-			if (send_ptr) { ssl_write_all(send_buf, send_ptr); send_ptr = 0; }
-			ssl_write_all(data, len);
-		}
-		send_dirty = true;
-	}
-
-	void recv_data_internal(void *data, int64_t len) override {
-		expecting(len >= 0, "TLSIO::recv_data: negative len");
-		if (len == 0) return;
-		// Drain pending sends before blocking on the peer's reply, else
-		// any send-then-recv pattern would deadlock with our bytes still
-		// staged. SSL_read goes straight to the socket BIO, no implicit
-		// drain, so this has to be explicit.
-		flush_unlocked();
-		int64_t got = 0;
-		while (got < len) {
-			if (recv_ptr == recv_fill) {
-				size_t n = ssl_read_some(recv_buf, NETWORK_STAGING_BUFFER_SIZE);
-				if (n == 0) tls_detail::die("recv_data: peer closed");
-				recv_ptr = 0;
-				recv_fill = n;
-			}
-			int64_t take = recv_fill - recv_ptr;
-			if (take > len - got) take = len - got;
-			memcpy((char *)data + got, recv_buf + recv_ptr, take);
-			recv_ptr += take;
-			got += take;
-		}
-	}
-
-private:
 	void flush_unlocked() {
 		if (!send_dirty) return;
 		++flushes_count;
