@@ -92,9 +92,10 @@ public:
 
   // ---- recorder substrate the owning Session drives (not user-facing) ----
   // Allocate n fresh (unpinned) ids for a materialized bundle the Session fills.
-  std::vector<uint32_t> reserve_ids(std::size_t n) {
-    std::vector<uint32_t> ids(n);
-    for (std::size_t i = 0; i < n; ++i) ids[i] = alloc_id_();
+  std::vector<uint32_t> reserve_ids(int64_t n) {
+    expecting(n >= 0, "ChunkRecorderCtx::reserve_ids: negative count");
+    std::vector<uint32_t> ids((std::size_t)n);
+    for (auto& id : ids) id = alloc_id_();
     return ids;
   }
   bool is_pending(uint32_t id) const { return pending_.count(id) != 0; }

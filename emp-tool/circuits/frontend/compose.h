@@ -19,7 +19,7 @@ namespace detail {
 // Reserve one external-input window on a ComposeCtx and build the typed arg.
 template <class CV>   // CV is a value type over ComposeCtx
 CV make_compose_arg(ComposeCtx& cc) {
-    ComposeCtx::Wire base = cc.external_input((size_t)CV::width());
+    ComposeCtx::Wire base = cc.external_input(CV::width());
     std::array<ComposeCtx::Wire, (std::size_t)CV::width()> win{};
     for (int i = 0; i < CV::width(); ++i)
         win[i] = base + (ComposeCtx::Wire)i;

@@ -74,8 +74,12 @@ static inline void sse_trans_16x16_byte(__m128i *m) {
 #ifdef __x86_64__
 __attribute__((target("sse2")))
 #endif
-inline void sse_trans(uint8_t *out, uint8_t const *inp, uint64_t nrows,
-               uint64_t ncols) {
+inline void sse_trans(uint8_t *out, uint8_t const *inp, int64_t nrows_in,
+               int64_t ncols_in) {
+  expecting(nrows_in >= 0 && ncols_in >= 0, "sse_trans: negative dimension");
+  expecting(ncols_in == 0 || nrows_in <= INT64_MAX / ncols_in,
+            "sse_trans: nrows * ncols overflows int64_t");
+  const uint64_t nrows = (uint64_t)nrows_in, ncols = (uint64_t)ncols_in;
   uint64_t rr, cc;
   int i, h;
   __m128i vec;
@@ -757,9 +761,9 @@ inline void sse_trans_n128_neon(block *out, const block *inp, uint64_t ncols) {
 
 }  // namespace detail
 
-inline void sse_trans_n128(block *out, const block *inp, uint64_t ncols) {
-  expecting((ncols % 128) == 0,
-            "sse_trans_n128: ncols must be a multiple of 128");
+inline void sse_trans_n128(block *out, const block *inp, int64_t ncols) {
+  expecting(ncols >= 0 && ncols % 128 == 0,
+            "sse_trans_n128: ncols must be a non-negative multiple of 128");
 #if defined(__x86_64__)
   #if EMP_HAS_GFNI512
     detail::sse_trans_n128_gfni(out, inp, ncols);

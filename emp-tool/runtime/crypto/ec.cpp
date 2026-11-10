@@ -249,17 +249,18 @@ void Scalar::to_bin(unsigned char * out) const {
 	BN_bn2bin(n_, out);
 }
 
-void Scalar::to_bin_padded(unsigned char * out, size_t fixed_len) const {
-	int actual = BN_num_bytes(n_);
-	expecting((size_t)actual <= fixed_len,
+void Scalar::to_bin_padded(unsigned char * out, int64_t fixed_len) const {
+	expecting(fixed_len >= 0, "Scalar::to_bin_padded: negative length");
+	const int64_t actual = BN_num_bytes(n_);
+	expecting(actual <= fixed_len,
 	          "Scalar::to_bin_padded: number too large");
-	std::memset(out, 0, fixed_len - (size_t)actual);
-	BN_bn2bin(n_, out + (fixed_len - (size_t)actual));
+	std::memset(out, 0, (size_t)(fixed_len - actual));
+	BN_bn2bin(n_, out + (fixed_len - actual));
 }
 
-void Scalar::from_bin(const unsigned char * in, size_t length) {
-	expecting(length <= (size_t)std::numeric_limits<int>::max(),
-	          "Scalar::from_bin: length exceeds INT_MAX");
+void Scalar::from_bin(const unsigned char * in, int64_t length) {
+	expecting(length >= 0 && length <= std::numeric_limits<int>::max(),
+	          "Scalar::from_bin: length must be in [0, INT_MAX]");
 	if (n_ != nullptr) BN_free(n_);
 	n_ = BN_bin2bn(in, (int)length, nullptr);
 	expecting(n_ != nullptr, "Scalar::from_bin: BN_bin2bn");
@@ -330,10 +331,12 @@ Point& Point::operator=(Point p) {
 	return *this;
 }
 
-void Point::to_bin(unsigned char * buf, size_t buf_len) const {
+void Point::to_bin(unsigned char * buf, int64_t buf_len) const {
 	expecting(group_ != nullptr, "Point::to_bin on uninitialized point");
+	expecting(buf_len >= 0, "Point::to_bin: negative length");
 	int ret = EC_POINT_point2oct(group_->ec_group(), point_,
-	                             POINT_CONVERSION_UNCOMPRESSED, buf, buf_len, group_->bn_ctx());
+	                             POINT_CONVERSION_UNCOMPRESSED, buf, (size_t)buf_len,
+	                             group_->bn_ctx());
 	expecting(ret != 0, "ECC TO_BIN");
 }
 
@@ -345,8 +348,9 @@ size_t Point::size() const {
 	return ret;
 }
 
-void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
+void Point::from_bin(ECGroup * g, const unsigned char * buf, int64_t buf_len) {
 	expecting(g != nullptr, "Point::from_bin: null group");
+	expecting(buf_len >= 0, "Point::from_bin: negative length");
 	// If already initialized against a different group, drop the old
 	// point and re-allocate against `g`; otherwise the decode would run
 	// on the prior group's curve and silently ignore `g`.
@@ -359,7 +363,8 @@ void Point::from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len) {
 		point_ = EC_POINT_new(group_->ec_group());
 		expecting(point_ != nullptr, "Point::from_bin: EC_POINT_new");
 	}
-	int ret = EC_POINT_oct2point(group_->ec_group(), point_, buf, buf_len, group_->bn_ctx());
+	int ret = EC_POINT_oct2point(group_->ec_group(), point_, buf, (size_t)buf_len,
+	                             group_->bn_ctx());
 	expecting(ret != 0, "ECC FROM_BIN");
 	// from_bin is the deserialization entry for externally-supplied bytes,
 	// so validate the decoded point before returning it. oct2point already
@@ -435,10 +440,11 @@ ECGroup::~ECGroup() {
 	if (scratch_ != nullptr)  { delete[] scratch_;        scratch_  = nullptr; }
 }
 
-void ECGroup::resize_scratch(size_t size) {
-	if (size > scratch_size_) {
+void ECGroup::resize_scratch(int64_t size) {
+	expecting(size >= 0, "ECGroup::resize_scratch: negative size");
+	if ((size_t)size > scratch_size_) {
 		delete[] scratch_;
-		scratch_size_ = size;
+		scratch_size_ = (size_t)size;
 		scratch_ = new unsigned char[scratch_size_];
 	}
 }
@@ -495,8 +501,9 @@ Point ECGroup::mul_gen(const Scalar &m) {
 	return res;
 }
 
-Point ECGroup::hash_to_point(const char * msg, size_t length,
-                             const char * dst, size_t dst_len) {
+Point ECGroup::hash_to_point(const char * msg, int64_t length,
+                             const char * dst, int64_t dst_len) {
+	expecting(length >= 0, "hash_to_point: negative message length");
 	expecting(dst_len >= 1 && dst_len <= 255,
 	          "hash_to_point: DST length must be in [1, 255]");
 	Point out(this);
@@ -509,8 +516,8 @@ Point ECGroup::hash_to_point(const char * msg, size_t length,
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
 	expecting(u0 && u1, "hash_to_point: BN_new");
 	hash_to_field_p256(u0, u1, p,
-	                   reinterpret_cast<const unsigned char*>(msg), length,
-	                   reinterpret_cast<const unsigned char*>(dst), dst_len,
+	                   reinterpret_cast<const unsigned char*>(msg), (size_t)length,
+	                   reinterpret_cast<const unsigned char*>(dst), (size_t)dst_len,
 	                   bn_ctx_);
 
 	BIGNUM *x0 = BN_new(), *y0 = BN_new();

@@ -65,13 +65,14 @@ inline block set_bit(const block & a, int i) {
 		return makeBlock(1ULL<<(i-64), 0) | a;
 }
 
-inline std::string to_hex(const void* data, size_t n) {
-	expecting(n <= std::string{}.max_size() / 2,
+inline std::string to_hex(const void* data, int64_t n) {
+	expecting(n >= 0, "to_hex: negative length");
+	expecting((uint64_t)n <= std::string{}.max_size() / 2,
 	          "to_hex: input too large");
 	static const char digits[] = "0123456789abcdef";
 	const unsigned char* b = static_cast<const unsigned char*>(data);
-	std::string s(2 * n, '0');
-	for (size_t i = 0; i < n; ++i) {
+	std::string s(2 * (size_t)n, '0');
+	for (int64_t i = 0; i < n; ++i) {
 		s[2 * i]     = digits[b[i] >> 4];
 		s[2 * i + 1] = digits[b[i] & 0xf];
 	}

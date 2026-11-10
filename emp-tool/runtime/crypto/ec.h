@@ -25,8 +25,8 @@ public:
 	// Fixed-width big-endian encoding: pads with leading zero bytes so
 	// the output is exactly `fixed_len` bytes. Errors if the integer is
 	// too large to fit.
-	void to_bin_padded(unsigned char * out, size_t fixed_len) const;
-	void from_bin(const unsigned char * in, size_t length);
+	void to_bin_padded(unsigned char * out, int64_t fixed_len) const;
+	void from_bin(const unsigned char * in, int64_t length);
 
 	// Raw add (no modular reduction). Use add_mod / mul_mod for
 	// modular arithmetic.
@@ -58,9 +58,9 @@ public:
 	Point & operator=(Point p);
 	~Point();
 
-	void to_bin(unsigned char * buf, size_t buf_len) const;
+	void to_bin(unsigned char * buf, int64_t buf_len) const;
 	size_t size() const;
-	void from_bin(ECGroup * g, const unsigned char * buf, size_t buf_len);
+	void from_bin(ECGroup * g, const unsigned char * buf, int64_t buf_len);
 
 	Point add(const Point & rhs) const;
 	Point mul(const Scalar & m) const;
@@ -98,7 +98,7 @@ public:
 	// serialization. resize_scratch only ever grows the buffer — never
 	// shrinks — to avoid thrashing under alternating large/small
 	// workloads. Worst-case allocation persists for the ECGroup's lifetime.
-	void resize_scratch(size_t size);
+	void resize_scratch(int64_t size);
 	unsigned char * scratch() const { return scratch_; }
 
 	Scalar rand_scalar();
@@ -112,8 +112,8 @@ public:
 	// 1..255 bytes. Pick one stable string per protocol; the canonical
 	// "QUUX-V01-CS02-with-<suite>" is only for validating against §J vectors.
 	// ECGroup construction guarantees P-256.
-	Point hash_to_point(const char * msg, size_t length,
-	                    const char * dst, size_t dst_len);
+	Point hash_to_point(const char * msg, int64_t length,
+	                    const char * dst, int64_t dst_len);
 
 	EC_GROUP * ec_group() const { return ec_group_; }
 	BN_CTX * bn_ctx() const { return bn_ctx_; }

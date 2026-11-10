@@ -44,18 +44,18 @@ struct CircuitScratch {
 	// Pointer+count keeps this low-level primitive easy to call from adapters.
 template <class Wire, class Dispatcher>
 inline void execute_program(const BooleanProgram& p,
-                            const Wire* inputs, size_t num_in,
-                            Wire* outputs, size_t num_out,
+                            const Wire* inputs, int64_t num_in,
+                            Wire* outputs, int64_t num_out,
                             CircuitScratch<Wire>& scratch,
                             Dispatcher&& dispatch) {
-	expecting(num_in == p.num_inputs,
+	expecting(num_in == (int64_t)p.num_inputs,
 	          "execute_program: input count != program num_inputs");
-	expecting(num_out == p.outputs.size(),
+	expecting(num_out == (int64_t)p.outputs.size(),
 	          "execute_program: output count != program outputs");
 
 	scratch.ensure(p.num_wires);
 	Wire* w = scratch.wires.data();
-	for (size_t i = 0; i < num_in; ++i) w[i] = inputs[i];
+	for (int64_t i = 0; i < num_in; ++i) w[i] = inputs[i];
 
 	// Bridge wire ids (from for_each_gate) to value slots (for the Dispatcher).
 	struct Bridge {
@@ -67,7 +67,7 @@ inline void execute_program(const BooleanProgram& p,
 	};
 	for_each_gate(p, Bridge{w, dispatch});
 
-	for (size_t i = 0; i < num_out; ++i) outputs[i] = w[p.outputs[i]];
+	for (int64_t i = 0; i < num_out; ++i) outputs[i] = w[p.outputs[i]];
 }
 
 }  // namespace circuit

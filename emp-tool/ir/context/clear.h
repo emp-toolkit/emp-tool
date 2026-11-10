@@ -5,6 +5,7 @@
 // counts match a recorded program exactly. The crypto-free static arm.
 
 #include "emp-tool/ir/context/concept.h"
+#include "emp-tool/runtime/core/error.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -20,8 +21,9 @@ struct ClearCtx {
     Wire xor_gate(Wire a, Wire b) { return a ^ b; }
     Wire not_gate(Wire a)         { return a ^ 1; }
     // Bulk hook (a real backend would batch AES/OT here); default scalar loop.
-    void and_many(Wire* o, const Wire* a, const Wire* b, size_t n) {
-        for (size_t i = 0; i < n; ++i) o[i] = a[i] & b[i];
+    void and_many(Wire* o, const Wire* a, const Wire* b, int64_t n) {
+        expecting(n >= 0, "ClearCtx::and_many: negative count");
+        for (int64_t i = 0; i < n; ++i) o[i] = a[i] & b[i];
     }
 };
 

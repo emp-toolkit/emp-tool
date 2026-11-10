@@ -213,7 +213,7 @@ using compiled_ret_t =
 // Build one recording-context arg from a freshly reserved input window.
 template <WireBundle RecV>
 RecV make_rec_arg(RecordCtx& rc) {
-    RecordCtx::Wire base = rc.external_input((size_t)RecV::width());
+    RecordCtx::Wire base = rc.external_input(RecV::width());
     std::array<RecordCtx::Wire, (std::size_t)RecV::width()> win{};
     for (int i = 0; i < RecV::width(); ++i)
         win[i] = base + (RecordCtx::Wire)i;
