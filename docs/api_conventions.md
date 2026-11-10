@@ -156,10 +156,11 @@ Circuit widths are `int` at run time too: a runtime width matches the
 
 ## PRG buffer fills
 
-`PRG::random_data` requires a 16-byte-aligned destination and asserts
-in debug builds. Use `PRG::random_data_unaligned` for stack integers,
-small structs, byte buffers with arbitrary offset, and any other
-destination that is not naturally `block`-aligned.
+`PRG::random_data` requires a 16-byte-aligned destination and stops
+the process, in every build, when it is not. Use
+`PRG::random_data_unaligned` for stack integers, small structs, byte
+buffers with arbitrary offset, and any other destination that is not
+naturally `block`-aligned.
 
 Use the aligned fast path only when the destination is known to be
 16-byte aligned, such as a `block*` or a suitably aligned block buffer.

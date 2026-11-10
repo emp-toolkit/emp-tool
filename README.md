@@ -50,7 +50,8 @@ host's ISA (`-march=native` on x86_64 or `-mcpu=native` on arm64). This enables
 the best available SIMD tiers, but the resulting binary may SIGILL on older
 CPUs. Set `-DEMP_TOOL_NATIVE_ARCH=OFF` for the portable AES-NI + PCLMUL +
 SSE4.2 x86_64 baseline or `armv8-a+crypto+crc` arm64 baseline. Default PRG
-construction obtains its seed from `/dev/urandom` on every supported platform.
+construction obtains its seed from the kernel through `getentropy()` on every
+supported platform.
 
 ### CMake options
 
@@ -170,7 +171,8 @@ prg.reseed(&rand_block[1]);                      // reset seed + counter
 
 `random_data` (16B-aligned) is the fast path; use `random_data_unaligned`
 for any destination that isn't naturally 16-byte aligned (stack ints,
-small structs, etc.) — the aligned variant asserts in debug.
+small structs, etc.) — the aligned variant stops the process on an
+unaligned destination, in every build.
 
 ### PRP / CCRH
 
