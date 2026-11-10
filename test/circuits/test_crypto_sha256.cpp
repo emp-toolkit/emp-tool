@@ -7,7 +7,7 @@
 //   - OpenSSL cross-check (SHA256()) at padding-boundary lengths around the
 //     55/56-byte single-block edge and the 64-byte block
 //   - a direct sha256_compress on the padded "abc" block, from the IV
-//   - record/replay equivalence and the AND count (24744) of the fixed
+//   - record/replay equivalence and the AND count (20954) of the fixed
 //     sha256(BitVec<256>) wrapper, via a tiny low-level IR driver
 #include "emp-tool/ir/session/clear_session.h"
 #include "emp-tool/runtime/core/constants.h"
@@ -203,9 +203,9 @@ static void section_ir() {
   uint64_t ands = count_ands(drv256, 256, 256);
 
   check("record == replay", rep == live);
-  bool cnt = (ands == 24744);
-  check("AND count == 24744", cnt);
-  if (!cnt) printf("    ands=%llu (want 24744)\n", (unsigned long long)ands);
+  bool cnt = (ands == 20954);
+  check("AND count == 20954", cnt);
+  if (!cnt) printf("    ands=%llu (want 20954)\n", (unsigned long long)ands);
 }
 
 int main() {

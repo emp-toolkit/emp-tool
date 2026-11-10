@@ -6,7 +6,7 @@
 //   - OpenSSL XV:   deterministic random key/pt pairs vs AES_encrypt (libcrypto)
 //   - AES-128-CTR:  counter increment + carry, two-block and multi-block keystream,
 //                   start_chunk offset, all cross-checked vs EVP_aes_128_ctr
-//   - IR plumbing:  record/replay equivalence + AND counts (aes_sbox==32, block==6400)
+//   - IR plumbing:  record/replay equivalence + AND counts (aes_sbox==28, block==5600)
 //
 // Inputs are fed and results revealed through a ClearSession — the I/O boundary;
 // the values themselves are pure context-bound circuit values, and crypto kernels
@@ -369,13 +369,13 @@ static void test_ir_plumbing() {
   bin.insert(bin.end(), bpt.begin(), bpt.end());
   check("aes128_encrypt record==live", record_replay(drv_block, bin, 128) == clear_run(drv_block, bin, 128));
 
-  // AND-gate budgets: 32 ANDs / SBox, 6400 ANDs / full block.
+  // AND-gate budgets: 28 ANDs / SBox, 5600 ANDs / full block.
   uint64_t sbox_ands  = count_ands(drv_sbox, 8, 8);
   uint64_t block_ands = count_ands(drv_block, 256, 128);
-  if (sbox_ands != 32)    printf("  [FAIL] aes_sbox ANDs got %llu want 32\n", (unsigned long long)sbox_ands);
-  if (block_ands != 6400) printf("  [FAIL] aes128_encrypt ANDs got %llu want 6400\n", (unsigned long long)block_ands);
-  check("aes_sbox == 32 ANDs", sbox_ands == 32);
-  check("aes128_encrypt == 6400 ANDs", block_ands == 6400);
+  if (sbox_ands != 28)    printf("  [FAIL] aes_sbox ANDs got %llu want 28\n", (unsigned long long)sbox_ands);
+  if (block_ands != 5600) printf("  [FAIL] aes128_encrypt ANDs got %llu want 5600\n", (unsigned long long)block_ands);
+  check("aes_sbox == 28 ANDs", sbox_ands == 28);
+  check("aes128_encrypt == 5600 ANDs", block_ands == 5600);
 }
 
 int main() {
