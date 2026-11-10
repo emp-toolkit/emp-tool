@@ -44,14 +44,20 @@ abs neg copysign
 Notes:
 
 - Predicate/classifier circuits output 8 bits; bit 0 is the result.
-- `add` / `sub` / `mul` / `div` / `min` / `max` are correctly rounded
-  (round-to-nearest-even; `test_float` verifies them bit-exactly against
-  the host). An exact zero from `add`, `sub` or `fma` is `+0` unless both
-  addends are `-0` (see "Zero-Sign Edit" below). `sqrt` / `recip` /
-  `rsqrt` are iterative kernels verified to 1e-2 relative tolerance — NOT
-  correctly rounded.
+- `add` / `sub` / `mul` / `div` / `sqrt` / `recip` / `min` / `max` are
+  correctly rounded (round-to-nearest-even; `test_float` verifies them
+  bit-exactly against the host). An exact zero from `add`, `sub` or `fma` is
+  `+0` unless both addends are `-0`.
 - `fma` is intentionally unfused: `add(mul(a, b), c)` with two roundings.
-- `rsqrt` is `1 / sqrt(x)`, also not a fused primitive.
+- `rsqrt` is unfused too: exactly `recip(sqrt(x))`, rounded twice. It is not a
+  correctly rounded `1/sqrt(x)`; the two differ on 8,402 of the 2^16 fp16
+  inputs.
+- NaN results of `div`, `recip`, `sqrt` and `rsqrt`: in fp16 and fp32 a NaN
+  operand is returned unchanged (sign and payload kept; a signaling NaN stays
+  signaling), and `div` returns its first operand if it is a NaN, else its
+  second. Invalid operations (`0/0`, `inf/inf`, the square root of a negative
+  number, including `-inf`) return `+qNaN` (`0x7e00`, `0x7fc00000`). In fp64
+  every NaN result is the canonical `+qNaN` `0x7ff8000000000000`.
 - Transcendentals (`sin`, `cos`, `tan`, `exp`, `log`, etc.) are not shipped.
 - IEEE exception flags, signaling-NaN behavior, exact NaN payload propagation,
   and non-default rounding modes are not modeled.
@@ -99,8 +105,9 @@ instead of adding another ad hoc search path.
 
 ## Historical Generation Notes
 
-The current assets came from one-off development pipelines, not from a single
-checked-in generator. The common shape was: source-level operation wrappers,
+The assets that preceded the current generators (see "Current Assets") came
+from one-off CBMC-GC-2 pipelines, and `fp16_isnan` and `fp64_isnan` still do.
+The common shape was: source-level operation wrappers,
 CBMC-GC-2 gate generation, conversion into emp-tool's dense `BooleanProgram`
 format, validation through `load_empbc_file()`, and semantic verification
 against host floating-point behavior or a native C reference.
@@ -161,9 +168,8 @@ instructions for the current checked-in files.
 - Prefer exact digit-recurrence/long-division datapaths for sqrt/div/recip when
   they fit. They beat Newton-style approximations here and are bit-exact rather
   than merely close.
-- Comparisons are cheapest when converted to an integer ordering problem. The
-  compare/min/max sources use monotonic sign-aware keys and handle NaNs
-  explicitly.
+- Comparisons are cheapest when converted to an integer ordering problem plus
+  a few class flags. See "Comparison, Min/Max and Classifier Circuits" below.
 - Implement pure rewiring operations directly in EMP. `abs`, `neg`, and
   `copysign` do not need a gate generator or `.empbc` asset.
 - Compose circuits for intentionally unfused operations. `fma` is
@@ -179,101 +185,114 @@ instructions for the current checked-in files.
   the candidate verifies and is smaller, or when a size increase is justified by
   a correctness fix.
 
-## Per-Width Strategy
+## Current Assets
 
-### FP16
+Every shipped asset except `fp16_isnan` and `fp64_isnan` is built directly as
+an XOR/AND graph by one of three parametric generators, then locally
+re-minimized with mockturtle's cut rewriting against its multiplicative-
+complexity database and, where it helped, CBMC-GC-2's minimizer. Every
+re-minimized circuit was proven equivalent to the generator's output with ABC
+`cec`. The circuits minimize AND gates; their AND depth is not a design goal.
+The generators are development tools and are not part of this tree.
 
-FP16 was generated from hand-written source-shaped C:
+### Addition, Multiplication and fma
 
-```text
-fp16.h
-fp16_ops.h
-fp16_arith.h
-sqr.h
-wrappers/
-```
+- `add`: a magnitude comparator whose tie-break picks the positive operand,
+  which by itself makes an exact cancellation `+0`; a conditional swap at one
+  AND per bit; a right-shift aligner that ORs shifted-out bits into a sticky
+  bit at each level and saturates when either input is Inf or NaN, so the
+  datapath returns the larger operand unchanged; a ripple add/subtract with the
+  sticky bit as its least significant bit; a leading-zero count clamped to the
+  exponent for subnormal results and one left normalizer; and exponent packing
+  with the hidden bit, so the round-to-nearest-even increment carries into the
+  exponent. NaN `a` takes priority over NaN `b`.
+- `sub`: `add` with the second operand's sign inverted.
+- `mul`: the possibly-subnormal operand is swapped into one position and
+  normalized (its fraction's leading-zero count doubles as the zero test); the
+  significand product is a column-compression multiplier of full and half
+  adders at one AND each; the product's one-bit normalization is folded into
+  the right shifter for subnormal results; special values saturate that
+  shifter. NaN handling matches the rule above.
+- `square`: a dedicated squarer that forms only the cross products, with the
+  same back end as `mul`.
+- `fma`: the `mul` and `add` circuits composed literally (unfused).
 
-No SoftFloat source is needed for fp16. All arithmetic fits naturally in small
-integer intermediates. `square` uses a branch-free dedicated squarer because the
-shared-input `mul(a, a)` shape can produce wrong circuits after minimization.
+Verification against the previous assets: fp16 `add`, `sub` and `mul`
+exhaustively over all 2^32 operand pairs, fp16 `square` over all 2^16 inputs
+and fp32 `square` over all 2^32; fp32 and fp64 `add` and `sub` by ABC `cec`;
+fp32 `mul` on 10^9 and fp64 `mul` and `square` on 2*10^9 random and targeted
+inputs (special values, NaN payloads, subnormal inputs and outputs, overflow
+boundaries, exact ties). Each `fma` is its verified `mul` and `add` composed,
+and ABC `cec` proves each previous `fma` equal to the previous `add` applied
+after the previous `mul`; each was also run on 5*10^8 random and targeted
+inputs.
 
-Verification:
+### Division and Square Root
 
-- Unary operations were checked exhaustively over all 2^16 inputs.
-- Binary/ternary operations were checked by large randomized samples.
-- `.empbc` files were reloaded and checked through the same operation semantics.
+- `div`: both significands are normalized by leading-zero stages, then a
+  radix-2 non-restoring recurrence produces `F + 3` quotient bits at one
+  `(F + 2)`-bit add or subtract per bit. The sticky bit is "remainder is
+  nonzero", tested as `r != 0 && r != -b` on the final partial remainder. A
+  single right shifter performs both the 1-bit quotient normalization and the
+  shift for subnormal results. Special cases force the datapath word to zero,
+  so the output stage needs only XORs plus the NaN-payload selection.
+- `recip`: the same recurrence with the constant dividend 1.0, specialized.
+  `1/x` is never a rounding tie (it is exact only for powers of two), so it
+  has no sticky logic. Only subnormals with at most two leading zeros have
+  finite reciprocals, and a subnormal result is at most two binades below the
+  smallest normal, so both shifters are two single-bit stages.
+- `sqrt`: the radicand is placed by exponent parity and normalized by
+  even-length stages, then a non-restoring square-root recurrence produces
+  `F + 2` root bits. A square root is never a rounding tie, so the rounding
+  increment is the last root bit and no sticky logic is needed.
+- `rsqrt`: `sqrt` as above, rounded, then the reciprocal recurrence on that
+  normal significand (no normalization, no subnormal results, no ties).
 
-### FP32
+The recurrences use ripple-carry steps, which minimizes AND gates but makes AND
+depth grow roughly with `F^2` (fp64 `div` has AND depth 3013).
 
-FP32 used a mixed strategy:
+Verification against the previous assets: fp16 operations exhaustively over
+all inputs (2^32 pairs for `div`); fp32 `recip`, `sqrt` and `rsqrt`
+exhaustively over all 2^32 inputs; fp32 `div` and all fp64 operations on 10^9
+random and targeted inputs (subnormal-result ties, near-ties, overflow and
+underflow boundaries). The generator was also checked exhaustively against an
+exact integer model on about 1,400 small-format instances (IEEE-like formats up
+to 16 bits for `div`, up to 24 bits for the unary operations, both NaN
+conventions).
 
-- hand-written source-shaped C for add/sub, comparisons, classifiers, min/max,
-  div, recip, sqrt, and rsqrt;
-- a small edited SoftFloat32 bundle for `mul` and `square`;
-- direct EMP bit operations for abs/neg/copysign;
-- `fma` composed from verified `mul` and `add` circuits.
+### Comparison, Min/Max and Classifier Circuits
 
-The SoftFloat32 copies used for generation were edited to remove union
-type-punning so CBMC-GC sees raw integer fields. Keep the original license
-notices with any regenerated source copies.
+Write `n = W - 1` for the magnitude width and `|x|` for the low `n` bits. Per
+operand, three cheap signals are shared:
 
-### FP64
+- `N`: the fraction is zero (an AND tree over the inverted fraction bits).
+- `A`: all exponent bits are equal (an AND tree over `e_i XNOR e_0`).
+- `P = A AND (e_0 XOR N)`: the operand is a NaN or a zero. This is the only
+  flag the ordering predicates need, because whenever the larger-magnitude
+  operand is a zero the answer is fixed by the zero rules.
 
-FP64 also used a mixed strategy:
+The circuits are:
 
-- source-shaped C for add/sub, comparisons, classifiers, and min/max;
-- edited SoftFloat3-derived sources for mul, div, recip, sqrt, and rsqrt;
-- a branch-free dedicated square to avoid the shared-input `mul(a, a)` issue;
-- direct EMP bit operations for abs/neg/copysign;
-- `fma` composed from verified `mul` and `add` circuits.
+- `eq`: `(|a| == |b|) AND H`, with `s = NOT(sa XOR sb)`,
+  `q = A AND NOT(s XOR e_0)` and `H = s XOR ((N XOR s) AND q)` on `a`'s
+  fields. It uses `2n - 1` ANDs, which is the lower bound: the function has
+  algebraic degree `2n`. `ne` is its negation.
+- `lt` / `le`: one `n`-AND ripple comparator `c` on `|a| XOR sb*1..1` versus
+  `|b| XOR sb*1..1` (carry-in 0 for `lt`, 1 for `le`), the `P` flags of both
+  operands and a 3-AND combine (`3n - 1` ANDs in total). For `lt`:
+  `g0 = sa AND Pa`, `g1 = NOT sb AND Pb`,
+  `lt = sa XOR g0 XOR ((c XOR sb) AND (c XOR sa XOR g0 XOR g1))`.
+  `gt` / `ge` swap the operands.
+- `min` / `max`: the same comparator and flags, a 4-AND select and a `W`-AND
+  multiplexer.
+- `isinf` / `iszero`: a single depth-balanced AND tree over `n` literals.
+- `fp32_isnan`: `E XOR (E AND NOR(fraction))`, where `E` is the 8-leaf AND of
+  the exponent bits, built as one node of a balanced 31-leaf AND tree.
 
-The SoftFloat64 generation path used no-union edits and a Karatsuba-shaped
-53-bit significand multiply. The final checked-in assets are the `.empbc` files,
-not the intermediate generator output.
-
-## Zero-Sign Edit
-
-The `add`, `sub` and `fma` assets of every width carry one edit made after
-generation, so that an exact zero sum is `+0`, as round-to-nearest-even
-requires, and `-0` only when both addends are `-0`. Without it, an exact
-cancellation such as `x - x` takes the sign of the second operand: the result
-sign comes from a strict magnitude comparator, which picks `a`'s sign when
-`|a| > |b|` and `b`'s otherwise, including on a tie.
-
-The comparator is a ripple chain that starts at the least significant
-significand bit, and the generator folded its constant carry-in (0, for a
-strict comparison) into that first stage, `AND(a0, NOT b0)`. The edit replaces
-that gate with the majority `MAJ(a0, NOT b0, t) = t XOR ((a0 XOR t) AND
-(NOT b0 XOR t))`, so the comparator computes `|a| > |b|`, or `|a| == |b|` and
-`t`. With `t = NOT sa`, a tie picks the positive operand; in `fma` the first
-addend is the rounded product, so `t = NOT (sa XOR sb)`. The comparator's other
-consumers are the operand-swap muxes, which select equal bits on a tie. The edit
-adds three XOR gates and one NOT gate (one more XOR in `fma`) and no AND gate,
-so AND counts and AND depth are unchanged. Wires after the edited gate are
-renumbered to keep the program dense.
-
-| asset | edited gate (wire id before the edit) | `t` |
-|---|---:|---|
-| `fp16_add` / `fp16_sub` | 81 / 79 | `NOT A15` |
-| `fp32_add` / `fp32_sub` | 168 / 166 | `NOT A31` |
-| `fp64_add` / `fp64_sub` | 761 / 759 | `NOT A63` |
-| `fp16_fma` | 2169 | `NOT (A15 XOR B15)` |
-| `fp32_fma` | 6759 | `NOT (A31 XOR B31)` |
-| `fp64_fma` | 26346 | `NOT (A63 XOR B63)` |
-
-`A15` is input bit 15 of the first operand (its sign bit for fp16), `B15` the
-same bit of the second. The edit was verified against host IEEE arithmetic
-(binary16 through `double`; `fma` as `round(round(a*b) + c)`):
-
-- fp16 `add` and `sub` over all 2^32 operand pairs: the edit changes exactly the
-  31,744 exact cancellations of each, all to `+0`, and nothing else, NaN
-  payloads included.
-- fp32 `add` and `sub` over every operand pair of equal magnitude, and fp16
-  `fma` over every `(a, b, ±round(a*b))`.
-- fp32 and fp64 `add`, `sub` and `fma` over about 2*10^8 random and
-  forced-cancellation cases each.
-
-`test_float` checks zero signs at every width.
+The 3- and 4-AND combine blocks were found by SAT-based exact synthesis over
+the reachable combinations of their inputs. Each asset was proven equivalent to
+the asset it replaced with ABC `cec`, and the binary16 assets were also checked
+exhaustively over every input.
 
 ## Current AND Counts
 
@@ -283,19 +302,19 @@ file, but AND gates are the dominant cost in modern garbling. `abs`, `neg`, and
 
 | op | fp16 | fp32 | fp64 |
 |---|---:|---:|---:|
-| add | 579 | 1143 | 2840 |
-| sub | 579 | 1141 | 2840 |
-| mul | 717 | 2286 | 8575 |
-| square | 478 | 1876 | 6578 |
-| fma | 1296 | 3429 | 11415 |
-| div | 2646 | 7845 | 18023 |
-| recip | 2264 | 5863 | 15391 |
-| sqrt | 270 | 5699 | 17880 |
-| rsqrt | 4256 | 11179 | 33273 |
-| eq/ne | 57 | 111 | 213 |
-| lt/le/gt/ge | 58 | 112 | 214 |
-| min | 101 | 200 | 395 |
-| max | 90 | 176 | 342 |
+| add | 261 | 550 | 1195 |
+| sub | 261 | 550 | 1195 |
+| mul | 466 | 1463 | 4986 |
+| square | 223 | 744 | 2722 |
+| fma | 727 | 2013 | 6181 |
+| div | 469 | 1355 | 4463 |
+| recip | 252 | 845 | 3312 |
+| sqrt | 185 | 570 | 1991 |
+| rsqrt | 328 | 1202 | 4921 |
+| eq/ne | 29 | 61 | 125 |
+| lt/le/gt/ge | 44 | 92 | 188 |
+| min | 61 | 125 | 253 |
+| max | 61 | 125 | 253 |
 | isnan/isinf/iszero | 14 | 30 | 62 |
 
 ## Replacement Checklist
@@ -314,6 +333,7 @@ Before replacing a checked-in `.empbc`, confirm all of the following:
 
 ## Third-Party Provenance
 
-Some fp32/fp64 assets were generated from modified sources derived from Berkeley
-SoftFloat 3e. The asset README in `emp-tool/ir/files/README.md` carries the
-SoftFloat notice so it is installed beside the generated `.empbc` files.
+Earlier fp32/fp64 assets were generated from modified sources derived from
+Berkeley SoftFloat 3e; the current assets contain no SoftFloat-derived logic.
+The asset README in `emp-tool/ir/files/README.md` keeps the SoftFloat notice
+beside the `.empbc` files.

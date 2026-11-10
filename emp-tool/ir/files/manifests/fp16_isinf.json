@@ -1,9 +1,9 @@
 {
   "name": "fp16_isinf.empbc",
-  "sha256": "d957b7659c666eaf02b38779e65365ce65d3eb6cf2f3173f2fbd2ff9586e1d88",
+  "sha256": "f3ecfcb6d75d8bdb0bbd619f6763413a92e3d4fd573e59e132596e07d0fd162d",
   "num_inputs": 16,
   "num_outputs": 8,
-  "num_gates": 51,
+  "num_gates": 33,
   "num_and": 14,
-  "and_depth": 5
+  "and_depth": 4
 }

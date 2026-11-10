@@ -21,8 +21,7 @@ pipeline produced — the manifest attests to the bytes we shipped, not to
 their derivation. Second, *semantic* verification: the manifest fixes the
 gate count and hash, but nothing in-repo independently checks that
 `fp32_div.empbc` computes IEEE division. `test_float` exercises the
-assets behaviorally (bit-exact for the correctly-rounded ops, tolerance
-for the iterative ones — see
+assets behaviorally (bit-exact against the host — see
 [floating_point_circuits.md](floating_point_circuits.md)), which is real
 coverage, but it is not a from-source regeneration or a formal
 equivalence check.
@@ -47,8 +46,7 @@ one first:
 
 **Acceptance.**
 - Every shipped `.empbc` is checked, on a plaintext context, against
-  checked-in oracle vectors for a representative input set (correctly-
-  rounded ops bit-exact; iterative ops within the documented tolerance).
+  checked-in oracle vectors for a representative input set, bit-exactly.
 - The AND-count / semantics tables in `floating_point_circuits.md` are
   regenerated from, and consistency-checked against, the assets rather
   than hand-maintained.

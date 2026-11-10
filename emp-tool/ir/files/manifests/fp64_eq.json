@@ -1,9 +1,9 @@
 {
   "name": "fp64_eq.empbc",
-  "sha256": "f3d35453f447d892534db47d66f902bfca7932666861a94ffc03024d00fe299b",
+  "sha256": "8e0b1266471ab66072b3c1d1f853f608dc91e8fbdec12fed2f7bd3c58b22cbbb",
   "num_inputs": 128,
   "num_outputs": 8,
-  "num_gates": 857,
-  "num_and": 213,
-  "and_depth": 10
+  "num_gates": 338,
+  "num_and": 125,
+  "and_depth": 8
 }

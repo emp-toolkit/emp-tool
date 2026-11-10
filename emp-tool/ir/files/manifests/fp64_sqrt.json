@@ -1,9 +1,9 @@
 {
   "name": "fp64_sqrt.empbc",
-  "sha256": "161cffa39ea898a42c5e76a833ba075534dda9cc6db57a63031b61f17db9dac0",
+  "sha256": "53089d0f14401fc637bf4580bf742b63da2e29a094bfaacf92df87765c567c76",
   "num_inputs": 64,
   "num_outputs": 64,
-  "num_gates": 56092,
-  "num_and": 17880,
-  "and_depth": 429
+  "num_gates": 12403,
+  "num_and": 1991,
+  "and_depth": 1443
 }

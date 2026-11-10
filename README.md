@@ -148,8 +148,8 @@ The numeric layer makes signedness explicit: `UInt_T<Ctx,N>` wraps mod 2^N
 matching `uint{N}_t`, `Int_T<Ctx,N>` is two's-complement matching `int{N}_t` on
 hardware (C signed-overflow UB is sidestepped — emp-tool wraps
 deterministically). `Float_T<Ctx,W>` carries IEEE binary{16,32,64} values:
-`+ − × ÷` / `min` / `max` are correctly rounded, `fma` is unfused (two
-roundings), and `sqrt` / `recip` / `rsqrt` are approximate — see
+`+ − × ÷` / `min` / `max` / `sqrt` / `recip` are correctly rounded, and `fma`
+and `rsqrt` are unfused (two roundings each) — see
 [docs/floating_point_circuits.md](docs/floating_point_circuits.md). Comparisons
 return `Bit_T<Ctx>`; the host clear types are `bool` / `uint64_t` / `int64_t` /
 the host float.

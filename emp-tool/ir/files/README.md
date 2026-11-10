@@ -46,9 +46,9 @@ rounding modes are not modeled.
 
 ## Third-Party Notice
 
-Some fp32/fp64 assets were generated from modified sources derived from Berkeley
-SoftFloat 3e. This notice is included so the provenance is available when the
-generated circuit assets are distributed.
+Earlier fp32/fp64 assets were generated from modified sources derived from
+Berkeley SoftFloat 3e; the current assets contain no SoftFloat-derived logic.
+The notice stays with the assets for that provenance.
 
 SoftFloat copyright notice:
 
