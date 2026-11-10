@@ -31,6 +31,31 @@ struct CircuitScratch {
 	void ensure(uint32_t n) { if (wires.size() < n) wires.resize(n); }
 };
 
+namespace detail {
+// Copy the inputs into wire slots [0, num_inputs) and walk the program once;
+// returns the slots, from which the caller reads p.outputs.
+template <class Wire, class Dispatcher>
+inline Wire* run_program_(const BooleanProgram& p, const Wire* inputs, int64_t num_in,
+                          CircuitScratch<Wire>& scratch, Dispatcher& dispatch) {
+	expecting(num_in == (int64_t)p.num_inputs,
+	          "execute_program: input count != program num_inputs");
+	scratch.ensure(p.num_wires);
+	Wire* w = scratch.wires.data();
+	for (int64_t i = 0; i < num_in; ++i) w[i] = inputs[i];
+
+	// Bridge wire ids (from for_each_gate) to value slots (for the Dispatcher).
+	struct Bridge {
+		Wire* w; Dispatcher& d;
+		void and_gate(uint32_t o, uint32_t a, uint32_t b) { d.and_gate(w[o], w[a], w[b]); }
+		void xor_gate(uint32_t o, uint32_t a, uint32_t b) { d.xor_gate(w[o], w[a], w[b]); }
+		void not_gate(uint32_t o, uint32_t a)             { d.not_gate(w[o], w[a]); }
+		void const_gate(uint32_t o, bool v)               { d.const_gate(w[o], v); }
+	};
+	for_each_gate(p, Bridge{w, dispatch});
+	return w;
+}
+}  // namespace detail
+
 // The in/out wrapper over for_each_gate, for callers whose wires carry values:
 // copy `num_in` input values into wire slots [0, num_inputs), walk once, copy the
 // output slots into `outputs`. Generic over the wire slot type and a Dispatcher
@@ -48,26 +73,23 @@ inline void execute_program(const BooleanProgram& p,
                             Wire* outputs, int64_t num_out,
                             CircuitScratch<Wire>& scratch,
                             Dispatcher&& dispatch) {
-	expecting(num_in == (int64_t)p.num_inputs,
-	          "execute_program: input count != program num_inputs");
 	expecting(num_out == (int64_t)p.outputs.size(),
 	          "execute_program: output count != program outputs");
-
-	scratch.ensure(p.num_wires);
-	Wire* w = scratch.wires.data();
-	for (int64_t i = 0; i < num_in; ++i) w[i] = inputs[i];
-
-	// Bridge wire ids (from for_each_gate) to value slots (for the Dispatcher).
-	struct Bridge {
-		Wire* w; Dispatcher& d;
-		void and_gate(uint32_t o, uint32_t a, uint32_t b) { d.and_gate(w[o], w[a], w[b]); }
-		void xor_gate(uint32_t o, uint32_t a, uint32_t b) { d.xor_gate(w[o], w[a], w[b]); }
-		void not_gate(uint32_t o, uint32_t a)             { d.not_gate(w[o], w[a]); }
-		void const_gate(uint32_t o, bool v)               { d.const_gate(w[o], v); }
-	};
-	for_each_gate(p, Bridge{w, dispatch});
-
+	Wire* w = detail::run_program_(p, inputs, num_in, scratch, dispatch);
 	for (int64_t i = 0; i < num_out; ++i) outputs[i] = w[p.outputs[i]];
+}
+
+// The same, writing the outputs into a vector that is resized only after the
+// inputs are read, so `inputs` may point into `outputs`.
+template <class Wire, class Dispatcher>
+inline void execute_program(const BooleanProgram& p,
+                            const Wire* inputs, int64_t num_in,
+                            std::vector<Wire>& outputs,
+                            CircuitScratch<Wire>& scratch,
+                            Dispatcher&& dispatch) {
+	Wire* w = detail::run_program_(p, inputs, num_in, scratch, dispatch);
+	outputs.resize(p.outputs.size());
+	for (size_t i = 0; i < p.outputs.size(); ++i) outputs[i] = w[p.outputs[i]];
 }
 
 }  // namespace circuit
@@ -108,18 +130,18 @@ struct CtxReplayAdapter {
 };
 
 // Value-return replay bridge (workspace form): writes outputs into ws.out and
-// returns a reference to it (no allocation when ws is reused). This is how stored
-// builtins run through any context.
+// returns a reference to it (no allocation when ws is reused). `inputs` may be
+// the reference an earlier call on the same ws returned: it is read before
+// ws.out is resized. This is how stored builtins run through any context.
 template <BooleanContext Ctx>
 inline const std::vector<typename Ctx::Wire>& execute_program(
     Ctx& ctx, const circuit::BooleanProgram& p,
     std::span<const typename Ctx::Wire> inputs,
     ProgramWorkspace<typename Ctx::Wire>& ws) {
 	using W = typename Ctx::Wire;
-	ws.out.resize(p.outputs.size());
 	CtxReplayAdapter<Ctx> adapter{ctx};
-	circuit::execute_program<W>(p, inputs.data(), inputs.size(),
-	                            ws.out.data(), ws.out.size(), ws.scratch, adapter);
+	circuit::execute_program<W>(p, inputs.data(), (int64_t)inputs.size(),
+	                            ws.out, ws.scratch, adapter);
 	return ws.out;
 }
 
