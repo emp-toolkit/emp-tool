@@ -10,6 +10,7 @@
 #include "emp-tool/ir/empbc.h"
 #include "emp-tool/ir/artifact.h"
 #include "emp-tool/ir/context/digest.h"
+#include "emp-tool/ir/context/clear.h"
 #include <cassert>
 #include <csignal>
 #include <cstdio>
@@ -212,6 +213,42 @@ int main() {
 		execute_program<uint8_t>(p, in, 2, out, 2, sc, ByteDispatcher{});
 		check(out[0] == ((uint8_t)((a & b) ^ 1)), "execute_program: out0 wrong");
 		check(out[1] == (uint8_t)a,                "execute_program: passthrough wrong");
+	}
+
+	// ---- a workspace replay may take the previous replay's outputs as inputs ----
+	// grow: 1 input -> 64 outputs alternating x, !x. shrink: 64 inputs -> the
+	// last one. Each chain feeds the reference the first call returned straight
+	// back in, once shrinking ws.out and once growing it past its capacity (run
+	// under ASan, reading the inputs after the resize is a use-after-free).
+	{
+		BooleanProgram grow;
+		grow.num_inputs = 1;
+		grow.num_wires  = 2;
+		grow.gates      = {Gate{0, 0, 1, Op::Not}};
+		for (int i = 0; i < 64; ++i) grow.outputs.push_back((uint32_t)(i % 2));
+		BooleanProgram shrink;
+		shrink.num_inputs = 64;
+		shrink.num_wires  = 64;
+		shrink.outputs    = {63};
+		validate_program(grow);
+		validate_program(shrink);
+		emp::ClearCtx ctx;
+		for (uint8_t x = 0; x < 2; ++x) {
+			emp::ProgramWorkspace<uint8_t> ws;
+			const uint8_t in1[1] = {x};
+			const auto& g = emp::execute_program(ctx, grow, std::span<const uint8_t>(in1), ws);
+			const auto& s = emp::execute_program(ctx, shrink, std::span<const uint8_t>(g), ws);
+			check(s.size() == 1 && s[0] == (uint8_t)(x ^ 1), "workspace chain: shrink of grow");
+
+			emp::ProgramWorkspace<uint8_t> ws2;
+			std::vector<uint8_t> in64(64, 0);
+			in64[63] = x;
+			const auto& t = emp::execute_program(ctx, shrink, std::span<const uint8_t>(in64), ws2);
+			const auto& u = emp::execute_program(ctx, grow, std::span<const uint8_t>(t), ws2);
+			bool grown = u.size() == 64;
+			for (size_t i = 0; grown && i < 64; ++i) grown = u[i] == (uint8_t)(x ^ (i % 2));
+			check(grown, "workspace chain: grow of shrink");
+		}
 	}
 
 	// ---- .empbc roundtrip (u16 form, since num_wires is tiny) ----
