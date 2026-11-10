@@ -25,6 +25,7 @@
 // lane would replay identical "random" streams — silently wrong rather
 // than merely nondeterministic.
 
+#include "emp-tool/runtime/core/abi_guard.h"
 #include "emp-tool/runtime/core/error.h"
 
 #include <atomic>
@@ -41,16 +42,16 @@
 
 namespace emp {
 
-// Build-consistency backstop, the same device as HashAbiMarker in hash.h:
-// libemp-tool defines the marker for the mode it was built in and every
-// translation unit references the marker for its own, so linking test-mode
-// and normal objects together fails with an undefined TestModeAbiMarker
-// symbol instead of mixing predictable and real seeds in one process.
+// Build-consistency backstop (runtime/core/abi_guard.h): libemp-tool defines
+// the marker for the mode it was built in and every translation unit
+// references the marker for its own, so linking test-mode and normal objects
+// together fails with an undefined TestModeAbiMarker symbol instead of mixing
+// predictable and real seeds in one process.
 template <bool> struct TestModeAbiMarker { static const char sym; };
 template <> const char TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym;
 namespace detail {
-[[maybe_unused, gnu::used]] static const char *const emp_test_mode_abi_guard =
-    &TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym;
+EMP_ABI_GUARD(emp_test_mode_abi_guard,
+              TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym);
 }
 
 namespace detail {
