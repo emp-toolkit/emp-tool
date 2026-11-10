@@ -151,10 +151,12 @@ so the fixed and dynamic integer families share one kernel set. `Float_T` is the
 ### Sorting
 
 [sort.h](../emp-tool/circuits/sort.h) provides data-oblivious `compare_swap(a, b)`
-(ascending min/max via `<` + `select`) and `sort(values)` (a Batcher odd-even
-mergesort network, any length) over any value with `operator<` and `select`
-(`UInt_T` / `Int_T` / `Float_T`). The compare-swap schedule is fixed, so the gate
-stream is identical for every input.
+(ascending min/max: one `<`, then one AND per bit, `d = s & (a ^ b)`,
+`a ^= d`, `b ^= d`) and `sort(values)` (a Batcher odd-even mergesort network
+with balanced halves over the smallest known networks for 9..16 inputs,
+any length) over any value with `operator<` and `select` (`UInt_T` / `Int_T` /
+`Float_T`). The compare-swap schedule is fixed, so the gate stream is identical
+for every input.
 
 ### Crypto primitives (`emp::circuit::crypto`)
 
