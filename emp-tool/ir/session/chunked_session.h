@@ -116,17 +116,16 @@ public:
 
   // ---- reveal: settle v and decode it to recipient. RAII liveness — every
   // pending wire still in C++ scope is kept (materialized), so revealing one
-  // value never invalidates another you still hold. keep... is an optional
-  // override of the implicit in-scope keep-set.
-  template <WireValue V, class... Keep>
-  reveal_t<V> reveal(const V& v, int recipient, const Keep&... keep) {
+  // value never invalidates another you still hold. To drop values that are
+  // still in scope, call checkpoint(keep...) first.
+  template <WireValue V>
+  reveal_t<V> reveal(const V& v, int recipient) {
     static_assert(std::same_as<typename V::context_type, ctx_t>,
         "ChunkedSession::reveal<V>: V must be a value over this session's ctx_t");
     self().validate_recipient_(recipient);   // reject before the networked flush
     std::vector<uint32_t> keep_ids = ctx_.live_pending_ids();
     std::vector<uint32_t> vids = value_ids_(v);
     keep_ids.insert(keep_ids.end(), vids.begin(), vids.end());
-    (append_ids_(keep_ids, keep), ...);
     flush_(keep_ids);
     std::vector<uint8_t> bits = self().decode_(vids, recipient);
     constexpr int W = V::width();
