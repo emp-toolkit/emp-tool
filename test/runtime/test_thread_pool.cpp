@@ -19,6 +19,7 @@
 #include <vector>
 
 using namespace std;
+using emp::ThreadPool;
 
 template <class F>
 static bool dies(F&& f) {

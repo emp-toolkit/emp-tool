@@ -30,10 +30,12 @@ freely, subject to the following restrictions:
 // emp::test_lane_scope whose lane is derived on the enqueuing thread, so
 // pool-parallel randomness reproduces across runs regardless of which
 // worker executes the task (see emp-tool/runtime/core/test_mode.h);
-// (2) enqueue-on-stopped-pool reports through emp::error() instead of
-// throwing, keeping the public surface exception-free
+// (2) enqueue-on-stopped-pool stops the process through emp::expecting()
+// instead of throwing, keeping the public surface exception-free
 // (docs/api_conventions.md, enforced by test_no_exceptions); (3) queued tasks
-// own their callable and arguments and may therefore contain move-only values.
+// own their callable and arguments and may therefore contain move-only values;
+// (4) the class lives in namespace emp, so it cannot collide with another
+// copy of the original.
 
 #include "emp-tool/runtime/core/error.h"
 #include "emp-tool/runtime/core/test_mode.h"
@@ -68,6 +70,8 @@ using thread_pool_stored_result_t = typename thread_pool_stored_result<
     Args...>::type;
 
 } // namespace emp::detail
+
+namespace emp {
 
 class ThreadPool {
 public:
@@ -150,8 +154,7 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	if constexpr (emp::is_test_mode()) test_lane = emp::next_test_child_lane();
 	{
 		std::unique_lock<std::mutex> lock(queue_mutex);
-		if (stop)
-			emp::error("ThreadPool: enqueue on stopped pool");
+		emp::expecting(!stop, "ThreadPool: enqueue on stopped pool");
 		if constexpr (emp::is_test_mode())
 			tasks.emplace([task, test_lane]() {
 				emp::test_lane_scope scope(test_lane);
@@ -175,5 +178,7 @@ inline void ThreadPool::stop_and_join() noexcept {
 
 // the destructor joins all threads
 inline ThreadPool::~ThreadPool() { stop_and_join(); }
+
+} // namespace emp
 
 #endif
