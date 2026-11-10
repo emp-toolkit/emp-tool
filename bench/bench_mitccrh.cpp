@@ -3,9 +3,9 @@
 // garbling. Throughput benchmark.
 //
 // What's in mitccrh.h:
-//   MITCCRH<BatchSize>                       AES_KEY scheduled_key[B], gid, start_point
-//   setS(s)                                  reset start_point + gid
-//   renew_ks() / renew_ks(gid)               schedule B keys from gid sequence
+//   MITCCRH<BatchSize>                       start_point(), next_gid()
+//   setS(s)                                  install S, restart the gid stream at 0
+//   renew_ks(gid)                            schedule B keys from gid
 //   hash<K, H>(blks)                         consume K lanes, hash K*H blocks:
 //                                              y ^ AES_{S ^ (gid>>RS)}(y), y = x ^ T(gid)
 //   hash_cir<K, H>(blks)                     same with y = sigma(x) ^ T(gid)
