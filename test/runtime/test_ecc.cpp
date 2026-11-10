@@ -104,19 +104,12 @@ int main() {
 	cout << res<<endl;
 	ok = ok && res;
 
-	// Exercise the nonzero/range contract in both the private OpenSSL
-	// generator and deterministic test-mode path.
-	for (int i = 0; i < 32; ++i) {
+	// Exercise the nonzero/range contract of this build's generator: OpenSSL's
+	// private generator, or the deterministic path in a test-mode build.
+	for (int i = 0; i < 64; ++i) {
 		Scalar s = G.rand_scalar();
 		ok = ok && !BN_is_zero(s.n()) && BN_cmp(s.n(), order.n()) < 0;
 	}
-	set_test_mode(true);
-	reset_test_seed_counter();
-	for (int i = 0; i < 32; ++i) {
-		Scalar s = G.rand_scalar();
-		ok = ok && !BN_is_zero(s.n()) && BN_cmp(s.n(), order.n()) < 0;
-	}
-	set_test_mode(false);
 
 	// Peer-controlled point lengths must be rejected in Release too. This
 	// exercises IOChannel::recv_pt without opening sockets.

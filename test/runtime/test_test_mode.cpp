@@ -1,8 +1,10 @@
 // core/test_mode.h — deterministic (lane, ordinal) randomness for wire-byte
-// equivalence. Read example() first; the rest is verification.
+// equivalence. Read example() first; the rest is verification. In a normal
+// build this test checks that the deterministic paths are compiled out; the
+// full checks run in a test-mode build (-DEMP_TEST_MODE=ON).
 //
 // What's in test_mode.h:
-//   is_test_mode() / set_test_mode(on)     the toggle ($EMP_TEST_MODE=1)
+//   is_test_mode()                         true in a test-mode build
 //   next_test_seed()                       (lane, ordinal) pair consumed by PRG()
 //   test_lane_scope guard(lane)            RAII lane for the body of spawned work
 //   next_test_child_lane()                 creator-side deterministic lane derivation
@@ -76,19 +78,35 @@ static bool run_child_capturing_stderr(F&& f, string* err) {
 	return pid > 0 && waitpid(pid, &status, 0) == pid && child_succeeded(status);
 }
 
-// EMP_TEST_MODE is read once, at the first is_test_mode() call. Each probe sets
-// it in a forked child that then makes that call, so main() probes before this
-// process reads it; a value cached earlier would fail the "1" or unset probe.
-// The insecurity warning must appear exactly when test mode turns on.
-static bool probe_environment(const char* value, bool expected) {
+// The first two default PRGs of a fresh process, in a forked child with
+// EMP_TEST_MODE=1 in its environment. A test-mode build must give the main
+// lane's (0,0) and (0,1) seeds and print the insecurity banner exactly once; a
+// normal build must ignore the variable, draw real seeds, and print nothing.
+// main() probes before this process draws anything, because the child
+// inherits the parent's lane state and banner flag.
+static bool probe_first_draws() {
 	string err;
-	bool exited = run_child_capturing_stderr([&] {
-		int env_result = value == nullptr ? unsetenv("EMP_TEST_MODE")
-		                                  : setenv("EMP_TEST_MODE", value, 1);
-		if (env_result != 0 || is_test_mode() != expected) _exit(1);
+	bool ok = run_child_capturing_stderr([] {
+		if (setenv("EMP_TEST_MODE", "1", 1) != 0) _exit(1);
+		PRG a, b;
+		const block e0 = makeBlock(0, 0), e1 = makeBlock(0, 1);
+		const block s0 = a.seed(), s1 = b.seed();
+		const bool deterministic = cmpBlock(&e0, &s0, 1) && cmpBlock(&e1, &s1, 1);
+		if (deterministic != is_test_mode() || cmpBlock(&s0, &s1, 1)) _exit(1);
 	}, &err);
-	bool warned = err.find("WARNING: EMP TEST MODE ENABLED") != string::npos;
-	return exited && warned == expected;
+	const string banner = "WARNING: EMP TEST MODE BUILD";
+	const size_t first = err.find(banner);
+	if constexpr (is_test_mode())
+		return ok && first != string::npos && err.find(banner, first + 1) == string::npos;
+	else
+		return ok && first == string::npos;
+}
+
+static bool check_first_draws(bool probed) {
+	cout << "  [first draws: " << (is_test_mode() ? "(0,0), (0,1), one banner"
+	                                              : "real seeds, environment ignored")
+	     << "]  " << (probed ? "OK" : "FAIL") << "\n";
+	return probed;
 }
 
 
@@ -96,7 +114,6 @@ static bool probe_environment(const char* value, bool expected) {
 
 static void example() {
 	cout << "=== example ===\n";
-	set_test_mode(true);
 	reset_test_seed_counter();
 
 	// (1) Main thread is lane 0; ordinals count from 0.
@@ -252,18 +269,6 @@ static bool check_child_lane_derivation_deterministic() {
 	return ok;
 }
 
-static bool probe_environment_contract() {
-	return probe_environment("1", true) && probe_environment(nullptr, false) &&
-	       probe_environment("", false) && probe_environment("0", false) &&
-	       probe_environment("10", false) && probe_environment("1x", false) &&
-	       probe_environment("true", false);
-}
-
-static bool check_environment_contract(bool probed) {
-	cout << "  [only EMP_TEST_MODE=1 enables and warns]  " << (probed ? "OK" : "FAIL") << "\n";
-	return probed;
-}
-
 static bool check_lane0_seed_owner() {
 	bool ok = child_died(run_child([] {
 		reset_test_seed_counter();
@@ -322,10 +327,9 @@ static bool check_reset_allows_lane0_handoff() {
 	return ok;
 }
 
-static bool run_correctness(bool environment_ok) {
+static bool run_correctness(bool first_draws_ok) {
 	cout << "=== correctness ===\n";
-	bool ok = true;
-	ok &= check_environment_contract(environment_ok);
+	bool ok = check_first_draws(first_draws_ok);
 	ok &= check_main_lane_sequence();
 	ok &= check_lane_scope_nesting();
 	ok &= check_lane0_seed_owner();
@@ -340,11 +344,18 @@ static bool run_correctness(bool environment_ok) {
 }
 
 int main() {
-	const bool environment_ok = probe_environment_contract();  // see probe_environment
-	set_test_mode(true);
+	const bool first_draws_ok = probe_first_draws();  // before any draw here
+	if constexpr (!is_test_mode()) {
+		cout << "=== normal build: test mode compiled out ===\n";
+		if (!check_first_draws(first_draws_ok)) {
+			cerr << "CORRECTNESS FAILURE\n";
+			return 1;
+		}
+		return 0;
+	}
 	example();
 	cout << "\n";
-	if (!run_correctness(environment_ok)) {
+	if (!run_correctness(first_draws_ok)) {
 		cerr << "CORRECTNESS FAILURE\n";
 		return 1;
 	}

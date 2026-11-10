@@ -44,6 +44,16 @@ jobs:
             native: OFF
             hash: sha256
             fs_hash: blake3
+          - name: Ubuntu GCC Debug test mode
+            os: ubuntu-latest
+            cc: gcc
+            cxx: g++
+            build_type: Debug
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
+            test_mode: ON
           - name: Ubuntu GCC native ISA
             os: ubuntu-latest
             cc: gcc
@@ -89,6 +99,7 @@ jobs:
           -DEMP_TOOL_NATIVE_ARCH=${{ matrix.native }}
           -DEMP_HASH_BACKEND=${{ matrix.hash }}
           -DEMP_FS_HASH=${{ matrix.fs_hash }}
+          -DEMP_TEST_MODE=${{ matrix.test_mode || 'OFF' }}
       - name: Build
         run: cmake --build build --parallel
       - name: Test

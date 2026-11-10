@@ -445,14 +445,14 @@ void ECGroup::resize_scratch(size_t size) {
 
 Scalar ECGroup::rand_scalar() {
 	Scalar n;
-	if (!is_test_mode()) {
+	if constexpr (!is_test_mode()) {
 		do {
 			expecting(BN_priv_rand_range(n.n(), order_.n()) == 1,
 			          "ECGroup::rand_scalar: BN_priv_rand_range");
 		} while (BN_is_zero(n.n()));
 		return n;
 	}
-	// Test mode: deterministic uniform sample in [1, order_) via emp::PRG.
+	// Test-mode build: deterministic uniform sample in [1, order_) via emp::PRG.
 	// Rejection sampling:
 	// draw n_bits-wide random bytes, retry if zero or ≥ order_. P-256's order
 	// is just under 2^256, so the per-iteration reject probability
@@ -552,5 +552,10 @@ template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym = 0;
 // A consumer whose EMP_WITH_BLAKE3 disagrees references the other marker and
 // fails to link.
 template <> const char FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym = 0;
+
+// Test-mode marker (see test_mode.h): define the symbol for whether this
+// emp-tool build is a test-mode build. A consumer built the other way
+// references the other marker and fails to link.
+template <> const char TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym = 0;
 
 }  // namespace emp

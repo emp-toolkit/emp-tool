@@ -23,7 +23,7 @@ class PRG { public:
 		}
 
 		block v;
-		if (is_test_mode()) {
+		if constexpr (is_test_mode()) {
 			// Deterministic seed: lane in the high half, per-lane
 			// construction ordinal in the low half. Distinct lanes never
 			// collide, and a lane's sequence depends only on its own

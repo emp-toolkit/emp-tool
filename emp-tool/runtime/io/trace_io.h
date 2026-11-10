@@ -7,7 +7,7 @@
 // protocol traces for diff-based wire-equivalent
 // verification of refactors / optimizations:
 //
-//   1. Set EMP_TEST_MODE=1 (so all randomness is deterministic).
+//   1. Build with -DEMP_TEST_MODE=ON (so all randomness is deterministic).
 //   2. Run the protocol once "before" the change, dumping wire bytes
 //      via TraceIO to <prefix>.send / <prefix>.recv .
 //   3. Apply the optimization. Run again to a different prefix.
@@ -16,12 +16,12 @@
 //      (a `.recv` file holds only consumed bytes, so it can miss trailing
 //      bytes the peer never read).
 //
-// Determinism contract: requires emp::is_test_mode() == true at protocol
-// startup and, if the protocol spawns threads, the lane discipline of
+// Determinism contract: requires a test-mode build (emp::is_test_mode())
+// and, if the protocol spawns threads, the lane discipline of
 // test_mode.h (pool tasks get lanes automatically; hand-spawned threads
 // install test_lane_scope) plus one lane per traced channel — concurrent
 // writers to one channel interleave nondeterministically even with
-// deterministic seeds. Test-mode-off → traces are non-reproducible.
+// deterministic seeds. In a normal build, traces are not reproducible.
 
 #include "emp-tool/runtime/io/io_channel.h"
 #include <cerrno>

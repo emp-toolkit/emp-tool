@@ -459,8 +459,8 @@ Benchmarks are separate from `ctest` and live under `bench/`; see
 
 ### Wire-byte equivalence (test mode)
 
-Setting `EMP_TEST_MODE=1` swaps every randomness source in the
-toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for
+A test-mode build (`-DEMP_TEST_MODE=ON`) swaps every randomness source
+in the toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for
 deterministic `(lane, ordinal)`-seeded streams, so two runs of the
 same code — single- or multi-threaded — produce byte-identical wire
 output. Combined with `TraceIO` (an
@@ -469,9 +469,10 @@ verify that an optimization or refactor doesn't change a protocol's
 observable behavior:
 
 ```bash
-EMP_TEST_MODE=1 ./run ./build/your_protocol_test before
-# … apply your refactor …
-EMP_TEST_MODE=1 ./run ./build/your_protocol_test after
+cmake -B build-test -DEMP_TEST_MODE=ON && cmake --build build-test -j
+./run ./build-test/your_protocol_test before
+# … apply your refactor, rebuild …
+./run ./build-test/your_protocol_test after
 diff before.alice.send after.alice.send   # each direction, checked at its sender
 diff before.bob.send   after.bob.send     # both must be empty
 ```
@@ -513,9 +514,9 @@ An implementation audit for external reviewers lives in
   peer identity beyond that: any certificate issued by the configured
   CA authenticates, so the CA must be deployment-private.
 - Failures are fail-stop: a violated check terminates the process
-  ([docs/api_conventions.md](docs/api_conventions.md)). Test mode
-  (`EMP_TEST_MODE=1`) makes all randomness deterministic and is never
-  safe for real secrets.
+  ([docs/api_conventions.md](docs/api_conventions.md)). A test-mode
+  build (`-DEMP_TEST_MODE=ON`) makes all randomness deterministic and is
+  never safe for real secrets.
 - Report vulnerabilities to wangxiao1254@gmail.com.
 
 ## [Acknowledgement, Reference, and Questions](https://github.com/emp-toolkit/emp-readme/blob/master/README.md#citation)

@@ -1,14 +1,13 @@
 # Test mode — deterministic randomness for wire-byte equivalence
 
-emp-tool exposes a "test mode" flag that swaps every randomness
-source in the toolkit for a deterministic, counter-derived stream.
-With test mode on, the wire bytes a protocol produces are byte-
-identical across runs of the same code. Two complementary headers
-build the framework:
+A test-mode build of emp-tool swaps every randomness source in the
+toolkit for a deterministic, counter-derived stream. In a test-mode
+build, the wire bytes a protocol produces are byte-identical across
+runs of the same code. Two complementary headers build the framework:
 
 | Header | Role |
 |---|---|
-| [`emp-tool/runtime/core/test_mode.h`](../emp-tool/runtime/core/test_mode.h) | The toggle and the lane machinery. `is_test_mode()`, `set_test_mode(bool)`, `next_test_seed()`, `reset_test_seed_counter()`, `test_lane_scope`, `next_test_child_lane()`. |
+| [`emp-tool/runtime/core/test_mode.h`](../emp-tool/runtime/core/test_mode.h) | The build switch and the lane machinery. `is_test_mode()`, `next_test_seed()`, `reset_test_seed_counter()`, `test_lane_scope`, `next_test_child_lane()`. |
 | [`emp-tool/runtime/io/trace_io.h`](../emp-tool/runtime/io/trace_io.h) | `TraceIO` IOChannel adapter that tees wire bytes to a pair of files alongside delivering them. |
 
 ## When to use it
@@ -43,27 +42,27 @@ Two randomness sources in emp-tool reach the wire:
 `PRG(const void*, int)` (explicit seed) is unaffected — callers
 that pass their own seed already control determinism.
 
-## Toggle mechanics
+## Turning it on
 
-Two ways to enable, equivalent in effect:
+Test mode is a build option, not a runtime switch:
 
 ```bash
-EMP_TEST_MODE=1 ./build/your_test
+cmake -B build-test -DEMP_TEST_MODE=ON
+cmake --build build-test -j
 ```
 
-```cpp
-emp::set_test_mode(true);  // before any PRG() default-construction
-```
+`-DEMP_TEST_MODE=ON` defines `EMP_TEST_MODE` for emp-tool and, through its
+exported target, for every library and program that links it, so a dependent
+built against a test-mode emp-tool is a test-mode build too. `is_test_mode()`
+is a compile-time constant. A normal build compiles the deterministic paths
+out, so no environment variable or call can make its randomness predictable.
+Objects built the two ways cannot be linked into one program: the link fails on
+an undefined `emp::TestModeAbiMarker` symbol.
 
-The env var is read once at first call to `is_test_mode()` and
-cached. Only the exact value `1` enables test mode; other values leave it off.
-`set_test_mode()` overrides it programmatically.
-
-The first activation by either mechanism prints a prominent warning to
-`stderr`, once per process, that default PRG seeds and EC scalar randomness are
-deterministic and insecure. The warning happens at activation rather than on
-each random draw, so it adds no work to the randomness hot path. Never process
-real secrets in a process running in test mode.
+A test-mode build prints a prominent warning to `stderr` at its first
+deterministic draw, once per process, that default PRG seeds and EC scalar
+randomness are deterministic and insecure. Never deploy a test-mode build or
+process real secrets with it.
 
 `reset_test_seed_counter()` rewinds every lane's ordinal and releases lane 0.
 Call it between independent test iterations, after joining threads and draining
@@ -154,10 +153,12 @@ the wrapping `TraceIO`'s counts, which is correct.
 For a refactor / optimization where wire-equivalence is required:
 
 ```bash
+# A test-mode build (see "Turning it on").
+cmake -B build-test -DEMP_TEST_MODE=ON && cmake --build build-test -j
 # Record the "before" trace (both Alice and Bob).
-EMP_TEST_MODE=1 ./run ./build/your_protocol_test before
-# … apply your refactor / optimization, rebuild …
-EMP_TEST_MODE=1 ./run ./build/your_protocol_test after
+./run ./build-test/your_protocol_test before
+# … apply your refactor / optimization, rebuild build-test …
+./run ./build-test/your_protocol_test after
 
 # Each direction of the wire, checked at its sender; both must be empty.
 diff before.alice.send after.alice.send
