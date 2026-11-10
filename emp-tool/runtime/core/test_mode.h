@@ -1,14 +1,16 @@
 #ifndef EMP_TEST_MODE_H__
 #define EMP_TEST_MODE_H__
 
-// Test-mode toggle for wire-byte determinism. When enabled, default-
+// Test mode for wire-byte determinism. In a test-mode build, default-
 // constructed randomness sources yield a deterministic byte stream so
 // two runs of the same protocol produce byte-identical wire output.
 //
-// Toggle:
-//   - $EMP_TEST_MODE=1 in the environment, OR
-//   - emp::set_test_mode(true) at program start.
-// First call to is_test_mode() caches the env-var read.
+// Test mode is a build option, not a runtime switch: configuring with
+// -DEMP_TEST_MODE=ON defines EMP_TEST_MODE for emp-tool and for everything
+// that links it. A normal build compiles the deterministic paths out, so no
+// environment variable or call can make its randomness predictable. Every
+// library and object linked into one program must be built the same way;
+// mixing them fails to link (TestModeAbiMarker below).
 //
 // Determinism model: a seed is the pair (lane, ordinal). The lane names
 // the logical unit of work — the main thread is lane 0, and a spawned
@@ -28,43 +30,48 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <functional>
 #include <thread>
 
+#ifdef EMP_TEST_MODE
+#define EMP_TEST_MODE_ENABLED true
+#else
+#define EMP_TEST_MODE_ENABLED false
+#endif
+
 namespace emp {
+
+// Build-consistency backstop, the same device as HashAbiMarker in hash.h:
+// libemp-tool defines the marker for the mode it was built in and every
+// translation unit references the marker for its own, so linking test-mode
+// and normal objects together fails with an undefined TestModeAbiMarker
+// symbol instead of mixing predictable and real seeds in one process.
+template <bool> struct TestModeAbiMarker { static const char sym; };
+template <> const char TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym;
+namespace detail {
+[[maybe_unused, gnu::used]] static const char *const emp_test_mode_abi_guard =
+    &TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym;
+}
 
 namespace detail {
 
-// Test mode deliberately replaces cryptographic randomness with predictable
-// streams. Say so once, loudly, at activation time rather than adding logging
-// or another check to every random draw.
+// A test-mode build deliberately replaces cryptographic randomness with
+// predictable streams. Say so once, loudly, at the first deterministic draw
+// rather than adding logging to every random draw.
 inline void warn_insecure_test_mode_once() {
     static const bool warned = []() {
         std::fputs(
             "\n"
             "=======================================================================\n"
-            "WARNING: EMP TEST MODE ENABLED - RANDOMNESS IS DETERMINISTIC AND INSECURE\n"
+            "WARNING: EMP TEST MODE BUILD - RANDOMNESS IS DETERMINISTIC AND INSECURE\n"
             "Default PRG seeds and EC scalars are predictable in this process.\n"
-            "Use only for testing; never process real secrets in this process.\n"
+            "Use only for testing; never process real secrets with this build.\n"
             "=======================================================================\n",
             stderr);
         std::fflush(stderr);
         return true;
     }();
     (void)warned;
-}
-
-inline std::atomic<bool>& test_mode_flag() {
-    static std::atomic<bool> flag(
-        []() {
-            const char* v = std::getenv("EMP_TEST_MODE");
-            const bool enabled = v != nullptr && std::strcmp(v, "1") == 0;
-            if (enabled) warn_insecure_test_mode_once();
-            return enabled;
-        }());
-    return flag;
 }
 
 // Determinism epoch, bumped by reset_test_seed_counter(). Every
@@ -140,17 +147,10 @@ inline uint64_t mix64(uint64_t x) {
 
 }  // namespace detail
 
-// Programmatic toggle. Affects all subsequent PRG()-default-
-// constructions and ECGroup::rand_scalar calls. Has no effect on
-// PRG instances already constructed.
-inline void set_test_mode(bool on) {
-    if (on) detail::warn_insecure_test_mode_once();
-    detail::test_mode_flag().store(on);
-}
-
-inline bool is_test_mode() {
-    return detail::test_mode_flag().load();
-}
+// True in a test-mode build (see the top of this file). A compile-time
+// constant, so `if constexpr (is_test_mode())` keeps the deterministic paths
+// out of a normal build.
+constexpr bool is_test_mode() { return EMP_TEST_MODE_ENABLED; }
 
 // A test-mode seed: the lane plus the draw ordinal within it. PRG()
 // packs it as makeBlock(lane, ordinal): distinct lanes can never
@@ -162,8 +162,9 @@ struct TestSeed {
 };
 
 // Yields the next deterministic seed for this thread's lane. Used
-// internally by PRG() in test mode.
+// internally by PRG() in a test-mode build.
 inline TestSeed next_test_seed() {
+    detail::warn_insecure_test_mode_once();
     auto& s = detail::test_seed_tls();
     detail::sync_test_epoch(s);
     if (s.lane == 0) detail::claim_lane0();
@@ -177,6 +178,7 @@ inline TestSeed next_test_seed() {
 // Hierarchical (child of the caller's lane), so workers may spawn
 // grandchildren deterministically too.
 inline uint64_t next_test_child_lane() {
+    detail::warn_insecure_test_mode_once();
     auto& s = detail::test_seed_tls();
     detail::sync_test_epoch(s);
     if (s.lane == 0) detail::claim_lane0();

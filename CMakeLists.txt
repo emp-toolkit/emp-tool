@@ -71,6 +71,17 @@ if(NOT EMP_FS_HASH MATCHES "^(default|sha256|blake3)$")
     message(FATAL_ERROR "EMP_FS_HASH must be default, sha256, or blake3 (got '${EMP_FS_HASH}')")
 endif()
 
+# Deterministic test mode (runtime/core/test_mode.h, docs/test_mode.md): every
+# default PRG seed and EC scalar comes from a fixed sequence, so two runs of a
+# protocol put identical bytes on the wire. INSECURE by design: a build with it
+# on must never handle real secrets. Propagates PUBLIC, and a link-time marker
+# rejects mixing test-mode and normal objects in one program.
+option(EMP_TEST_MODE "Deterministic, INSECURE randomness for wire-byte tests" OFF)
+if(EMP_TEST_MODE)
+    message(WARNING "EMP_TEST_MODE=ON: randomness is deterministic and insecure; "
+                    "never deploy this build.")
+endif()
+
 # ---------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------
@@ -204,6 +215,9 @@ elseif(EMP_FS_HASH STREQUAL "sha256")
     # Explicit pin (only meaningful when EMP_HASH_BACKEND=blake3 would
     # otherwise drag the FS default along with it).
     target_compile_definitions(emp-tool PUBLIC EMP_FS_HASH_DEFAULT=::emp::HashOption::sha256)
+endif()
+if(EMP_TEST_MODE)
+    target_compile_definitions(emp-tool PUBLIC EMP_TEST_MODE)
 endif()
 
 # ---------------------------------------------------------------------
