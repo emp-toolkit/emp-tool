@@ -63,25 +63,15 @@ class MITCCRH {
 
 public:
 	static_assert(ReuseShift >= 0 && ReuseShift < 32, "MITCCRH: ReuseShift out of range");
-	AES_KEY scheduled_key[BatchSize];
-	block keys[BatchSize];
-	int key_used = BatchSize;
-	// Zero only so a fresh object is never indeterminate. An unseeded object is
-	// not a keyed instance: setS() must install the parties' shared random S.
-	block start_point = zero_block;
-	uint64_t gid = 0;
-	// Bucket the current schedule covers (ReuseShift > 0 only); ~0 = none.
-	uint64_t scheduled_bucket = ~0ull;
-	// gid hashed under scheduled_key[0]: lane k of the current schedule hashes
-	// gid lane_gid0 + k, and T(that gid) enters its cipher input.
-	uint64_t lane_gid0 = 0;
 
+	// Install the parties' shared random start point S and restart the gid
+	// stream at 0.
 	void setS(block sin) {
-		this->start_point = sin;
-		this->gid = 0;
-		this->key_used = BatchSize;  // drop pre-scheduled keys; next hash re-keys under the new S
-		this->scheduled_bucket = ~0ull;
-		this->lane_gid0 = 0;
+		start_point_ = sin;
+		gid_ = 0;
+		key_used_ = BatchSize;  // drop pre-scheduled keys; next hash re-keys under the new S
+		scheduled_bucket_ = ~0ull;
+		lane_gid0_ = 0;
 	}
 
 	// Reposition the gid stream: schedule from `gid`, so the next hash's first
@@ -89,42 +79,19 @@ public:
 	// out as gid gaps (e.g. gid = gate * stride, one lane per destination) and
 	// the class keeps every (S, gid) distinct, buckets and tweaks included.
 	void renew_ks(uint64_t gid) {
-		this->gid = gid;
+		gid_ = gid;
 		renew_ks();
 	}
 
-	void renew_ks() {
-		lane_gid0 = gid;
-		if constexpr (ReuseShift == 0) {
-			for(int i = 0; i < BatchSize; ++i)
-				keys[i] = start_point ^ makeBlock(gid++, 0);
-			AES_opt_key_schedule<BatchSize>(keys, scheduled_key);
-		} else {
-			uint64_t first = gid >> ReuseShift;
-			uint64_t last  = (gid + BatchSize - 1) >> ReuseShift;
-			if (first == last) {
-				// Whole batch in one bucket (the aligned steady state): one
-				// schedule into scheduled_key[0] only — the hash detects the
-				// uniform batch via scheduled_bucket and runs every block
-				// under key 0, so no replication is needed. Skipped entirely
-				// if the bucket is already scheduled (2^ReuseShift >
-				// BatchSize spans renewals).
-				if (first != scheduled_bucket) {
-					keys[0] = start_point ^ makeBlock(first, 0);
-					AES_opt_key_schedule<1>(keys, scheduled_key);
-					scheduled_bucket = first;
-				}
-			} else {
-				// Batch straddles buckets (unaligned gid, or
-				// 2^ReuseShift < BatchSize): schedule per-gid bucket keys.
-				for (int i = 0; i < BatchSize; ++i)
-					keys[i] = start_point ^ makeBlock((gid + i) >> ReuseShift, 0);
-				AES_opt_key_schedule<BatchSize>(keys, scheduled_key);
-				scheduled_bucket = ~0ull;   // mixed batch; don't cache
-			}
-			gid += BatchSize;
-		}
-		key_used = 0;
+	// The start point S installed by setS().
+	block start_point() const { return start_point_; }
+
+	// The gid the next hash's first lane takes when its K lanes fit in the
+	// current schedule; a hash whose lanes do not fit starts a new schedule
+	// instead (see consume()). 0 after setS(). For an instance that always
+	// hashes the same K, it is the number of gids hashed since setS().
+	uint64_t next_gid() const {
+		return key_used_ < BatchSize ? lane_gid0_ + (uint64_t)key_used_ : gid_;
 	}
 
 	// On VAES builds all four entry points below read their input one block
@@ -166,12 +133,61 @@ public:
 	}
 
 private:
+	AES_KEY scheduled_key_[BatchSize];
+	block keys_[BatchSize];
+	int key_used_ = BatchSize;
+	// Zero only so a fresh object is never indeterminate. An unseeded object is
+	// not a keyed instance: setS() must install the parties' shared random S.
+	block start_point_ = zero_block;
+	// First gid of the next schedule renew_ks() builds.
+	uint64_t gid_ = 0;
+	// Bucket the current schedule covers (ReuseShift > 0 only); ~0 = none.
+	uint64_t scheduled_bucket_ = ~0ull;
+	// gid hashed under scheduled_key_[0]: lane k of the current schedule hashes
+	// gid lane_gid0_ + k, and T(that gid) enters its cipher input.
+	uint64_t lane_gid0_ = 0;
+
+	// Schedule BatchSize lanes starting at gid_.
+	void renew_ks() {
+		lane_gid0_ = gid_;
+		if constexpr (ReuseShift == 0) {
+			for(int i = 0; i < BatchSize; ++i)
+				keys_[i] = start_point_ ^ makeBlock(gid_++, 0);
+			AES_opt_key_schedule<BatchSize>(keys_, scheduled_key_);
+		} else {
+			uint64_t first = gid_ >> ReuseShift;
+			uint64_t last  = (gid_ + BatchSize - 1) >> ReuseShift;
+			if (first == last) {
+				// Whole batch in one bucket (the aligned steady state): one
+				// schedule into scheduled_key_[0] only — the hash detects the
+				// uniform batch via scheduled_bucket_ and runs every block
+				// under key 0, so no replication is needed. Skipped entirely
+				// if the bucket is already scheduled (2^ReuseShift >
+				// BatchSize spans renewals).
+				if (first != scheduled_bucket_) {
+					keys_[0] = start_point_ ^ makeBlock(first, 0);
+					AES_opt_key_schedule<1>(keys_, scheduled_key_);
+					scheduled_bucket_ = first;
+				}
+			} else {
+				// Batch straddles buckets (unaligned gid, or
+				// 2^ReuseShift < BatchSize): schedule per-gid bucket keys.
+				for (int i = 0; i < BatchSize; ++i)
+					keys_[i] = start_point_ ^ makeBlock((gid_ + i) >> ReuseShift, 0);
+				AES_opt_key_schedule<BatchSize>(keys_, scheduled_key_);
+				scheduled_bucket_ = ~0ull;   // mixed batch; don't cache
+			}
+			gid_ += BatchSize;
+		}
+		key_used_ = 0;
+	}
+
 	// Shared body of hash / hash_cir: consume the next K scheduled lanes, H
 	// blocks each, through the fused tweak tile. Lane k hashes gid g0 + k,
-	// g0 = lane_gid0 + key_used. A uniform bucket runs all K*H blocks under
+	// g0 = lane_gid0_ + key_used_. A uniform bucket runs all K*H blocks under
 	// key 0 as one wide run; its tile derives lane k's tweak from T(g0) and the
 	// block index (Span = H). A straddling schedule runs lane k under
-	// scheduled_key[key_used + k] with T(g0 + k) as that key's base tweak.
+	// scheduled_key_[key_used_ + k] with T(g0 + k) as that key's base tweak.
 	// InPlace says dst and src are the same buffer, so the tile is handed one
 	// pointer and keeps the exact aliasing knowledge (loads hoisted above
 	// stores) of the in-place form; otherwise they must not overlap.
@@ -179,26 +195,26 @@ private:
 	void consume(block * dst, const block * src) {
 		validate_hash_shape<K, H>();
 		// Renew when the next K lanes do not fit. With one K per schedule this
-		// is exactly key_used == BatchSize; a caller that mixes K within a
+		// is exactly key_used_ == BatchSize; a caller that mixes K within a
 		// schedule skips the leftover lanes instead of reading past the
 		// schedule or hashing a gid under a neighbouring bucket's key, and a
 		// skipped gid is never reused.
-		if (key_used + K > BatchSize) renew_ks();
+		if (key_used_ + K > BatchSize) renew_ks();
 		const block * const s = InPlace ? dst : src;
-		const uint64_t g0 = lane_gid0 + (uint64_t)key_used;
+		const uint64_t g0 = lane_gid0_ + (uint64_t)key_used_;
 		if constexpr (ReuseShift > 0) {
-			if (scheduled_bucket != ~0ull) {   // uniform batch: every key == key 0
+			if (scheduled_bucket_ != ~0ull) {   // uniform batch: every key == key 0
 				const block tb = makeBlock(g0, 0);
-				detail::ParaEnc_mem_tiles_impl<Tile, 1, K * H>(dst, s, scheduled_key, &tb);
-				key_used += K;
+				detail::ParaEnc_mem_tiles_impl<Tile, 1, K * H>(dst, s, scheduled_key_, &tb);
+				key_used_ += K;
 				return;
 			}
 		}
 		block tb[K];
 		for (int k = 0; k < K; ++k) tb[k] = makeBlock(g0 + (uint64_t)k, 0);
 		detail::ParaEnc_mem_tiles_impl<Tile, K, H>(
-			dst, s, scheduled_key + key_used, static_cast<const block *>(tb));
-		key_used += K;
+			dst, s, scheduled_key_ + key_used_, static_cast<const block *>(tb));
+		key_used_ += K;
 	}
 };
 }

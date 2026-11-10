@@ -3,9 +3,9 @@
 // garbling. Read example() first; the rest is verification.
 //
 // What's in mitccrh.h:
-//   MITCCRH<BatchSize, ReuseShift>           AES_KEY scheduled_key[B], gid, start_point
-//   setS(s)                                  reset start_point + gid
-//   renew_ks() / renew_ks(gid)               schedule B keys from the gid sequence
+//   MITCCRH<BatchSize, ReuseShift>           start_point(), next_gid()
+//   setS(s)                                  install S, restart the gid stream at 0
+//   renew_ks(gid)                            schedule B keys from gid
 //   hash<K, H>(blks)                         consume K lanes, hash K*H blocks:
 //                                              y ^ AES_{S ^ (gid>>RS)}(y), y = x ^ T(gid)
 //   hash_cir<K, H>(blks)                     same with y = sigma(x) ^ T(gid)
@@ -103,8 +103,7 @@ static bool check_hash_against_reference() {
 
 	MITCCRH<B, RS> mit;
 	mit.setS(S);
-	mit.gid = gid0;
-	mit.key_used = B;  // force a fresh schedule on first hash()
+	mit.renew_ks(gid0);
 
 	bool ok = true;
 	for (int call = 0; call < 2; ++call) {
@@ -181,8 +180,6 @@ static bool check_hash_cir() {
 	const block S = makeBlock(0x1234ULL, 0x5678ULL);
 	MITCCRH<8> a, b;
 	a.setS(S); b.setS(S);
-	a.gid = b.gid = 0;
-	a.key_used = b.key_used = 8;
 
 	block in[K * H];
 	PRG().random_block(in, K * H);
@@ -228,8 +225,7 @@ static bool check_out_of_place() {
 	const uint64_t gid0 = 42;
 	MITCCRH<8> in_place, out_place;
 	in_place.setS(S); out_place.setS(S);
-	in_place.gid = out_place.gid = gid0;
-	in_place.key_used = out_place.key_used = 8;
+	in_place.renew_ks(gid0); out_place.renew_ks(gid0);
 
 	block in[K * H];
 	PRG().random_block(in, K * H);
@@ -254,8 +250,7 @@ static bool check_hash_cir_out_of_place() {
 	const uint64_t gid0 = 77;
 	MITCCRH<8> in_place, out_place;
 	in_place.setS(S); out_place.setS(S);
-	in_place.gid = out_place.gid = gid0;
-	in_place.key_used = out_place.key_used = 8;
+	in_place.renew_ks(gid0); out_place.renew_ks(gid0);
 
 	block in[K * H];
 	PRG().random_block(in, K * H);
@@ -274,20 +269,77 @@ static bool check_hash_cir_out_of_place() {
 	return ok;
 }
 
-static bool check_setS_resets_gid() {
+// next_gid() through setS, partial and full schedules, renew_ks(gid), and a
+// second setS; start_point() returns S.
+static bool check_next_gid() {
 	MITCCRH<8> mit;
-	mit.setS(makeBlock(1, 2));
-	mit.gid = 99;
-	mit.setS(makeBlock(3, 4));
-	bool ok = (mit.gid == 0);
-	cout << "  [setS resets gid]                              " << (ok ? "OK" : "FAIL") << "\n";
+	const block S1 = makeBlock(1, 2), S2 = makeBlock(3, 4);
+	block b[8] = {};
+	mit.setS(S1);
+	bool ok = mit.next_gid() == 0 && same(mit.start_point(), S1);
+	mit.hash<2, 1>(b);
+	mit.hash<2, 1>(b);
+	ok &= mit.next_gid() == 4;
+	mit.hash<4, 1>(b);
+	ok &= mit.next_gid() == 8;    // schedule used up: the next one starts at 8
+	mit.hash<2, 1>(b);
+	ok &= mit.next_gid() == 10;
+	mit.renew_ks(99);
+	ok &= mit.next_gid() == 99;
+	mit.hash<1, 1>(b);
+	ok &= mit.next_gid() == 100;
+	mit.setS(S2);
+	ok &= mit.next_gid() == 0 && same(mit.start_point(), S2);
+	cout << "  [next_gid / start_point]                       " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+// One instance hashing with more than one K: hash<1,1>, then hash<2,1> twelve
+// times. A hash whose K lanes do not fit the schedule's remaining lanes starts
+// a new schedule and skips the leftover lane, so no lane reads past the
+// schedule and no gid repeats. Every block is checked against the one-block
+// reference at the gid this rule gives (run under ASan to see an over-read).
+template <int RS>
+static bool check_mixed_k() {
+	const block S = makeBlock(0x5eedULL, 0xf00dULL);
+	constexpr int B = 8;
+	MITCCRH<B, RS> mit;
+	mit.setS(S);
+	uint64_t sched0 = 0, next_sched = 0;   // model of the schedule
+	int used = B;
+	auto take = [&](int K) {
+		if (used + K > B) { sched0 = next_sched; next_sched += B; used = 0; }
+		const uint64_t g = sched0 + (uint64_t)used;
+		used += K;
+		return g;
+	};
+	bool ok = true;
+	auto check = [&](const block* in, const block* out, int K, uint64_t g) {
+		for (int k = 0; k < K; ++k)
+			ok &= same(out[k], ref_hash(in[k], gid_key(S, g + (uint64_t)k, RS),
+			                             gid_tweak(g + (uint64_t)k), false));
+	};
+	block in[2], out[2];
+	PRG().random_block(in, 2);
+	mit.template hash<1, 1>(out, in);
+	check(in, out, 1, take(1));
+	for (int call = 0; call < 12; ++call) {
+		PRG().random_block(in, 2);
+		mit.template hash<2, 1>(out, in);
+		check(in, out, 2, take(2));
+	}
+	ok &= mit.next_gid() == sched0 + (uint64_t)used;
+	cout << "  [mixed K, ReuseShift " << RS << "]                          "
+	     << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
-	ok &= check_setS_resets_gid();
+	ok &= check_next_gid();
+	ok &= check_mixed_k<0>();
+	ok &= check_mixed_k<3>();
 	ok &= check_hash_against_reference<1, 1>();
 	ok &= check_hash_against_reference<1, 4>();
 	ok &= check_hash_against_reference<2, 1>();
