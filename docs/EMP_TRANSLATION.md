@@ -343,8 +343,10 @@ Don't hand-roll AES or SHA3 in scalar `Bit_T`/integer ops. Use the
 circuits as native `.empbc` programs; load one and replay it on your context
 (see [frontend.md](frontend.md) and the `.empbc` section of the README), or
 `compile` a body that calls them. Each input/output bit is a wire — there are
-no host-side crypto branches inside. Cost is 6400 ANDs for one AES-128 block,
-24744 for one SHA-256 compression, 38400 for one Keccak-f permutation.
+no host-side crypto branches inside. Cost is 5600 ANDs for one AES-128 block
+with its key schedule, 22271 for one SHA-256 compression (20954 for the whole
+`sha256` of a 256-bit message, whose IV and padding are public), 38400 for one
+Keccak-f permutation (37056 for `sha3_256` of a 256-bit message).
 
 The BooleanContext-native kernels live in `emp::circuit::crypto`
 (`circuits/crypto/aes128.h` / `sha256.h` / `keccak.h`). For ground-truth comparisons in

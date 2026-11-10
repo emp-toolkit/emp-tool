@@ -6,7 +6,7 @@
 //   SHA3-256 KAT vectors   -- "" (a7ffc6f8..) and "abc" (3a985da7..)
 //   OpenSSL cross-check     -- vs EVP_sha3_256 at rate-block boundary lengths
 //                             (rate = 136 bytes): 0,1,135,136,137,271,272
-//   AND count               -- sha3_256(BitVec<256>) == 38400, plus record==live
+//   AND count               -- sha3_256(BitVec<256>) == 37056, plus record==live
 //
 // The readable sections feed inputs and reveal results through a ClearSession —
 // the I/O boundary — and call the kernels on sess.ctx(). A tiny generic driver
@@ -239,7 +239,7 @@ static void test_and_count() {
   uint64_t ands = count_ands(drv256, 256, 256);
 
   check("record==live (256-bit msg)", rep == live);
-  check_u64("sha3_256 AND count", ands, 38400);
+  check_u64("sha3_256 AND count", ands, 37056);
 }
 
 int main() {

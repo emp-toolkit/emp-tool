@@ -7,6 +7,7 @@
 // (x,y) is state[5*y + x]; bit z is the lane's bit z (z=0 = LSB). The four linear
 // steps (theta, rho, pi, iota) are XOR / lane rotate / index relabel / public-
 // constant XOR — zero AND gates; chi is the only nonlinear step (1 AND/bit).
+// sha3_256 skips the chi ANDs of the final round's lanes the digest never reads.
 //
 // Sponge I/O is LSB-first within each byte, byte-sequential: input bit j maps to
 // state bit 64*(5y+x)+z with byte_j=j/8, lane=byte_j/8, x=lane%5, y=lane/5,
@@ -52,38 +53,53 @@ inline constexpr std::size_t sha3_state_bit_index(std::size_t idx) {
   return 64 * (5 * y + x) + z;
 }
 
+namespace detail {
+
+// One Keccak-f[1600] round (theta -> rho/pi -> chi -> iota) in place. `need`
+// (bit 5y+x) selects the output lanes to compute; the others are left stale.
+// Theta reads every lane (column parities), but chi only reads the rho/pi images
+// feeding the selected lanes, so a partial round skips their ANDs.
+template <BooleanContext Ctx>
+inline void keccak_round(Ctx& ctx, UInt_T<Ctx, 64> A[25], int r, uint32_t need = (1u << 25) - 1) {
+  using U = UInt_T<Ctx, 64>;
+  // theta
+  U C[5], D[5];
+  for (int x = 0; x < 5; ++x)
+    C[x] = A[keccak_lane(x, 0)] ^ A[keccak_lane(x, 1)] ^ A[keccak_lane(x, 2)]
+         ^ A[keccak_lane(x, 3)] ^ A[keccak_lane(x, 4)];
+  for (int x = 0; x < 5; ++x) D[x] = C[(x + 4) % 5] ^ C[(x + 1) % 5].rotl(1);
+
+  // rho + pi, for the lanes chi reads
+  uint32_t needB = 0;
+  for (int y = 0; y < 5; ++y)
+    for (int x = 0; x < 5; ++x)
+      if ((need >> keccak_lane(x, y)) & 1)
+        needB |= (1u << keccak_lane(x, y)) | (1u << keccak_lane((x + 1) % 5, y))
+               | (1u << keccak_lane((x + 2) % 5, y));
+  U B[25];
+  for (int x = 0; x < 5; ++x)
+    for (int y = 0; y < 5; ++y) {
+      const int dst = keccak_lane(y, (2 * x + 3 * y) % 5);
+      if ((needB >> dst) & 1) B[dst] = (A[keccak_lane(x, y)] ^ D[x]).rotl(KECCAK_RHO[y][x]);
+    }
+
+  // chi (the only AND step)
+  for (int y = 0; y < 5; ++y)
+    for (int x = 0; x < 5; ++x)
+      if ((need >> keccak_lane(x, y)) & 1)
+        A[keccak_lane(x, y)] = B[keccak_lane(x, y)]
+            ^ ((~B[keccak_lane((x + 1) % 5, y)]) & B[keccak_lane((x + 2) % 5, y)]);
+
+  // iota
+  if (need & 1) A[0] = A[0] ^ U::constant(ctx, KECCAK_RC[r]);
+}
+
+}  // namespace detail
+
 // Keccak-f[1600]: 24 rounds of theta -> rho/pi -> chi -> iota, in place.
 template <BooleanContext Ctx>
 inline void keccak_f1600(Ctx& ctx, UInt_T<Ctx, 64> A[25]) {
-  using U = UInt_T<Ctx, 64>;
-  for (int r = 0; r < 24; ++r) {
-    // theta
-    U C[5], D[5];
-    for (int x = 0; x < 5; ++x)
-      C[x] = A[keccak_lane(x, 0)] ^ A[keccak_lane(x, 1)] ^ A[keccak_lane(x, 2)]
-           ^ A[keccak_lane(x, 3)] ^ A[keccak_lane(x, 4)];
-    for (int x = 0; x < 5; ++x) D[x] = C[(x + 4) % 5] ^ C[(x + 1) % 5].rotl(1);
-    for (int x = 0; x < 5; ++x)
-      for (int y = 0; y < 5; ++y) A[keccak_lane(x, y)] = A[keccak_lane(x, y)] ^ D[x];
-
-    // rho + pi
-    U B[25];
-    for (int x = 0; x < 5; ++x)
-      for (int y = 0; y < 5; ++y)
-        B[keccak_lane(y, (2 * x + 3 * y) % 5)] = A[keccak_lane(x, y)].rotl(KECCAK_RHO[y][x]);
-    for (int i = 0; i < 25; ++i) A[i] = B[i];
-
-    // chi (the only AND step)
-    for (int y = 0; y < 5; ++y) {
-      U row[5];
-      for (int x = 0; x < 5; ++x) row[x] = A[keccak_lane(x, y)];
-      for (int x = 0; x < 5; ++x)
-        A[keccak_lane(x, y)] = row[x] ^ ((~row[(x + 1) % 5]) & row[(x + 2) % 5]);
-    }
-
-    // iota
-    A[0] = A[0] ^ U::constant(ctx, KECCAK_RC[r]);
-  }
+  for (int r = 0; r < 24; ++r) detail::keccak_round<Ctx>(ctx, A, r);
 }
 
 namespace detail {
@@ -99,13 +115,18 @@ inline void sha3_256_wires(Ctx& ctx, typename Ctx::Wire out[256], const typename
   std::array<W, 1600> S;
   S.fill(ctx.public_bit(false));
 
-  auto permute = [&]() {
+  // The squeeze reads only the lanes holding the 256 digest bits, so the last
+  // round of the final permutation computes just those (4 of 25 lanes).
+  uint32_t out_lanes = 0;
+  for (std::size_t i = 0; i < 256; ++i) out_lanes |= 1u << (sha3_state_bit_index(i) / 64);
+  auto permute = [&](bool last) {
     U A[25];
     for (int l = 0; l < 25; ++l) {
       A[l] = U(ctx);
       for (int z = 0; z < 64; ++z) A[l].w[z] = S[64 * l + z];
     }
-    keccak_f1600<Ctx>(ctx, A);
+    for (int r = 0; r < 24; ++r)
+      keccak_round<Ctx>(ctx, A, r, (last && r == 23) ? out_lanes : (1u << 25) - 1);
     for (int l = 0; l < 25; ++l)
       for (int z = 0; z < 64; ++z) S[64 * l + z] = A[l].w[z];
   };
@@ -114,7 +135,7 @@ inline void sha3_256_wires(Ctx& ctx, typename Ctx::Wire out[256], const typename
   for (std::size_t j = 0; j < N; ++j) {
     const std::size_t s = sha3_state_bit_index(index);
     S[s] = ctx.xor_gate(S[s], in[j]);
-    if (++index == 1088) { permute(); index = 0; }
+    if (++index == 1088) { permute(false); index = 0; }
   }
 
   // Domain separator 0x06 at the next byte boundary, then pad10*1 final 1.
@@ -122,7 +143,7 @@ inline void sha3_256_wires(Ctx& ctx, typename Ctx::Wire out[256], const typename
   S[sha3_state_bit_index(index + 1)] = ctx.not_gate(S[sha3_state_bit_index(index + 1)]);
   S[sha3_state_bit_index(index + 2)] = ctx.not_gate(S[sha3_state_bit_index(index + 2)]);
   S[1087] = ctx.not_gate(S[1087]);
-  permute();
+  permute(true);
 
   for (std::size_t i = 0; i < 256; ++i) out[i] = S[sha3_state_bit_index(i)];
 }
