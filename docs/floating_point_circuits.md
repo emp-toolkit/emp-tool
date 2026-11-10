@@ -46,8 +46,10 @@ Notes:
 - Predicate/classifier circuits output 8 bits; bit 0 is the result.
 - `add` / `sub` / `mul` / `div` / `min` / `max` are correctly rounded
   (round-to-nearest-even; `test_float` verifies them bit-exactly against
-  the host). `sqrt` / `recip` / `rsqrt` are iterative kernels verified to
-  1e-2 relative tolerance — NOT correctly rounded.
+  the host). An exact zero from `add`, `sub` or `fma` is `+0` unless both
+  addends are `-0` (see "Zero-Sign Edit" below). `sqrt` / `recip` /
+  `rsqrt` are iterative kernels verified to 1e-2 relative tolerance — NOT
+  correctly rounded.
 - `fma` is intentionally unfused: `add(mul(a, b), c)` with two roundings.
 - `rsqrt` is `1 / sqrt(x)`, also not a fused primitive.
 - Transcendentals (`sin`, `cos`, `tan`, `exp`, `log`, etc.) are not shipped.
@@ -228,6 +230,50 @@ FP64 also used a mixed strategy:
 The SoftFloat64 generation path used no-union edits and a Karatsuba-shaped
 53-bit significand multiply. The final checked-in assets are the `.empbc` files,
 not the intermediate generator output.
+
+## Zero-Sign Edit
+
+The `add`, `sub` and `fma` assets of every width carry one edit made after
+generation, so that an exact zero sum is `+0`, as round-to-nearest-even
+requires, and `-0` only when both addends are `-0`. Without it, an exact
+cancellation such as `x - x` takes the sign of the second operand: the result
+sign comes from a strict magnitude comparator, which picks `a`'s sign when
+`|a| > |b|` and `b`'s otherwise, including on a tie.
+
+The comparator is a ripple chain that starts at the least significant
+significand bit, and the generator folded its constant carry-in (0, for a
+strict comparison) into that first stage, `AND(a0, NOT b0)`. The edit replaces
+that gate with the majority `MAJ(a0, NOT b0, t) = t XOR ((a0 XOR t) AND
+(NOT b0 XOR t))`, so the comparator computes `|a| > |b|`, or `|a| == |b|` and
+`t`. With `t = NOT sa`, a tie picks the positive operand; in `fma` the first
+addend is the rounded product, so `t = NOT (sa XOR sb)`. The comparator's other
+consumers are the operand-swap muxes, which select equal bits on a tie. The edit
+adds three XOR gates and one NOT gate (one more XOR in `fma`) and no AND gate,
+so AND counts and AND depth are unchanged. Wires after the edited gate are
+renumbered to keep the program dense.
+
+| asset | edited gate (wire id before the edit) | `t` |
+|---|---:|---|
+| `fp16_add` / `fp16_sub` | 81 / 79 | `NOT A15` |
+| `fp32_add` / `fp32_sub` | 168 / 166 | `NOT A31` |
+| `fp64_add` / `fp64_sub` | 761 / 759 | `NOT A63` |
+| `fp16_fma` | 2169 | `NOT (A15 XOR B15)` |
+| `fp32_fma` | 6759 | `NOT (A31 XOR B31)` |
+| `fp64_fma` | 26346 | `NOT (A63 XOR B63)` |
+
+`A15` is input bit 15 of the first operand (its sign bit for fp16), `B15` the
+same bit of the second. The edit was verified against host IEEE arithmetic
+(binary16 through `double`; `fma` as `round(round(a*b) + c)`):
+
+- fp16 `add` and `sub` over all 2^32 operand pairs: the edit changes exactly the
+  31,744 exact cancellations of each, all to `+0`, and nothing else, NaN
+  payloads included.
+- fp32 `add` and `sub` over every operand pair of equal magnitude, and fp16
+  `fma` over every `(a, b, ±round(a*b))`.
+- fp32 and fp64 `add`, `sub` and `fma` over about 2*10^8 random and
+  forced-cancellation cases each.
+
+`test_float` checks zero signs at every width.
 
 ## Current AND Counts
 

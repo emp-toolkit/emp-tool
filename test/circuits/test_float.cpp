@@ -14,8 +14,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <random>
+#include <type_traits>
 using namespace emp;
 using Ctx = ClearSession::ctx_t;
 
@@ -25,11 +27,16 @@ static int g_fail = 0;
 static void check(const char* name, bool ok) {
   if (!ok) { printf("  [FAIL] %s\n", name); ++g_fail; }
 }
-// got/want reporter for host floats; bit-exact comparison via the IEEE pattern
-// so that NaN==NaN and -0.0 vs +0.0 are distinguished where it matters.
+// got/want reporter. Host floats compare by IEEE bit pattern, so -0.0 and +0.0
+// differ; any two NaNs match.
 template <class T>
 static void check_eq(const char* name, T got, T want) {
-  if (!(got == want)) {
+  bool same;
+  if constexpr (std::is_floating_point_v<T>)
+    same = (std::isnan(got) && std::isnan(want)) || std::memcmp(&got, &want, sizeof(T)) == 0;
+  else
+    same = got == want;
+  if (!same) {
     printf("  [FAIL] %s  got %.17g want %.17g\n", name, (double)got, (double)want);
     ++g_fail;
   }
@@ -314,6 +321,53 @@ static void boundary_cases(const char* tag) {
 }
 
 // ---------------------------------------------------------------------------
+// Zero signs. Under round-to-nearest an exact zero sum is +0, and -0 only when
+// both addends are -0; 1 / (x - x) shows the sign as an infinity. fma is
+// round(round(a*b) + c), so its addends are the rounded product and c.
+// ---------------------------------------------------------------------------
+template <int W>
+static void zero_signs(const char* tag) {
+  using F = Float_T<Ctx, W>;
+  using host_t = typename FloatTraits<W>::host_t;
+  ClearSession sess;
+  auto C = [&](host_t v) { return sess.input<F>(ALICE, v); };
+  auto name = [&](const char* op) {
+    static char buf[64]; std::snprintf(buf, sizeof buf, "%s %s", tag, op); return buf;
+  };
+  auto bits_of = [&](const F& v) { return host_bits<W>(sess.reveal(v, PUBLIC).value()); };
+  const uint64_t pz = host_bits<W>((host_t)0.0), nz = host_bits<W>((host_t)-0.0);
+  const uint64_t pinf = host_bits<W>(std::numeric_limits<host_t>::infinity());
+
+  F x = C((host_t)2.5), nx = C((host_t)-2.5), one = C((host_t)1.0), mone = C((host_t)-1.0);
+  F p0 = C((host_t)0.0), n0 = C((host_t)-0.0);
+  check_eq<uint64_t>(name("x - x"), bits_of(x - x), pz);
+  check_eq<uint64_t>(name("-x - -x"), bits_of(nx - nx), pz);
+  check_eq<uint64_t>(name("x + -x"), bits_of(x + nx), pz);
+  check_eq<uint64_t>(name("-x + x"), bits_of(nx + x), pz);
+  check_eq<uint64_t>(name("+0 + -0"), bits_of(p0 + n0), pz);
+  check_eq<uint64_t>(name("-0 + +0"), bits_of(n0 + p0), pz);
+  check_eq<uint64_t>(name("-0 + -0"), bits_of(n0 + n0), nz);
+  check_eq<uint64_t>(name("+0 - +0"), bits_of(p0 - p0), pz);
+  check_eq<uint64_t>(name("-0 - +0"), bits_of(n0 - p0), nz);
+  check_eq<uint64_t>(name("fma(1, 1, -1)"), bits_of(one.fma(one, mone)), pz);
+  check_eq<uint64_t>(name("fma(-1, 1, 1)"), bits_of(mone.fma(one, one)), pz);
+  check_eq<uint64_t>(name("fma(-0, 1, -0)"), bits_of(n0.fma(one, n0)), nz);
+  check_eq<uint64_t>(name("1 / (x - x)"), bits_of(one / (x - x)), pinf);
+
+  // Random finite x, subnormals included: x - x and x + (-x) are +0.
+  std::mt19937_64 rng(0x5eedULL + W);
+  const uint64_t mask = W == 64 ? ~0ULL : ((1ULL << W) - 1);
+  int bad = 0;
+  for (int i = 0; i < 200; ++i) {
+    host_t v = FloatTraits<W>::from_bits(rng() & mask);
+    if (!std::isfinite((double)v)) continue;
+    F a = C(v), b = C(-v);
+    if (bits_of(a - a) != pz || bits_of(a + b) != pz) ++bad;
+  }
+  check(name("random x - x and x + -x"), bad == 0);
+}
+
+// ---------------------------------------------------------------------------
 // encode/decode round-trip of the IEEE pattern (the clear codec) at each width.
 // ---------------------------------------------------------------------------
 template <int W>
@@ -352,6 +406,10 @@ int main() {
   boundary_cases<16>("fp16");
   boundary_cases<32>("fp32");
   boundary_cases<64>("fp64");
+
+  zero_signs<16>("fp16");
+  zero_signs<32>("fp32");
+  zero_signs<64>("fp64");
 
   codec_roundtrip<16>("fp16");
   codec_roundtrip<32>("fp32");
