@@ -244,13 +244,81 @@ metadata is numeric (see the README's version guidance).
   zero-width runtime value.
 - `popcount<R>()` requires `R >= bits_for(N)`, the width that holds `0..N`; a
   narrower `R` used to return the count modulo `2^R`.
-- Integer circuits emit fewer gates. `==` / `!=` take `N - 1` AND gates instead of
-  `N`; `*` takes `N² - N + 1` instead of `N²`, because it starts from its first
-  partial-product row instead of adding that row to zero; and `popcount` /
-  `hamming_weight` / `leading_zeros` likewise start from the first bit. `<`, `<=`,
-  `>`, `>=`, `/` and `%` keep their AND gates and emit fewer XOR and NOT gates.
-  Results are unchanged, but compiled programs, gate counts and `digest_program`
-  values change, and so do pinned transcripts of circuits whose AND gates changed.
+- Integer circuits emit fewer gates; every result is unchanged, including
+  division by zero and `INT_MIN / -1`. `==` / `!=` take `N - 1` AND gates
+  instead of `N`, as a balanced tree of AND depth `ceil(log2 N)` instead of a
+  chain of depth `N - 1`. `/` and `%` divide non-restoringly over a growing
+  window, so no step needs a restoring multiplexer: an unsigned quotient takes
+  `N(N+1)/2 + 2N - 3` ANDs instead of `N² + 3N - 1` (589 instead of 1,119 at 32
+  bits) and a remainder `2N - 1` more; signed `/` and `%` take the magnitudes
+  and re-sign them with conditional negations of `N - 1` ANDs (682 and 745
+  instead of 1,308 at 32 bits). `hamming_weight` / `popcount` take
+  `N - popcount(N)` ANDs, the multiplicative complexity of the Hamming weight
+  (31 instead of 155 at 32 bits), and `leading_zeros` takes `N - 1` (31 instead
+  of 186). `*` takes `N² - N + 1` below 24 bits and is a Karatsuba short product
+  from 24 bits (931 instead of 993 at 32 bits, 3,347 instead of 4,033 at 64),
+  at a higher AND depth from 48 bits (73 instead of 63 at 64). Unary `-` on
+  `Int_T` takes `N - 2`, signed `<` takes `N`, and the secret-amount shifts fold
+  the out-of-range test into their last stage (203 instead of 219 at 32 bits,
+  198 for `Int_T >>`, at AND depth 7 instead of 28). Compiled programs, gate
+  counts and `digest_program` values change, and so do pinned transcripts of
+  circuits that use these operators.
+- `compare_swap`, `sort` and `sort_by_key` exchange two values with one AND per
+  bit, `d = s & (a ^ b)`, `a ^= d`, `b ^= d`, instead of two `select`s that each
+  computed that AND. A compare-swap of 32-bit integers takes 64 AND gates instead
+  of 96, and one carrying a 32-bit payload 96 instead of 160. Values without
+  `pack_wires` / `from_wires` (or the runtime-width integers' `^`) still use two
+  `select`s. Results are unchanged; gate counts and pinned transcripts change.
+- `batcher_network` (and so `sort` / `sort_by_key`) sorts the two halves of any
+  length, larger first, and joins them with Batcher's merge for unequal runs,
+  instead of cutting the next power-of-two network down to the length. At 2^k
+  and 2^k - 1 inputs the network is the same; at the other lengths checked
+  (every length up to 8192) it has no more compare-swaps and no more layers,
+  and up to 17% fewer compare-swaps just above a power of two (85 to 74 at 17
+  inputs, 679 to 565 at 65). Integer `sort` results are unchanged. At the
+  lengths whose network changed, `sort_by_key` may leave the payloads of equal
+  keys in a different order, and `Float_T` sorts may place NaNs and zeros of
+  opposite sign differently.
+- Sorts of 9 to 16 values, and the 9- to 16-value blocks that larger sorts
+  merge, use the smallest known sorting networks (25, 29, 35, 39, 45, 51, 56
+  and 60 compare-swaps; Knuth, TAOCP vol. 3, §5.3.4) instead of Batcher's (26,
+  31, 37, 41, 48, 53, 59 and 63). Sorting 16, 64 or 1024 values takes 60, 531 or
+  23871 compare-swaps instead of 63, 543 or 24063, with no more layers. As
+  above, integer `sort` results are unchanged, while `sort_by_key` may order the
+  payloads of equal keys differently and `Float_T` sorts may place NaNs and
+  signed zeros differently.
+- `compare_swap(a, b)` and `sort` over `UInt_T`, `Int_T` and their runtime-width
+  forms decide the exchange with a comparison that may answer either way when
+  the two values are equal, where exchanging changes nothing: the borrow chain
+  starts at bit 1, with one operand's bit 0 as the incoming borrow. A
+  compare-swap of w-bit values takes 2w - 1 AND gates in w AND layers (before:
+  2w in w + 1 layers unsigned; 2w + 1 in w + 2 layers signed, which now
+  complements both sign bits instead of ending in a mux). Results are
+  unchanged. `sort_by_key` keeps the exact comparison, so equal keys still never
+  exchange their payloads in a compare-swap.
+- The shipped floating-point circuits are rebuilt for fewer AND gates and
+  compute the same results, NaN payloads and signed zeros included. At fp32
+  (fp16 / fp64 in the same proportions): `add` / `sub` 1,143 -> 550, `mul`
+  2,286 -> 1,463, `square` 1,876 -> 744, `fma` 3,429 -> 2,013, `div` 7,845 ->
+  1,355, `recip` 5,863 -> 845, `sqrt` 5,699 -> 570, `rsqrt` 11,179 -> 1,202,
+  `eq` / `ne` 111 -> 61, `lt` / `le` / `gt` / `ge` 112 -> 92, `min` 200 -> 125
+  and `max` 176 -> 125 ANDs; `isinf` / `iszero` and `fp32_isnan` keep their AND
+  counts at one less AND depth. The circuits minimize AND gates, not depth: the
+  division family is deeper than before (fp64 `div` has AND depth 3,013 instead
+  of 389). `docs/floating_point_circuits.md` lists every count and how each
+  circuit was verified. Compiled programs, `digest_program` values and pinned
+  transcripts of circuits that use these operators change.
+- In-circuit AES-128 uses a 28-AND S-box (straight-line program
+  `aes-sbox-a28-ad4-g131-gd32-xx103-47` of the NIST Circuit Complexity
+  repository) instead of Boyar-Peralta's 32-AND one: AES-128 with its key
+  schedule takes 5,600 ANDs instead of 6,400, at AND depth 40 instead of 60.
+  SHA-256 computes majority with one AND per bit, folds public bits (the IV,
+  padding and round constants) into its additions and compresses multi-operand
+  sums: a compression takes 22,271 ANDs instead of 24,744, and the
+  `sha256_256` asset 20,954. SHA3-256 evaluates chi in the last round only on
+  the lanes the digest reads: 37,056 ANDs instead of 38,400. Results are
+  unchanged; the `aes128`, `sha256_256` and `sha3_256_256` assets, their
+  digests and pinned transcripts change.
 - `Int_T`'s secret-amount shifts check, under `EMP_CONTEXT_CHECKS`, that the
   shift amount belongs to the value's context, as the other binary integer
   operators do.
