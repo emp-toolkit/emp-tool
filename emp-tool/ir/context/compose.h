@@ -147,11 +147,11 @@ struct ComposeCtx {
 		expecting(next_id != UINT32_MAX, "ComposeCtx: wire id overflow");
 		return next_id++;
 	}
-	Wire external_input(size_t n) {
+	Wire external_input(int64_t n) {
 		expecting(!inputs_closed,
 		          "ComposeCtx::external_input: called after a gate/call was emitted");
-		expecting(n != 0, "ComposeCtx::external_input: zero-width argument");
-		expecting(n <= static_cast<size_t>(UINT32_MAX - next_id),
+		expecting(n > 0, "ComposeCtx::external_input: width must be positive");
+		expecting(n <= static_cast<int64_t>(UINT32_MAX - next_id),
 		          "ComposeCtx::external_input: wire id overflow");
 		Wire base = next_id; next_id += (uint32_t)n; num_inputs += (uint32_t)n; return base;
 	}
@@ -169,10 +169,10 @@ struct ComposeCtx {
 	// Record one call of `unit` reading `in` (length == unit.num_inputs) and
 	// return fresh wire ids for its outputs.
 	std::vector<Wire> call_unit(std::shared_ptr<const circuit::BooleanProgram> unit,
-	                            const Wire* in, size_t n) {
+	                            const Wire* in, int64_t n) {
 		inputs_closed = true;
 		expecting(unit != nullptr, "ComposeCtx::call_unit: null unit");
-		expecting(n == unit->num_inputs,
+		expecting(n == static_cast<int64_t>(unit->num_inputs),
 		          "ComposeCtx::call_unit: argument width != unit num_inputs");
 		expecting(n == 0 || in != nullptr,
 		          "ComposeCtx::call_unit: null input array");

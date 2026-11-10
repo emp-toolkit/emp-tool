@@ -29,7 +29,7 @@ inline block  set_bit(const block& a, int i);
 // renderer for blocks, digests, and raw byte buffers — operator<<(block) below
 // is just to_hex(&blk, sizeof(block)). Use this instead of redefining a setw(2)
 // loop. Named to_hex (not hex) to avoid clashing with the std::hex manipulator.
-std::string to_hex(const void* data, size_t n);
+std::string to_hex(const void* data, int64_t n);
 std::ostream& operator<<(std::ostream& out, const block& blk);
 
 // zero_block, all_one_block, select_mask[2], bit0_mask, bit1_mask: defined in block.hpp.
@@ -57,15 +57,15 @@ inline bool cmpBlock(const block* x, const block* y, int64_t nblocks);
 // --- bit-matrix transpose (kernels live in transpose.hpp) -----------------
 
 // Transpose an nrows x ncols bit-matrix in row-major byte layout.
-// nrows and ncols must each be multiples of 8.
-inline void sse_trans(uint8_t* out, const uint8_t* inp, uint64_t nrows, uint64_t ncols);
+// nrows and ncols must each be non-negative multiples of 8.
+inline void sse_trans(uint8_t* out, const uint8_t* inp, int64_t nrows, int64_t ncols);
 
-// nrows=128 specialization. ncols must be a multiple of 128. Both
+// nrows=128 specialization. ncols must be a non-negative multiple of 128. Both
 // buffers are block arrays (nrows=128 means each input row is a
 // multiple of one block); takes block* directly to spare callers
 // the reinterpret_cast. Dispatches on the widest compiled tier; see
 // transpose.hpp.
-inline void sse_trans_n128(block* out, const block* inp, uint64_t ncols);
+inline void sse_trans_n128(block* out, const block* inp, int64_t ncols);
 
 // 16x16 byte transpose in place. Building block for block-loop
 // transpose variants.

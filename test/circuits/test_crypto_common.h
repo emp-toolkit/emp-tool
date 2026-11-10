@@ -53,7 +53,7 @@ inline std::vector<uint8_t> record_replay(Drv drv, const std::vector<uint8_t>& i
   emp::RecordCtx rc;
   std::vector<uint32_t> in((size_t)n_in), out((size_t)n_out);
   if (n_in > 0) {
-    uint32_t base = rc.external_input((size_t)n_in);   // reserve ALL inputs first
+    uint32_t base = rc.external_input(n_in);   // reserve ALL inputs first
     for (int i = 0; i < n_in; ++i) in[i] = base + (uint32_t)i;
   }
   drv(rc, in.data(), out.data());

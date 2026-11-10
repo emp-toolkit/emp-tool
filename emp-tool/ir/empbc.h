@@ -124,11 +124,12 @@ inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 
 // Decode .empbc bytes into a runtime BooleanProgram (uint32_t indices) and
 // validate it. error()s (fatal) on any structural problem.
-inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
+inline BooleanProgram load_empbc(const uint8_t* bytes, int64_t len) {
 	using namespace empbc_detail;
+	expecting(len >= 0, "empbc: negative length");
 	expecting(bytes != nullptr || len == 0,
 	          "empbc: null buffer with nonzero length");
-	Reader r(bytes, len);
+	Reader r(bytes, (size_t)len);
 
 	for (uint8_t m : MAGIC)
 		expecting(r.u8() == m, "empbc: bad magic");
@@ -180,7 +181,7 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, size_t len) {
 }
 
 inline BooleanProgram load_empbc(const std::vector<uint8_t>& bytes) {
-	return load_empbc(bytes.data(), bytes.size());
+	return load_empbc(bytes.data(), (int64_t)bytes.size());
 }
 
 // No cleanup on the failure paths: expecting() ends the process, so an

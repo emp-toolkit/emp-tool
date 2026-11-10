@@ -234,10 +234,10 @@ public:
 			expecting(len <= MAX_POINT_BYTES,
 			          "IOChannel::send_pt: point length exceeds MAX_POINT_BYTES");
 			const uint32_t len_wire = static_cast<uint32_t>(len);
-			A[i].group()->resize_scratch(len);
+			A[i].group()->resize_scratch(static_cast<int64_t>(len));
 			unsigned char *tmp = A[i].group()->scratch();
 			send_data(&len_wire, sizeof(len_wire));
-			A[i].to_bin(tmp, len);
+			A[i].to_bin(tmp, static_cast<int64_t>(len));
 			send_data(tmp, static_cast<int64_t>(len));
 		}
 	}
@@ -250,10 +250,10 @@ public:
 			expecting(len_wire <= MAX_POINT_BYTES,
 			          "IOChannel::recv_pt: point length exceeds MAX_POINT_BYTES");
 			const size_t len = len_wire;
-			g->resize_scratch(len);
+			g->resize_scratch(static_cast<int64_t>(len));
 			unsigned char *tmp = g->scratch();
 			recv_data(tmp, static_cast<int64_t>(len));
-			A[i].from_bin(g, tmp, len);
+			A[i].from_bin(g, tmp, static_cast<int64_t>(len));
 		}
 	}
 

@@ -22,11 +22,11 @@ struct DigestCtx {
     // Reserve input wires [0, n) so gate outputs start at n. Multiple argument
     // windows are accumulated and framed once as their total width, matching the
     // single num_inputs field recorded by RecordCtx / BooleanProgram.
-    Wire external_input(size_t n) {
+    Wire external_input(int64_t n) {
         expecting(!inputs_closed,
                   "DigestCtx::external_input: called after inputs were sealed");
-        expecting(n != 0, "DigestCtx::external_input: zero-width argument");
-        expecting(n <= static_cast<size_t>(UINT32_MAX - next_id),
+        expecting(n > 0, "DigestCtx::external_input: width must be positive");
+        expecting(n <= static_cast<int64_t>(UINT32_MAX - next_id),
                   "DigestCtx::external_input: wire id overflow");
         Wire base = next_id; next_id += (uint32_t)n; return base;
     }
@@ -111,12 +111,14 @@ inline uint64_t digest_program(const circuit::BooleanProgram& p) {
 // gates on the context. Equals digest_gate_stream() of the program that body
 // produces under RecordCtx.
 template <class Body>
-inline uint64_t digest_source(uint32_t num_inputs, Body&& body) {
+inline uint64_t digest_source(int64_t num_inputs, Body&& body) {
+    expecting(num_inputs >= 0 && num_inputs <= static_cast<int64_t>(UINT32_MAX),
+              "digest_source: num_inputs out of range");
     DigestCtx d;
     uint32_t base = 0;
-    if (num_inputs != 0) base = d.external_input((size_t)num_inputs);
-    std::vector<uint32_t> in(num_inputs);
-    for (uint32_t i = 0; i < num_inputs; ++i) in[i] = base + i;
+    if (num_inputs != 0) base = d.external_input(num_inputs);
+    std::vector<uint32_t> in((size_t)num_inputs);
+    for (int64_t i = 0; i < num_inputs; ++i) in[(size_t)i] = base + (uint32_t)i;
     d.seal_inputs();
     body(d, in);
     return d.value();

@@ -44,7 +44,10 @@ public:
 
 	// One overload per field type; the type id is baked into the frame.
 	RO& absorb(std::string_view s)        { return frame(kStr,   s.data(), s.size()); }
-	RO& absorb(const void* p, size_t n)   { return frame(kBytes, p, n); }
+	RO& absorb(const void* p, int64_t n) {
+		expecting(n >= 0, "RO::absorb: negative length");
+		return frame(kBytes, p, (size_t)n);
+	}
 	RO& absorb(block b)                   { return frame(kBlock, &b, sizeof(block)); }
 	RO& absorb(uint64_t v)                { return frame(kU64,   &v, sizeof(v)); }
 	RO& absorb(const Point& p) {

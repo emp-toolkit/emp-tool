@@ -34,7 +34,9 @@ inline void compare_swap(K& ka, K& kb, P& pa, P& pb, bool ascending = true) {
 
 // Batcher odd-even mergesort network: invoke swap(i, j) for each compare-swap.
 template <class Swap>
-inline void batcher_network(std::size_t n, Swap&& swap) {
+inline void batcher_network(int64_t count, Swap&& swap) {
+    expecting(count >= 0, "batcher_network: negative count");
+    const std::size_t n = (std::size_t)count;
     for (std::size_t p = 1; p < n; p *= 2)
         for (std::size_t k = p; k >= 1; k /= 2)
             for (std::size_t j = k % p; j + k < n; j += 2 * k)
@@ -49,7 +51,8 @@ inline void sort(std::vector<V>& v, bool ascending = true) {
     batcher_network(v.size(), [&](std::size_t i, std::size_t j) { compare_swap(v[i], v[j], ascending); });
 }
 template <class V>
-inline void sort(V* a, std::size_t n, bool ascending = true) {
+inline void sort(V* a, int64_t n, bool ascending = true) {
+    expecting(n >= 0, "sort: negative count");
     batcher_network(n,
                     [&](std::size_t i, std::size_t j) { compare_swap(a[i], a[j], ascending); });
 }
@@ -65,7 +68,8 @@ inline void sort_by_key(std::vector<K>& keys, std::vector<P>& data, bool ascendi
                     [&](std::size_t i, std::size_t j) { compare_swap(keys[i], keys[j], data[i], data[j], ascending); });
 }
 template <class K, class P>
-inline void sort_by_key(K* keys, P* data, std::size_t n, bool ascending = true) {
+inline void sort_by_key(K* keys, P* data, int64_t n, bool ascending = true) {
+    expecting(n >= 0, "sort_by_key: negative count");
     batcher_network(n,
                     [&](std::size_t i, std::size_t j) {
                         compare_swap(keys[i], keys[j], data[i], data[j], ascending);

@@ -116,7 +116,9 @@ to a byte-bool overload, or convert explicitly if an API requires real
 ## Length and count parameters
 
 Buffer-length and count parameters on emp-tool's public API use
-`int64_t`, not `int` or `size_t`.
+`int64_t`, not `int` or `size_t`. That includes byte lengths handed on
+to OpenSSL or a file parser, and backend hooks such as
+`BulkBooleanContext::and_many`.
 
 Why:
 
@@ -149,6 +151,8 @@ to validate the result afterward.
 
 Template non-type parameters stay as `int` / `size_t` when they are
 compile-time bounded sizes (`int N`, `int K`, `size_t Width`, etc.).
+Circuit widths are `int` at run time too: a runtime width matches the
+`int N` of the fixed-width types and their `width()`.
 
 ## PRG buffer fills
 

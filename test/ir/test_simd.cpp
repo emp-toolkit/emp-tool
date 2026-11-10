@@ -24,6 +24,8 @@ struct BitslicedClearCtx {
     Wire and_gate(Wire a, Wire b) { return a & b; }
     Wire xor_gate(Wire a, Wire b) { return a ^ b; }
     Wire not_gate(Wire a)         { return a ^ all_one_block; }
+    // A size_t count still satisfies BulkBooleanContext: the concept passes
+    // an int64_t, which converts.
     void and_many(Wire* o, const Wire* a, const Wire* b, size_t n) {
         for (size_t i = 0; i < n; ++i) o[i] = a[i] & b[i];
     }

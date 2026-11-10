@@ -61,7 +61,7 @@ inline const std::vector<typename Ctx::Wire>& execute_scheduled(
         }
         if (!ws.ba.empty()) {
             ws.bo.assign(ws.ba.size(), W{});
-            ctx.and_many(ws.bo.data(), ws.ba.data(), ws.bb.data(), ws.ba.size());
+            ctx.and_many(ws.bo.data(), ws.ba.data(), ws.bb.data(), (int64_t)ws.ba.size());
             for (size_t k = 0; k < ws.bouts.size(); ++k) w[ws.bouts[k]] = ws.bo[k];
         }
         for (uint32_t gi : bucket) {

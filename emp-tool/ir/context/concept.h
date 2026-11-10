@@ -11,6 +11,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 
 namespace emp {
 
@@ -35,7 +36,7 @@ concept BooleanContext =
 template <class Ctx>
 concept BulkBooleanContext =
     BooleanContext<Ctx> &&
-    requires(Ctx& c, typename Ctx::Wire* o, const typename Ctx::Wire* a, size_t n) {
+    requires(Ctx& c, typename Ctx::Wire* o, const typename Ctx::Wire* a, int64_t n) {
         c.and_many(o, a, a, n);
     };
 
