@@ -1,6 +1,7 @@
 #ifndef EMP_HASH_H__
 #define EMP_HASH_H__
 
+#include "emp-tool/runtime/core/abi_guard.h"
 #include "emp-tool/runtime/core/block.h"
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/ec.h"
@@ -51,8 +52,8 @@ enum class HashOption { sha256, blake3 };
 template <bool> struct FsVariantAbiMarker { static const char sym; };
 template <> const char FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym;
 namespace detail {
-[[maybe_unused, gnu::used]] static const char *const emp_fs_variant_abi_guard =
-    &FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym;
+EMP_ABI_GUARD(emp_fs_variant_abi_guard,
+              FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym);
 }
 
 #ifdef EMP_WITH_BLAKE3
@@ -74,8 +75,7 @@ template <HashOption> struct HashAbiMarker { static const char sym; };
 // "undefined reference to HashAbiMarker<...>::sym" error.
 template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym;
 namespace detail {
-[[maybe_unused, gnu::used]] static const char *const emp_hash_abi_guard =
-    &HashAbiMarker<EMP_HASH_DEFAULT>::sym;
+EMP_ABI_GUARD(emp_hash_abi_guard, HashAbiMarker<EMP_HASH_DEFAULT>::sym);
 }
 #endif
 

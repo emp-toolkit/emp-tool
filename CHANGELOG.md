@@ -374,6 +374,16 @@ metadata is numeric (see the README's version guidance).
   `close_notify` and closes without waiting. A TLSIO server also sends no
   session tickets, which TLSIO never uses, so a send-only peer has no unread
   bytes that would turn its close into a connection reset.
+- The link-time guards that reject objects built with a different default
+  `Hash` backend, or with and without BLAKE3, were discarded by linker section
+  garbage collection (`-ffunction-sections -fdata-sections -Wl,--gc-sections`),
+  and such objects then linked into one program, where `Hash` and `IOChannel`
+  objects crossing between them had mismatched layouts. Each guard, like the
+  new test-mode guard, is now an empty function that runs at program start and
+  references its marker. Linkers keep startup functions, so the check holds
+  with any compiler and linker. Every translation unit that includes `hash.h`
+  or `test_mode.h` gets one such function per guard, which Clang's
+  `-Wglobal-constructors` reports.
 
 ## v1.0.0-alpha.1
 

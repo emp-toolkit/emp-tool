@@ -117,6 +117,50 @@ foreach(neg RANGE 1 13)
 endforeach()
 
 add_test_case(runtime test_test_mode)
+
+# Link-time build-consistency guards (runtime/core/abi_guard.h). The positive
+# case links like any consumer; each negative case compiles the probe with one
+# build option flipped and must fail to link on that option's marker symbol.
+# Every case links with section garbage collection, which drops a guard that
+# nothing keeps alive. Serial: the cases share one build tree.
+function(link_with_section_gc target)
+    if(APPLE)
+        target_link_options(${target} PRIVATE LINKER:-dead_strip)
+    else()
+        target_compile_options(${target} PRIVATE -ffunction-sections -fdata-sections)
+        target_link_options(${target} PRIVATE LINKER:--gc-sections)
+    endif()
+endfunction()
+add_test_case(runtime abi_guard_probes)     # positive (ABI_NEG_CASE undefined)
+link_with_section_gc(abi_guard_probes)
+set(_abi_neg_cases 1)
+set(_abi_neg_msg "TestModeAbiMarker")        # 1 the other test mode
+if(EMP_WITH_BLAKE3)
+    list(APPEND _abi_neg_cases 2 3)
+    list(APPEND _abi_neg_msg
+        "HashAbiMarker"                      # 2 the other default Hash backend
+        "FsVariantAbiMarker")                # 3 FS state without BLAKE3
+endif()
+if(EMP_HASH_BACKEND STREQUAL "blake3")
+    set(_abi_other_hash sha256)
+else()
+    set(_abi_other_hash blake3)
+endif()
+foreach(neg IN LISTS _abi_neg_cases)
+    add_executable(abi_guard_neg_${neg} EXCLUDE_FROM_ALL runtime/abi_guard_probes.cpp)
+    target_link_libraries(abi_guard_neg_${neg} PRIVATE emp-tool::emp-tool)
+    target_compile_definitions(abi_guard_neg_${neg} PRIVATE
+        ABI_NEG_CASE=${neg} ABI_OTHER_HASH=::emp::HashOption::${_abi_other_hash})
+    link_with_section_gc(abi_guard_neg_${neg})
+    math(EXPR _idx "${neg} - 1")
+    list(GET _abi_neg_msg ${_idx} _expect)
+    add_test(NAME abi_guard_neg_${neg}
+             COMMAND ${CMAKE_COMMAND} --build . --target abi_guard_neg_${neg}
+             WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(abi_guard_neg_${neg} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${_expect}" RUN_SERIAL TRUE)
+endforeach()
+
 add_test_case(runtime test_thread_pool)
 add_test_case(runtime test_utils)
 # Exception-free public surface (docs/api_conventions.md): compiled with
