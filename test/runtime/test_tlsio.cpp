@@ -38,6 +38,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <memory>
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -305,8 +306,8 @@ static void run_correctness(TLSIO *io, int party) {
 // -------------------------------------------------------------------------
 // run_send_only_regression(): mirrors test_netio's check that an IO doing
 // only sends across a step still delivers its tail bytes via (a) explicit
-// flush and (b) destructor. Under TLS, (b) additionally exercises the
-// two-phase SSL_shutdown drain — a regression that closes the fd before
+// flush and (b) destructor. Under TLS, (b) also covers the destructor's
+// flush before close_notify — a regression that closes the fd before
 // flushing the staged record would manifest the same way as on NetIO:
 // BOB's recv hits EOF / "error: net_recv_data".
 // -------------------------------------------------------------------------
@@ -354,6 +355,32 @@ static void run_send_only_regression(int port, int party) {
 	if (party == ALICE) cout << "TLSIO send-only regression: OK\n";
 }
 
+// -------------------------------------------------------------------------
+// run_teardown_order_regression(): each party holds two channels. ALICE
+// destroys `aux` and then sends on `main`; BOB receives on `main` and only
+// then destroys `aux`. NetIO completes this order. A TLSIO destructor that
+// waited for the peer's close_notify would block ALICE in ~aux while BOB
+// blocks in recv on `main`, until the run harness kills both.
+// -------------------------------------------------------------------------
+static void run_teardown_order_regression(int port, int party) {
+	const TLSConfig cfg = make_cfg(party);
+	const char *address = party == ALICE ? nullptr : peer_ip();
+	auto main_io = std::make_unique<TLSIO>(address, port + 3, cfg, true);
+	auto aux = std::make_unique<TLSIO>(address, port + 4, cfg, true);
+	uint32_t x = 0;
+	if (party == ALICE) {
+		aux.reset();
+		x = 0x5eed;
+		main_io->send_data(&x, sizeof(x));
+		main_io->flush();
+	} else {
+		main_io->recv_data(&x, sizeof(x));
+		aux.reset();
+		expecting(x == 0x5eed, "TLSIO test: teardown-order payload mismatch");
+	}
+	if (party == ALICE) cout << "TLSIO teardown-order regression: OK\n";
+}
+
 int main(int argc, char **argv) {
 	int port, party;
 	party = parse_party(argv);
@@ -375,5 +402,6 @@ int main(int argc, char **argv) {
 	run_correctness(io, party);
 	io->sync();  // the IOChannel barrier over TLS
 	run_send_only_regression(port, party);
+	run_teardown_order_regression(port, party);
 	delete io;
 }
