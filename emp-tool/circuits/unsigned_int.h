@@ -102,41 +102,24 @@ public:
 
     UInt_T operator<<(const UInt_T& shamt) const {
         check_same_context(*this, shamt);
-        UInt_T res(*this);
-        constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
-        for (int i = 0; i < use; ++i) res = res.select(shamt[i], res << (1 << i));
-        Bit_T<Ctx> overflow = Bit_T<Ctx>::constant(*ctx_, false);
-        for (int i = use; i < N; ++i) overflow = overflow | shamt[i];
-        return res.select(overflow, UInt_T::constant(*ctx_, 0));
+        UInt_T r(*ctx_); kernel::shift_by<Ctx>(*ctx_, r.w.data(), w.data(), shamt.w.data(), N, kernel::ShiftKind::Left);
+        return r;
     }
     UInt_T operator>>(const UInt_T& shamt) const {
         check_same_context(*this, shamt);
-        UInt_T res(*this);
-        constexpr int use = (N <= 1) ? 0 : kernel::clog2_ceil(N);
-        for (int i = 0; i < use; ++i) res = res.select(shamt[i], res >> (1 << i));
-        Bit_T<Ctx> overflow = Bit_T<Ctx>::constant(*ctx_, false);
-        for (int i = use; i < N; ++i) overflow = overflow | shamt[i];
-        return res.select(overflow, UInt_T::constant(*ctx_, 0));
+        UInt_T r(*ctx_); kernel::shift_by<Ctx>(*ctx_, r.w.data(), w.data(), shamt.w.data(), N, kernel::ShiftKind::LogicalRight);
+        return r;
     }
 
     template <int R> requires (R >= kernel::bits_for(N))
     UInt_T<Ctx, R> popcount() const {
-        UInt_T<Ctx, R> acc = UInt_T<Ctx, R>::constant(*ctx_, 0);
-        acc.w[0] = w[0];
-        for (int i = 1; i < N; ++i) {
-            UInt_T<Ctx, R> b = UInt_T<Ctx, R>::constant(*ctx_, 0);
-            b.w[0] = w[(std::size_t)i];
-            acc = acc + b;
-        }
-        return acc;
+        UInt_T<Ctx, R> r(*ctx_); kernel::popcount<Ctx>(*ctx_, r.w.data(), R, w.data(), N); return r;
     }
     UInt_T<Ctx, kernel::bits_for(N)> hamming_weight() const { return popcount<kernel::bits_for(N)>(); }
     UInt_T<Ctx, kernel::bits_for(N)> leading_zeros() const {
-        UInt_T sat(*this);
-        for (int i = N - 2; i >= 0; --i)
-            sat.w[(std::size_t)i] = kernel::or_gate(*ctx_, sat.w[(std::size_t)(i + 1)], sat.w[(std::size_t)i]);
-        for (int i = 0; i < N; ++i) sat.w[(std::size_t)i] = ctx_->not_gate(sat.w[(std::size_t)i]);
-        return sat.hamming_weight();
+        UInt_T<Ctx, kernel::bits_for(N)> r(*ctx_);
+        kernel::leading_zeros<Ctx>(*ctx_, r.w.data(), kernel::bits_for(N), w.data(), N);
+        return r;
     }
 
     Int_T<Ctx, N> as_signed() const;
@@ -290,15 +273,9 @@ public:
     }
     DynamicUInt_T hamming_weight() const {
         bound_();
-        const int result_width = kernel::bits_for(width());
-        DynamicUInt_T acc = constant(*ctx_, result_width, 0);
-        acc.w_[0] = w_[0];
-        for (int i = 1; i < width(); ++i) {
-            DynamicUInt_T bit = constant(*ctx_, result_width, 0);
-            bit.w_[0] = w_[(std::size_t)i];
-            acc = acc + bit;
-        }
-        return acc;
+        DynamicUInt_T r(*ctx_, kernel::bits_for(width()));
+        kernel::popcount<Ctx>(*ctx_, r.data(), r.width(), data(), width());
+        return r;
     }
     template <int M> requires (M > 0)
     UInt_T<Ctx, M> to_fixed() const {

@@ -134,13 +134,18 @@ to or destroyed. Assignment replaces the target's width and wires.
 ### Arithmetic kernels (`emp::kernel`)
 
 The small, inlineable structured kernels (ripple add/sub, mux, comparators,
-multiply, restoring division, `if_then_else`) live in namespace `emp::kernel` in
+negation, bit counts, secret-amount shifts, multiply, division, `if_then_else`)
+live in namespace `emp::kernel` in
 [numeric_kernels.h](../emp-tool/circuits/numeric_kernels.h), written against bare
-`Ctx::Wire` (no per-bit `Ctx*`). They are LSB-first and size-optimal: one AND per
-full adder (an N-bit add is N−1 ANDs); unsigned `<` is the borrow-out of a
-subtract (one AND/bit). The value-type operators forward to them, passing the width
-as a runtime argument, so the fixed and dynamic integer families
-share one kernel set. `Float_T` is the opposite — every nontrivial op is an
+`Ctx::Wire` (no per-bit `Ctx*`). They are LSB-first and count AND gates: one AND
+per full adder (an N-bit add is N−1 ANDs); unsigned `<` is the borrow-out of a
+subtract (one AND/bit) and signed `<` the same borrow XOR both sign bits; unary
+`-` is N−2 ANDs; `hamming_weight` is N − popcount(N) ANDs and `leading_zeros`
+N−1, both the multiplicative complexity of their function. `/` and `%` divide
+non-restoringly over a growing window (N(N+1)/2 + O(N) ANDs); `*` is schoolbook
+partial products below 24 bits and a Karatsuba short product above. The
+value-type operators forward to them, passing the width as a runtime argument,
+so the fixed and dynamic integer families share one kernel set. `Float_T` is the opposite — every nontrivial op is an
 `.empbc` replay.
 
 ### Sorting
