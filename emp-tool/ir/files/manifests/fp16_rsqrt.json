@@ -1,9 +1,9 @@
 {
   "name": "fp16_rsqrt.empbc",
-  "sha256": "3be8e39b5c78dda7c176f857252ca67f388b589d7d8afdb9e883bb1fc86c7d2e",
+  "sha256": "13d9db683b3fb39d0502c3635ee79409865876683269f4d38479f346dca10381",
   "num_inputs": 16,
   "num_outputs": 16,
-  "num_gates": 14466,
-  "num_and": 4256,
-  "and_depth": 1118
+  "num_gates": 1781,
+  "num_and": 328,
+  "and_depth": 205
 }

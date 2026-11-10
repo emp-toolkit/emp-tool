@@ -2,9 +2,9 @@
 // comparison, classification, and sign ops. Binary/unary/ternary arithmetic
 // replays the on-disk fp<W>_<op>.empbc builtins through the context, so the run
 // recipe points EMP_CIRCUIT_DIR at emp-tool/ir/files. Each result is checked
-// against the host scalar (float for fp16/fp32, double for fp64); where the
-// .empbc is a faithful round-to-nearest implementation we demand bit-equality,
-// and the iterative recip/rsqrt/sqrt builtins are checked within tolerance.
+// against the host scalar (float for fp16/fp32, double for fp64) bit-exactly:
+// every arithmetic builtin is correctly rounded except fma and rsqrt, which are
+// two correctly rounded steps (round(round(a*b)+c) and recip(sqrt(x))).
 // Inputs are fed and results revealed through a ClearSession — the I/O boundary;
 // the values themselves are pure context-bound circuit values.
 #include "emp-tool/ir/session/clear_session.h"
@@ -41,16 +41,6 @@ static void check_eq(const char* name, T got, T want) {
     ++g_fail;
   }
 }
-template <class T>
-static void check_close(const char* name, T got, T want, double tol) {
-  double d = std::fabs((double)got - (double)want);
-  double scale = std::max(1.0, std::fabs((double)want));
-  if (d > tol * scale) {
-    printf("  [FAIL] %s  got %.17g want %.17g (|d|=%.3g)\n", name, (double)got, (double)want, d);
-    ++g_fail;
-  }
-}
-
 // Raw IEEE bit pattern of a clear host value at width W, and of a revealed
 // Float_T — used for exact bit-equality of the value against host arithmetic.
 template <int W>
@@ -110,11 +100,10 @@ static void width_examples(const char* tag) {
   check_eq<host_t>(name("max"),   sess.reveal(a.max(b), PUBLIC).value(), (host_t)3.0);
   check_eq<host_t>(name("fma"),   sess.reveal(a.fma(b, a), PUBLIC).value(), (host_t)8.0);  // 2*3 + 2
 
-  // Iterative kernels: tolerance, not bit-exact (3 ulp of fp16's coarse grid is
-  // generous; fp32/fp64 are far tighter, so a single relative bound suffices).
-  check_close<host_t>(name("sqrt"),  sess.reveal(nine.sqrt(), PUBLIC).value(),  (host_t)3.0, 1e-2);
-  check_close<host_t>(name("recip"), sess.reveal(a.recip(), PUBLIC).value(),    (host_t)0.5, 1e-2);
-  check_close<host_t>(name("rsqrt"), sess.reveal(nine.rsqrt(), PUBLIC).value(), (host_t)(1.0 / 3.0), 1e-2);
+  // sqrt and recip are correctly rounded; rsqrt is recip(sqrt(x)).
+  check_eq<host_t>(name("sqrt"),  sess.reveal(nine.sqrt(), PUBLIC).value(),  (host_t)3.0);
+  check_eq<host_t>(name("recip"), sess.reveal(a.recip(), PUBLIC).value(),    (host_t)0.5);
+  check_eq<host_t>(name("rsqrt"), sess.reveal(nine.rsqrt(), PUBLIC).value(), round_to_w<W>(1.0 / 3.0));
 
   // sign ops are pure wiring (set/flip the MSB), so exact at every width.
   check_eq<host_t>(name("neg"),       sess.reveal(-a, PUBLIC).value(), (host_t)-2.0);
@@ -141,13 +130,13 @@ static void width_examples(const char* tag) {
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic random sweeps vs host arithmetic. The + - * / min/max/fma
-// .empbc are faithful IEEE round-to-nearest, so we require BIT-EXACT equality:
-// the reference is computed in a wide accumulator (double) and rounded back to
-// width W per operation (round_to_w), matching the format's grid exactly. fma
-// is NOT a single fused rounding — it is round(round(a*b)+c), so the product is
-// sequenced through a named variable. The iterative sqrt/recip/rsqrt kernels run
-// within a relative tolerance. Seed is FIXED — no time/Date.
+// Deterministic random sweeps vs host arithmetic, BIT-EXACT: the reference is
+// computed in a wide accumulator (double) and rounded back to width W per
+// operation (round_to_w), matching the format's grid exactly. A double carries
+// at least 2p + 2 bits for p = 11 and 24, so for + - * / and sqrt that extra
+// rounding cannot change the result. fma is NOT a single fused rounding — it is
+// round(round(a*b)+c), so the product is sequenced through a named variable;
+// rsqrt likewise is recip(sqrt(x)). Seed is FIXED — no time/Date.
 // ---------------------------------------------------------------------------
 template <int W>
 static void random_sweep(const char* tag, int runs) {
@@ -160,7 +149,7 @@ static void random_sweep(const char* tag, int runs) {
   std::uniform_int_distribution<int> ex(-12, 12);
 
   auto bits = [](host_t v) { return host_bits<W>(v); };
-  int bad_exact = 0, bad_close = 0;
+  int bad_exact = 0;
 
   for (int i = 0; i < runs; ++i) {
     // Operands snapped to the width's grid so the host reference and circuit
@@ -185,37 +174,18 @@ static void random_sweep(const char* tag, int runs) {
     host_t fma_want = round_to_w<W>((double)prod + (double)da);
     if (bits(sess.reveal(a.fma(b, a), PUBLIC).value()) != bits(fma_want)) ++bad_exact;
 
-    // Iterative kernels: relative tolerance against the host on |a|. Only check
-    // when the true result is a finite, representable value at this width — a
-    // huge reciprocal (e.g. 1/tiny) overflows the format to inf, which is the
-    // correct answer but not meaningfully comparable by relative error.
-    auto in_range = [](double x) {
-      return std::isfinite((double)round_to_w<W>(x)) && round_to_w<W>(x) != (typename FloatTraits<W>::host_t)0.0;
-    };
-    double pa = std::fabs((double)da);
-    if (pa > 0.0) {
-      double want_sqrt = std::sqrt(pa);
-      if (in_range(want_sqrt)) {
-        double got = (double)sess.reveal(sess.input<F>(ALICE, round_to_w<W>(pa)).sqrt(), PUBLIC).value();
-        if (std::fabs(got - want_sqrt) > 1e-2 * std::max(1.0, want_sqrt)) ++bad_close;
-      }
-      double want_recip = 1.0 / (double)da;
-      if (in_range(want_recip)) {
-        double got = (double)sess.reveal(a.recip(), PUBLIC).value();
-        if (std::fabs(got - want_recip) > 1e-2 * std::max(1.0, std::fabs(want_recip))) ++bad_close;
-      }
-      double want_rsqrt = 1.0 / std::sqrt(pa);
-      if (in_range(want_rsqrt)) {
-        double got = (double)sess.reveal(sess.input<F>(ALICE, round_to_w<W>(pa)).rsqrt(), PUBLIC).value();
-        if (std::fabs(got - want_rsqrt) > 1e-2 * std::max(1.0, want_rsqrt)) ++bad_close;
-      }
-    }
+    // sqrt and recip are correctly rounded; rsqrt is recip(sqrt(x)), rounded
+    // twice. Zero and overflowing results (1/0, 1/tiny) are compared too.
+    host_t ha = round_to_w<W>(std::fabs((double)da));
+    F pa = sess.input<F>(ALICE, ha);
+    host_t sqrt_want = round_to_w<W>(std::sqrt((double)ha));
+    if (bits(sess.reveal(pa.sqrt(), PUBLIC).value()) != bits(sqrt_want)) ++bad_exact;
+    if (bits(sess.reveal(a.recip(), PUBLIC).value()) != bits(round_to_w<W>(1.0 / (double)da))) ++bad_exact;
+    if (bits(sess.reveal(pa.rsqrt(), PUBLIC).value()) != bits(round_to_w<W>(1.0 / (double)sqrt_want))) ++bad_exact;
   }
   char nm[96];
-  std::snprintf(nm, sizeof nm, "%s sweep bit-exact (+,-,*,/,min,max,fma)", tag);
+  std::snprintf(nm, sizeof nm, "%s sweep bit-exact (+,-,*,/,min,max,fma,sqrt,recip,rsqrt)", tag);
   check(nm, bad_exact == 0);
-  std::snprintf(nm, sizeof nm, "%s sweep tolerance (sqrt,recip,rsqrt)", tag);
-  check(nm, bad_close == 0);
 }
 
 // ---------------------------------------------------------------------------

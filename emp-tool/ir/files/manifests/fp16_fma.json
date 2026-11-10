@@ -1,9 +1,9 @@
 {
   "name": "fp16_fma.empbc",
-  "sha256": "b334395f1dd9920f6798c912cceeb3e0e433325195504ff58bae09c766ab98c6",
+  "sha256": "499288dcc43929d3ccf915f830c91d36961495f4f5945b1fddce5266e595f02b",
   "num_inputs": 48,
   "num_outputs": 16,
-  "num_gates": 3780,
-  "num_and": 1296,
-  "and_depth": 118
+  "num_gates": 2312,
+  "num_and": 727,
+  "and_depth": 145
 }

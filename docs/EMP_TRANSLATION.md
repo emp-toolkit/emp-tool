@@ -491,8 +491,8 @@ Refuse, or flag for the user, when the source program does any of these:
    they need a custom multi-limb construction.
 9. **Float width**. emp-tool ships `Float_T<Ctx,16>` / `<Ctx,32>` /
    `<Ctx,64>` (IEEE binary16 / binary32 / binary64 formats). `+ − × ÷` /
-   `min` / `max` are correctly rounded; `fma` is unfused (two roundings)
-   and `sqrt` / `recip` / `rsqrt` are approximate — see
+   `min` / `max` / `sqrt` / `recip` are correctly rounded; `fma` and
+   `rsqrt` are unfused (two roundings each) — see
    [docs/floating_point_circuits.md](floating_point_circuits.md).
    Map `float` to `Float_T<Ctx,32>` and `double` to `Float_T<Ctx,64>`; pick
    width 16 only when the source is explicitly half-precision.
