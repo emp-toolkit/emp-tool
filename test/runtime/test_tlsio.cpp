@@ -8,6 +8,8 @@
 //   send_bool / recv_bool              packed via bools_to_bits (inherited)
 //   flush()                            drain outbound coalescing buffer
 //   sync()                             barrier (inherited from IOChannel)
+//   has_session_root / next_session_id session ids, from a root taken from
+//                                      the TLS exporter
 //   TLSConfig::socket_options          pre-handshake socket buffer sizing
 //
 // Same flush contract and thread-safety rules as NetIO. The test
@@ -355,6 +357,32 @@ static void run_send_only_regression(int port, int party) {
 	if (party == ALICE) cout << "TLSIO send-only regression: OK\n";
 }
 
+// next_session_id() over TLS: the root comes from the TLS exporter, so the two
+// ends agree on every id with no message on the wire. Each party then sends
+// its ids to the other.
+static void run_session_id(TLSIO *io, int party) {
+	expecting(io->has_session_root(), "TLSIO test: the channel has no session root");
+	const uint64_t sent = io->send_counter, received = io->recv_counter;
+	block mine[3], theirs[3];
+	for (int i = 0; i < 3; ++i) mine[i] = io->next_session_id().value();
+	expecting(io->send_counter == sent && io->recv_counter == received,
+	          "TLSIO test: next_session_id moved bytes");
+	expecting(!cmpBlock(&mine[0], &mine[1], 1) && !cmpBlock(&mine[1], &mine[2], 1) &&
+	              !cmpBlock(&mine[0], &mine[2], 1),
+	          "TLSIO test: consecutive session ids repeat");
+	if (party == ALICE) {
+		io->send_block(mine, 3);
+		io->recv_block(theirs, 3);
+	} else {
+		io->recv_block(theirs, 3);
+		io->send_block(mine, 3);
+		io->flush();
+	}
+	expecting(cmpBlock(mine, theirs, 3),
+	          "TLSIO test: the two ends derived different session ids");
+	if (party == ALICE) cout << "TLSIO session ids: OK\n";
+}
+
 // -------------------------------------------------------------------------
 // run_teardown_order_regression(): each party holds two channels. ALICE
 // destroys `aux` and then sends on `main`; BOB receives on `main` and only
@@ -400,6 +428,7 @@ int main(int argc, char **argv) {
 	TLSIO *io = new TLSIO(party == ALICE ? nullptr : peer_ip(), port, cfg, true);
 	expect_socket_options(*io, cfg.socket_options);
 	run_correctness(io, party);
+	run_session_id(io, party);
 	io->sync();  // the IOChannel barrier over TLS
 	run_send_only_regression(port, party);
 	run_teardown_order_regression(port, party);

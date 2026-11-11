@@ -284,12 +284,16 @@ public:
 	int fd;
 };
 
-// Application-level "the peer's accept() actually ran" marker. A completed
+// Application-level "the peer's accept() actually ran" markers. A completed
 // TCP connect() only proves the connection reached A listen queue — possibly
 // a stale listener the server has stopped accepting on (e.g. a fresh session
-// reusing the same port). The server sends this byte right after accept(); the
-// client waits for it before treating the connection as established.
+// reusing the same port). The server sends one of these bytes right after
+// accept(); the client waits for one before treating the connection as
+// established. kAcceptAckSessionRoot also says that a session-root coin flip
+// follows, so a NetIO whose peer chose differently stops at connect (see
+// NetIO::SessionRoot).
 inline constexpr unsigned char kAcceptAck = 0xa5;
+inline constexpr unsigned char kAcceptAckSessionRoot = 0x5a;
 
 // Accept one connection from an existing listener, retrying an interrupted
 // system call. The caller decides whether to keep or close the listener.
@@ -306,17 +310,22 @@ inline int accept_one(int listener) {
 	return s;
 }
 
-// accept_one plus a one-byte application acknowledgement, so the client can
-// confirm this accept() actually ran (see kAcceptAck). Raw ::send, so it does
-// not touch IOChannel byte counters or any Fiat-Shamir transcript.
-inline int accept_one_confirmed(int listener) {
+// accept_one plus a one-byte application acknowledgement, `ack` (kAcceptAck
+// or kAcceptAckSessionRoot), so the client can confirm this accept() actually
+// ran. Raw ::send, so it does not touch IOChannel byte counters or any
+// Fiat-Shamir transcript.
+inline int accept_one_confirmed(int listener, unsigned char ack) {
 	int s = accept_one(listener);
 	ssize_t n;
 	do {
-		n = ::send(s, &kAcceptAck, 1, 0);
+		n = ::send(s, &ack, 1, 0);
 	} while (n < 0 && errno == EINTR);
 	expecting(n == 1, "tcp: failed to acknowledge accepted connection");
 	return s;
+}
+
+inline int accept_one_confirmed(int listener) {
+	return accept_one_confirmed(listener, kAcceptAck);
 }
 
 // One-shot compatibility helper used by transports that need only one
@@ -338,10 +347,12 @@ inline int server_listen(int port) {
 // When wait_for_accept is set, a connect() that landed on a listen queue
 // but was not acknowledged (kAcceptAck) — because it reached a stale
 // listener the server no longer accepts on — is treated as a failure and
-// retried, so "connected" always means the peer's accept() ran.
+// retried, so "connected" always means the peer's accept() ran. The
+// acknowledgement received is stored in *ack_out unless ack_out is null.
 inline int client_connect_impl(const char *address, int port,
                                bool wait_for_accept,
-	                           const SocketOptions &options) {
+	                           const SocketOptions &options,
+	                           unsigned char *ack_out) {
 	struct sockaddr_in dest;
 	std::memset(&dest, 0, sizeof(dest));
 	dest.sin_family = AF_INET;
@@ -363,8 +374,10 @@ inline int client_connect_impl(const char *address, int port,
 			do {
 				n = ::recv(s, &ack, 1, 0);
 			} while (n < 0 && errno == EINTR);
-			if (n == 1 && ack == kAcceptAck)
+			if (n == 1 && (ack == kAcceptAck || ack == kAcceptAckSessionRoot)) {
+				if (ack_out != nullptr) *ack_out = ack;
 				return s;
+			}
 		}
 		::close(s);
 		::usleep(1000);
@@ -373,6 +386,12 @@ inline int client_connect_impl(const char *address, int port,
 	                        std::to_string(port) + " unreachable after " +
 	                        std::to_string(max_retries) + " attempts";
 	error(msg.c_str());
+}
+
+inline int client_connect_impl(const char *address, int port,
+                               bool wait_for_accept,
+	                           const SocketOptions &options) {
+	return client_connect_impl(address, port, wait_for_accept, options, nullptr);
 }
 
 inline int client_connect_impl(const char *address, int port,
@@ -393,10 +412,18 @@ inline int client_connect(const char *address, int port) {
 }
 
 // Connect and wait for the server's accept acknowledgement — safe against a
-// connection landing on a stale listener (see kAcceptAck). Used by NetIO.
+// connection landing on a stale listener (see kAcceptAck) — and store the
+// acknowledgement in *ack unless ack is null. Used by NetIO.
+inline int client_connect_confirmed(const char *address, int port,
+	                                const SocketOptions &options,
+	                                unsigned char *ack) {
+	return client_connect_impl(address, port, /*wait_for_accept=*/true, options,
+	                           ack);
+}
+
 inline int client_connect_confirmed(const char *address, int port,
 	                                const SocketOptions &options) {
-	return client_connect_impl(address, port, /*wait_for_accept=*/true, options);
+	return client_connect_confirmed(address, port, options, nullptr);
 }
 
 inline int client_connect_confirmed(const char *address, int port) {
