@@ -330,6 +330,23 @@ private:
 				X509_free(peer);
 			}
 		}
+
+		set_session_root(export_session_root());
+	}
+
+	// The next_session_id() root comes from the TLS exporter (RFC 8446,
+	// section 7.5) instead of a coin flip. Both ends derive it from the
+	// handshake secret with no message, and with certificate verification on,
+	// it is bound to the authenticated peer. The label is unregistered, so it
+	// takes RFC 5705's private-use prefix.
+	block export_session_root() {
+		static constexpr char kLabel[] = "EXPERIMENTAL-emp-tool-session-id";
+		block root;
+		if (SSL_export_keying_material(ssl, reinterpret_cast<unsigned char *>(&root),
+		                               sizeof(root), kLabel, sizeof(kLabel) - 1,
+		                               nullptr, 0, /*use_context=*/0) != 1)
+			tls_detail::die("SSL_export_keying_material");
+		return root;
 	}
 
 	void flush_unlocked() {

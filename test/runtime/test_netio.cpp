@@ -9,6 +9,9 @@
 //   flush()                            drain outbound only (no peer coupling)
 //   sync()                             barrier: one zero byte each way
 //   make_sibling()                     more connections on the same port
+//   has_session_root / next_session_id session ids, from a root agreed by a
+//                                      coin flip at connection setup
+//   SessionRoot::none                  connect without agreeing on a root
 //   tcp::SocketOptions                 pre-handshake socket buffer sizing
 //   SocketOptions::for_bandwidth_and_rtt
 //                                      derive buffers from a known path
@@ -402,6 +405,58 @@ static void run_sync_regression() {
 	cout << "NetIO sync regression: OK\n";
 }
 
+// Session roots that must not exist or must not be accepted. A channel adopted
+// from a socket does not know which end of the connection it is, so it has no
+// root, and asking it for a session id is an error. A connector checks the
+// listener's opening: here the listener is a raw socket on a kernel-assigned
+// port that sends 32 arbitrary bytes for the commitment and 32 for an opening
+// that does not match it.
+static void run_session_root_failure_regression() {
+	int pair[2];
+	expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0,
+	          "NetIO test: socketpair failed");
+	{
+		NetIO a(pair[0], true), b(pair[1], true);
+		expecting(!a.has_session_root() && !b.has_session_root(),
+		          "NetIO test: a channel adopted from a socket has a session root");
+	}
+
+	std::string err;
+	bool clean = run_capturing_stderr([] {
+		int sockets[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+		          "NetIO test: socketpair failed");
+		NetIO adopted(sockets[0], true);
+		(void)adopted.next_session_id();
+	}, err);
+	expecting(!clean && err.find("has no session root") != std::string::npos,
+	          "NetIO test: next_session_id() without a session root did not fail");
+
+	clean = run_capturing_stderr([] {
+		const int listener = tcp::open_listener(0);
+		sockaddr_in local{};
+		socklen_t local_size = sizeof(local);
+		expecting(::getsockname(listener, (sockaddr *)&local, &local_size) == 0,
+		          "NetIO test: getsockname failed");
+		std::thread forger([listener] {
+			const int s = tcp::accept_one_confirmed(listener);
+			const unsigned char forged[32] = {1};
+			unsigned char r_prime[16];
+			expecting(::send(s, forged, sizeof(forged), 0) == (ssize_t)sizeof(forged) &&
+			              ::recv(s, r_prime, sizeof(r_prime), MSG_WAITALL) ==
+			                  (ssize_t)sizeof(r_prime) &&
+			              ::send(s, forged, sizeof(forged), 0) == (ssize_t)sizeof(forged),
+			          "NetIO test: the forged listener's I/O failed");
+		});
+		NetIO connector("127.0.0.1", ntohs(local.sin_port), true);
+		forger.join();
+	}, err);
+	expecting(!clean && err.find("does not match its commitment") != std::string::npos,
+	          "NetIO test: a session-root opening that does not match its "
+	          "commitment was accepted");
+	cout << "NetIO session-root failure regression: OK\n";
+}
+
 static void run_flush_failure_regression() {
 	expecting(dies([] {
 		int sockets[2];
@@ -444,6 +499,69 @@ static void run_socket_options_regression(int port, int party) {
 	if (party == ALICE) cout << "NetIO socket-options regression: OK\n";
 }
 
+// next_session_id() between the two processes: the connection agreed on a
+// root, each process drawing its own coins, and both must end with the same
+// ids. Each party sends its ids to the other.
+template <typename IO>
+static void run_session_id(IO *io, int party, const char *tag) {
+	expecting(io->has_session_root(),
+	          "NetIO test: a connected channel has no session root");
+	block mine[2], theirs[2];
+	for (int i = 0; i < 2; ++i) mine[i] = io->next_session_id().value();
+	if (party == ALICE) {
+		io->send_block(mine, 2);
+		io->recv_block(theirs, 2);
+	} else {
+		io->recv_block(theirs, 2);
+		io->send_block(mine, 2);
+		io->flush();
+	}
+	expecting(cmpBlock(mine, theirs, 2),
+	          "NetIO test: the two ends derived different session ids");
+	expecting(!cmpBlock(&mine[0], &mine[1], 1),
+	          "NetIO test: consecutive session ids repeat");
+	if (party == ALICE) cout << tag << " session ids: OK\n";
+}
+
+// Session roots across a family of channels. A sibling's root is its parent's
+// next session id, so the sibling runs no flip of its own, and both ends get
+// the same ids, which differ from the parent's. A channel opened with
+// SessionRoot::none has no root, and neither do its siblings. The second
+// family takes the next port: BOB leaves the first family first, and a
+// connection reaching ALICE's listener while it closes can, on Linux, stay
+// established with no peer and never be reset.
+static void run_session_root_regression(int port, int party) {
+	{
+		auto primary = party == ALICE ? NetIO::listen(port, true)
+		                              : NetIO::connect(peer_ip(), port, true);
+		auto sibling = primary->make_sibling();
+		block mine[2] = {primary->next_session_id().value(),
+		                 sibling->next_session_id().value()};
+		block theirs[2];
+		if (party == ALICE) {
+			sibling->send_block(mine, 2);
+			sibling->recv_block(theirs, 2);
+		} else {
+			sibling->recv_block(theirs, 2);
+			sibling->send_block(mine, 2);
+			sibling->flush();
+		}
+		expecting(cmpBlock(mine, theirs, 2),
+		          "NetIO test: the two ends of a sibling derived different session ids");
+		expecting(!cmpBlock(&mine[0], &mine[1], 1),
+		          "NetIO test: a sibling repeated its parent's session id");
+	}
+	{
+		auto primary = party == ALICE
+		    ? NetIO::listen(port + 1, true, NetIO::SessionRoot::none)
+		    : NetIO::connect(peer_ip(), port + 1, true, NetIO::SessionRoot::none);
+		auto sibling = primary->make_sibling();
+		expecting(!primary->has_session_root() && !sibling->has_session_root(),
+		          "NetIO test: a channel opened without a session root has one");
+	}
+	if (party == ALICE) cout << "NetIO session-root regression: OK\n";
+}
+
 // Zero-length send/recv are documented no-ops (docs/api_conventions.md):
 // no counter, round, or flush-state mutation, no transport call, and a
 // null pointer is fine at count zero. Purely local — both parties run it
@@ -467,6 +585,7 @@ template <typename IO>
 static void run_suite(int port_base, int party, const char *tag) {
 	IO *io = new IO(party == ALICE ? nullptr : peer_ip(), port_base, true);
 	run_correctness(io, party, tag);
+	run_session_id(io, party, tag);
 	run_zero_length_noop(io, party, tag);
 	run_send_only_regression<IO>(port_base, party, tag);
 	delete io;
@@ -479,10 +598,12 @@ int main(int argc, char **argv) {
 	run_socket_options_factory_regression();
 	run_flush_failure_regression();
 	run_sync_regression();
+	run_session_root_failure_regression();
 
-	// Five contiguous ports: main, two send-only cases, sibling regression,
-	// socket-options regression.
+	// Seven contiguous ports: main, two send-only cases, sibling regression,
+	// socket-options regression, and two for the session-root regression.
 	run_suite<NetIO>(port, party, "NetIO");
 	run_sibling_regression(port + 3, party);
 	run_socket_options_regression(port + 4, party);
+	run_session_root_regression(port + 5, party);
 }

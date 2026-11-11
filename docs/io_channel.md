@@ -68,6 +68,41 @@ sub-challenges across stages). `get_send_digest()` / `get_recv_digest()`
 are per-direction snapshots for diagnostics. All three assert that
 `enable_fs` ran first.
 
+## Session ids
+
+A channel may hold a session root that both ends agree on when the connection
+is set up. `next_session_id()` returns a fresh `SessionID` on every call, a
+child (`SessionID::derive`) of that root. It is local: the two ends get the
+same sequence by calling it in the same order, and another connection gets a
+different one. The root itself is never returned. `has_session_root()` reports
+whether the channel has one; asking a channel without a root for an id is an
+error.
+
+- **NetIO** agrees on its root with a commit-then-reveal coin flip in its
+  connecting constructors (the address constructor, `listen` and `connect`).
+  Right after its accept acknowledgement, the listener sends `c = RO(s ‖ r)`
+  (a 32-byte digest); the connector replies with `r'`; the listener opens
+  `s ‖ r`, and the connector checks the opening against `c`. The root is
+  `RO(r ‖ r')`. The flip adds one round trip to setup on both ends. Like
+  `sync()`, it runs on the transport hooks, so its bytes are not counted and
+  not in the Fiat–Shamir transcript. The root is uniform when at least one
+  party follows the protocol; the listener learns it first and can abort
+  instead of opening, the bias any two-party coin flip allows. The flip does
+  not authenticate the peer: on an unauthenticated network, a man in the
+  middle runs one flip with each party. Pass `NetIO::SessionRoot::none` to
+  skip the flip. Both ends must choose the same: a mismatch is not detected,
+  so the setup hangs or the flip's bytes are read as protocol data.
+- **Siblings**: `make_sibling()` gives the sibling its parent's next session
+  id as its root, so siblings run no flip, and a sibling of a channel without
+  a root has none. A NetIO adopted from a socket does not know which end of
+  the connection it is, so it has no root.
+- **TLSIO** takes its root from the TLS exporter (RFC 8446, section 7.5),
+  under the private-use label `EXPERIMENTAL-emp-tool-session-id`. Both ends
+  derive it from the handshake secret with no message, and with certificate
+  verification on, the root is bound to the authenticated peer.
+- **TraceIO** forwards both calls to the channel it wraps, so the two share
+  one sequence.
+
 ## Other base surface
 
 - **`sync()`**: a barrier for tests, benchmarks and setup, not protocol logic.
