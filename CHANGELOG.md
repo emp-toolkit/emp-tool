@@ -3,7 +3,13 @@
 Notable changes to emp-tool. Versions are the git tags. CMake package
 metadata is numeric (see the README's version guidance).
 
-## Unreleased
+## v1.0.0-alpha.2
+
+Second alpha of the 1.0 development line. It fixes a Delta recovery in
+`v1.0.0-alpha.1`'s garbling hash (see Security), so both parties of a protocol
+must upgrade together, and class layouts and wire transcripts change, so every
+dependent must be rebuilt. Both alphas install as CMake package version `1.0.0`,
+so pin the tag.
 
 ### Security
 
@@ -34,6 +40,11 @@ metadata is numeric (see the README's version guidance).
   out, and test-mode and normal objects cannot be linked into one program.
   Wire-trace tests need a test-mode build of emp-tool and of the code under
   test.
+- Half-gate garbling: both parties seed `MITCCRH` with one public start point
+  `S`, chosen independently of the garbler's `Δ`, and keep the gid schedule in
+  step; `half_gate.h` states this. `v1.0.0-alpha.1`'s `test_halfgate` and
+  `bench_halfgate` seeded `MITCCRH` with `Δ`, so code copied from them must
+  switch to a separate public `S`.
 
 ### Added
 
@@ -80,6 +91,17 @@ metadata is numeric (see the README's version guidance).
   `to_fixed<M>()` and `as_signed()` / `as_unsigned()`, and `DynamicUInt_T` has
   `hamming_weight()`. They are the `RuntimeWidthValue`s that a `RuntimeSessionIO`
   session inputs and reveals.
+- `uint8_t` (byte-bool) overloads of `bools_to_bits` / `bits_to_bools`,
+  `PRG::random_bool`, `IOChannel::send_bool` / `recv_bool`,
+  `vector_inn_prdt_sum_red` (runtime and `<N>` forms) and
+  `GaloisFieldPacking::packing`, so byte-bool buffers need no cast to `bool*`.
+  An input byte is false when zero and true otherwise; outputs are 0 or 1. The
+  `bool` and `uint8_t` paths give the same bits, wire bytes and PRG state.
+- Two hooks for sessions derived from `ChunkedSession`: a
+  `static constexpr bool kCountsAndsInternally` member makes the base skip its
+  own AND count, and `materialize_deferred_inputs_()` is called at every `run`,
+  `run_artifact` and flush boundary, so a derived session can settle deferred
+  inputs there.
 
 ### Changed
 
@@ -350,6 +372,10 @@ metadata is numeric (see the README's version guidance).
   `keep...` values could not change the flush, since every value still in scope
   is kept anyway; they were only checked to belong to the session. To drop
   values that are still in scope, call `checkpoint(keep...)` first.
+- `ChunkedSession::InputBatch` is move-only: its copy constructor, copy
+  assignment and move assignment are deleted, where `v1.0.0-alpha.1` had
+  implicit copies. Keep the batch that `input_batch()` returns, or move it into
+  a new variable; do not copy or reassign one.
 
 ### Removed
 
@@ -380,6 +406,8 @@ metadata is numeric (see the README's version guidance).
   it modulo `q`, so its result was wrong whenever a product reached `2^N`.
 - `runtime_width`, and the `is_dynamic` member of `UInt_T` / `Int_T`
   (`RuntimeWidthValue` requires it, as `true`, of a runtime-width type).
+- `audit-report/`: it reviewed an earlier tree, and its guidance no longer
+  applied. The README no longer cites it.
 
 ### Fixed
 
@@ -452,6 +480,15 @@ metadata is numeric (see the README's version guidance).
   with any compiler and linker. Every translation unit that includes `hash.h`
   or `test_mode.h` gets one such function per guard, which Clang's
   `-Wglobal-constructors` reports.
+- `load_empbc` / `load_empbc_file` take a `max_wires` limit, default
+  `empbc_default_max_wires` (2^30), and reject a header that declares more wires
+  before anything is allocated. Input wires take no bytes in a `.empbc` file, so
+  a 24-byte file could declare 2^32 − 1 of them, and the IR passes, which size
+  their arrays by the wire count, then requested tens of GiB. Pass a larger
+  limit to load a bigger program, or a smaller one for files from an untrusted
+  source.
+- `bench_f2k` counts bytes per row: 32 for two-operand products, 17 for
+  byte-bool selectors, 16 for generators.
 
 ## v1.0.0-alpha.1
 

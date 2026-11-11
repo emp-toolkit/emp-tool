@@ -11,11 +11,13 @@
 >   tag [`0.3.0`](https://github.com/emp-toolkit/emp-tool/releases/tag/0.3.0)
 >   or branch [`v0.3.x`](https://github.com/emp-toolkit/emp-tool/tree/v0.3.x).
 >   Bug fixes and security patches will be backported to `v0.3.x`.
-> - **New projects: use `v1.0.0-alpha.1`** —
->   tag [`v1.0.0-alpha.1`](https://github.com/emp-toolkit/emp-tool/releases/tag/v1.0.0-alpha.1).
->   The API may still change from one alpha tag to the next and before the
->   final `1.0.0` release. CMake package metadata remains numeric `1.0.0`
->   because `project(VERSION)` cannot carry prerelease suffixes.
+> - **New projects: use `v1.0.0-alpha.2`** —
+>   tag [`v1.0.0-alpha.2`](https://github.com/emp-toolkit/emp-tool/releases/tag/v1.0.0-alpha.2).
+>   Do not use `v1.0.0-alpha.1`: its garbling hash lets the evaluator recover
+>   the garbler's Delta (#212). The API may still change from one alpha tag to
+>   the next and before the final `1.0.0` release. CMake package metadata
+>   remains numeric `1.0.0` because `project(VERSION)` cannot carry prerelease
+>   suffixes.
 
 Foundational primitives for the emp-toolkit family: SIMD `block` types,
 fast AES / PRG / PRP / hash / GF(2^128) kernels, OpenSSL-backed elliptic
