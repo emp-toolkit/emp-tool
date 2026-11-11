@@ -92,7 +92,10 @@ alice_pid=$!
 bob_pid=$!
 set +m
 
-deadline=$((SECONDS + timeout_seconds))
+# SECONDS counts whole seconds, so a deadline of SECONDS + timeout can arrive
+# as soon as the next second starts. One second more means the parties always
+# get the full timeout.
+deadline=$((SECONDS + timeout_seconds + 1))
 alice_status=0
 bob_status=0
 
