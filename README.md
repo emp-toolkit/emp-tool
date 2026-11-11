@@ -510,10 +510,11 @@ determinism contract, and limitations.
   instructions (AES-NI, or NEON via sse2neon); elliptic-curve
   operations call OpenSSL; other kernels are written for throughput,
   and secret-dependent timing has not been audited across the tree.
-- `TLSIO` verifies the peer's certificate chain against the configured
-  CA (optionally mutually, `require_peer_cert`). It does not check a
-  peer identity beyond that: any certificate issued by the configured
-  CA authenticates, so the CA must be deployment-private.
+- `TLSIO` authenticates the peer by its public key: each party configures
+  its own private key and the peer's public key, and the handshake fails
+  unless the peer proves it holds the matching private key. There is no CA;
+  getting each party the other's authentic public key is the deployment's
+  job.
 - Failures are fail-stop: a violated check terminates the process
   ([docs/api_conventions.md](docs/api_conventions.md)). A test-mode
   build (`-DEMP_TEST_MODE=ON`) makes all randomness deterministic and is
