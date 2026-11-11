@@ -441,8 +441,8 @@ corresponding header — see `docs/test_conventions.md` for the file conventions
 (`example()` / `run_correctness()` per file).
 
 Two-party tests and benchmarks run both parties: `./run <binary> [args]`
-launches party 1 and party 2 locally on a fresh `EMP_PORT` per invocation
-(`ctest` already wraps the two-party tests in it). The harness fails if either
+launches party 1 and party 2 locally on port `EMP_PORT`, 12345 unless set
+(`ctest` already wraps the two-party tests in it and gives each its own port). The harness fails if either
 party fails, terminates the sibling, and imposes a 120-second timeout; set
 `EMP_RUN_TIMEOUT` to another positive number of seconds when a longer benchmark
 needs it. For a real two-machine run,

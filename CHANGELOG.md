@@ -489,6 +489,13 @@ so pin the tag.
   source.
 - `bench_f2k` counts bytes per row: 32 for two-operand products, 17 for
   byte-bool selectors, 16 for generators.
+- The two-party test harness `./run` uses `EMP_PORT` when set and 12345
+  otherwise, and `ctest` gives each two-party test its own ports from 20000 up.
+  It used to pick a random port in 20000-49999, which overlaps the range Linux
+  assigns to outgoing connections (32768-60999): a test's port could already be
+  held by an outgoing connection (`bind: Address already in use`), and a
+  reconnecting client could be handed the listener's port and connect to
+  itself.
 
 ## v1.0.0-alpha.1
 

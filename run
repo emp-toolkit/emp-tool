@@ -1,8 +1,11 @@
 #!/bin/bash
-# Two-party local test harness. Pick a fresh random port per invocation so back-
-# to-back ctest runs don't collide on a socket still in TIME_WAIT. Port travels
-# via EMP_PORT (read by peer_port()); only the party id is a positional arg.
-export EMP_PORT=$(( (RANDOM % 30000) + 20000 ))
+# Two-party local test harness. The port travels via EMP_PORT (read by
+# peer_port()); only the party id is a positional arg. It is EMP_PORT when set
+# (ctest gives each two-party test its own) and 12345 otherwise: a fixed port
+# below the range the OS assigns to outgoing connections (32768 and up on Linux,
+# 49152 and up on macOS), so no outgoing connection can be holding it. The
+# listener sets SO_REUSEADDR, so back-to-back runs can re-bind it.
+export EMP_PORT=${EMP_PORT:-12345}
 
 if [[ $# -lt 1 ]]; then
 	echo "usage: $0 <binary> [args]" >&2
