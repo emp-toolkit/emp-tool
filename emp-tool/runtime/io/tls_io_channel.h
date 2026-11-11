@@ -15,7 +15,10 @@
 
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 
 #include <signal.h>
 #include <unistd.h>
@@ -32,32 +35,28 @@ namespace emp {
 // SSL_write produces at most one or two records.
 //
 // Why per-channel SSL_CTX: simplest ownership model, no global state.
-// Callers that build hundreds of TLSIOs pay the per-channel cert parse
-// cost.
+// Callers that build hundreds of TLSIOs pay the per-channel cost of
+// reading the keys and signing a certificate.
 //
-// Cert / key / CA material is caller-supplied via TLSConfig: PEM file
-// paths, no auto self-signed default.
+// Authentication is by pinned public keys, with no CA: TLSConfig names
+// this party's private key and the peer's public key. TLS 1.3 carries a
+// key in a certificate, so each end presents a throwaway self-signed
+// certificate for its key, and accepts the peer's only if it carries the
+// pinned key; the handshake signature proves the peer holds the matching
+// private key.
 
 struct TLSConfig {
 	// Role on the TLS handshake. Independent of the address-vs-port
 	// role used to establish the underlying TCP connection.
 	bool is_tls_server = false;
 
-	// PEM file paths. cert_pem_path + key_pem_path are required when
-	// is_tls_server, and required on the client when require_peer_cert
-	// on the server side enables mTLS. ca_pem_path is the trust anchor
-	// used to verify the peer; required on whichever side verifies.
-	std::string cert_pem_path;
+	// The keys that authenticate the connection, as PEM files, both
+	// required: this party's private key, and the peer's public key (a
+	// SubjectPublicKeyInfo, "BEGIN PUBLIC KEY", as `openssl pkey -pubout`
+	// writes it). Any key type OpenSSL signs TLS 1.3 handshakes with
+	// works (Ed25519, ECDSA, RSA), and the two parties' types may differ.
 	std::string key_pem_path;
-	std::string ca_pem_path;
-
-	// Server-side mTLS toggle. When true, the server requests a client
-	// cert and aborts the handshake if the client doesn't present one.
-	bool require_peer_cert = true;
-
-	// Dev / test escape hatch. Sets SSL_VERIFY_NONE on both sides — do
-	// NOT use for real deployments.
-	bool insecure_skip_verify = false;
+	std::string peer_public_key_pem_path;
 
 	// "" leaves the library default TLS 1.3 ciphersuite list untouched.
 	std::string ciphersuites;
@@ -95,6 +94,54 @@ inline void install_sigpipe_ignore_once() {
 		msg += buf;
 	}
 	error(msg.c_str());
+}
+
+// The private key in a PEM file.
+inline EVP_PKEY *read_private_key(const std::string &path) {
+	BIO *bio = BIO_new_file(path.c_str(), "r");
+	if (!bio) die("cannot open key_pem_path");
+	EVP_PKEY *key = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+	BIO_free(bio);
+	if (!key) die("key_pem_path holds no private key");
+	return key;
+}
+
+// The public key in a PEM file ("BEGIN PUBLIC KEY").
+inline EVP_PKEY *read_public_key(const std::string &path) {
+	BIO *bio = BIO_new_file(path.c_str(), "r");
+	if (!bio) die("cannot open peer_public_key_pem_path");
+	EVP_PKEY *key = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+	BIO_free(bio);
+	if (!key) die("peer_public_key_pem_path holds no public key");
+	return key;
+}
+
+// A throwaway self-signed certificate for `key`. The peer reads only the key
+// from it, so its name and dates carry no meaning.
+inline X509 *self_signed_cert(EVP_PKEY *key) {
+	X509 *cert = X509_new();
+	if (!cert) die("X509_new");
+	X509_NAME *name = X509_get_subject_name(cert);
+	// Ed25519 and Ed448 sign the message itself, with no separate digest.
+	const int type = EVP_PKEY_get_id(key);
+	const EVP_MD *md =
+	    (type == EVP_PKEY_ED25519 || type == EVP_PKEY_ED448) ? nullptr : EVP_sha256();
+	const bool built =
+	    X509_set_version(cert, X509_VERSION_3) == 1 &&
+	    ASN1_INTEGER_set(X509_get_serialNumber(cert), 1) == 1 &&
+	    X509_gmtime_adj(X509_getm_notBefore(cert), 0) != nullptr &&
+	    X509_gmtime_adj(X509_getm_notAfter(cert), 24 * 60 * 60) != nullptr &&
+	    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+	                               reinterpret_cast<const unsigned char *>("emp-tool"),
+	                               -1, -1, 0) == 1 &&
+	    X509_set_issuer_name(cert, name) == 1 &&
+	    X509_set_pubkey(cert, key) == 1 &&
+	    X509_sign(cert, key, md) > 0;
+	if (!built) {
+		X509_free(cert);
+		die("cannot build a self-signed certificate for key_pem_path");
+	}
+	return cert;
 }
 
 }  // namespace tls_detail
@@ -170,6 +217,7 @@ public:
 			SSL_CTX_free(ctx);
 			ctx = nullptr;
 		}
+		EVP_PKEY_free(peer_key);
 		if (sock >= 0) {
 			::close(sock);
 			sock = -1;
@@ -232,6 +280,11 @@ private:
 	SSL_CTX *ctx = nullptr;
 	SSL     *ssl = nullptr;
 
+	// The peer's pinned public key, and whether the handshake met a
+	// certificate carrying another key (for the error message).
+	EVP_PKEY *peer_key = nullptr;
+	bool peer_key_rejected = false;
+
 	// Send-side staging — same shape as NetIO's send_buf path.
 	char *send_buf = nullptr;
 	size_t send_ptr = 0;
@@ -270,74 +323,74 @@ private:
 				tls_detail::die("set_ciphersuites");
 		}
 
-		// Cert + key are required on the server, and on the client only
-		// when the server is going to ask for them (mTLS). Loading them
-		// when the path is non-empty keeps the client side flexible.
-		const bool need_cert = cfg.is_tls_server || !cfg.cert_pem_path.empty();
-		if (need_cert) {
-			if (cfg.cert_pem_path.empty() || cfg.key_pem_path.empty())
-				tls_detail::die("cert_pem_path / key_pem_path required");
-			if (SSL_CTX_use_certificate_file(ctx, cfg.cert_pem_path.c_str(),
-			                                 SSL_FILETYPE_PEM) != 1)
-				tls_detail::die("use_certificate_file");
-			if (SSL_CTX_use_PrivateKey_file(ctx, cfg.key_pem_path.c_str(),
-			                                SSL_FILETYPE_PEM) != 1)
-				tls_detail::die("use_PrivateKey_file");
-			if (SSL_CTX_check_private_key(ctx) != 1)
-				tls_detail::die("check_private_key");
-		}
+		if (cfg.key_pem_path.empty() || cfg.peer_public_key_pem_path.empty())
+			tls_detail::die("key_pem_path and peer_public_key_pem_path are required");
+		EVP_PKEY *key = tls_detail::read_private_key(cfg.key_pem_path);
+		peer_key = tls_detail::read_public_key(cfg.peer_public_key_pem_path);
+		X509 *cert = tls_detail::self_signed_cert(key);
+		const bool loaded = SSL_CTX_use_certificate(ctx, cert) == 1 &&
+		                    SSL_CTX_use_PrivateKey(ctx, key) == 1 &&
+		                    SSL_CTX_check_private_key(ctx) == 1;
+		X509_free(cert);
+		EVP_PKEY_free(key);
+		if (!loaded) tls_detail::die("cannot use key_pem_path for the handshake");
 
-		// Verification setup. We do NOT install a custom verify callback
-		// — those are footguns (callers reach for "return 1" and
-		// silently disable verification). insecure_skip_verify is the
-		// explicit escape hatch.
-		if (cfg.insecure_skip_verify) {
-			SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
-		} else {
-			if (cfg.ca_pem_path.empty())
-				tls_detail::die("ca_pem_path required (or set insecure_skip_verify)");
-			if (SSL_CTX_load_verify_locations(ctx, cfg.ca_pem_path.c_str(), nullptr) != 1)
-				tls_detail::die("load_verify_locations");
-			int mode = SSL_VERIFY_PEER;
-			if (cfg.is_tls_server && cfg.require_peer_cert)
-				mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-			SSL_CTX_set_verify(ctx, mode, nullptr);
-		}
+		// Both ends present a certificate and check the peer's, and the check
+		// is verify_pinned_key alone. It is not a caller hook: TLSConfig has
+		// no way to turn it off.
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
+		                   &TLSIO::verify_pinned_key);
 
 		ssl = SSL_new(ctx);
 		if (!ssl) tls_detail::die("SSL_new failed");
 		if (SSL_set_fd(ssl, sock) != 1) tls_detail::die("SSL_set_fd");
+		SSL_set_app_data(ssl, this);
 
+		// A TLS 1.3 client finishes its handshake before the server has
+		// checked the client's key, so a client the server rejects fails at
+		// its next read instead.
+		auto handshake_failed = [&](const char *what) {
+			tls_detail::die(peer_key_rejected
+			                    ? "the peer's public key is not the pinned one"
+			                    : what);
+		};
 		if (is_tls_server) {
 			SSL_set_accept_state(ssl);
-			if (SSL_accept(ssl) != 1) tls_detail::die("SSL_accept");
+			if (SSL_accept(ssl) != 1) handshake_failed("SSL_accept");
 		} else {
 			SSL_set_connect_state(ssl);
-			if (SSL_connect(ssl) != 1) tls_detail::die("SSL_connect");
+			if (SSL_connect(ssl) != 1) handshake_failed("SSL_connect");
 		}
 
-		// If verification is on, post-handshake check that the chain
-		// validated and (when expected) the peer presented a cert.
-		if (!cfg.insecure_skip_verify) {
-			long v = SSL_get_verify_result(ssl);
-			if (v != X509_V_OK)
-				tls_detail::die("peer cert verify failed");
-			const bool expect_peer_cert =
-				is_tls_server ? cfg.require_peer_cert : true;
-			if (expect_peer_cert) {
-				X509 *peer = SSL_get_peer_certificate(ssl);
-				if (!peer) tls_detail::die("peer presented no certificate");
-				X509_free(peer);
-			}
-		}
+		// The callback already decided; this restates its outcome on the
+		// finished handshake.
+		X509 *peer = SSL_get0_peer_certificate(ssl);
+		if (!peer || EVP_PKEY_eq(X509_get0_pubkey(peer), peer_key) != 1)
+			tls_detail::die("the peer's public key is not the pinned one");
 
 		set_session_root(export_session_root());
 	}
 
+	// SSL_CTX verify callback: accept the peer's certificate exactly when it
+	// carries the pinned key. The certificate is self-signed, so OpenSSL's
+	// chain verdict (preverify_ok) is expected to fail and carries no weight;
+	// only the key of the certificate at depth 0, the peer's own, decides.
+	static int verify_pinned_key(int /*preverify_ok*/, X509_STORE_CTX *store) {
+		if (X509_STORE_CTX_get_error_depth(store) != 0) return 1;
+		SSL *ssl = static_cast<SSL *>(X509_STORE_CTX_get_ex_data(
+		    store, SSL_get_ex_data_X509_STORE_CTX_idx()));
+		TLSIO *self = static_cast<TLSIO *>(SSL_get_app_data(ssl));
+		X509 *cert = X509_STORE_CTX_get_current_cert(store);
+		const bool pinned =
+		    cert != nullptr && EVP_PKEY_eq(X509_get0_pubkey(cert), self->peer_key) == 1;
+		if (!pinned) self->peer_key_rejected = true;
+		return pinned ? 1 : 0;
+	}
+
 	// The next_session_id() root comes from the TLS exporter (RFC 8446,
 	// section 7.5) instead of a coin flip. Both ends derive it from the
-	// handshake secret with no message, and with certificate verification on,
-	// it is bound to the authenticated peer. The label is unregistered, so it
+	// handshake secret with no message, so it is bound to this handshake
+	// with the peer holding the pinned key. The label is unregistered, so it
 	// takes RFC 5705's private-use prefix.
 	block export_session_root() {
 		static constexpr char kLabel[] = "EXPERIMENTAL-emp-tool-session-id";
