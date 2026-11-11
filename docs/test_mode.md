@@ -114,6 +114,10 @@ in production paths.
   scheduling; wire-byte identity additionally requires one writer
   lane per channel, since concurrent writers to a single channel
   interleave nondeterministically even with deterministic seeds.
+- **A connecting NetIO draws a seed.** Its constructor runs the
+  session-root coin flip, which default-constructs a `PRG`, so a NetIO
+  built on a hand-spawned thread needs a lane like any other draw
+  (`NetIO::SessionRoot::none` draws nothing).
 - **`PRG(const void*, int)` is unchanged in test mode.** Callers
   with their own explicit seed sources already control determinism;
   the test-mode hook only affects the OS-random default path.

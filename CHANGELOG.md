@@ -3,6 +3,47 @@
 Notable changes to emp-tool. Versions are the git tags. CMake package
 metadata is numeric (see the README's version guidance).
 
+## Unreleased
+
+### Added
+
+- Session ids on `IOChannel`: `next_session_id()` returns a fresh `SessionID`
+  per call, derived from a session root that both ends agree on when the
+  connection is set up, and `has_session_root()` reports whether there is one.
+  `NetIO` agrees on the root with a commit-then-reveal coin flip in its
+  connecting constructors, one more round trip at setup
+  (`NetIO::SessionRoot::none` skips it). `make_sibling()` gives a sibling its
+  parent's next session id as its root. `TLSIO` takes the root from the TLS
+  exporter, and `TraceIO` forwards to the channel it wraps.
+- `TLSIO::make_sibling()` opens another TLS channel to the same peer and
+  port, as `NetIO::make_sibling()` does. The sibling shares its parent's TLS
+  context (the keys), runs its own handshake, and takes its parent's next
+  session id as its root.
+
+### Changed
+
+- `TLSIO` authenticates by pinned public keys instead of a CA. `TLSConfig`
+  takes `key_pem_path` (this party's private key) and
+  `peer_public_key_pem_path` (the peer's public key); `cert_pem_path`,
+  `ca_pem_path`, `require_peer_cert` and `insecure_skip_verify` are gone.
+  Each end presents a throwaway self-signed certificate for its key, and the
+  peer accepts it only if it carries the pinned key. Before, any certificate
+  the configured CA had issued was accepted as the peer.
+- A listening `TLSIO` keeps its listener open while it or a sibling is
+  alive, as a listening `NetIO` does, so no other channel can listen on that
+  port meanwhile; open more channels to the peer with `make_sibling()`.
+- `NetIO`'s connecting constructors run the session-root coin flip by
+  default, so both parties must upgrade together: a NetIO from an earlier
+  release does not take part in it. Neither that nor a `SessionRoot`
+  mismatch between the two ends is detected: the setup hangs, or the flip's
+  bytes are read as protocol data. In a test-mode build the flip draws one PRG
+  seed per connection, which shifts every later seed, so pinned test-mode
+  wire traces must be regenerated, and a connecting NetIO built on a
+  hand-spawned thread needs a lane like any other seed draw.
+- `NetIO::make_sibling()` is no longer `const`: it takes the sibling's root
+  from the parent's session ids, so it changes the parent like any other
+  call on it.
+
 ## v1.0.0-alpha.2
 
 Second alpha of the 1.0 development line. It fixes a Delta recovery in

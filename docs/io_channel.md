@@ -68,6 +68,42 @@ sub-challenges across stages). `get_send_digest()` / `get_recv_digest()`
 are per-direction snapshots for diagnostics. All three assert that
 `enable_fs` ran first.
 
+## Session ids
+
+A channel may hold a session root that both ends agree on when the connection
+is set up. `next_session_id()` returns a fresh `SessionID` on every call, a
+child (`SessionID::derive`) of that root. It is local: the two ends get the
+same sequence by calling it in the same order, and another connection gets a
+different one. The root itself is never returned. `has_session_root()` reports
+whether the channel has one; asking a channel without a root for an id is an
+error.
+
+- **NetIO** agrees on its root with a commit-then-reveal coin flip in its
+  connecting constructors (the address constructor, `listen` and `connect`).
+  Right after its accept acknowledgement, the listener sends `c = RO(s ‖ r)`
+  (a 32-byte digest); the connector replies with `r'`; the listener opens
+  `s ‖ r`, and the connector checks the opening against `c`. The root is
+  `RO(r ‖ r')`. The flip adds one round trip to setup on both ends. Like
+  `sync()`, it runs on the transport hooks, so its bytes are not counted and
+  not in the Fiat–Shamir transcript. The root is uniform when at least one
+  party follows the protocol; the listener learns it first and can abort
+  instead of opening, the bias any two-party coin flip allows. The flip does
+  not authenticate the peer: on an unauthenticated network, a man in the
+  middle runs one flip with each party. Pass `NetIO::SessionRoot::none` to
+  skip the flip. Both ends must choose the same: a mismatch is not detected,
+  so the setup hangs or the flip's bytes are read as protocol data.
+- **Siblings**: `make_sibling()`, on NetIO and on TLSIO, gives the sibling
+  its parent's next session id as its root, so NetIO siblings run no flip,
+  and a sibling of a channel without a root has none. A NetIO adopted from a
+  socket does not know which end of the connection it is, so it has no
+  root.
+- **TLSIO** takes its root from the TLS exporter (RFC 8446, section 7.5),
+  under the private-use label `EXPERIMENTAL-emp-tool-session-id`. Both ends
+  derive it from the handshake secret with no message, so the root is bound
+  to the handshake with the peer that holds the pinned key.
+- **TraceIO** forwards both calls to the channel it wraps, so the two share
+  one sequence.
+
 ## Other base surface
 
 - **`sync()`**: a barrier for tests, benchmarks and setup, not protocol logic.
@@ -88,9 +124,9 @@ are per-direction snapshots for diagnostics. All three assert that
   listener closes with the last one. This avoids closing, rebinding, or sleeping
   between accepts.
 - **Multiple channels — recommended pattern**: to run several channels to
-  the same peer, keep one anchor NetIO alive and take the others via
-  `make_sibling()`, calling it **serially and in the same order on both
-  parties** (its accept/connect pairing is FIFO on the shared listener —
+  the same peer, keep one anchor channel (NetIO or TLSIO) alive and take the
+  others via `make_sibling()`, calling it **serially and in the same order on
+  both parties** (its accept/connect pairing is FIFO on the shared listener —
   concurrent `make_sibling()` from multiple threads is not deterministic).
   Closing all channels and reopening the same port is supported, but sibling
   channels avoid reconnecting.
@@ -162,13 +198,22 @@ order, as with NetIO. A TLSIO server sends no session tickets (TLSIO
 never resumes a session), so a send-only peer has no unread bytes that
 would turn its close into a connection reset.
 
-Cert / key / CA material is caller-supplied via `TLSConfig` (PEM file
-paths). mTLS is on by default — each side verifies the peer's
-certificate chain against the configured CA; clear `require_peer_cert`
-on the server to make client-cert presentation optional, or set
-`insecure_skip_verify` in dev only. Verification is chain-only: no
-expected-hostname / SAN / fingerprint binding, so any certificate
-issued by the configured CA authenticates — the CA must be
-deployment-private (see the README's Security section). One `SSL_CTX`
-per channel; if a profile shows the per-channel cert-parse cost
-mattering, share a CTX via a thin factory.
+Authentication is by pinned public keys, with no CA. `TLSConfig` names
+this party's private key (`key_pem_path`) and the peer's public key
+(`peer_public_key_pem_path`, a PEM `BEGIN PUBLIC KEY` block), both
+required. TLS 1.3 carries a key in a certificate, so each end presents a
+throwaway self-signed certificate for its key and accepts the peer's only
+if it carries the pinned key; the handshake signature proves that the peer
+holds the matching private key. Any key type OpenSSL signs TLS 1.3
+handshakes with works (Ed25519, ECDSA, RSA), and the two parties' types may
+differ. A TLS 1.3 client finishes its handshake before the server checks
+the client's key, so a client the server rejects fails at its next read
+rather than in its constructor.
+
+`TLSIO::make_sibling()` opens another TLS channel to the same peer and port,
+as NetIO's does: a listening TLSIO keeps its listener open while it or a
+sibling is alive, and both ends call it serially and in the same order. A
+sibling shares its parent's `SSL_CTX` (the keys, read and signed into a
+certificate once) but runs its own handshake, so its traffic keys are its
+own; TLSIO never resumes a session, so nothing else carries over. A TLSIO
+adopted from a socket cannot open siblings.

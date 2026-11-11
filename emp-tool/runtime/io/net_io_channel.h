@@ -10,6 +10,8 @@
 #include <string>
 
 #include "emp-tool/runtime/core/utils.h"   // error()
+#include "emp-tool/runtime/crypto/prg.h"
+#include "emp-tool/runtime/crypto/ro.h"
 #include "emp-tool/runtime/io/io_channel.h"
 #include "emp-tool/runtime/io/tcp_socket.h"
 
@@ -41,11 +43,20 @@ public:
 	// time per channel; threaded consumers take a sibling channel each
 	// (make_sibling). Races are not detected at runtime — use TSan.
 
-	NetIO(const char *address, int port, bool quiet = false)
-	    : NetIO(address, port, tcp::SocketOptions{}, quiet) {}
+	// Whether a connecting constructor agrees on a session root with the peer
+	// (see next_session_id()). coin_flip, the default, adds one round trip to
+	// connection setup; none leaves the channel, and its siblings, without a
+	// root. Both ends must choose the same: a mismatch is not detected, so the
+	// setup hangs or the flip's bytes are read as protocol data.
+	enum class SessionRoot { coin_flip, none };
+
+	NetIO(const char *address, int port, bool quiet = false,
+	      SessionRoot session_root = SessionRoot::coin_flip)
+	    : NetIO(address, port, tcp::SocketOptions{}, quiet, session_root) {}
 
 	NetIO(const char *address, int port,
-	      const tcp::SocketOptions &socket_options, bool quiet = false)
+	      const tcp::SocketOptions &socket_options, bool quiet = false,
+	      SessionRoot session_root = SessionRoot::coin_flip)
 	    : quiet(quiet), socket_options_(socket_options) {
 		expecting(port >= 0 && port <= 65535,
 		          "NetIO: invalid port number");
@@ -61,6 +72,8 @@ public:
 			init_from_sock(tcp::client_connect_confirmed(address, port,
 			                                               socket_options_));
 		}
+		if (session_root == SessionRoot::coin_flip)
+			set_session_root(flip_session_root());
 		if (!quiet) std::cout << "connected\n";
 	}
 
@@ -68,46 +81,61 @@ public:
 	// is explicit in the name and the signature — listen() takes no address;
 	// connect() requires one — an explicit alternative to the
 	// nullptr-means-server sentinel of the (const char*, int) constructor.
-	static std::unique_ptr<NetIO> listen(int port, bool quiet = false) {
-		return std::make_unique<NetIO>(nullptr, port, quiet);
+	static std::unique_ptr<NetIO> listen(
+	    int port, bool quiet = false,
+	    SessionRoot session_root = SessionRoot::coin_flip) {
+		return std::make_unique<NetIO>(nullptr, port, quiet, session_root);
 	}
-	static std::unique_ptr<NetIO> listen(int port,
-	                                     const tcp::SocketOptions &socket_options,
-	                                     bool quiet = false) {
-		return std::make_unique<NetIO>(nullptr, port, socket_options, quiet);
+	static std::unique_ptr<NetIO> listen(
+	    int port, const tcp::SocketOptions &socket_options, bool quiet = false,
+	    SessionRoot session_root = SessionRoot::coin_flip) {
+		return std::make_unique<NetIO>(nullptr, port, socket_options, quiet,
+		                               session_root);
 	}
-	static std::unique_ptr<NetIO> connect(const char *address, int port, bool quiet = false) {
-		return std::make_unique<NetIO>(address, port, quiet);
+	static std::unique_ptr<NetIO> connect(
+	    const char *address, int port, bool quiet = false,
+	    SessionRoot session_root = SessionRoot::coin_flip) {
+		return std::make_unique<NetIO>(address, port, quiet, session_root);
 	}
 	static std::unique_ptr<NetIO> connect(
 	    const char *address, int port, const tcp::SocketOptions &socket_options,
-	    bool quiet = false) {
-		return std::make_unique<NetIO>(address, port, socket_options, quiet);
+	    bool quiet = false, SessionRoot session_root = SessionRoot::coin_flip) {
+		return std::make_unique<NetIO>(address, port, socket_options, quiet,
+		                               session_root);
 	}
 
 	// Open another channel to the same peer and port. Related server channels
 	// share the listener, so make_sibling() may be called repeatedly on the
 	// primary or any sibling. The client makes another connection to the same
 	// port. The listener closes when the last related server NetIO is destroyed.
-	std::unique_ptr<NetIO> make_sibling() const {
-		if (!is_server)
-			return connect(addr_.c_str(), port_, socket_options_, /*quiet=*/true);
+	// When this channel has a session root, the sibling's root is this
+	// channel's next session id, so the sibling runs no coin flip of its own;
+	// otherwise the sibling has no root either.
+	std::unique_ptr<NetIO> make_sibling() {
+		std::unique_ptr<NetIO> sibling;
+		if (!is_server) {
+			sibling = connect(addr_.c_str(), port_, socket_options_,
+			                  /*quiet=*/true, SessionRoot::none);
+		} else {
+			expecting(listener != nullptr,
+			          "NetIO::make_sibling requires a server listener");
+			// The accepted socket inherits the listener's options.
+			int sibling_sock = tcp::accept_one_confirmed(listener->fd);
 
-		expecting(listener != nullptr,
-		          "NetIO::make_sibling requires a server listener");
-		// The accepted socket inherits the listener's options.
-		int sibling_sock = tcp::accept_one_confirmed(listener->fd);
-
-		auto sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
-		sibling->is_server = true;  // so make_sibling() on it accepts too
-		sibling->port_ = port_;
-		sibling->socket_options_ = socket_options_;
-		sibling->listener = listener;
+			sibling = std::make_unique<NetIO>(sibling_sock, /*quiet=*/true);
+			sibling->is_server = true;  // so make_sibling() on it accepts too
+			sibling->port_ = port_;
+			sibling->socket_options_ = socket_options_;
+			sibling->listener = listener;
+		}
+		if (has_session_root())
+			sibling->set_session_root(next_session_id().value());
 		return sibling;
 	}
 
 	// Wrap an already-connected socket fd, for callers that run their
-	// own accept loop and want to skip bind/listen/accept.
+	// own accept loop and want to skip bind/listen/accept. The channel does
+	// not know which end of the connection it is, so it has no session root.
 	NetIO(int existing_sock, bool quiet = true) : quiet(quiet) {
 		is_server = false;
 		init_from_sock(existing_sock);
@@ -226,6 +254,53 @@ private:
 			return std::string("NetIO: fdopen failed: ") + std::strerror(errno);
 		});
 		setvbuf(stream, stream_buf, _IOFBF, NETWORK_STREAM_BUFFER_SIZE);
+	}
+
+	// The session root, agreed by a commit-then-reveal coin flip as soon as
+	// the connection is up. Like sync(), it runs on the transport hooks, so its
+	// bytes are not counted and not in the Fiat-Shamir transcript. s, r and r'
+	// are fresh random blocks, and the commitment is a 32-byte digest:
+	//
+	//   listener -> connector   c = RO(s ‖ r)
+	//   connector -> listener   r'
+	//   listener -> connector   s ‖ r          (checked against c)
+	//   root = RO(r ‖ r')
+	//
+	// The commitment follows the listener's accept acknowledgement, so the flip
+	// adds one round trip to setup on both ends. The root is uniform when at
+	// least one party follows the protocol: the listener is bound to r before
+	// seeing r', and the connector picks r' without seeing r. The listener
+	// learns the root first and can abort instead of opening, the bias any
+	// two-party coin flip allows. The flip does not authenticate the peer: on
+	// an unauthenticated network, a man in the middle runs one flip with each
+	// party.
+	block flip_session_root() {
+		static constexpr const char *kCommit = "emp-tool:session-id:commit";
+		block opening[2];   // s, r
+		block r_prime;
+		unsigned char commitment[Hash::DIGEST_SIZE];
+		if (is_server) {
+			PRG().random_block(opening, 2);
+			RO(kCommit, zero_block).absorb(opening[0]).absorb(opening[1])
+			    .squeeze_digest(commitment);
+			send_data_internal(commitment, sizeof(commitment));
+			recv_data_internal(&r_prime, sizeof(r_prime));
+			send_data_internal(opening, sizeof(opening));
+			flush_unlocked();
+		} else {
+			recv_data_internal(commitment, sizeof(commitment));
+			PRG().random_block(&r_prime, 1);
+			send_data_internal(&r_prime, sizeof(r_prime));
+			recv_data_internal(opening, sizeof(opening));
+			unsigned char expected[Hash::DIGEST_SIZE];
+			RO(kCommit, zero_block).absorb(opening[0]).absorb(opening[1])
+			    .squeeze_digest(expected);
+			expecting(std::memcmp(commitment, expected, sizeof(expected)) == 0,
+			          "NetIO: the listener's session-root opening does not match "
+			          "its commitment");
+		}
+		return RO("emp-tool:session-id:root", zero_block)
+		    .absorb(opening[1]).absorb(r_prime).squeeze_block();
 	}
 
 	void flush_unlocked() {
