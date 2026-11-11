@@ -10,9 +10,10 @@
 // Parsing is hostile-input safe (third-party circuit files are a goal): fixed
 // little-endian field reads (never a struct overlay / reinterpret_cast, so the
 // reader is endian- and layout-independent), overflow-checked size math, an
-// exact total-size check, and validate_program() after decode. Trusted
-// self-produced assets (the shipped float circuits) take the same path; the
-// cost is negligible and it keeps one loader.
+// exact total-size check, a cap on the declared wire count, and
+// validate_program() after decode. Trusted self-produced assets (the shipped
+// float circuits) take the same path; the cost is negligible and it keeps one
+// loader.
 //
 // Layout (all integers little-endian):
 //   magic   : 4 bytes = 'E','M','P','B'
@@ -122,9 +123,19 @@ inline std::vector<uint8_t> save_empbc(const BooleanProgram& p) {
 	return b;
 }
 
+// Default cap on a loaded program's wire count. Input wires take no bytes in a
+// .empbc file, so a header alone can declare up to 2^32-1 of them, and the IR
+// passes size their per-wire arrays by num_wires (liveness keeps 16 bytes per
+// wire). The cap stops such a header before anything is allocated while leaving
+// room for very large programs; pass a larger max_wires to load a bigger one, or
+// a smaller one to bound memory for files from an untrusted source.
+inline constexpr int64_t empbc_default_max_wires = int64_t(1) << 30;
+
 // Decode .empbc bytes into a runtime BooleanProgram (uint32_t indices) and
-// validate it. error()s (fatal) on any structural problem.
-inline BooleanProgram load_empbc(const uint8_t* bytes, int64_t len) {
+// validate it. error()s (fatal) on any structural problem or when the header
+// declares more than max_wires wires.
+inline BooleanProgram load_empbc(const uint8_t* bytes, int64_t len,
+                                 int64_t max_wires = empbc_default_max_wires) {
 	using namespace empbc_detail;
 	expecting(len >= 0, "empbc: negative length");
 	expecting(bytes != nullptr || len == 0,
@@ -144,6 +155,11 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, int64_t len) {
 	BooleanProgram p;
 	p.wire_reuse           = (WireReuse)(flags & 0x3u);
 	p.num_wires            = r.u32();
+	expecting(max_wires >= 0, "empbc: negative max_wires");
+	expecting((int64_t)p.num_wires <= max_wires, [&] {
+		return "empbc: num_wires " + std::to_string(p.num_wires) + " exceeds max_wires " +
+		       std::to_string(max_wires) + " (pass a larger max_wires to load it)";
+	});
 	p.num_inputs           = r.u32();
 	uint32_t num_outputs   = r.u32();
 	uint32_t num_gates     = r.u32();
@@ -180,13 +196,15 @@ inline BooleanProgram load_empbc(const uint8_t* bytes, int64_t len) {
 	return p;
 }
 
-inline BooleanProgram load_empbc(const std::vector<uint8_t>& bytes) {
-	return load_empbc(bytes.data(), (int64_t)bytes.size());
+inline BooleanProgram load_empbc(const std::vector<uint8_t>& bytes,
+                                 int64_t max_wires = empbc_default_max_wires) {
+	return load_empbc(bytes.data(), (int64_t)bytes.size(), max_wires);
 }
 
 // No cleanup on the failure paths: expecting() ends the process, so an
 // open FILE* cannot leak into continued execution.
-inline BooleanProgram load_empbc_file(const char* path) {
+inline BooleanProgram load_empbc_file(const char* path,
+                                      int64_t max_wires = empbc_default_max_wires) {
 	FILE* f = std::fopen(path, "rb");
 	expecting(f != nullptr,
 	          [&] { return std::string("empbc: cannot open ") + path; });
@@ -198,7 +216,7 @@ inline BooleanProgram load_empbc_file(const char* path) {
 	expecting(sz == 0 || std::fread(buf.data(), 1, (size_t)sz, f) == (size_t)sz,
 	          "empbc: short read");
 	std::fclose(f);
-	return load_empbc(buf);
+	return load_empbc(buf, max_wires);
 }
 
 inline void save_empbc_file(const char* path, const BooleanProgram& p) {

@@ -406,8 +406,9 @@ consume its AND-depth schedule with `scheduled_execute_program`.
 
 ### Circuit statistics and asset manifests
 
-Top-level builds also produce `empbc-tool`. It uses the same hostile-input-safe
-loader and IR passes as the library:
+Top-level builds also produce `empbc-tool`. It uses the library's loader, which
+rejects malformed files and, by default, more than 2^30 wires, and the library's
+IR passes, which allocate memory in proportion to the wire count:
 
 ```bash
 ./build/empbc-tool inspect emp-tool/ir/files/aes128.empbc
