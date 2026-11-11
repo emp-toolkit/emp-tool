@@ -18,6 +18,13 @@ metadata is numeric (see the README's version guidance).
 
 ### Changed
 
+- `TLSIO` authenticates by pinned public keys instead of a CA. `TLSConfig`
+  takes `key_pem_path` (this party's private key) and
+  `peer_public_key_pem_path` (the peer's public key); `cert_pem_path`,
+  `ca_pem_path`, `require_peer_cert` and `insecure_skip_verify` are gone.
+  Each end presents a throwaway self-signed certificate for its key, and the
+  peer accepts it only if it carries the pinned key. Before, any certificate
+  the configured CA had issued was accepted as the peer.
 - `NetIO`'s connecting constructors run the session-root coin flip by
   default, so both parties must upgrade together: a NetIO from an earlier
   release does not take part in it. Neither that nor a `SessionRoot`

@@ -98,8 +98,8 @@ error.
   the connection it is, so it has no root.
 - **TLSIO** takes its root from the TLS exporter (RFC 8446, section 7.5),
   under the private-use label `EXPERIMENTAL-emp-tool-session-id`. Both ends
-  derive it from the handshake secret with no message, and with certificate
-  verification on, the root is bound to the authenticated peer.
+  derive it from the handshake secret with no message, so the root is bound
+  to the handshake with the peer that holds the pinned key.
 - **TraceIO** forwards both calls to the channel it wraps, so the two share
   one sequence.
 
@@ -197,13 +197,16 @@ order, as with NetIO. A TLSIO server sends no session tickets (TLSIO
 never resumes a session), so a send-only peer has no unread bytes that
 would turn its close into a connection reset.
 
-Cert / key / CA material is caller-supplied via `TLSConfig` (PEM file
-paths). mTLS is on by default — each side verifies the peer's
-certificate chain against the configured CA; clear `require_peer_cert`
-on the server to make client-cert presentation optional, or set
-`insecure_skip_verify` in dev only. Verification is chain-only: no
-expected-hostname / SAN / fingerprint binding, so any certificate
-issued by the configured CA authenticates — the CA must be
-deployment-private (see the README's Security section). One `SSL_CTX`
-per channel; if a profile shows the per-channel cert-parse cost
-mattering, share a CTX via a thin factory.
+Authentication is by pinned public keys, with no CA. `TLSConfig` names
+this party's private key (`key_pem_path`) and the peer's public key
+(`peer_public_key_pem_path`, a PEM `BEGIN PUBLIC KEY` block), both
+required. TLS 1.3 carries a key in a certificate, so each end presents a
+throwaway self-signed certificate for its key and accepts the peer's only
+if it carries the pinned key; the handshake signature proves that the peer
+holds the matching private key. Any key type OpenSSL signs TLS 1.3
+handshakes with works (Ed25519, ECDSA, RSA), and the two parties' types may
+differ. A TLS 1.3 client finishes its handshake before the server checks
+the client's key, so a client the server rejects fails at its next read
+rather than in its constructor. One `SSL_CTX` per channel, which reads the
+keys and signs a certificate; if a profile shows that cost mattering, share
+a CTX via a thin factory.

@@ -10,37 +10,36 @@
 //   sync()                             barrier (inherited from IOChannel)
 //   has_session_root / next_session_id session ids, from a root taken from
 //                                      the TLS exporter
+//   TLSConfig keys                     own private key + the peer's pinned
+//                                      public key; a peer without the
+//                                      matching private key is rejected,
+//                                      whatever certificates it presents
 //   TLSConfig::socket_options          pre-handshake socket buffer sizing
 //
 // Same flush contract and thread-safety rules as NetIO. The test
 // mirrors test_netio.cpp's correctness + send-only regression suite,
 // exercising the same paths against TLSIO.
 //
-// Cert material is laid out the way a real mTLS deployment would be —
-// five distinct files with five distinct roles, so the test reads as a
-// tutorial for what each TLSConfig path actually is:
+// Keys are laid out the way a deployment holds them: each party has its own
+// private key and the other party's public key, and nothing else (no CA, no
+// certificates):
 //
-//   ca_cert.pem        VK_CA — the trust anchor both sides verify against
-//   alice_cert.pem     VK_alice + Sign(SK_CA, VK_alice ‖ "alice")
-//   alice_key.pem      SK_alice — ALICE's signing key
-//   bob_cert.pem       VK_bob   + Sign(SK_CA, VK_bob   ‖ "bob")
-//   bob_key.pem        SK_bob   — BOB's signing key
+//   alice_key.pem     SK_alice, ALICE's private key (RSA)
+//   alice_pub.pem     PK_alice, which BOB pins
+//   bob_key.pem       SK_bob, BOB's private key (Ed25519)
+//   bob_pub.pem       PK_bob, which ALICE pins
+//   mallory_pub.pem   a third public key, pinned by the rejection checks
 //
-// ALICE generates everything (CA keypair, ALICE keypair, BOB keypair),
-// signs ALICE's and BOB's certs with the CA, and writes the five PEM
-// files. The CA's private key never touches disk — only its cert
-// (= VK_CA) is published. In a real deployment ALICE and BOB would
-// each generate their own SK locally and hand the CA only a CSR; the
-// test conflates this for simplicity but the file layout matches.
-//
-// BOB polls for ca_cert.pem (written last as the readiness sentinel),
-// then both sides build a TLSConfig pointing at their respective
-// (cert, key, ca) triple. Real verification runs both directions —
-// no insecure_skip_verify shortcut.
+// ALICE generates all of them and BOB polls for mallory_pub.pem, written last.
+// In a deployment each party generates its own key pair and gives the other
+// only its public key. The two key types differ to cover both ways TLSIO signs
+// its throwaway certificate (with a digest for RSA, without one for Ed25519).
 
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -49,10 +48,12 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
-#include <openssl/rsa.h>
+#include <openssl/ssl.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "emp-tool/emp-tool.h"
 
@@ -73,146 +74,111 @@ static bool dies(F &&f) {
 	return !(WIFEXITED(status) && WEXITSTATUS(status) == 0);
 }
 
-static const char *CA_CERT    = "/tmp/emp_tlsio_test_ca_cert.pem";
-static const char *ALICE_CERT = "/tmp/emp_tlsio_test_alice_cert.pem";
-static const char *ALICE_KEY  = "/tmp/emp_tlsio_test_alice_key.pem";
-static const char *BOB_CERT   = "/tmp/emp_tlsio_test_bob_cert.pem";
-static const char *BOB_KEY    = "/tmp/emp_tlsio_test_bob_key.pem";
+// Runs f in a child process and collects what it writes to stderr; true if
+// the child exited cleanly.
+template <class F>
+static bool run_capturing_stderr(F &&f, std::string &err) {
+	int fds[2];
+	expecting(::pipe(fds) == 0, "TLSIO test: pipe failed");
+	pid_t pid = fork();
+	expecting(pid >= 0, "TLSIO test: fork failed");
+	if (pid == 0) {
+		::close(fds[0]);
+		::dup2(fds[1], STDERR_FILENO);
+		f();
+		_exit(0);
+	}
+	::close(fds[1]);
+	err.clear();
+	char buf[512];
+	ssize_t n;
+	while ((n = ::read(fds[0], buf, sizeof(buf))) > 0) err.append(buf, (size_t)n);
+	::close(fds[0]);
+	int status = 0;
+	waitpid(pid, &status, 0);
+	return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+// The key files live under the test's port, so runs on other ports never
+// share them.
+static int g_port = 0;
+static std::string pem_path(const char *name) {
+	return "/tmp/emp_tlsio_test_" + std::to_string(g_port) + "_" + name + ".pem";
+}
 
 // Bail with the OpenSSL error queue dumped, on any non-success path.
 // Used in lieu of assert() because the test runs Release-by-default and
 // assert() is a no-op there — most of these calls have side effects.
-[[noreturn]] static void cert_die(const char *what) {
-	fprintf(stderr, "test_tlsio cert gen: %s failed\n", what);
+[[noreturn]] static void key_die(const char *what) {
+	fprintf(stderr, "test_tlsio key gen: %s failed\n", what);
 	ERR_print_errors_fp(stderr);
 	exit(1);
 }
 
-// One in-memory keypair + cert. `pkey` is the SK; `cert` carries the
-// matching VK plus the CA's signature binding it to a name.
-struct CertKey {
-	EVP_PKEY *pkey = nullptr;
-	X509     *cert = nullptr;
-};
-
-// EVP_PKEY_CTX route (vs the simpler EVP_PKEY_Q_keygen) so this
-// compiles on OpenSSL 1.1 as well as 3.x.
-static EVP_PKEY *gen_rsa_keypair() {
-	EVP_PKEY_CTX *pctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
-	if (!pctx) cert_die("EVP_PKEY_CTX_new_id");
-	if (EVP_PKEY_keygen_init(pctx) != 1) cert_die("EVP_PKEY_keygen_init");
-	if (EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) != 1)
-		cert_die("EVP_PKEY_CTX_set_rsa_keygen_bits");
-	EVP_PKEY *pkey = nullptr;
-	if (EVP_PKEY_keygen(pctx, &pkey) != 1) cert_die("EVP_PKEY_keygen");
-	EVP_PKEY_CTX_free(pctx);
-	return pkey;
-}
-
-// Build an X509 with subject CN=common_name, public key VK from `pkey`.
-// If `signer == nullptr`, the cert is self-signed (issuer = subject,
-// signed with `pkey`) — that's the CA case. Otherwise issuer is
-// `signer->cert`'s subject and the signature is by `signer->pkey` —
-// that's the end-entity case (alice / bob).
-static CertKey gen_certkey(const char *common_name, const CertKey *signer) {
-	CertKey ck;
-	ck.pkey = gen_rsa_keypair();
-	ck.cert = X509_new();
-	if (!ck.cert) cert_die("X509_new");
-
-	ASN1_INTEGER_set(X509_get_serialNumber(ck.cert), 1);
-	X509_gmtime_adj(X509_get_notBefore(ck.cert), 0);
-	X509_gmtime_adj(X509_get_notAfter(ck.cert), 60L * 60 * 24);
-	if (X509_set_pubkey(ck.cert, ck.pkey) != 1) cert_die("X509_set_pubkey");
-
-	X509_NAME *subj = X509_get_subject_name(ck.cert);
-	X509_NAME_add_entry_by_txt(subj, "CN", MBSTRING_ASC,
-	                           (const unsigned char *)common_name, -1, -1, 0);
-
-	X509_NAME *issuer = signer ? X509_get_subject_name(signer->cert) : subj;
-	if (X509_set_issuer_name(ck.cert, issuer) != 1)
-		cert_die("X509_set_issuer_name");
-
-	EVP_PKEY *signing_key = signer ? signer->pkey : ck.pkey;
-	if (X509_sign(ck.cert, signing_key, EVP_sha256()) <= 0)
-		cert_die("X509_sign");
-	return ck;
-}
-
-static void free_certkey(CertKey &ck) {
-	if (ck.pkey) EVP_PKEY_free(ck.pkey);
-	if (ck.cert) X509_free(ck.cert);
-	ck.pkey = nullptr;
-	ck.cert = nullptr;
-}
-
-static void write_cert_pem(X509 *cert, const char *path) {
-	FILE *f = fopen(path, "wb");
-	if (!f) cert_die("fopen cert");
-	if (PEM_write_X509(f, cert) != 1) cert_die("PEM_write_X509");
-	fclose(f);
-}
-
 // 0600 perms from creation (not chmod'd after) so we never publish a
 // world-readable private key, even briefly.
-static void write_key_pem(EVP_PKEY *key, const char *path) {
-	int fd = ::open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-	if (fd < 0) cert_die("open key");
+static void write_private_key(EVP_PKEY *key, const std::string &path) {
+	int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+	if (fd < 0) key_die("open key");
 	FILE *f = fdopen(fd, "wb");
-	if (!f) cert_die("fdopen key");
+	if (!f) key_die("fdopen key");
 	if (PEM_write_PrivateKey(f, key, nullptr, nullptr, 0, nullptr, nullptr) != 1)
-		cert_die("PEM_write_PrivateKey");
+		key_die("PEM_write_PrivateKey");
 	fclose(f);
 }
 
-// Set up the whole PKI: a CA that signs separate end-entity certs for
-// ALICE and BOB. Writes 5 PEM files; CA's private key stays in memory
-// and is freed at the end. CA_CERT is renamed-into-place last so it
-// doubles as the readiness sentinel for BOB.
-static void generate_pki() {
-	CertKey ca    = gen_certkey("emp-tool-test CA", nullptr);
-	CertKey alice = gen_certkey("alice", &ca);
-	CertKey bob   = gen_certkey("bob",   &ca);
-
-	write_cert_pem(alice.cert, ALICE_CERT);
-	write_key_pem (alice.pkey, ALICE_KEY);
-	write_cert_pem(bob.cert,   BOB_CERT);
-	write_key_pem (bob.pkey,   BOB_KEY);
-
-	std::string ca_tmp = std::string(CA_CERT) + ".tmp";
-	write_cert_pem(ca.cert, ca_tmp.c_str());
-	if (::rename(ca_tmp.c_str(), CA_CERT) != 0) cert_die("rename ca cert");
-
-	free_certkey(alice);
-	free_certkey(bob);
-	free_certkey(ca);
+// 0644 from creation: anyone may read a public key, but no one else may
+// replace the one a party pins.
+static void write_public_key(EVP_PKEY *key, const std::string &path) {
+	int fd = ::open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (fd < 0) key_die("open public key");
+	FILE *f = fdopen(fd, "wb");
+	if (!f) key_die("fdopen public key");
+	if (PEM_write_PUBKEY(f, key) != 1) key_die("PEM_write_PUBKEY");
+	fclose(f);
 }
 
-// Block until CA_CERT exists. ALICE writes the four end-entity files
-// first and renames-in CA_CERT last, so its presence implies all five
-// files are fully written. 5 s cap so a missed-handoff bug surfaces as
-// a test failure rather than a hang.
-static void wait_for_pki() {
+// Make the key files listed at the top. mallory_pub.pem is renamed into place
+// last, so its presence tells BOB the others are complete.
+static void generate_keys() {
+	EVP_PKEY *alice = EVP_PKEY_Q_keygen(nullptr, nullptr, "RSA", (size_t)2048);
+	EVP_PKEY *bob = EVP_PKEY_Q_keygen(nullptr, nullptr, "ED25519");
+	EVP_PKEY *mallory = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", "P-256");
+	if (!alice || !bob || !mallory) key_die("EVP_PKEY_Q_keygen");
+	write_private_key(alice, pem_path("alice_key"));
+	write_public_key(alice, pem_path("alice_pub"));
+	write_private_key(bob, pem_path("bob_key"));
+	write_public_key(bob, pem_path("bob_pub"));
+	const std::string ready = pem_path("mallory_pub");
+	write_public_key(mallory, ready + ".tmp");
+	if (::rename((ready + ".tmp").c_str(), ready.c_str()) != 0)
+		key_die("rename mallory_pub");
+	EVP_PKEY_free(alice);
+	EVP_PKEY_free(bob);
+	EVP_PKEY_free(mallory);
+}
+
+// Block until mallory_pub.pem exists, with a 5 s cap so a missed handoff
+// surfaces as a test failure rather than a hang.
+static void wait_for_keys() {
+	const std::string ready = pem_path("mallory_pub");
 	struct stat sb;
 	for (int i = 0; i < 5000; ++i) {
-		if (::stat(CA_CERT, &sb) == 0) return;
+		if (::stat(ready.c_str(), &sb) == 0) return;
 		usleep(1000);
 	}
-	fprintf(stderr, "test_tlsio: timed out waiting for PKI files\n");
+	fprintf(stderr, "test_tlsio: timed out waiting for the key files\n");
 	exit(1);
 }
 
 static TLSConfig make_cfg(int party) {
 	TLSConfig cfg;
-	// Mirror test_netio.cpp: ALICE runs the TCP listener. We make ALICE
-	// the TLS server too — both sides present a cert (mTLS) and verify
-	// the peer's cert against the same CA.
+	// Mirror test_netio.cpp: ALICE runs the TCP listener, and is the TLS
+	// server too. Each party gives its own private key and pins the other's
+	// public key.
 	cfg.is_tls_server = (party == ALICE);
-	cfg.cert_pem_path = (party == ALICE) ? ALICE_CERT : BOB_CERT;
-	cfg.key_pem_path  = (party == ALICE) ? ALICE_KEY  : BOB_KEY;
-	cfg.ca_pem_path   = CA_CERT;       // both trust the same CA
-	cfg.require_peer_cert    = true;   // exercise the mTLS path
-	cfg.insecure_skip_verify = false;
+	cfg.key_pem_path = pem_path(party == ALICE ? "alice_key" : "bob_key");
+	cfg.peer_public_key_pem_path = pem_path(party == ALICE ? "bob_pub" : "alice_pub");
 	cfg.socket_options.send_buffer_size = 128 * 1024;
 	cfg.socket_options.receive_buffer_size = 128 * 1024;
 	return cfg;
@@ -246,6 +212,178 @@ static void run_adopted_socket_options_rejection() {
 		cfg.socket_options.receive_buffer_size = 128 * 1024;
 		TLSIO io(sockets[0], true, cfg, true);
 	}), "TLSIO test: adopted socket accepted pre-handshake options");
+}
+
+// A TLSConfig without both keys is refused before any handshake.
+static void run_missing_key_rejection() {
+	std::string err;
+	const bool clean = run_capturing_stderr([] {
+		int sockets[2];
+		expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+		          "TLSIO test: socketpair failed");
+		TLSConfig cfg;
+		cfg.key_pem_path = pem_path("alice_key");  // and no peer key
+		TLSIO io(sockets[0], true, cfg, true);
+	}, err);
+	expecting(!clean && err.find("are required") != std::string::npos,
+	          "TLSIO test: a TLSConfig without the peer's public key was accepted");
+}
+
+// -------------------------------------------------------------------------
+// Pinned-key attacks, without ports: TLSIO adopts one end of a socketpair,
+// and a raw OpenSSL peer on a thread holds the other. The attacker knows the
+// pinned public key but not its private key, so it can put the pinned key in
+// a certificate but cannot sign the handshake with it. TLSIO, in either role,
+// must refuse a chain whose leaf carries the attacker's key and whose next
+// certificate, styled as a CA, carries the pinned key; as a server it must
+// refuse a client with no certificate. An honest raw peer is the control,
+// and a TLSIO adopted from a socket has a session root.
+// -------------------------------------------------------------------------
+
+// A certificate carrying `subject_key`, signed by `signer`.
+static X509 *raw_cert(EVP_PKEY *subject_key, EVP_PKEY *signer, bool is_ca) {
+	X509 *cert = X509_new();
+	if (!cert) key_die("X509_new");
+	X509_NAME *name = X509_get_subject_name(cert);
+	bool built =
+	    X509_set_version(cert, X509_VERSION_3) == 1 &&
+	    ASN1_INTEGER_set(X509_get_serialNumber(cert), 1) == 1 &&
+	    X509_gmtime_adj(X509_getm_notBefore(cert), 0) != nullptr &&
+	    X509_gmtime_adj(X509_getm_notAfter(cert), 60 * 60) != nullptr &&
+	    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+	                               (const unsigned char *)"raw peer", -1, -1, 0) == 1 &&
+	    X509_set_issuer_name(cert, name) == 1 &&
+	    X509_set_pubkey(cert, subject_key) == 1;
+	if (built && is_ca) {
+		X509V3_CTX v3;
+		X509V3_set_ctx_nodb(&v3);
+		X509V3_set_ctx(&v3, cert, cert, nullptr, nullptr, 0);
+		X509_EXTENSION *ext = X509V3_EXT_conf_nid(nullptr, &v3, NID_basic_constraints,
+		                                          "critical,CA:TRUE");
+		built = ext != nullptr && X509_add_ext(cert, ext, -1) == 1;
+		X509_EXTENSION_free(ext);
+	}
+	const int type = EVP_PKEY_get_id(signer);
+	const EVP_MD *md =
+	    (type == EVP_PKEY_ED25519 || type == EVP_PKEY_ED448) ? nullptr : EVP_sha256();
+	if (!built || X509_sign(cert, signer, md) <= 0) key_die("raw_cert");
+	return cert;
+}
+
+enum class RawChain { honest, attacker_then_pinned, none };
+
+// The raw peer: a handshake on `fd` presenting `chain`, then one byte, sent by
+// the TLS client to the TLS server. A failed handshake is how an attack ends.
+static void raw_peer(int fd, bool is_server, RawChain chain, EVP_PKEY *pinned,
+                     EVP_PKEY *attacker) {
+	SSL_CTX *ctx = SSL_CTX_new(TLS_method());
+	if (!ctx) key_die("SSL_CTX_new");
+	SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
+	SSL_CTX_set_num_tickets(ctx, 0);
+	EVP_PKEY *signing_key = chain == RawChain::honest ? pinned : attacker;
+	if (chain != RawChain::none) {
+		X509 *leaf = raw_cert(signing_key, signing_key, false);
+		SSL_CTX_use_certificate(ctx, leaf);
+		X509_free(leaf);
+		SSL_CTX_use_PrivateKey(ctx, signing_key);
+	}
+	if (chain == RawChain::attacker_then_pinned)
+		SSL_CTX_add_extra_chain_cert(ctx, raw_cert(pinned, attacker, true));  // ctx owns it
+	SSL *ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, fd);
+	if ((is_server ? SSL_accept(ssl) : SSL_connect(ssl)) == 1) {
+		unsigned char byte = 0x42;
+		if (is_server) SSL_read(ssl, &byte, 1);
+		else SSL_write(ssl, &byte, 1);
+	}
+	SSL_free(ssl);
+	SSL_CTX_free(ctx);
+}
+
+static void run_pinned_key_attacks() {
+	char dir_template[] = "/tmp/emp_tlsio_attack.XXXXXX";
+	const char *dir = ::mkdtemp(dir_template);
+	expecting(dir != nullptr, "TLSIO test: mkdtemp failed");
+	EVP_PKEY *own = EVP_PKEY_Q_keygen(nullptr, nullptr, "ED25519");
+	EVP_PKEY *pinned = EVP_PKEY_Q_keygen(nullptr, nullptr, "ED25519");
+	EVP_PKEY *attacker = EVP_PKEY_Q_keygen(nullptr, nullptr, "EC", "P-256");
+	if (!own || !pinned || !attacker) key_die("EVP_PKEY_Q_keygen");
+	TLSConfig cfg;
+	cfg.key_pem_path = std::string(dir) + "/own_key.pem";
+	cfg.peer_public_key_pem_path = std::string(dir) + "/pinned_pub.pem";
+	write_private_key(own, cfg.key_pem_path);
+	write_public_key(pinned, cfg.peer_public_key_pem_path);
+
+	// TLSIO against the raw peer in a child process, then `after` on the
+	// channel; true if the child exited cleanly.
+	auto run = [&](bool tlsio_is_server, RawChain chain, auto after, std::string &err) {
+		return run_capturing_stderr([&] {
+			int sockets[2];
+			expecting(::socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0,
+			          "TLSIO test: socketpair failed");
+			std::thread peer([&] {
+				raw_peer(sockets[1], !tlsio_is_server, chain, pinned, attacker);
+			});
+			TLSConfig role = cfg;
+			role.is_tls_server = tlsio_is_server;
+			TLSIO io(sockets[0], tlsio_is_server, role, true);
+			unsigned char byte = 0;
+			if (tlsio_is_server) {
+				io.recv_data(&byte, 1);
+			} else {
+				io.send_data(&byte, 1);
+				io.flush();
+			}
+			peer.join();
+			after(io);
+		}, err);
+	};
+	auto nothing = [](TLSIO &) {};
+	std::string err;
+	for (const bool server : {false, true}) {
+		expecting(run(server, RawChain::honest, [](TLSIO &io) {
+			expecting(io.has_session_root(),
+			          "TLSIO test: an adopted channel has no session root");
+		}, err), "TLSIO test: an honest raw peer was refused");
+		expecting(!run(server, RawChain::attacker_then_pinned, nothing, err) &&
+		              err.find("not the pinned one") != std::string::npos,
+		          "TLSIO test: a chain with the pinned key behind another leaf "
+		          "was accepted");
+	}
+	expecting(!run(true, RawChain::none, nothing, err),
+	          "TLSIO test: a client without a certificate was accepted");
+
+	EVP_PKEY_free(own);
+	EVP_PKEY_free(pinned);
+	EVP_PKEY_free(attacker);
+	std::filesystem::remove_all(dir);
+	cout << "TLSIO pinned-key attacks: OK\n";
+}
+
+// A peer that does not hold the pinned key is rejected. Each party runs its end
+// in a child process, and "mallory" is pinned on one side at a time. When BOB
+// pins it, ALICE's certificate fails BOB's check during the handshake. When
+// ALICE pins it, BOB's certificate fails ALICE's check; a TLS 1.3 client
+// finishes its handshake before the server checks the client's key, so BOB
+// sees the rejection at the first read.
+static void run_pinned_key_rejection(int port, int party) {
+	for (const int rejecter : {BOB, ALICE}) {
+		TLSConfig cfg = make_cfg(party);
+		if (party == rejecter) cfg.peer_public_key_pem_path = pem_path("mallory_pub");
+		const int at = rejecter == BOB ? port + 5 : port + 6;
+		std::string err;
+		const bool clean = run_capturing_stderr([&] {
+			TLSIO io(party == ALICE ? nullptr : peer_ip(), at, cfg, true);
+			unsigned char byte = 0;
+			if (party == BOB) io.recv_data(&byte, 1);
+		}, err);
+		expecting(!clean, "TLSIO test: a handshake with a wrong pinned key went through");
+		if (party == rejecter)
+			expecting(err.find("not the pinned one") != std::string::npos,
+			          "TLSIO test: the wrong pinned key was rejected for another reason");
+	}
+	if (party == ALICE) cout << "TLSIO pinned-key rejection: OK\n";
 }
 
 // -------------------------------------------------------------------------
@@ -413,15 +551,16 @@ int main(int argc, char **argv) {
 	int port, party;
 	party = parse_party(argv);
 	port = peer_port();
+	g_port = port;
 	run_adopted_socket_options_rejection();
+	run_missing_key_rejection();
+	run_pinned_key_attacks();
 
-	// PKI handoff. ALICE (party 1, the TCP listener) builds the whole
-	// CA + ALICE + BOB PKI in memory and writes 5 PEM files; BOB polls
-	// until ca_cert.pem appears (the readiness sentinel, renamed into
-	// place last). Both sides then build a TLSConfig pointing at their
-	// own (cert, key) and the shared CA, and run the suite.
-	if (party == ALICE) generate_pki();
-	else                wait_for_pki();
+	// Key handoff. ALICE (party 1, the TCP listener) makes both key pairs
+	// and writes them; BOB polls until they are complete. Each side then
+	// configures its own private key and the other's public key.
+	if (party == ALICE) generate_keys();
+	else                wait_for_keys();
 
 	const TLSConfig cfg = make_cfg(party);
 
@@ -433,4 +572,5 @@ int main(int argc, char **argv) {
 	run_send_only_regression(port, party);
 	run_teardown_order_regression(port, party);
 	delete io;
+	run_pinned_key_rejection(port, party);
 }
