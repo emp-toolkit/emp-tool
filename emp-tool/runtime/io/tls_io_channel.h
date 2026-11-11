@@ -34,9 +34,9 @@ namespace emp {
 // coalesced into the 32 KiB staging buffer above SSL_write, so each
 // SSL_write produces at most one or two records.
 //
-// Why per-channel SSL_CTX: simplest ownership model, no global state.
-// Callers that build hundreds of TLSIOs pay the per-channel cost of
-// reading the keys and signing a certificate.
+// Why an SSL_CTX per channel family: a channel and its siblings share
+// one context, and there is no global state. Independent TLSIOs each pay
+// for reading the keys and signing a certificate.
 //
 // Authentication is by pinned public keys, with no CA: TLSConfig names
 // this party's private key and the peer's public key. TLS 1.3 carries a
@@ -155,18 +155,29 @@ public:
 	// per channel. Races are not detected at runtime — use TSan.
 
 	// (addr == nullptr) → TCP listener; otherwise TCP client. The TLS role
-	// comes from TLSConfig and is independent of the TCP role.
+	// comes from TLSConfig and is independent of the TCP role. A listener
+	// stays open while this channel or a sibling of it is alive, as with
+	// NetIO, so make_sibling() can accept more connections on the port.
 	TLSIO(const char *address, int port, const TLSConfig &cfg, bool quiet = false)
-	    : quiet(quiet) {
+	    : quiet(quiet), is_tls_server(cfg.is_tls_server) {
 		expecting(port >= 0 && port <= 65535,
 		          "TLSIO: invalid port number");
 		tls_detail::install_sigpipe_ignore_once();
-		const bool is_listener = (address == nullptr);
-		is_tls_server = cfg.is_tls_server;
-		init_from_sock(is_listener ? tcp::server_listen(port, cfg.socket_options)
-		                           : tcp::client_connect(address, port,
-		                                                 cfg.socket_options),
-		               cfg);
+		port_ = port;
+		socket_options_ = cfg.socket_options;
+		setup_context(cfg);
+		int connected;
+		if (address == nullptr) {
+			listener = std::make_shared<tcp::ListenerHandle>(
+			    tcp::open_listener(port, cfg.socket_options));
+			// The accepted socket inherits the listener's options.
+			connected = tcp::accept_one(listener->fd);
+		} else {
+			addr_ = address;
+			connected = tcp::client_connect(address, port, cfg.socket_options);
+		}
+		handshake(connected);
+		set_session_root(export_session_root());
 		if (!quiet) std::cout << "TLS connected\n";
 	}
 
@@ -190,7 +201,30 @@ public:
 		              cfg.socket_options.receive_buffer_size == 0,
 		          "TLSIO: socket buffer options cannot be applied to an already-connected socket");
 		tls_detail::install_sigpipe_ignore_once();
-		init_from_sock(existing_sock, cfg);
+		setup_context(cfg);
+		handshake(existing_sock);
+		set_session_root(export_session_root());
+	}
+
+	// Open another TLS channel to the same peer and port, like
+	// NetIO::make_sibling(): related server channels share the listener, the
+	// client connects again, and both ends must call it serially and in the
+	// same order. The sibling shares this channel's TLS context (its key and
+	// the pinned peer key, loaded once) but runs its own handshake, so it has
+	// its own traffic keys. Its session root is this channel's next session
+	// id. A channel adopted from a socket has no port to reconnect to.
+	std::unique_ptr<TLSIO> make_sibling() {
+		int connected;
+		if (listener) {
+			connected = tcp::accept_one(listener->fd);
+		} else {
+			expecting(!addr_.empty(),
+			          "TLSIO::make_sibling: a channel adopted from a socket "
+			          "cannot open siblings");
+			connected = tcp::client_connect(addr_.c_str(), port_, socket_options_);
+		}
+		return std::unique_ptr<TLSIO>(
+		    new TLSIO(*this, connected, next_session_id().value()));
 	}
 
 	// Non-copyable, non-movable: owns raw fd / OpenSSL handles /
@@ -277,6 +311,13 @@ private:
 	bool quiet;
 	bool is_tls_server;
 
+	// Where siblings come from: the shared listener on the listening side,
+	// the peer's address on the connecting side.
+	std::shared_ptr<tcp::ListenerHandle> listener;
+	std::string addr_;
+	int port_ = -1;
+	tcp::SocketOptions socket_options_;
+
 	SSL_CTX *ctx = nullptr;
 	SSL     *ssl = nullptr;
 
@@ -295,21 +336,34 @@ private:
 	size_t recv_ptr = 0;
 	size_t recv_fill = 0;
 
-	void init_from_sock(int new_sock, const TLSConfig &cfg) {
-		sock = new_sock;
-		tcp::set_nodelay(sock);
-		send_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
-		recv_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
+	// A sibling (make_sibling()): shares `parent`'s TLS context and where its
+	// connections come from, runs its own handshake on `connected`, and takes
+	// `root` as its session root.
+	TLSIO(TLSIO &parent, int connected, block root)
+	    : quiet(true), is_tls_server(parent.is_tls_server),
+	      listener(parent.listener), addr_(parent.addr_), port_(parent.port_),
+	      socket_options_(parent.socket_options_) {
+		if (SSL_CTX_up_ref(parent.ctx) != 1) tls_detail::die("SSL_CTX_up_ref");
+		ctx = parent.ctx;
+		if (EVP_PKEY_up_ref(parent.peer_key) != 1) tls_detail::die("EVP_PKEY_up_ref");
+		peer_key = parent.peer_key;
+		handshake(connected);
+		set_session_root(root);
+	}
 
+	// The TLS context, shared with siblings: TLS 1.3 only, this party's key
+	// and its throwaway certificate, and the check of the peer's key.
+	void setup_context(const TLSConfig &cfg) {
 		ctx = SSL_CTX_new(TLS_method());
 		if (!ctx) tls_detail::die("SSL_CTX_new failed");
 		// TLSIO never resumes a session, so a server sends no session
 		// tickets: nothing arrives after the handshake for a send-only peer
 		// to leave unread, and unread bytes at close() make the kernel
 		// reset the connection, which can discard data its peer has not
-		// read yet.
+		// read yet. Nor does the shared context cache sessions.
 		if (SSL_CTX_set_num_tickets(ctx, 0) != 1)
 			tls_detail::die("set_num_tickets");
+		SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
 
 		// Pin both ends of the version range to TLS 1.3 — known cipher
 		// set, known post-handshake semantics, no surprise downgrade.
@@ -340,6 +394,14 @@ private:
 		// no way to turn it off.
 		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
 		                   &TLSIO::verify_pinned_key);
+	}
+
+	// Run this channel's handshake on a connected socket.
+	void handshake(int connected) {
+		sock = connected;
+		tcp::set_nodelay(sock);
+		send_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
+		recv_buf = new char[NETWORK_STAGING_BUFFER_SIZE];
 
 		ssl = SSL_new(ctx);
 		if (!ssl) tls_detail::die("SSL_new failed");
@@ -367,8 +429,6 @@ private:
 		X509 *peer = SSL_get0_peer_certificate(ssl);
 		if (!peer || EVP_PKEY_eq(X509_get0_pubkey(peer), peer_key) != 1)
 			tls_detail::die("the peer's public key is not the pinned one");
-
-		set_session_root(export_session_root());
 	}
 
 	// SSL_CTX verify callback: accept the peer's certificate exactly when it
