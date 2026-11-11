@@ -319,8 +319,8 @@ inline int accept_one_confirmed(int listener) {
 	return s;
 }
 
-// One-shot compatibility helper used by transports that need only one
-// connection, such as TLSIO.
+// One-shot helper for a transport that needs only one connection: the
+// listener closes right after the accept.
 inline int server_listen(int port, const SocketOptions &options) {
 	int listener = open_listener(port, options);
 	int s = accept_one(listener);  // inherits the listener's options

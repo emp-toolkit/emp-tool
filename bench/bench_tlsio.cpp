@@ -13,9 +13,10 @@
 // the TLSIO loopback throughput sweep.
 //
 // Each party holds its own private key and the other party's public key, as
-// in a deployment: ALICE generates both Ed25519 key pairs and writes
-// alice_key.pem, alice_pub.pem, bob_key.pem and bob_pub.pem (the last one
-// renamed into place, so its presence tells BOB the others are complete).
+// in a deployment: ALICE generates both Ed25519 key pairs, writes
+// alice_key.pem, alice_pub.pem, bob_key.pem and bob_pub.pem, and only then
+// accepts BOB on a plain NetIO (port + 1), so once BOB is connected the files
+// are complete.
 
 #include <cassert>
 #include <cstring>
@@ -79,25 +80,9 @@ static void generate_keys() {
 	write_private_key(alice, pem_path("alice_key"));
 	write_public_key(alice, pem_path("alice_pub"));
 	write_private_key(bob, pem_path("bob_key"));
-	const std::string ready = pem_path("bob_pub");
-	write_public_key(bob, ready + ".tmp");
-	if (::rename((ready + ".tmp").c_str(), ready.c_str()) != 0)
-		key_die("rename bob_pub");
+	write_public_key(bob, pem_path("bob_pub"));
 	EVP_PKEY_free(alice);
 	EVP_PKEY_free(bob);
-}
-
-// Block until bob_pub.pem exists, with a 5 s cap so a missed handoff
-// surfaces as a failure rather than a hang.
-static void wait_for_keys() {
-	const std::string ready = pem_path("bob_pub");
-	struct stat sb;
-	for (int i = 0; i < 5000; ++i) {
-		if (::stat(ready.c_str(), &sb) == 0) return;
-		usleep(1000);
-	}
-	fprintf(stderr, "bench_tlsio: timed out waiting for the key files\n");
-	exit(1);
 }
 
 static TLSConfig make_cfg(int party) {
@@ -143,10 +128,11 @@ int main(int argc, char **argv) {
 	port = peer_port();
 	g_port = port;
 
-	// Key handoff: ALICE makes both key pairs, BOB waits for them, and each
-	// side configures its own private key and the other's public key.
+	// Key handoff: ALICE makes both key pairs and then accepts BOB on a plain
+	// NetIO, and each side configures its own private key and the other's
+	// public key.
 	if (party == ALICE) generate_keys();
-	else                wait_for_keys();
+	{ NetIO handoff(party == ALICE ? nullptr : peer_ip(), port + 1, true); }
 
 	const TLSConfig cfg = make_cfg(party);
 

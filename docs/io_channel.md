@@ -92,10 +92,11 @@ error.
   middle runs one flip with each party. Pass `NetIO::SessionRoot::none` to
   skip the flip. Both ends must choose the same: a mismatch is not detected,
   so the setup hangs or the flip's bytes are read as protocol data.
-- **Siblings**: `make_sibling()` gives the sibling its parent's next session
-  id as its root, so siblings run no flip, and a sibling of a channel without
-  a root has none. A NetIO adopted from a socket does not know which end of
-  the connection it is, so it has no root.
+- **Siblings**: `make_sibling()`, on NetIO and on TLSIO, gives the sibling
+  its parent's next session id as its root, so NetIO siblings run no flip,
+  and a sibling of a channel without a root has none. A NetIO adopted from a
+  socket does not know which end of the connection it is, so it has no
+  root.
 - **TLSIO** takes its root from the TLS exporter (RFC 8446, section 7.5),
   under the private-use label `EXPERIMENTAL-emp-tool-session-id`. Both ends
   derive it from the handshake secret with no message, so the root is bound
@@ -123,9 +124,9 @@ error.
   listener closes with the last one. This avoids closing, rebinding, or sleeping
   between accepts.
 - **Multiple channels — recommended pattern**: to run several channels to
-  the same peer, keep one anchor NetIO alive and take the others via
-  `make_sibling()`, calling it **serially and in the same order on both
-  parties** (its accept/connect pairing is FIFO on the shared listener —
+  the same peer, keep one anchor channel (NetIO or TLSIO) alive and take the
+  others via `make_sibling()`, calling it **serially and in the same order on
+  both parties** (its accept/connect pairing is FIFO on the shared listener —
   concurrent `make_sibling()` from multiple threads is not deterministic).
   Closing all channels and reopening the same port is supported, but sibling
   channels avoid reconnecting.
@@ -207,6 +208,12 @@ holds the matching private key. Any key type OpenSSL signs TLS 1.3
 handshakes with works (Ed25519, ECDSA, RSA), and the two parties' types may
 differ. A TLS 1.3 client finishes its handshake before the server checks
 the client's key, so a client the server rejects fails at its next read
-rather than in its constructor. One `SSL_CTX` per channel, which reads the
-keys and signs a certificate; if a profile shows that cost mattering, share
-a CTX via a thin factory.
+rather than in its constructor.
+
+`TLSIO::make_sibling()` opens another TLS channel to the same peer and port,
+as NetIO's does: a listening TLSIO keeps its listener open while it or a
+sibling is alive, and both ends call it serially and in the same order. A
+sibling shares its parent's `SSL_CTX` (the keys, read and signed into a
+certificate once) but runs its own handshake, so its traffic keys are its
+own; TLSIO never resumes a session, so nothing else carries over. A TLSIO
+adopted from a socket cannot open siblings.

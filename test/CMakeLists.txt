@@ -186,7 +186,7 @@ add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case(runtime test_session_id)
 add_test_case_with_run(runtime test_netio PORTS 7)   # port .. port + 6
-add_test_case_with_run(runtime test_tlsio PORTS 7)   # port .. port + 6
+add_test_case_with_run(runtime test_tlsio PORTS 8)   # port .. port + 7
 add_test_case(runtime test_traceio)
 set_tests_properties(test_netio test_tlsio PROPERTIES TIMEOUT 130)
 add_test_case(runtime test_halfgate)         # half-gate garble/eval free functions

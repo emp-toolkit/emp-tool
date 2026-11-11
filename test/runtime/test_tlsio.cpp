@@ -8,6 +8,8 @@
 //   send_bool / recv_bool              packed via bools_to_bits (inherited)
 //   flush()                            drain outbound coalescing buffer
 //   sync()                             barrier (inherited from IOChannel)
+//   make_sibling()                     another TLS connection on the same
+//                                      port: shared keys, its own handshake
 //   has_session_root / next_session_id session ids, from a root taken from
 //                                      the TLS exporter
 //   TLSConfig keys                     own private key + the peer's pinned
@@ -30,9 +32,10 @@
 //   bob_pub.pem       PK_bob, which ALICE pins
 //   mallory_pub.pem   a third public key, pinned by the rejection checks
 //
-// ALICE generates all of them and BOB polls for mallory_pub.pem, written last.
-// In a deployment each party generates its own key pair and gives the other
-// only its public key. The two key types differ to cover both ways TLSIO signs
+// ALICE generates all of them, and only then accepts BOB on a plain NetIO: once
+// BOB is connected, the files are complete, whatever an earlier run left
+// behind. In a deployment each party generates its own key pair and gives the
+// other only its public key. The two key types differ to cover both ways TLSIO signs
 // its throwaway certificate (with a digest for RSA, without one for Ed25519).
 
 #include <cstring>
@@ -138,8 +141,7 @@ static void write_public_key(EVP_PKEY *key, const std::string &path) {
 	fclose(f);
 }
 
-// Make the key files listed at the top. mallory_pub.pem is renamed into place
-// last, so its presence tells BOB the others are complete.
+// Make the key files listed at the top.
 static void generate_keys() {
 	EVP_PKEY *alice = EVP_PKEY_Q_keygen(nullptr, nullptr, "RSA", (size_t)2048);
 	EVP_PKEY *bob = EVP_PKEY_Q_keygen(nullptr, nullptr, "ED25519");
@@ -149,26 +151,10 @@ static void generate_keys() {
 	write_public_key(alice, pem_path("alice_pub"));
 	write_private_key(bob, pem_path("bob_key"));
 	write_public_key(bob, pem_path("bob_pub"));
-	const std::string ready = pem_path("mallory_pub");
-	write_public_key(mallory, ready + ".tmp");
-	if (::rename((ready + ".tmp").c_str(), ready.c_str()) != 0)
-		key_die("rename mallory_pub");
+	write_public_key(mallory, pem_path("mallory_pub"));
 	EVP_PKEY_free(alice);
 	EVP_PKEY_free(bob);
 	EVP_PKEY_free(mallory);
-}
-
-// Block until mallory_pub.pem exists, with a 5 s cap so a missed handoff
-// surfaces as a test failure rather than a hang.
-static void wait_for_keys() {
-	const std::string ready = pem_path("mallory_pub");
-	struct stat sb;
-	for (int i = 0; i < 5000; ++i) {
-		if (::stat(ready.c_str(), &sb) == 0) return;
-		usleep(1000);
-	}
-	fprintf(stderr, "test_tlsio: timed out waiting for the key files\n");
-	exit(1);
 }
 
 static TLSConfig make_cfg(int party) {
@@ -237,7 +223,8 @@ static void run_missing_key_rejection() {
 // must refuse a chain whose leaf carries the attacker's key and whose next
 // certificate, styled as a CA, carries the pinned key; as a server it must
 // refuse a client with no certificate. An honest raw peer is the control,
-// and a TLSIO adopted from a socket has a session root.
+// and a TLSIO adopted from a socket has a session root but cannot open
+// siblings.
 // -------------------------------------------------------------------------
 
 // A certificate carrying `subject_key`, signed by `signer`.
@@ -353,6 +340,10 @@ static void run_pinned_key_attacks() {
 	}
 	expecting(!run(true, RawChain::none, nothing, err),
 	          "TLSIO test: a client without a certificate was accepted");
+	expecting(!run(false, RawChain::honest, [](TLSIO &io) { (void)io.make_sibling(); },
+	               err) &&
+	              err.find("cannot open siblings") != std::string::npos,
+	          "TLSIO test: a channel adopted from a socket opened a sibling");
 
 	EVP_PKEY_free(own);
 	EVP_PKEY_free(pinned);
@@ -521,6 +512,34 @@ static void run_session_id(TLSIO *io, int party) {
 	if (party == ALICE) cout << "TLSIO session ids: OK\n";
 }
 
+// make_sibling(): another TLS connection on the main channel's port, sharing
+// its keys but running its own handshake; a sibling's sibling works the same
+// way. Bytes cross on both new channels, and their session ids, which come
+// from the parent's, match across the two ends and differ from each other.
+static void run_sibling_regression(TLSIO *io, int party) {
+	auto second = io->make_sibling();
+	auto third = second->make_sibling();
+	block mine[3] = {io->next_session_id().value(),
+	                 second->next_session_id().value(),
+	                 third->next_session_id().value()};
+	block theirs[3];
+	if (party == ALICE) {
+		second->send_block(mine, 3);
+		second->flush();
+		third->recv_block(theirs, 3);
+	} else {
+		second->recv_block(theirs, 3);
+		third->send_block(mine, 3);
+		third->flush();
+	}
+	expecting(cmpBlock(mine, theirs, 3),
+	          "TLSIO test: the two ends of the siblings derived different session ids");
+	expecting(!cmpBlock(&mine[0], &mine[1], 1) && !cmpBlock(&mine[1], &mine[2], 1) &&
+	              !cmpBlock(&mine[0], &mine[2], 1),
+	          "TLSIO test: siblings repeated a session id");
+	if (party == ALICE) cout << "TLSIO sibling regression: OK\n";
+}
+
 // -------------------------------------------------------------------------
 // run_teardown_order_regression(): each party holds two channels. ALICE
 // destroys `aux` and then sends on `main`; BOB receives on `main` and only
@@ -556,11 +575,12 @@ int main(int argc, char **argv) {
 	run_missing_key_rejection();
 	run_pinned_key_attacks();
 
-	// Key handoff. ALICE (party 1, the TCP listener) makes both key pairs
-	// and writes them; BOB polls until they are complete. Each side then
-	// configures its own private key and the other's public key.
+	// Key handoff. ALICE (party 1, the TCP listener) makes both key pairs and
+	// writes them, then accepts BOB on a plain NetIO; once that connection is
+	// up, BOB reads complete files. Each side then configures its own private
+	// key and the other's public key.
 	if (party == ALICE) generate_keys();
-	else                wait_for_keys();
+	{ NetIO handoff(party == ALICE ? nullptr : peer_ip(), port + 7, true); }
 
 	const TLSConfig cfg = make_cfg(party);
 
@@ -568,6 +588,7 @@ int main(int argc, char **argv) {
 	expect_socket_options(*io, cfg.socket_options);
 	run_correctness(io, party);
 	run_session_id(io, party);
+	run_sibling_regression(io, party);
 	io->sync();  // the IOChannel barrier over TLS
 	run_send_only_regression(port, party);
 	run_teardown_order_regression(port, party);

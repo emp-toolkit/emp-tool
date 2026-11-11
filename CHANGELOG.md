@@ -15,6 +15,10 @@ metadata is numeric (see the README's version guidance).
   (`NetIO::SessionRoot::none` skips it). `make_sibling()` gives a sibling its
   parent's next session id as its root. `TLSIO` takes the root from the TLS
   exporter, and `TraceIO` forwards to the channel it wraps.
+- `TLSIO::make_sibling()` opens another TLS channel to the same peer and
+  port, as `NetIO::make_sibling()` does. The sibling shares its parent's TLS
+  context (the keys), runs its own handshake, and takes its parent's next
+  session id as its root.
 
 ### Changed
 
@@ -25,6 +29,9 @@ metadata is numeric (see the README's version guidance).
   Each end presents a throwaway self-signed certificate for its key, and the
   peer accepts it only if it carries the pinned key. Before, any certificate
   the configured CA had issued was accepted as the peer.
+- A listening `TLSIO` keeps its listener open while it or a sibling is
+  alive, as a listening `NetIO` does, so no other channel can listen on that
+  port meanwhile; open more channels to the peer with `make_sibling()`.
 - `NetIO`'s connecting constructors run the session-root coin flip by
   default, so both parties must upgrade together: a NetIO from an earlier
   release does not take part in it. Neither that nor a `SessionRoot`
