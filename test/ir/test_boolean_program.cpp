@@ -343,7 +343,8 @@ int main() {
 		// (b) num_inputs == num_wires == 0xFFFFFFFF, no gates: passes the bound
 		//     (NW == num_inputs + 0), so validation must NOT size written[] to
 		//     num_wires nor loop over num_inputs — either would be a ~4 GB
-		//     alloc + 4e9-iteration DoS. It must load cheaply as a no-op
+		//     alloc + 4e9-iteration DoS. The default wire cap rejects it up
+		//     front; with the cap lifted it must still load cheaply as a no-op
 		//     program (sizing only the non-input slots, here zero).
 		std::vector<uint8_t> huge_reuse_b = {
 			'E','M','P','B',
@@ -354,8 +355,30 @@ int main() {
 			0,0,0,0,              // num_outputs
 			0,0,0,0               // num_gates
 		};
-		check(!dies([&]{ load_empbc(huge_reuse_b); }),
+		check(rejects(huge_reuse_b),
+		      "huge reuse header (inputs==wires) not rejected by the default wire cap");
+		check(!dies([&]{ load_empbc(huge_reuse_b, (int64_t)UINT32_MAX); }),
 		      "huge reuse header (inputs==wires) must load cheaply, not allocate per-wire");
+
+		// The wire cap. Input wires take no file bytes, so these headers declare
+		// only inputs: one at the default cap loads (nothing is sized by the
+		// input count), one wire more is rejected before validation, and a
+		// caller's own cap is honored on both sides.
+		auto inputs_only = [](uint32_t wires) {
+			std::vector<uint8_t> b = {'E','M','P','B', 1,0, 4,0};
+			for (uint32_t v : {wires, wires, 0u, 0u})
+				for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (8 * i)));
+			return b;
+		};
+		const uint32_t cap = (uint32_t)empbc_default_max_wires;
+		check(!dies([&]{ load_empbc(inputs_only(cap)); }),
+		      "header at the default wire cap not accepted");
+		check(rejects(inputs_only(cap + 1)), "header above the default wire cap not rejected");
+		check(!dies([&]{ load_empbc(inputs_only(1000), 1000); }),
+		      "header at a caller's wire cap not accepted");
+		check(dies([&]{ load_empbc(inputs_only(1001), 1000); }),
+		      "header above a caller's wire cap not rejected");
+		check(dies([&]{ load_empbc(inputs_only(10), -1); }), "negative wire cap not rejected");
 	}
 
 	// ---- wire_reuse (compact) programs: validation + .empbc roundtrip ----
