@@ -8,6 +8,8 @@
 //   send_data / recv_data    record then deliver (send), deliver then record (recv)
 //   flush()                  flush both trace files, then `under`
 //   sync()                   the IOChannel barrier; its bytes are recorded too
+//   has_session_root /       forwarded to `under`, so the trace and `under`
+//   next_session_id          share one sequence of session ids
 
 #include <cstring>
 #include <filesystem>
@@ -61,6 +63,9 @@ public:
 	}
 
 	void flush() override { ++flush_count; }
+
+	// A test stand-in for the root a real transport agrees on at setup.
+	void agree_session_root(block root) { set_session_root(root); }
 
 	vector<char> sent;
 	int flush_count = 0;
@@ -153,6 +158,25 @@ static bool check_sync_recorded(const string &prefix) {
 	       trace.recv_counter == 0;
 }
 
+static bool check_session_ids_forwarded(const string &prefix) {
+	MemoryIO bare({});
+	TraceIO bare_trace(&bare, prefix + "_bare");
+	if (bare_trace.has_session_root()) return false;
+
+	const block root = makeBlock(0x5e55, 0x1d);
+	MemoryIO under({});
+	under.agree_session_root(root);
+	TraceIO trace(&under, prefix);
+	// Calls through the trace and on `under` walk one sequence.
+	const block got[3] = {trace.next_session_id().value(),
+	                      under.next_session_id().value(),
+	                      trace.next_session_id().value()};
+	SessionID expected(root);
+	block want[3];
+	for (block &w : want) w = expected.derive().value();
+	return trace.has_session_root() && cmpBlock(got, want, 3);
+}
+
 static bool run_correctness(const string &dir) {
 	cout << "=== correctness ===\n";
 	bool a = dies([&] { TraceIO trace(nullptr, dir + "/null"); });
@@ -163,7 +187,9 @@ static bool run_correctness(const string &dir) {
 	cout << "  trace files are 0600           " << (c ? "OK" : "FAIL") << "\n";
 	bool d = check_sync_recorded(dir + "/sync");
 	cout << "  sync() bytes recorded          " << (d ? "OK" : "FAIL") << "\n";
-	return a && b && c && d;
+	bool e = check_session_ids_forwarded(dir + "/session");
+	cout << "  session ids forwarded          " << (e ? "OK" : "FAIL") << "\n";
+	return a && b && c && d && e;
 }
 
 int main() {

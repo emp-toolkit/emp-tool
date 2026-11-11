@@ -60,6 +60,13 @@ public:
         under_->flush();
     }
 
+    // Session ids come from the wrapped channel: the trace and `under` are
+    // one connection, so they share one sequence.
+    bool has_session_root() const override { return under_->has_session_root(); }
+    [[nodiscard]] SessionID next_session_id() override {
+        return under_->next_session_id();
+    }
+
 protected:
     void send_data_internal(const void* data, int64_t nbyte) override {
         expecting(nbyte >= 0,

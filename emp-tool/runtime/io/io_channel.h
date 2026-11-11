@@ -4,6 +4,7 @@
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/hash.h"
 #include "emp-tool/runtime/crypto/ec.h"
+#include "emp-tool/runtime/crypto/session_id.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -17,7 +18,8 @@
 namespace emp {
 
 // Polymorphic transport interface. Implementations override send_data_internal
-// / recv_data_internal; everything else (block / point / packed-bool helpers,
+// / recv_data_internal, and may set a session root at connection setup (see
+// next_session_id); everything else (block / point / packed-bool helpers,
 // byte counters, optional Fiat-Shamir transcript) is inherited.
 //
 // Fiat-Shamir support: enable_fs<opt>(send_first) turns on two running
@@ -90,6 +92,14 @@ protected:
 	virtual void send_data_internal(const void *data, int64_t nbyte) = 0;
 	virtual void recv_data_internal(void *data, int64_t nbyte) = 0;
 
+	// Set the root of next_session_id(), once, when the connection is set up.
+	// Both ends must set the same root.
+	void set_session_root(block root) {
+		expecting(!sid_root_.has_value(),
+		          "IOChannel::set_session_root: the session root is already set");
+		sid_root_.emplace(root);
+	}
+
 public:
 
 	// Drain any outbound buffer to the underlying transport. Default
@@ -111,6 +121,24 @@ public:
 		recv_data_internal(&received, 1);
 		expecting(received == marker,
 		          "IOChannel::sync: the peer's next byte is not a sync marker");
+	}
+
+	// Session ids. A channel may hold a session root, agreed with the peer when
+	// the connection is set up: NetIO runs a coin flip in its connecting
+	// constructors unless told not to, and TLSIO takes the root from the TLS
+	// exporter. next_session_id() is local: it returns a fresh child
+	// (SessionID::derive) of the root on every call, so the two ends get the
+	// same sequence by calling it in the same order, and another connection
+	// gets a different one. The root itself is never returned: deriving from it
+	// would repeat the ids later calls return. Asking a channel without a root
+	// for an id is an error. A wrapping channel forwards both calls to the
+	// channel it wraps.
+	virtual bool has_session_root() const { return sid_root_.has_value(); }
+
+	[[nodiscard]] virtual SessionID next_session_id() {
+		expecting(sid_root_.has_value(),
+		          "IOChannel::next_session_id: this channel has no session root");
+		return sid_root_->derive();
 	}
 
 	// Turn on Fiat-Shamir transcript hashing. `send_first` selects which
@@ -369,6 +397,9 @@ private:
 #endif
 	FsState fs_;
 	bool fs_send_first_ = false;
+
+	// next_session_id()'s root, if the connection agreed on one.
+	std::optional<SessionID> sid_root_;
 };
 
 }  // namespace emp
