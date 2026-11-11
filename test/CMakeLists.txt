@@ -17,7 +17,21 @@ function(add_test_case folder name)
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 endfunction()
 
+# Two-party tests run under ./run, which takes the port from EMP_PORT. Each gets
+# its own block of ports, so `ctest -j` never runs two of them on one port. The
+# blocks start at 20000, below the range the OS assigns to outgoing connections
+# (32768 and up on Linux, 49152 and up on macOS), so no outgoing connection can
+# hold a test's port. A test owns EMP_PORT .. EMP_PORT + PORTS - 1 (PORTS
+# defaults to 1).
+set_property(GLOBAL PROPERTY EMP_TEST_NEXT_PORT 20000)
 function(add_test_case_with_run folder name)
+    cmake_parse_arguments(ARG "" "PORTS" "" ${ARGN})
+    if(NOT ARG_PORTS)
+        set(ARG_PORTS 1)
+    endif()
+    get_property(port GLOBAL PROPERTY EMP_TEST_NEXT_PORT)
+    math(EXPR next_port "${port} + ${ARG_PORTS}")
+    set_property(GLOBAL PROPERTY EMP_TEST_NEXT_PORT ${next_port})
     add_executable(${name} ${folder}/${name}.cpp)
     target_link_libraries(${name} PRIVATE emp-tool::emp-tool)
     target_compile_options(${name} PRIVATE -Werror=switch)
@@ -26,6 +40,7 @@ function(add_test_case_with_run folder name)
     add_test(NAME ${name}
              COMMAND ${PROJECT_SOURCE_DIR}/run $<TARGET_FILE:${name}>
              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    set_tests_properties(${name} PROPERTIES ENVIRONMENT "EMP_PORT=${port}")
 endfunction()
 
 # emp-tool exports PUBLIC cxx_std_20 (the BooleanContext surface requires it), so
@@ -170,8 +185,8 @@ target_compile_options(test_no_exceptions PRIVATE -fno-exceptions)
 add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case(runtime test_session_id)
-add_test_case_with_run(runtime test_netio)
-add_test_case_with_run(runtime test_tlsio)
+add_test_case_with_run(runtime test_netio PORTS 5)   # port .. port + 4
+add_test_case_with_run(runtime test_tlsio PORTS 5)   # port .. port + 4
 add_test_case(runtime test_traceio)
 set_tests_properties(test_netio test_tlsio PROPERTIES TIMEOUT 130)
 add_test_case(runtime test_halfgate)         # half-gate garble/eval free functions
