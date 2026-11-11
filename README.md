@@ -498,15 +498,11 @@ determinism contract, and limitations.
 | Test and benchmark conventions | [docs/test_conventions.md](docs/test_conventions.md), [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |
 | Tracked future work (ISA dispatch, embedder hook, asset reproducibility) | [docs/roadmap.md](docs/roadmap.md) |
 
-An implementation audit for external reviewers lives in
-[audit-report/](audit-report/) (start at `index.html`).
-
 ## Security
 
-- Research software. This line has been reviewed by its maintainer
-  (see [audit-report/](audit-report/)) and by automated tooling
-  (ASan/UBSan CI legs, CodeQL, always-on contract checks, the test
-  suite); it has not had an independent security audit.
+- Research software. This line has been reviewed by its maintainer and by
+  automated tooling (ASan/UBSan CI legs, CodeQL, always-on contract checks,
+  the test suite); it has not had an independent security audit.
 - No systematic constant-time guarantee. AES-based kernels use CPU AES
   instructions (AES-NI, or NEON via sse2neon); elliptic-curve
   operations call OpenSSL; other kernels are written for throughput,
