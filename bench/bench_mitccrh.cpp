@@ -3,12 +3,15 @@
 // garbling. Throughput benchmark.
 //
 // What's in mitccrh.h:
-//   MITCCRH<BatchSize>                       start_point(), next_gid()
+//   MITCCRH<ReuseShift, Ahead>               a stream of single-use tweaks; start_point(),
+//                                            next_gid()
 //   setS(s)                                  install S, restart the gid stream at 0
-//   renew_ks(gid)                            schedule B keys from gid
-//   hash<K, H>(blks)                         consume K lanes, hash K*H blocks:
+//   hash<K, H>(blks)                         take the next bit_ceil(K)-aligned run of K
+//                                            gids, hash K*H blocks under its bucket key:
 //                                              y ^ AES_{S ^ (gid>>RS)}(y), y = x ^ T(gid)
 //   hash_cir<K, H>(blks)                     same with y = sigma(x) ^ T(gid)
+//   MITCCRHBulk<BatchSize, ReuseShift>       the general form: start_point(), next_gid(),
+//                                            renew_ks(gid), runs that span buckets
 
 #include "emp-tool/emp-tool.h"
 
@@ -55,53 +58,57 @@ static void print_vec(const string &lbl, double calls, int blocks_per_call) {
 	     << setw(7) << cy_per_blk << " cy/blk @3GHz\n";
 }
 
-template <int K, int H, int RS = 3>
+template <class Hash, int K, int H>
 static double bench_hash(double sec) {
-	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
-	MITCCRH<8, RS> mit;
+	Hash mit;
 	mit.setS(makeBlock(1, 2));
-	mit.renew_ks(uint64_t{0});
 	block buf[K * H];
 	PRG().random_block(buf, K * H);
 	return run_for(sec, [&]() { mit.template hash<K, H>(buf); }, &buf[0]);
 }
 
-template <int K, int H, int RS = 3>
-static double bench_hash_cir(double sec, uint64_t initial_gid = 0) {
-	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
-	MITCCRH<8, RS> mit;
+template <class Hash, int K, int H>
+static double bench_hash_cir(double sec) {
+	Hash mit;
 	mit.setS(makeBlock(1, 2));
-	mit.renew_ks(initial_gid);
 	block buf[K * H];
 	PRG().random_block(buf, K * H);
 	return run_for(sec, [&]() { mit.template hash_cir<K, H>(buf); }, &buf[0]);
 }
 
-template <int K, int H, int RS = 3>
-static double bench_hash_cir_out_of_place(double sec, uint64_t initial_gid = 0) {
-	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
-	MITCCRH<8, RS> mit;
+template <class Hash, int K, int H>
+static double bench_hash_cir_out_of_place(double sec) {
+	Hash mit;
 	mit.setS(makeBlock(1, 2));
-	mit.renew_ks(initial_gid);
 	block in[K * H], out[K * H];
 	PRG().random_block(in, K * H);
 	return run_for(sec, [&]() { mit.template hash_cir<K, H>(out, in); }, &out[0]);
+}
+
+// MITCCRHBulk only: start the stream at `gid` (gid = 1 leaves every batch
+// unaligned, so each spans two buckets).
+template <int K, int H>
+static double bench_bulk_hash_cir_at(double sec, uint64_t gid) {
+	MITCCRHBulk<8> mit;
+	mit.setS(makeBlock(1, 2));
+	mit.renew_ks(gid);
+	block buf[K * H];
+	PRG().random_block(buf, K * H);
+	return run_for(sec, [&]() { mit.template hash_cir<K, H>(buf); }, &buf[0]);
 }
 
 // The rows above hash one buffer in place, so each call's input is the
 // previous call's output. A half-gate caller instead writes each call's input
 // block by block from labels it has just read; these rows do the same, drawing
 // every block from a different slot of a table that stays in cache.
-template <int K, int H, bool Cir>
+template <class Hash, int K, int H, bool Cir>
 static double bench_gathered(double sec) {
-	static_assert(K <= 8 && 8 % K == 0, "MITCCRH<8> requires K | 8");
 	constexpr int N = K * H;
 	constexpr uint64_t kLabels = 1 << 12;
 	vector<block> labels(kLabels);
 	PRG().random_block(labels.data(), (int64_t)kLabels);
-	MITCCRH<8> mit;
+	Hash mit;
 	mit.setS(makeBlock(1, 2));
-	mit.renew_ks(uint64_t{0});
 	block buf[N], sink = zero_block;
 	uint64_t call = 0;
 	return run_for(sec, [&]() {
@@ -124,45 +131,51 @@ static void bench(double sec) {
 #else
 	cout << "AES SIMD tier: AES-NI (1 block/vector)\n\n";
 #endif
+	using Stream = MITCCRH<>;
+	using Bulk = MITCCRHBulk<8>;
 
-	cout << "=== MITCCRH<8>::hash<K, H>  (default ReuseShift=3: schedule once per 8-gid bucket) ===\n";
-	print_vec("hash<1,1>", bench_hash<1, 1>(sec), 1);
-	print_vec("hash<1,4>", bench_hash<1, 4>(sec), 4);
-	print_vec("hash<1,8>", bench_hash<1, 8>(sec), 8);
-	print_vec("hash<2,1>", bench_hash<2, 1>(sec), 2);
-	print_vec("hash<2,4>", bench_hash<2, 4>(sec), 8);
-	print_vec("hash<4,1>", bench_hash<4, 1>(sec), 4);
-	print_vec("hash<4,4>", bench_hash<4, 4>(sec), 16);
-	print_vec("hash<8,1>", bench_hash<8, 1>(sec), 8);
-	print_vec("hash<8,2>", bench_hash<8, 2>(sec), 16);
-	print_vec("hash<8,4>", bench_hash<8, 4>(sec), 32);
-	print_vec("hash<8,8>", bench_hash<8, 8>(sec), 64);
+	cout << "=== hash<K, H>: MITCCRH<> stream | MITCCRHBulk<8>  (ReuseShift=3: one key per 8-gid bucket) ===\n";
+	print_vec("stream hash<1,1>", bench_hash<Stream, 1, 1>(sec), 1);
+	print_vec("bulk   hash<1,1>", bench_hash<Bulk, 1, 1>(sec), 1);
+	print_vec("stream hash<2,1>", bench_hash<Stream, 2, 1>(sec), 2);
+	print_vec("bulk   hash<2,1>", bench_hash<Bulk, 2, 1>(sec), 2);
+	print_vec("stream hash<2,4>", bench_hash<Stream, 2, 4>(sec), 8);
+	print_vec("bulk   hash<2,4>", bench_hash<Bulk, 2, 4>(sec), 8);
+	print_vec("stream hash<8,1>", bench_hash<Stream, 8, 1>(sec), 8);
+	print_vec("bulk   hash<8,1>", bench_hash<Bulk, 8, 1>(sec), 8);
+	print_vec("stream hash<8,2>", bench_hash<Stream, 8, 2>(sec), 16);
+	print_vec("bulk   hash<8,2>", bench_hash<Bulk, 8, 2>(sec), 16);
+	print_vec("stream hash<8,8>", bench_hash<Stream, 8, 8>(sec), 64);
+	print_vec("bulk   hash<8,8>", bench_hash<Bulk, 8, 8>(sec), 64);
 
-	cout << "\n=== MITCCRH<8, 0>  (one key per gid, no tweak reuse) ===\n";
-	print_vec("hash<2,4>  shift0", bench_hash<2, 4, 0>(sec), 8);
-	print_vec("hash<8,2>  shift0", bench_hash<8, 2, 0>(sec), 16);
-	print_vec("hash<8,8>  shift0", bench_hash<8, 8, 0>(sec), 64);
-	print_vec("hash_cir<2,1> shift0", bench_hash_cir<2, 1, 0>(sec), 2);
-	print_vec("hash_cir<2,2> shift0", bench_hash_cir<2, 2, 0>(sec), 4);
-
-	cout << "\n=== MITCCRH<8>::hash_cir<K, H>  (sigma + hash) ===\n";
-	print_vec("hash_cir<1,1>", bench_hash_cir<1, 1>(sec), 1);
-	print_vec("hash_cir<2,1>", bench_hash_cir<2, 1>(sec), 2);
-	print_vec("hash_cir<2,2>", bench_hash_cir<2, 2>(sec), 4);
-	print_vec("hash_cir<8,1>", bench_hash_cir<8, 1>(sec), 8);
-	print_vec("hash_cir<8,2>", bench_hash_cir<8, 2>(sec), 16);
-
-	cout << "\n=== hash_cir<2,2> call shape and gid alignment ===\n";
-	print_vec("in-place, gid=0", bench_hash_cir<2, 2>(sec, 0), 4);
-	print_vec("out-of-place, gid=0", bench_hash_cir_out_of_place<2, 2>(sec, 0), 4);
-	print_vec("in-place, gid=1", bench_hash_cir<2, 2>(sec, 1), 4);
+	cout << "\n=== hash_cir<K, H>  (sigma + hash) ===\n";
+	print_vec("stream hash_cir<2,1>", bench_hash_cir<Stream, 2, 1>(sec), 2);
+	print_vec("bulk   hash_cir<2,1>", bench_hash_cir<Bulk, 2, 1>(sec), 2);
+	print_vec("stream hash_cir<2,2>", bench_hash_cir<Stream, 2, 2>(sec), 4);
+	print_vec("bulk   hash_cir<2,2>", bench_hash_cir<Bulk, 2, 2>(sec), 4);
+	print_vec("stream hash_cir<8,2>", bench_hash_cir<Stream, 8, 2>(sec), 16);
+	print_vec("bulk   hash_cir<8,2>", bench_hash_cir<Bulk, 8, 2>(sec), 16);
+	print_vec("stream hash_cir<2,2> out-of-place", bench_hash_cir_out_of_place<Stream, 2, 2>(sec), 4);
+	print_vec("bulk   hash_cir<2,2> out-of-place", bench_hash_cir_out_of_place<Bulk, 2, 2>(sec), 4);
 
 	cout << "\n=== input written block by block before each call ===\n";
-	print_vec("hash_cir<2,2> gathered", bench_gathered<2, 2, true>(sec), 4);
-	print_vec("hash_cir<2,1> gathered", bench_gathered<2, 1, true>(sec), 2);
-	print_vec("hash_cir<1,4> gathered", bench_gathered<1, 4, true>(sec), 4);
-	print_vec("hash_cir<8,2> gathered", bench_gathered<8, 2, true>(sec), 16);
-	print_vec("hash<8,2> gathered", bench_gathered<8, 2, false>(sec), 16);
+	print_vec("stream hash_cir<2,2> gathered", bench_gathered<Stream, 2, 2, true>(sec), 4);
+	print_vec("bulk   hash_cir<2,2> gathered", bench_gathered<Bulk, 2, 2, true>(sec), 4);
+	print_vec("stream hash_cir<2,1> gathered", bench_gathered<Stream, 2, 1, true>(sec), 2);
+	print_vec("bulk   hash_cir<2,1> gathered", bench_gathered<Bulk, 2, 1, true>(sec), 2);
+	print_vec("stream hash_cir<8,2> gathered", bench_gathered<Stream, 8, 2, true>(sec), 16);
+	print_vec("bulk   hash_cir<8,2> gathered", bench_gathered<Bulk, 8, 2, true>(sec), 16);
+	print_vec("stream hash<8,1> gathered", bench_gathered<Stream, 8, 1, false>(sec), 8);
+	print_vec("bulk   hash<8,1> gathered", bench_gathered<Bulk, 8, 1, false>(sec), 8);
+
+	cout << "\n=== MITCCRHBulk<8, 0>  (one key per gid, no tweak reuse) ===\n";
+	print_vec("hash<2,4>  shift0", bench_hash<MITCCRHBulk<8, 0>, 2, 4>(sec), 8);
+	print_vec("hash<8,2>  shift0", bench_hash<MITCCRHBulk<8, 0>, 8, 2>(sec), 16);
+	print_vec("hash_cir<2,2> shift0", bench_hash_cir<MITCCRHBulk<8, 0>, 2, 2>(sec), 4);
+
+	cout << "\n=== MITCCRHBulk<8> hash_cir<2,2> and gid alignment ===\n";
+	print_vec("gid=0", bench_bulk_hash_cir_at<2, 2>(sec, 0), 4);
+	print_vec("gid=1 (every batch spans two buckets)", bench_bulk_hash_cir_at<2, 2>(sec, 1), 4);
 }
 
 int main(int argc, char **argv) {

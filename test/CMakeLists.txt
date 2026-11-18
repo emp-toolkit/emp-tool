@@ -105,7 +105,7 @@ foreach(neg RANGE 1 4)
 endforeach()
 
 set(_crypto_neg_msg
-    "MITCCRH: BatchSize must be positive"
+    "MITCCRH: Ahead must be positive"
     "MITCCRH: K must be positive"
     "MITCCRH: H must be positive"
     "vector_inn_prdt_sum_no_red: size must be non-negative"
@@ -113,12 +113,15 @@ set(_crypto_neg_msg
     "vector_inn_prdt_sum_red: size must be non-negative"
     "vector_self_xor: size must be non-negative"
     "uni_hash_coeff_gen: size must be positive"
-    "MITCCRH: BatchSize must be positive"
+    "MITCCRH: Ahead must be positive"
     "MITCCRH: K must be positive"
     "MITCCRH: H must be positive"
     "uni_hash_coeff_gen: size must be positive"
-    "vector_inn_prdt_sum_red_x4: size must be non-negative")
-foreach(neg RANGE 1 13)
+    "vector_inn_prdt_sum_red_x4: size must be non-negative"
+    "MITCCRH: bit_ceil"
+    "MITCCRHBulk: BatchSize must be positive"
+    "MITCCRHBulk: K must divide BatchSize")
+foreach(neg RANGE 1 16)
     add_executable(crypto_contract_neg_${neg} EXCLUDE_FROM_ALL runtime/crypto_contract_probes.cpp)
     target_link_libraries(crypto_contract_neg_${neg} PRIVATE emp-tool::emp-tool)
     target_compile_definitions(crypto_contract_neg_${neg} PRIVATE CRYPTO_NEG_CASE=${neg})

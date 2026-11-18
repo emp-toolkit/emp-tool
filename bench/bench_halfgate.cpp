@@ -11,7 +11,7 @@ using namespace emp;
 
 int main(void) {
 	block data[2], delta, hash_seed, table[2], w0, w1;
-	MITCCRH<8> mi_gen;
+	MITCCRH<> mi_gen;
 	PRG prg;
 	prg.random_block(&delta, 1);
 	delta = delta | makeBlock(0x0, 0x1);
@@ -19,7 +19,7 @@ int main(void) {
 	mi_gen.setS(hash_seed);
 
 	block data1[2];
-	MITCCRH<8> mi_eva;
+	MITCCRH<> mi_eva;
 	mi_eva.setS(hash_seed);
 	block ret;
 	block sink = zero_block;

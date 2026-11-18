@@ -9,13 +9,14 @@ namespace emp {
 // Half-gate garbling [Zahur-Rosulek-Evans 2014, eprint 2014/756]: the per-AND
 // garble / evaluate primitives over block labels and a shared MITCCRH. XOR and
 // NOT are free (label XOR with delta), handled by the caller; only AND needs a
-// ciphertext pair (`table`). Generic over the MITCCRH instantiation so the
-// protocol picks BatchSize / ReuseShift. Both parties use the same public
+// ciphertext pair (`table`). Generic over the hash instance (MITCCRH, or any
+// type with the same hash_cir) so the protocol picks ReuseShift / Ahead. Each
+// call takes the next two gids, one per half. Both parties use the same public
 // start_point S, chosen independently of the garbler's secret delta, and keep
-// the gid schedule in lockstep. ReuseShift must also match — together these
-// determine the hash keys and transcript. BatchSize only sets how many gids
-// are keyed per schedule refill; the outputs are BatchSize-invariant, so it is
-// a per-machine scheduling choice.
+// the gid stream in lockstep. ReuseShift must also match — together these
+// determine the hash keys and transcript. Ahead only sets how many bucket keys
+// are scheduled at once; the outputs are Ahead-invariant, so it is a
+// per-machine scheduling choice.
 
 template <class MITC>
 inline block halfgates_garble(block LA0, block A1, block LB0, block B1,
