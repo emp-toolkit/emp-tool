@@ -32,19 +32,13 @@ Throughput lives separately in `bench/bench_netio.cpp`.
 
 ## Thread-safety
 
-NetIO is NOT thread-safe. The user-space `send_buf` coalescing has no
-per-call lock; concurrent `send_data` / `recv_data` / `flush` from two
-threads on the same instance corrupts the buffer. Each instance must be
-owned by one thread at a time — `flush()` counts as a "touch" and is
-unsafe to call from a thread other than the one currently sending.
-
-## Thread-safety contract
-
 A channel is not thread-safe: send-buffer coalescing is unlocked, and
-TLSIO's `SSL*` mutates internal state on every read and write. Only one
-thread may touch a given channel at a time; sequential hand-off between
-threads is fine. Threaded consumers take a channel per thread —
-`make_sibling()` on NetIO, or a per-lane channel at the protocol layer.
+TLSIO's `SSL*` mutates internal state on every read and write, so
+concurrent `send_data` / `recv_data` / `flush` calls on one instance
+corrupt it. Only one thread may touch a given channel at a time (`flush()`
+counts as a touch); sequential hand-off between threads is fine. Threaded
+consumers take a channel per thread — `make_sibling()` on NetIO or TLSIO,
+or a per-lane channel at the protocol layer.
 Races on a shared channel are not detected at runtime; when debugging a
 threaded consumer, build with `-fsanitize=thread`.
 

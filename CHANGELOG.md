@@ -25,8 +25,9 @@ metadata is numeric (see the README's version guidance).
   digests act on `inner`'s, which sees the wrapper's traffic in wire order. A
   wrapper that keeps its own transcript absorbs each message before its
   `send_data_internal` runs, so bytes that `send_data_internal` sends of its
-  own first land out of wire order. emp-zk's `BoolIO`, which closes its
-  buffered bit chunks that way, needs it.
+  own first land out of wire order. emp-zk's `BoolIO` uses it: the OT and
+  VOLE extensions given a `BoolIO` used to turn on a second transcript on it,
+  which hashed its byte traffic a second time.
 
 ### Changed
 
@@ -54,6 +55,12 @@ metadata is numeric (see the README's version guidance).
 - `NetIO::make_sibling()` is no longer `const`: it takes the sibling's root
   from the parent's session ids, so it changes the parent like any other
   call on it.
+
+### Fixed
+
+- `./run` could stop the two parties up to a second before
+  `EMP_RUN_TIMEOUT`, because `SECONDS` counts whole seconds. It now gives
+  them the full timeout and may run up to a second over.
 
 ## v1.0.0-alpha.2
 
