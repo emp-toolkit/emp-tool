@@ -68,6 +68,16 @@ sub-challenges across stages). `get_send_digest()` / `get_recv_digest()`
 are per-direction snapshots for diagnostics. All three assert that
 `enable_fs` ran first.
 
+A wrapping channel that sends and receives every byte through another
+channel's `send_data` / `recv_data` can call the protected
+`use_transcript_of(inner)` in its constructor. It then keeps no transcript of
+its own: `enable_fs`, `fs_enabled` and the digests act on `inner`'s, which sees
+all of the wrapper's traffic in wire order. A wrapper that keeps its own
+transcript absorbs each message when its `send_data` is called, before its
+`send_data_internal` runs, so bytes that `send_data_internal` sends of its own
+first (to close a buffered unit, say) land after that message in the
+transcript but before it on the wire.
+
 ## Session ids
 
 A channel may hold a session root that both ends agree on when the connection

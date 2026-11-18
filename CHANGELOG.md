@@ -19,6 +19,14 @@ metadata is numeric (see the README's version guidance).
   port, as `NetIO::make_sibling()` does. The sibling shares its parent's TLS
   context (the keys), runs its own handshake, and takes its parent's next
   session id as its root.
+- `IOChannel::use_transcript_of(inner)` (protected), for a wrapping channel
+  that sends and receives every byte through `inner`: the wrapper keeps no
+  Fiat-Shamir transcript of its own, and `enable_fs`, `fs_enabled` and the
+  digests act on `inner`'s, which sees the wrapper's traffic in wire order. A
+  wrapper that keeps its own transcript absorbs each message before its
+  `send_data_internal` runs, so bytes that `send_data_internal` sends of its
+  own first land out of wire order. emp-zk's `BoolIO`, which closes its
+  buffered bit chunks that way, needs it.
 
 ### Changed
 

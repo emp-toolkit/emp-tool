@@ -19,9 +19,11 @@
 
 #include <openssl/sha.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <deque>
 #include <fcntl.h>
 #include <iomanip>
 #include <iostream>
@@ -235,6 +237,14 @@ public:
 	void recv_data_internal(void *, int64_t) override {}
 };
 
+// Exposes the protected use_transcript_of for the contract checks.
+class RetargetIO final : public IOChannel {
+public:
+	void retarget(IOChannel *inner) { use_transcript_of(inner); }
+	void send_data_internal(const void *, int64_t) override {}
+	void recv_data_internal(void *, int64_t) override {}
+};
+
 static bool check_fs_state_contracts_rejected() {
 	return dies([] {
 		NullIO io;
@@ -249,7 +259,107 @@ static bool check_fs_state_contracts_rejected() {
 		NullIO io;
 		io.enable_fs(false);
 		io.enable_fs(false);
+	}) && dies([] {
+		RetargetIO io;
+		io.retarget(nullptr);
+	}) && dies([] {
+		RetargetIO io;
+		io.retarget(&io);
+	}) && dies([] {
+		RetargetIO io;
+		NullIO inner;
+		io.enable_fs(false);
+		io.retarget(&inner);  // it already keeps its own transcript
+	}) && dies([] {
+		RetargetIO a, b;
+		a.retarget(&b);
+		b.retarget(&a);  // each would use the other's
+	}) && dies([] {
+		RetargetIO io;
+		NullIO a, b;
+		io.retarget(&a);
+		io.retarget(&b);
+	}) && dies([] {
+		RetargetIO io;
+		NullIO inner;
+		io.retarget(&inner);
+		inner.enable_fs(false);
+		io.enable_fs(false);  // inner's transcript is already on
 	});
+}
+
+// One end of an in-memory pipe: sends append to `out`, receives take from `in`.
+class PipeIO final : public IOChannel {
+public:
+	PipeIO(std::deque<uint8_t> *out, std::deque<uint8_t> *in) : out_(out), in_(in) {}
+	void send_data_internal(const void *data, int64_t nbyte) override {
+		const uint8_t *p = static_cast<const uint8_t *>(data);
+		out_->insert(out_->end(), p, p + nbyte);
+	}
+	void recv_data_internal(void *data, int64_t nbyte) override {
+		expecting(static_cast<int64_t>(in_->size()) >= nbyte, "PipeIO: pipe underrun");
+		std::copy(in_->begin(), in_->begin() + nbyte, static_cast<uint8_t *>(data));
+		in_->erase(in_->begin(), in_->begin() + nbyte);
+	}
+private:
+	std::deque<uint8_t> *out_, *in_;
+};
+
+// A wrapper that sends every byte through `inner` and uses inner's transcript.
+// Like a channel that buffers its own units, it sends what it has staged
+// before the next message.
+class StagingIO final : public IOChannel {
+public:
+	explicit StagingIO(IOChannel *inner) : inner_(inner) { use_transcript_of(inner); }
+	void stage(uint8_t b) { staged_.push_back(b); }
+	void send_data_internal(const void *data, int64_t nbyte) override {
+		if (!staged_.empty()) {
+			std::vector<uint8_t> unit;
+			unit.swap(staged_);
+			inner_->send_data(unit.data(), static_cast<int64_t>(unit.size()));
+		}
+		inner_->send_data(data, nbyte);
+	}
+	void recv_data_internal(void *data, int64_t nbyte) override {
+		inner_->recv_data(data, nbyte);
+	}
+private:
+	IOChannel *inner_;
+	std::vector<uint8_t> staged_;
+};
+
+// A wrapper's transcript is its inner channel's: turning it on through the
+// wrapper turns on inner's, and the staged bytes a message sends first are
+// recorded before that message, as they go out, so the sending and receiving
+// ends agree.
+static bool check_wrapper_uses_inner_transcript() {
+	std::deque<uint8_t> wire;
+	PipeIO sender(&wire, nullptr), receiver(nullptr, &wire);
+	StagingIO wrapper(&sender);
+	wrapper.enable_fs(true);
+	receiver.enable_fs(false);
+	const uint8_t staged[3] = {1, 2, 3};
+	for (uint8_t b : staged) wrapper.stage(b);
+	const block msg = makeBlock(0x0123, 0x4567);
+	wrapper.send_block(&msg, 1);
+
+	uint8_t got_staged[3];
+	block got_msg;
+	receiver.recv_data(got_staged, 3);
+	receiver.recv_block(&got_msg, 1);
+	const block via_wrapper = wrapper.get_send_digest();
+	const block via_inner = sender.get_send_digest();
+	const block received = receiver.get_recv_digest();
+	const block wrapper_all = wrapper.get_digest();
+	const block inner_all = sender.get_digest();
+	const bool ok = sender.fs_enabled() && wrapper.fs_enabled() &&
+	                std::memcmp(got_staged, staged, sizeof(staged)) == 0 &&
+	                cmpBlock(&got_msg, &msg, 1) &&
+	                cmpBlock(&via_wrapper, &via_inner, 1) &&
+	                cmpBlock(&via_inner, &received, 1) &&
+	                cmpBlock(&wrapper_all, &inner_all, 1);
+	cout << "  [wrapper uses its inner transcript]    " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
 }
 
 static bool run_correctness() {
@@ -270,6 +380,7 @@ static bool run_correctness() {
 	cout << "  [Fiat-Shamir state contracts rejected] "
 	     << (fs_contracts ? "OK" : "FAIL") << "\n";
 	ok &= fs_contracts;
+	ok &= check_wrapper_uses_inner_transcript();
 	return ok;
 }
 
