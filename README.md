@@ -183,7 +183,8 @@ unaligned destination, in every build.
 | Class | Models |
 |---|---|
 | `CCRH`    | circular correlation-robust hash |
-| `MITCCRH` | multi-instance tweakable CCRH |
+| `MITCCRH` | multi-instance tweakable CCRH, as a stream of single-use tweaks |
+| `MITCCRHBulk` | the same hash, repositionable, for runs that span key buckets |
 
 ```cpp
 block key;
@@ -202,7 +203,8 @@ block one = ccrh.H(buf[0]);                      // single-block form
 CCRH has three call shapes: a scalar `H(block)` returning one block, a
 templated batched `H<n>(out, in)` that the compiler unrolls (best for small
 `n`), and a runtime `Hn(out, in, n)` for large batches. MITCCRH has a
-different shape — see `crypto/mitccrh.h`. `CCRH` is the single
+different shape: each call takes the next gids of a stream started by `setS`
+— see `crypto/mitccrh.h`. `CCRH` is the single
 correlation-robust hash: its `sigma` preprocessing rules out a footgun class
 of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)` correlated.
 

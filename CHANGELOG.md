@@ -55,6 +55,27 @@ metadata is numeric (see the README's version guidance).
 - `NetIO::make_sibling()` is no longer `const`: it takes the sibling's root
   from the parent's session ids, so it changes the parent like any other
   call on it.
+- `MITCCRH` is now a stream of single-use tweaks, the way every caller in
+  the emp stack hashes, and the previous class is `MITCCRHBulk`, unchanged.
+  `MITCCRH<ReuseShift = 3, Ahead = 8>` has `setS`, `start_point()`,
+  `next_gid()` (the first gid no hash has taken) and `hash<K, H>` /
+  `hash_cir<K, H>` (in place and out of place). A call of K lanes takes the
+  next run of K gids starting at a multiple of `bit_ceil(K)`, and
+  `bit_ceil(K)` must not exceed `2^ReuseShift`, so every call runs under one
+  key. When a call enters a bucket whose key is not scheduled, the keys of
+  `Ahead` consecutive buckets are scheduled in one interleaved batch instead
+  of one at a time. `ReuseShift`, which both parties must match, is now the
+  first parameter and `Ahead`, which only chooses when keys are scheduled,
+  the second, so the first parameter is no longer the batch size: for any
+  batch size B, write `MITCCRH<B>` as `MITCCRH<>` and `MITCCRH<B, RS>` as
+  `MITCCRH<RS>` (`MITCCRH<8>` now means `ReuseShift = 8`, one key per 256
+  gids), provided every K the instance hashes has `bit_ceil(K)` at most
+  `2^RS`, 8 for `MITCCRH<>`. Such an instance that hashes one power-of-two
+  K gives the same bytes as before. Use `MITCCRHBulk<BatchSize, ReuseShift>`
+  for `renew_ks(gid)`, a K with `bit_ceil(K)` above `2^ReuseShift`, or
+  `ReuseShift = 0` with K > 1. An instance that mixes K values, or hashes a
+  K that is not a power of two, now aligns each call to `bit_ceil(K)`, so
+  its gids differ from before.
 
 ### Fixed
 

@@ -7,13 +7,13 @@ int main() {
 	block blocks[8] = {};
 	bool bits[1] = {};
 #if CRYPTO_NEG_CASE == 1
-	MITCCRH<0> hash;
+	MITCCRH<3, 0> hash;
 	(void)hash;
 #elif CRYPTO_NEG_CASE == 2
-	MITCCRH<8> hash;
+	MITCCRH<> hash;
 	hash.hash<0, 1>(blocks);
 #elif CRYPTO_NEG_CASE == 3
-	MITCCRH<8> hash;
+	MITCCRH<> hash;
 	hash.hash<1, 0>(blocks);
 #elif CRYPTO_NEG_CASE == 4
 	vector_inn_prdt_sum_no_red<-1>(blocks, blocks, blocks);
@@ -26,18 +26,28 @@ int main() {
 #elif CRYPTO_NEG_CASE == 8
 	uni_hash_coeff_gen<0>(blocks, zero_block);
 #elif CRYPTO_NEG_CASE == 9
-	MITCCRH<-1> hash;
+	MITCCRH<3, -1> hash;
 	(void)hash;
 #elif CRYPTO_NEG_CASE == 10
-	MITCCRH<8> hash;
+	MITCCRH<> hash;
 	hash.hash<-1, 1>(blocks);
 #elif CRYPTO_NEG_CASE == 11
-	MITCCRH<8> hash;
+	MITCCRH<> hash;
 	hash.hash<1, -1>(blocks);
 #elif CRYPTO_NEG_CASE == 12
 	uni_hash_coeff_gen<-1>(blocks, zero_block);
 #elif CRYPTO_NEG_CASE == 13
 	vector_inn_prdt_sum_red_x4<-1>(blocks, blocks, blocks);
+#elif CRYPTO_NEG_CASE == 14
+	MITCCRH<> hash;   // 16 lanes do not fit one 8-gid bucket
+	block wide[16] = {};
+	hash.hash<16, 1>(wide);
+#elif CRYPTO_NEG_CASE == 15
+	MITCCRHBulk<0> hash;
+	(void)hash;
+#elif CRYPTO_NEG_CASE == 16
+	MITCCRHBulk<8> hash;
+	hash.hash<3, 1>(blocks);
 #endif
 	return 0;
 }

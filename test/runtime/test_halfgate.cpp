@@ -10,12 +10,12 @@ void printt(block a) {
 	printf("\n");
 }
 
-template <int BatchSize>
+template <class Hash>
 static void garble_trace(const array<array<block, 2>, 12>& labels,
                          block delta, block hash_seed,
                          array<block, 24>& tables,
                          array<block, 12>& outputs) {
-	MITCCRH<BatchSize> hash;
+	Hash hash;
 	hash.setS(hash_seed);
 	for (size_t i = 0; i < labels.size(); ++i) {
 		outputs[i] = halfgates_garble(
@@ -25,22 +25,24 @@ static void garble_trace(const array<array<block, 2>, 12>& labels,
 	}
 }
 
-static bool check_batch_size_invariance(PRG& prg, block delta,
-                                        block hash_seed) {
+// The same 12 gates garbled under two hash instances must give the same tables
+// and output labels.
+template <class HashA, class HashB>
+static bool same_transcript(PRG& prg, block delta, block hash_seed) {
 	array<array<block, 2>, 12> labels;
 	for (auto& pair : labels) prg.random_block(pair.data(), pair.size());
-	array<block, 24> tables2, tables8;
-	array<block, 12> outputs2, outputs8;
-	garble_trace<2>(labels, delta, hash_seed, tables2, outputs2);
-	garble_trace<8>(labels, delta, hash_seed, tables8, outputs8);
-	return cmpBlock(tables2.data(), tables8.data(), tables2.size()) &&
-	       cmpBlock(outputs2.data(), outputs8.data(), outputs2.size());
+	array<block, 24> tables_a, tables_b;
+	array<block, 12> outputs_a, outputs_b;
+	garble_trace<HashA>(labels, delta, hash_seed, tables_a, outputs_a);
+	garble_trace<HashB>(labels, delta, hash_seed, tables_b, outputs_b);
+	return cmpBlock(tables_a.data(), tables_b.data(), tables_a.size()) &&
+	       cmpBlock(outputs_a.data(), outputs_b.data(), outputs_a.size());
 }
 
 int main(void) {
 	// sender
 	block data[2], delta, hash_seed, table[2], w0, w1;
-	MITCCRH<8> mi_gen;
+	MITCCRH<> mi_gen;
 	PRG prg;
 	prg.random_block(&delta, 1);
 	delta = delta | makeBlock(0x0, 0x1);
@@ -49,7 +51,7 @@ int main(void) {
 
 	// receiver
 	block data1[2];
-	MITCCRH<8> mi_eva;
+	MITCCRH<> mi_eva;
 	mi_eva.setS(hash_seed);
 	block ret;
 
@@ -74,7 +76,7 @@ int main(void) {
 	}
 	cout << "check\n";
 
-	// Key-reuse regression (emp-tool issue #212). MITCCRH<8> keys AES per
+	// Key-reuse regression (emp-tool issue #212). MITCCRH<> keys AES per
 	// 8-gid bucket and a half-gate spends gids 2g, 2g+1, so four consecutive
 	// ANDs share one key. Garble AND(a, b) then AND(a, c) in one bucket: if the
 	// hash ignored the gid, the first rows would be H(A0)^H(A1)^pb*delta and
@@ -84,7 +86,7 @@ int main(void) {
 	// both differences are unstructured.
 	cout << "Bucket key reuse: fan-out rows unstructured ... ";
 	for (int trial = 0; trial < 16; ++trial) {
-		MITCCRH<8> mi;
+		MITCCRH<> mi;
 		block S, a, b, c, t_ab[2], t_ac[2], t_aa[2];
 		prg.random_block(&S, 1);
 		mi.setS(S);
@@ -103,10 +105,16 @@ int main(void) {
 		}
 	}
 	cout << "check\n";
-	bool batch_invariant = check_batch_size_invariance(prg, delta, hash_seed);
-	cout << "BatchSize-invariant transcript ... "
-	     << (batch_invariant ? "check" : "FAIL") << "\n";
+	// Ahead only decides when keys are scheduled, and the stream hashes each
+	// gid as MITCCRHBulk does: Ahead 2 and Ahead 8 give one transcript, and so
+	// do the two classes.
+	bool ahead_invariant = same_transcript<MITCCRH<3, 2>, MITCCRH<3, 8>>(prg, delta, hash_seed);
+	cout << "Ahead-invariant transcript ... "
+	     << (ahead_invariant ? "check" : "FAIL") << "\n";
+	bool bulk_equal = same_transcript<MITCCRH<>, MITCCRHBulk<8>>(prg, delta, hash_seed);
+	cout << "MITCCRH and MITCCRHBulk transcripts equal ... "
+	     << (bulk_equal ? "check" : "FAIL") << "\n";
 	// Throughput measurement lives in bench/bench_halfgate.cpp (build-only).
 
-	return batch_invariant ? 0 : 1;
+	return ahead_invariant && bulk_equal ? 0 : 1;
 }
