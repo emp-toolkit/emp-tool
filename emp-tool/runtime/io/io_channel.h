@@ -36,6 +36,10 @@ namespace emp {
 // call-site) is robust against protocols that batch sends asymmetrically.
 //
 // Off by default.
+//
+// A wrapping channel that sends and receives every byte through the channel it
+// wraps can use that channel's transcript instead of keeping its own
+// (use_transcript_of).
 
 class TraceIO;
 
@@ -100,6 +104,21 @@ protected:
 		sid_root_.emplace(root);
 	}
 
+	// For a wrapping channel that sends and receives every byte through
+	// `inner`'s send_data / recv_data: use inner's Fiat-Shamir transcript
+	// instead of keeping one. enable_fs, fs_enabled and the digests then act
+	// on inner's transcript, which sees all of the wrapper's traffic in wire
+	// order. Call it once, before enable_fs.
+	void use_transcript_of(IOChannel *inner) {
+		expecting(inner != nullptr, "IOChannel::use_transcript_of: null channel");
+		for (const IOChannel *c = inner; c != nullptr; c = c->fs_owner_)
+			expecting(c != this,
+			          "IOChannel::use_transcript_of: the transcript would be its own");
+		expecting(fs_owner_ == nullptr && !fs_enabled(),
+		          "IOChannel::use_transcript_of: call it once, before enable_fs");
+		fs_owner_ = inner;
+	}
+
 public:
 
 	// Drain any outbound buffer to the underlying transport. Default
@@ -152,12 +171,17 @@ public:
 	// assert: calling twice is a bug.
 	template <HashOption opt = EMP_FS_HASH_DEFAULT>
 	void enable_fs(bool send_first) {
+		if (fs_owner_ != nullptr) {
+			fs_owner_->template enable_fs<opt>(send_first);
+			return;
+		}
 		expecting(!fs_enabled(), "IOChannel::enable_fs: called twice");
 		fs_send_first_ = send_first;
 		fs_.template emplace<FsStateT<opt>>();
 	}
 
 	bool fs_enabled() const {
+		if (fs_owner_ != nullptr) return fs_owner_->fs_enabled();
 		return !std::holds_alternative<std::monostate>(fs_);
 	}
 
@@ -167,12 +191,14 @@ public:
 	// have crossed in that direction since enable_fs. Non-destructive;
 	// the running transcripts continue absorbing after the snapshot.
 	block get_send_digest() {
+		if (fs_owner_ != nullptr) return fs_owner_->get_send_digest();
 		expecting(fs_enabled(), "IOChannel::get_send_digest: enable_fs first");
 		return fs_digest_([](auto& st, char* buf) {
 			st.send.digest(buf, /*reset_after=*/false);
 		});
 	}
 	block get_recv_digest() {
+		if (fs_owner_ != nullptr) return fs_owner_->get_recv_digest();
 		expecting(fs_enabled(), "IOChannel::get_recv_digest: enable_fs first");
 		return fs_digest_([](auto& st, char* buf) {
 			st.recv.digest(buf, /*reset_after=*/false);
@@ -187,6 +213,7 @@ public:
 	// Output: H(d_AB ‖ d_BA)[0..16). Send-first side concatenates
 	// my_send first, the other side concatenates my_recv first.
 	block get_digest() {
+		if (fs_owner_ != nullptr) return fs_owner_->get_digest();
 		expecting(fs_enabled(), "IOChannel::get_digest: enable_fs first");
 		block out = zero_block;   // asserts guard FS-off; keep release defined
 		std::visit([&](auto& st) {
@@ -397,6 +424,11 @@ private:
 #endif
 	FsState fs_;
 	bool fs_send_first_ = false;
+	// The channel whose transcript enable_fs, fs_enabled and the digests act
+	// on when use_transcript_of named one; null for this channel's own. A
+	// channel that uses another's never turns its own fs_ on, so its
+	// send_data and recv_data absorb nothing.
+	IOChannel *fs_owner_ = nullptr;
 
 	// next_session_id()'s root, if the connection agreed on one.
 	std::optional<SessionID> sid_root_;
