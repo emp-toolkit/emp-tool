@@ -37,6 +37,7 @@ self-contained and assumes you've read this index.
 | Add, replace, or debug generated `.empbc` circuit assets, especially floating-point assets | [docs/floating_point_circuits.md](docs/floating_point_circuits.md) |
 | Implement a protocol backend (a `BooleanContext` + session; gate dispatch, garbling) | [docs/backend.md](docs/backend.md) |
 | Run / compile / replay a pure circuit function through a backend (`frontend::run` / `compile`) | [docs/frontend.md](docs/frontend.md) |
+| Give a circuit declared inputs and outputs and run it in two phases (`Computation`, `prepare` / `run`, `ComputationSession`) | [docs/frontend.md § Computations](docs/frontend.md) |
 | Write protocol code that uses NetIO (sends, recvs, multi-thread, flush) | [docs/io_channel.md](docs/io_channel.md) |
 | Investigate a NetIO deadlock | [docs/io_channel.md](docs/io_channel.md) |
 | Translate ordinary C++ / Python to an EMP secure circuit | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |

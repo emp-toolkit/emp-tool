@@ -8,8 +8,9 @@
 // value is the explicit `outputs` wire list. The IR knows
 // nothing about parties, owners, argument boundaries, labels, MACs, or any
 // protocol — those live in the layers that produce/consume it (the compiled
-// Circuit's signature carries per-argument widths; a protocol backend carries
-// ownership). Validation (ir/validate.h), the gate-walk primitive (ir/visit.h),
+// Circuit's signature carries per-argument widths; a ComputationArtifact,
+// ir/computation.h, carries the roles of its slots beside the program; a
+// protocol backend carries everything else). Validation (ir/validate.h), the gate-walk primitive (ir/visit.h),
 // and value execution (ir/execute.h) are split into their own headers.
 
 #include <cstddef>

@@ -3,10 +3,11 @@
 
 // ir — the context-free Boolean IR and execution contracts: BooleanProgram and its
 // validation / visiting / passes / scheduling / execution, the .empbc assets /
-// builtins / artifacts, the reusable non-protocol contexts (the BooleanContext /
-// BulkBooleanContext concepts + ClearCtx / CountCtx / DigestCtx / RecordCtx), the
-// generic WireBundle/WireValue concepts, and the generic session contracts (Session /
-// DirectSession / SessionIO / CheckpointingSession + the plaintext ClearSession).
+// builtins / artifacts, computations (a program plus the roles of its slots), the
+// reusable non-protocol contexts (the BooleanContext / BulkBooleanContext concepts +
+// ClearCtx / CountCtx / DigestCtx / RecordCtx), the generic WireBundle/WireValue
+// concepts, and the generic session contracts (Session / DirectSession / SessionIO /
+// CheckpointingSession / ComputationSession + the plaintext ClearSession).
 // It builds on runtime and is built on by circuits.
 
 #include "emp-tool/ir/program.h"
@@ -17,6 +18,7 @@
 #include "emp-tool/ir/execute.h"
 #include "emp-tool/ir/schedule.h"
 #include "emp-tool/ir/artifact.h"
+#include "emp-tool/ir/computation.h"
 #include "emp-tool/ir/empbc.h"
 #include "emp-tool/ir/assets.h"
 #include "emp-tool/ir/builtins.h"
@@ -24,6 +26,7 @@
 #include "emp-tool/ir/context/context.h"
 #include "emp-tool/ir/session/session.h"
 #include "emp-tool/ir/session/session_io.h"
+#include "emp-tool/ir/session/computation_session.h"
 #include "emp-tool/ir/session/clear_session.h"
 
 #endif  // EMP_IR_IR_H__

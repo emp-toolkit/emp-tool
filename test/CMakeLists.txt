@@ -207,6 +207,7 @@ add_test_case_cxx20(ir test_chunked_session)       # chunked-session reveal/arti
 add_test_case_cxx20(ir test_dynamic)             # runtime-width session I/O (RuntimeWidthValue) over ClearSession
 add_test_case_cxx20(ir test_builtin_circuits)    # AES/SHA/SHA3 IR-replay == live kernels (ir/builtins.h)
 add_test_case_cxx20(ir test_simd)                # ir/simd.h: SIMD-batched replay over a bitsliced BulkBooleanContext
+add_test_case_cxx20(ir test_computation)         # ir/computation.h + circuit mode (computation_session.h) over ClearSession
 
 # ---- circuits/ : typed values, crypto circuits, frontend ----
 add_test_case_cxx20(circuits test_bit)           # per-type value headers over ClearCtx
@@ -220,6 +221,7 @@ add_test_case_cxx20(circuits test_sort)          # data-oblivious sort over circ
 add_test_case_cxx20(circuits test_runtime_int)   # DynamicUInt_T / DynamicInt_T
 add_test_case_cxx20(circuits test_typed)         # typed values (Bit/BitVec/UInt/Int/Float) over Ctx
 add_test_case_cxx20(circuits test_circuit_fn)    # compile-once / run-on-any-context frontend (rec:: value types)
+add_test_case_cxx20(circuits test_computation_fn) # typed circuit mode: Circuit + roles, prepare / run
 add_test_case_cxx20(circuits test_crypto_aes)    # AES-128 block over the value layer (vector/record/count)
 add_test_case_cxx20(circuits test_crypto_sha256) # SHA-256 compression + full-hash wrapper
 add_test_case_cxx20(circuits test_crypto_keccak) # Keccak-f[1600] + SHA3-256 wrapper

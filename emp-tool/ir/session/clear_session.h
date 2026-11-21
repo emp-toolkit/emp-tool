@@ -23,8 +23,17 @@
 // party that learns it and std::nullopt otherwise. ClearSession is plaintext — it
 // always knows the value — so its optional is always populated. Public constants
 // stay value/context-level: UInt32::constant(sess.ctx(), 7).
+//
+// Circuit mode (ir/session/computation_session.h): prepare_computation validates,
+// and run_computation executes the program on the direct context. All parties
+// live in this one process, so a run takes every input slot and fills every
+// output slot; it is the reference other sessions' circuit modes are checked
+// against.
 
+#include "emp-tool/ir/computation.h"           // ComputationArtifact, validate_computation
 #include "emp-tool/ir/context/clear.h"        // ClearCtx
+#include "emp-tool/ir/execute.h"              // execute_program
+#include "emp-tool/ir/session/computation_session.h"  // RawBindings / RawResult / check_bindings
 #include "emp-tool/ir/session/session.h"      // Session / DirectSession
 #include "emp-tool/ir/wire_value.h"           // WireValue / RuntimeWidthValue
 #include "emp-tool/runtime/core/constants.h"  // PUBLIC
@@ -32,7 +41,10 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
+#include <span>
+#include <utility>
 #include <vector>
 
 namespace emp {
@@ -143,12 +155,63 @@ public:
         return std::optional<typename V::clear_t>(V::decode(buf.data(), n));
     }
 
+    // ---- Circuit mode ----
+    // A prepared, single-use job: the validated computation it runs.
+    class job_t {
+    public:
+        job_t(const job_t&) = delete;
+        job_t& operator=(const job_t&) = delete;
+        job_t(job_t&& other) noexcept : artifact_(std::move(other.artifact_)) {}
+        job_t& operator=(job_t&& other) noexcept {
+            artifact_ = std::move(other.artifact_);
+            return *this;
+        }
+
+    private:
+        friend class ClearSession;
+        explicit job_t(std::shared_ptr<const circuit::ComputationArtifact> a)
+            : artifact_(std::move(a)) {}
+        std::shared_ptr<const circuit::ComputationArtifact> artifact_;
+    };
+
+    // Any party id >= 1 is accepted, as for input(): the plaintext oracle serves
+    // n-party protocols as well as 2PC.
+    job_t prepare_computation(std::shared_ptr<const circuit::ComputationArtifact> a) {
+        expecting(a != nullptr, "ClearSession::prepare_computation: null computation");
+        circuit::validate_computation(*a);
+        return job_t(std::move(a));
+    }
+
+    session::RawResult run_computation(job_t&& job, const session::RawBindings& b) {
+        expecting(job.artifact_ != nullptr,
+                  "ClearSession::run_computation: the job was already run");
+        const std::shared_ptr<const circuit::ComputationArtifact> a = std::move(job.artifact_);
+        session::check_bindings(*a, party(), b);
+        const circuit::BooleanProgram& p = *a->program;
+        std::vector<typename ctx_t::Wire> in;
+        in.reserve(p.num_inputs);
+        for (const std::optional<session::Bits>& slot : b.inputs)
+            for (uint8_t bit : *slot) in.push_back(ctx_.public_bit(bit != 0));
+        const std::vector<typename ctx_t::Wire> out = emp::execute_program(
+            ctx_, p, std::span<const typename ctx_t::Wire>(in.data(), in.size()));
+        session::RawResult r;
+        r.outputs.resize(a->io.outputs.size());
+        std::size_t pos = 0;
+        for (std::size_t i = 0; i < a->io.outputs.size(); ++i) {
+            session::Bits bits(a->io.outputs[i].width);
+            for (uint8_t& bit : bits) bit = (uint8_t)(out[pos++] & 1);
+            r.outputs[i] = std::move(bits);
+        }
+        return r;
+    }
+
 private:
     ctx_t ctx_;
 };
 
 static_assert(Session<ClearSession>);
 static_assert(DirectSession<ClearSession>);
+static_assert(ComputationSession<ClearSession>);
 // SessionIO<ClearSession, V> for a concrete value type is asserted in the emp-tool
 // tests — naming a value family here would make ir depend on circuits/.
 

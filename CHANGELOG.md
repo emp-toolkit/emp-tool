@@ -7,6 +7,19 @@ metadata is numeric (see the README's version guidance).
 
 ### Added
 
+- Circuit mode: a `Computation` is a `Circuit` plus a role for its return
+  value and for each argument, Party (a party id) or Public, so a session sees
+  every owner and recipient before the online phase. `cf::computation(circ,
+  cf::to(r), cf::from(o)...)` builds one, `cf::prepare(sess, comp)` returns a
+  single-use job, and `cf::run(sess, std::move(job), cf::bind(handle, x)...)`
+  binds this party's inputs and returns the outputs it receives
+  (`circuits/frontend/computation_fn.h`). The untyped form is
+  `circuit::ComputationArtifact`, a shared program plus an `IoSignature` of
+  slots, with `validate_computation` and `canonical_encoding`
+  (`ir/computation.h`). A session that models `ComputationSession`
+  (`ir/session/computation_session.h`) implements `prepare_computation` and
+  `run_computation` over `session::RawBindings` / `session::RawResult`;
+  `ClearSession` does, as the plaintext reference.
 - Session ids on `IOChannel`: `next_session_id()` returns a fresh `SessionID`
   per call, derived from a session root that both ends agree on when the
   connection is set up, and `has_session_root()` reports whether there is one.

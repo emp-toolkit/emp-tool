@@ -209,6 +209,43 @@ rejected at construction rather than silently mis-running. Accessors:
 No analyses are baked into the circuit — gate counts, liveness, and the AND-depth
 schedule are free functions over the program (`ir/passes.h`), computed when wanted.
 
+## Computations — declared inputs and outputs
+
+A `Circuit` names no parties: a session decides each input's owner and each
+output's recipient call by call. A **`Computation`** declares them up front: a
+`Circuit` plus a role for its return value and for each argument, so a session
+sees every owner and recipient before the online phase and can prepare offline
+the work that depends on them.
+
+```cpp
+#include "emp-tool/circuits/frontend/computation_fn.h"
+namespace cf = emp::frontend;
+auto comp = cf::computation(circ, cf::to(BOB), cf::from(ALICE), cf::from(PUBLIC));
+auto [out, x_in, k_in] = comp.handles();      // the return's handle, then one per argument
+auto job = cf::prepare(sess, comp);           // offline
+auto res = cf::run(sess, std::move(job),      // online; at ALICE: her input and every Public one
+                   cf::bind(x_in, x), cf::bind(k_in, k));
+std::optional<uint32_t> v = res[out];         // present where this party receives the output
+```
+
+- **Roles.** `cf::to(r)` for the return and `cf::from(o)` for each argument, each
+  a party id or `PUBLIC`. A Party input comes from its owner; a Public input is
+  supplied by every party, and nothing compares the copies. A Party output goes
+  to its recipient; a Public output goes to everyone.
+- **Binding.** Each party binds exactly its own Party inputs and every Public
+  input. Anything else, a handle of another computation, a slot bound twice, a
+  job run twice or on another session, is fatal before any traffic.
+- **The raw form.** `cf::computation` builds a `circuit::ComputationArtifact`
+  (`ir/computation.h`): the shared program plus an `IoSignature` of slots. A
+  program built elsewhere, with any number of slots, runs through a session's
+  `prepare_computation` / `run_computation` directly, with
+  `session::RawBindings` / `session::RawResult` (`ir/session/computation_session.h`).
+- **Sessions.** A session that models `ComputationSession` runs computations.
+  `ClearSession` does, holding every party in one process: it takes every slot
+  and returns every output, and is the reference for protocol sessions.
+- **Determinism.** Every party must build the same computation, roles included.
+  `circuit::canonical_encoding` gives the bytes tests compare.
+
 ## What's inside (internals)
 
 - `circuits/typed.h` — the typed values `Bit_T`/`BitVec_T`/`UInt_T`/`Int_T`/`Float_T<Ctx>`
@@ -227,9 +264,16 @@ schedule are free functions over the program (`ir/passes.h`), computed when want
   and `ProgramWorkspace` — is defined in `ir/execute.h`.
 - `ir/artifact.h` — `CircuitArtifact` (program + signature) +
   `validate_artifact`.
+- `ir/computation.h` — `ComputationArtifact` (shared program + `IoSignature`),
+  `validate_computation`, the slot offsets, `canonical_encoding`.
+- `ir/session/computation_session.h` — `RawBindings` / `RawResult`, the binding
+  rule (`check_bindings`), and the `ComputationSession` concept.
 - `circuits/frontend/circuit_fn.h` — the `RecordValue` concept (refining `WireBundle`),
   `circuit_fn_traits` / `circuit_contract`, `Circuit<RetV,ArgVs...>`, `compile`,
   `run`.
+- `circuits/frontend/computation_fn.h` — `Computation<RetV,ArgVs...>`, the roles
+  `to` / `from`, the handles, `bind`, `prepare`, `Job`, `Result` and the job
+  overload of `run`.
 - `ir/passes.h` — analyses over the IR (`count_pass`, `liveness_pass`,
   `schedule_pass`, `layout_pass`) as free functions.
 
@@ -253,3 +297,8 @@ round-sensitive protocol (e.g. GMW) gets efficiency by moving the program into
   recorder and `ComposeCtx`.
 - `test/circuits/circuit_fn_contract_probes.cpp` — the contract's positive case +
   the negative cases that must fail to compile with the expected message.
+- `test/ir/test_computation.cpp` — validation, slot offsets and encoding of a
+  `ComputationArtifact`, the binding rule, and `ClearSession`'s circuit mode
+  against `execute_program` on random programs.
+- `test/circuits/test_computation_fn.cpp` — typed computations on `ClearSession`
+  against direct mode, and the identity and single-use rules.
