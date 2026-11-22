@@ -6,7 +6,6 @@
 
 #include <openssl/evp.h>
 #include <openssl/err.h>
-#include <openssl/bnerr.h>
 #include <algorithm>
 #include <cstring>
 #include <limits>
@@ -100,36 +99,28 @@ inline void hash_to_field_p256(BIGNUM *u0, BIGNUM *u1, const BIGNUM *p,
 	expecting(BN_mod(u1, u1, p, ctx) != 0, "hash_to_field: BN_mod u1");
 }
 
-// BN_mod_sqrt reports an expected nonsquare through OpenSSL's thread-local
-// error queue. Keep that internal control-flow result from leaking into later
-// OpenSSL operations while leaving any caller-owned errors intact.
-inline bool mod_sqrt_if_square(BIGNUM *out, const BIGNUM *value,
-		const BIGNUM *p, BN_CTX *ctx) {
-	// Marks the caller's newest error, if any; popping to the mark removes
-	// only what BN_mod_sqrt added (the whole queue when there was none).
-	(void)ERR_set_mark();
-	const bool square = BN_mod_sqrt(out, value, p, ctx) != nullptr;
-	if (!square) {
-		const unsigned long error = ERR_peek_last_error();
-		expecting(ERR_GET_LIB(error) == ERR_LIB_BN &&
-		              ERR_GET_REASON(error) == BN_R_NOT_A_SQUARE,
-		          "SSWU: BN_mod_sqrt failed");
-	}
-	(void)ERR_pop_to_mark();
-	return square;
-}
-
 // Simplified SWU for P-256, A=-3, Z=-10. RFC 9380 §6.6.2 non-optimized
-// version. Uses BN_mod_sqrt (Tonelli-Shanks); not constant-time, but
-// P-256 has p ≡ 3 (mod 4) so OpenSSL takes the fast (p+1)/4 path
-// internally.
+// version, with one modular exponentiation per map. Variable time: the input
+// is public.
+//
+// p ≡ 3 (mod 4), so y = gx1^((p+1)/4) is a square root of gx1 when gx1 is a
+// square and of -gx1 when it is not (gx1 != 0: P-256 has no point of order
+// 2). In the second case the map takes x2 = t·x1 with t = Z·u^2, and for
+// x1 = (-B/A)·(1 + 1/(t^2 + t)) the curve equation gives
+// gx2 = t^3·gx1, so y2 = sqrt(-Z)·t·u·y squares to
+// (-Z)·t^2·u^2·(-gx1) = t^3·gx1 = gx2. The exceptional x1 = B/(Z·A) has a
+// square g(x1) by RFC 9380's choice of Z, so it never takes the second
+// branch. Each candidate's root is fixed up to sign and the sgn0 step picks
+// the sign, so the output is the RFC's. A wrong root cannot pass unseen:
+// EC_POINT_set_affine_coordinates rejects an (x, y) off the curve.
 //
 // BN_mod_* failures (OOM on intermediate growth) leave the destination
 // BIGNUM in an indeterminate state — not null — so downstream reads
 // of garbage rather than crashing. Checked at every block boundary.
 inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 		const BIGNUM *u, const BIGNUM *p, const BIGNUM *A, const BIGNUM *B,
-		const BIGNUM *Z, BN_CTX *ctx) {
+		const BIGNUM *Z, const BIGNUM *sqrt_minus_z, const BIGNUM *sqrt_exp,
+		BN_CTX *ctx) {
 	BIGNUM *u2 = BN_new(), *t = BN_new(), *tv1 = BN_new(), *tmp = BN_new();
 	BIGNUM *x1 = BN_new(), *gx = BN_new(), *y = BN_new();
 	expecting(u2 && t && tv1 && tmp && x1 && gx && y, "SSWU: BN_new");
@@ -176,21 +167,20 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	          && BN_mod_add(gx, gx, B, p, ctx) == 1,
 	          "SSWU: BN_mod_* (gx1)");
 
-	if (mod_sqrt_if_square(y, gx, p, ctx)) {
-		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
-	} else {
-		// x2 = t * x1 ; gx2 = x2^3 + A*x2 + B
+	// y = gx1^((p+1)/4); gx1 is a square exactly when y^2 == gx1.
+	expecting(BN_mod_exp(y, gx, sqrt_exp, p, ctx) == 1
+	          && BN_mod_sqr(tmp, y, p, ctx) == 1,
+	          "SSWU: BN_mod_exp/sqr (gx1 root)");
+	if (BN_cmp(tmp, gx) != 0) {
+		// x2 = t * x1 ; y2 = sqrt(-Z) * t * u * y
+		expecting(!BN_is_zero(tv1), "H2C SSWU: exceptional x1 with nonsquare g(x1)");
 		expecting(BN_mod_mul(x1, t, x1, p, ctx) == 1
-		          && BN_mod_sqr(tmp, x1, p, ctx) == 1
-		          && BN_mod_mul(gx, tmp, x1, p, ctx) == 1
-		          && BN_mod_mul(tmp, A, x1, p, ctx) == 1
-		          && BN_mod_add(gx, gx, tmp, p, ctx) == 1
-		          && BN_mod_add(gx, gx, B, p, ctx) == 1,
-		          "SSWU: BN_mod_* (gx2)");
-		expecting(mod_sqrt_if_square(y, gx, p, ctx),
-		          "H2C SSWU: neither candidate square");
-		expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
+		          && BN_mod_mul(y, y, sqrt_minus_z, p, ctx) == 1
+		          && BN_mod_mul(y, y, t, p, ctx) == 1
+		          && BN_mod_mul(y, y, u, p, ctx) == 1,
+		          "SSWU: BN_mod_mul (x2/y2)");
 	}
+	expecting(BN_copy(x_out, x1) != NULL, "SSWU: BN_copy x_out");
 
 	// sgn0 correction: if sgn0(u) != sgn0(y), y = -y
 	if (BN_is_bit_set(u, 0) != BN_is_bit_set(y, 0)) {
@@ -202,15 +192,28 @@ inline void map_to_curve_sswu_p256(BIGNUM *x_out, BIGNUM *y_out,
 	BN_free(x1); BN_free(gx); BN_free(y);
 }
 
-// Z constant per curve, per RFC 9380 suite registry. Adding a curve =
-// a new branch here. P-256: Z = -10 (mod p).
-void sswu_z_for_curve(BIGNUM * z_out, const BIGNUM * p, int curve_nid) {
+// SSWU constants per curve, per RFC 9380 suite registry. Adding a curve =
+// a new branch here. P-256: Z = -10 (mod p); sqrt(-Z) = sqrt(10) mod p,
+// either root (the map's sgn0 step fixes the sign of y); and, as
+// p ≡ 3 (mod 4), the square-root exponent (p+1)/4 = (p >> 2) + 1.
+void sswu_constants_for_curve(BIGNUM * z_out, BIGNUM * sqrt_minus_z_out,
+		BIGNUM * sqrt_exp_out, const BIGNUM * p, int curve_nid) {
 	switch (curve_nid) {
-	case NID_X9_62_prime256v1:
+	case NID_X9_62_prime256v1: {
+		static constexpr unsigned char kSqrt10[32] = {
+			0xda, 0x53, 0x8e, 0x3b, 0xe1, 0xd8, 0x9b, 0x99,
+			0xc9, 0x78, 0xfc, 0x67, 0x51, 0x80, 0xaa, 0xb2,
+			0x7b, 0x8d, 0x1f, 0xf8, 0x4c, 0x55, 0xd5, 0xb6,
+			0x2c, 0xcd, 0x34, 0x27, 0xe4, 0x33, 0xc4, 0x7f,
+		};
 		expecting(BN_set_word(z_out, 10) == 1 &&
-		              BN_sub(z_out, p, z_out) == 1,
-		          "hash_to_point: derive P-256 SSWU Z");
+		              BN_sub(z_out, p, z_out) == 1 &&
+		              BN_bin2bn(kSqrt10, sizeof(kSqrt10), sqrt_minus_z_out) != nullptr &&
+		              BN_rshift(sqrt_exp_out, p, 2) == 1 &&
+		              BN_add_word(sqrt_exp_out, 1) == 1,
+		          "hash_to_point: derive P-256 SSWU constants");
 		return;
+	}
 	default:
 		expecting(false,
 		          "hash_to_point: unsupported curve (no SSWU Z table entry)");
@@ -508,10 +511,11 @@ Point ECGroup::hash_to_point(const char * msg, int64_t length,
 	          "hash_to_point: DST length must be in [1, 255]");
 	Point out(this);
 	BIGNUM *p = BN_new(), *A = BN_new(), *B = BN_new(), *Z = BN_new();
-	expecting(p && A && B && Z, "hash_to_point: BN_new");
+	BIGNUM *sqrt_minus_z = BN_new(), *sqrt_exp = BN_new();
+	expecting(p && A && B && Z && sqrt_minus_z && sqrt_exp, "hash_to_point: BN_new");
 	expecting(EC_GROUP_get_curve(ec_group_, p, A, B, bn_ctx_) == 1,
 	          "hash_to_point: EC_GROUP_get_curve");
-	sswu_z_for_curve(Z, p, curve_nid_);
+	sswu_constants_for_curve(Z, sqrt_minus_z, sqrt_exp, p, curve_nid_);
 
 	BIGNUM *u0 = BN_new(), *u1 = BN_new();
 	expecting(u0 && u1, "hash_to_point: BN_new");
@@ -523,8 +527,8 @@ Point ECGroup::hash_to_point(const char * msg, int64_t length,
 	BIGNUM *x0 = BN_new(), *y0 = BN_new();
 	BIGNUM *x1 = BN_new(), *y1 = BN_new();
 	expecting(x0 && y0 && x1 && y1, "hash_to_point: BN_new");
-	map_to_curve_sswu_p256(x0, y0, u0, p, A, B, Z, bn_ctx_);
-	map_to_curve_sswu_p256(x1, y1, u1, p, A, B, Z, bn_ctx_);
+	map_to_curve_sswu_p256(x0, y0, u0, p, A, B, Z, sqrt_minus_z, sqrt_exp, bn_ctx_);
+	map_to_curve_sswu_p256(x1, y1, u1, p, A, B, Z, sqrt_minus_z, sqrt_exp, bn_ctx_);
 
 	EC_POINT *Q0 = EC_POINT_new(ec_group_);
 	EC_POINT *Q1 = EC_POINT_new(ec_group_);
@@ -541,6 +545,7 @@ Point ECGroup::hash_to_point(const char * msg, int64_t length,
 
 	EC_POINT_free(Q0); EC_POINT_free(Q1);
 	BN_free(p); BN_free(A); BN_free(B); BN_free(Z);
+	BN_free(sqrt_minus_z); BN_free(sqrt_exp);
 	BN_free(u0); BN_free(u1);
 	BN_free(x0); BN_free(y0); BN_free(x1); BN_free(y1);
 	return out;

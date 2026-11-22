@@ -154,6 +154,10 @@ metadata is numeric (see the README's version guidance).
 - `vector_inn_prdt_sum_no_red` and `vector_inn_prdt_sum_red` skip a 512- or
   256-bit VPCLMULQDQ tier that has no full vector of input left, instead of
   zeroing and folding its empty accumulators. Results are unchanged.
+- `ECGroup::hash_to_point` takes one modular exponentiation per SSWU map
+  instead of a square root per candidate: when the first candidate's g(x) is
+  not a square, the second candidate's root comes from the same exponentiation
+  by three field multiplications. It returns the same points.
 
 ### Fixed
 
