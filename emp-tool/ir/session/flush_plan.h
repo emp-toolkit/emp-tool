@@ -11,11 +11,12 @@
 
 #include "emp-tool/ir/program.h"   // circuit::Gate, BooleanProgram
 #include "emp-tool/ir/validate.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <unordered_map>
-#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace emp {
@@ -34,6 +35,16 @@ struct FlushPlan {
 // plus the recorder-id ordering for its inputs and outputs. `ok` is false when
 // the recorded stream is structurally invalid or references stale state; `error`
 // gives the short reason for the caller's fatal diagnostic.
+//
+// Gates are looked up by output id. A recorder allocates ids from one monotonic
+// counter, so a recorded chunk's outputs lie in a span no wider than the ids
+// allocated while it was recorded; such a span is indexed directly (one 4-byte
+// slot per id, like the recorder's own refcount table). A chunk whose outputs are
+// too sparse for that, such as a hand-built stream, is indexed by a sorted
+// (id, gate) table instead, and both indexes give the same plan. Reachability is
+// one reverse sweep: in a recorded chunk a gate's chunk-local operands are outputs
+// of earlier gates, and a needed gate that reads a later gate's output is
+// rejected.
 template <class IsMaterialized>
 inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
                             const std::vector<uint32_t>& keep_ids,
@@ -49,9 +60,27 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
     return plan;
   }
 
+  // NONE marks "no gate" / "no compact id": gate indices are below G, and compact
+  // ids below UINT32_MAX (checked before compaction), so neither reaches it.
+  constexpr uint32_t NONE = std::numeric_limits<uint32_t>::max();
   const std::size_t G = chunk_gates.size();
-  std::unordered_map<uint32_t, uint32_t> wire_to_gate;
-  wire_to_gate.reserve(G);   // holds exactly one entry per gate
+  uint32_t lo = NONE, hi = 0;
+  for (const circuit::Gate& g : chunk_gates) {
+    lo = std::min(lo, g.out);
+    hi = std::max(hi, g.out);
+  }
+  const bool dense = G != 0 && (uint64_t)(hi - lo) < 4 * (uint64_t)G + 4096;
+  std::vector<uint32_t> dense_index(dense ? (std::size_t)(hi - lo) + 1 : 0, NONE);
+  std::vector<std::pair<uint32_t, uint32_t>> sparse_index;   // (out id, gate), sorted
+  if (!dense) sparse_index.reserve(G);
+  // The chunk gate that outputs id, or NONE when no chunk gate does.
+  auto gate_of = [&](uint32_t id) -> uint32_t {
+    if (dense) return (id >= lo && id <= hi) ? dense_index[id - lo] : NONE;
+    auto it = std::lower_bound(sparse_index.begin(), sparse_index.end(),
+                               std::make_pair(id, 0u));
+    return (it != sparse_index.end() && it->first == id) ? it->second : NONE;
+  };
+
   for (std::size_t gi = 0; gi < G; ++gi) {
     const circuit::Gate& g = chunk_gates[gi];
     if (static_cast<unsigned>(g.op) > static_cast<unsigned>(circuit::Op::Const1)) {
@@ -88,9 +117,24 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
       fail("gate reads its own output");
       return plan;
     }
-    if (!wire_to_gate.emplace(g.out, static_cast<uint32_t>(gi)).second) {
-      fail("recorder id is produced by more than one gate");
-      return plan;
+    if (dense) {
+      uint32_t& slot = dense_index[g.out - lo];
+      if (slot != NONE) {
+        fail("recorder id is produced by more than one gate");
+        return plan;
+      }
+      slot = static_cast<uint32_t>(gi);
+    } else {
+      sparse_index.emplace_back(g.out, static_cast<uint32_t>(gi));
+    }
+  }
+  if (!dense) {
+    std::sort(sparse_index.begin(), sparse_index.end());
+    for (std::size_t i = 1; i < sparse_index.size(); ++i) {
+      if (sparse_index[i].first == sparse_index[i - 1].first) {
+        fail("recorder id is produced by more than one gate");
+        return plan;
+      }
     }
   }
 
@@ -99,37 +143,39 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
       fail("keep set contains the null recorder id");
       return plan;
     }
-    if (!wire_to_gate.count(id) && !is_materialized(id)) {
+    if (gate_of(id) == NONE && !is_materialized(id)) {
       fail("keep set contains a stale recorder id");
       return plan;
     }
   }
 
-  // Reachability from the pending keep ids.
+  // Reachability from the pending keep ids, one reverse sweep. Only a later gate
+  // marks an earlier one, so a gate's mark is final when the sweep reaches it.
   std::vector<char> needed(G, 0);
-  std::vector<uint32_t> stack;
-  for (uint32_t id : keep_ids)
-    if (wire_to_gate.count(id)) stack.push_back(id);
-  while (!stack.empty()) {
-    uint32_t w = stack.back(); stack.pop_back();
-    auto it = wire_to_gate.find(w);
-    if (it == wire_to_gate.end()) continue;     // carried operand (program input)
-    uint32_t gi = it->second;
-    if (needed[gi]) continue;
-    needed[gi] = 1;
+  for (uint32_t id : keep_ids) {
+    const uint32_t gi = gate_of(id);
+    if (gi != NONE) needed[gi] = 1;
+  }
+  for (std::size_t gi = G; gi-- > 0;) {
+    if (!needed[gi]) continue;
     const circuit::Gate& g = chunk_gates[gi];
-    if (!g.is_const()) {                         // const operands are normalized-0 dummies
-      stack.push_back(g.in0);
-      if (!g.is_not()) stack.push_back(g.in1);
+    if (g.is_const()) continue;                  // const operands are normalized-0 dummies
+    const uint32_t a = gate_of(g.in0);
+    const uint32_t b = g.is_not() ? NONE : gate_of(g.in1);
+    if ((a != NONE && a > gi) || (b != NONE && b > gi)) {
+      fail("gate reads a later gate's output");
+      return plan;
     }
+    if (a != NONE) needed[a] = 1;
+    if (b != NONE) needed[b] = 1;
   }
 
   // Carried (materialized) operands of needed gates become program inputs,
   // numbered [0, num_inputs) in first-seen order.
-  std::unordered_map<uint32_t, uint32_t> remap;   // recorder id -> compact id
+  std::unordered_map<uint32_t, uint32_t> input_index;   // carried recorder id -> input
   auto note_input = [&](uint32_t v) -> bool {
-    if (wire_to_gate.count(v)) return true;       // chunk-local, not an input
-    if (remap.count(v)) return true;
+    if (gate_of(v) != NONE) return true;         // chunk-local, not an input
+    if (input_index.count(v)) return true;
     if (!is_materialized(v)) {
       fail("gate operand has no carried state");
       return false;
@@ -138,7 +184,7 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
       fail("too many carried inputs for uint32 wire indices");
       return false;
     }
-    remap.emplace(v, static_cast<uint32_t>(plan.input_ids.size()));
+    input_index.emplace(v, static_cast<uint32_t>(plan.input_ids.size()));
     plan.input_ids.push_back(v);
     return true;
   };
@@ -161,27 +207,34 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
 
   // Compact the needed gates in emission order; out_c == num_inputs + index, so
   // the program is canonical (what the engine requires).
+  std::vector<uint32_t> compact(G, NONE);        // chunk gate -> compact output id
   uint32_t cid = num_inputs;
-  auto mapped = [&](uint32_t id, uint32_t& compact) -> bool {
-    auto it = remap.find(id);
-    if (it == remap.end()) {
+  auto mapped = [&](uint32_t id, uint32_t& c) -> bool {
+    const uint32_t gi = gate_of(id);
+    if (gi != NONE) {
+      c = compact[gi];
+    } else {
+      auto it = input_index.find(id);
+      c = it == input_index.end() ? NONE : it->second;
+    }
+    if (c == NONE) {
       fail("needed wire has no compact mapping");
       return false;
     }
-    compact = it->second;
     return true;
   };
+  plan.prog.gates.reserve(needed_gates);
   for (std::size_t gi = 0; gi < G; ++gi) {
     if (!needed[gi]) continue;
     const circuit::Gate& g = chunk_gates[gi];
-    // Operands resolve before the gate's own output is mapped, so a gate can
-    // only read wires that earlier gates or inputs define.
+    // Operands resolve before the gate's own compact id is assigned, so a gate
+    // can only read wires that earlier gates or inputs define.
     uint32_t ni0 = 0;
     uint32_t ni1 = 0;
     if (!g.is_const() && !mapped(g.in0, ni0)) return plan;
     if (!g.is_const() && !g.is_not() && !mapped(g.in1, ni1)) return plan;
-    uint32_t out_c = cid++;
-    remap.emplace(g.out, out_c);
+    const uint32_t out_c = cid++;
+    compact[gi] = out_c;
     plan.prog.gates.push_back({ni0, ni1, out_c, g.op});
   }
   plan.prog.num_inputs = num_inputs;
@@ -189,10 +242,12 @@ inline FlushPlan plan_flush(const std::vector<circuit::Gate>& chunk_gates,
 
   // Outputs = the pending keep ids (each is a reachability root, hence needed),
   // deduped, in keep order.
-  std::unordered_set<uint32_t> emitted;
+  std::vector<char> emitted(G, 0);
   for (uint32_t id : keep_ids) {
-    if (!wire_to_gate.count(id)) continue;        // already materialized
-    if (!emitted.insert(id).second) continue;
+    const uint32_t gi = gate_of(id);
+    if (gi == NONE) continue;                    // already materialized
+    if (emitted[gi]) continue;
+    emitted[gi] = 1;
     uint32_t output = 0;
     if (!mapped(id, output)) return plan;
     plan.prog.outputs.push_back(output);

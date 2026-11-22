@@ -7,14 +7,22 @@
 //
 // One process-global recorder may be active at a time. Recording and recorder-wire
 // lifetime operations are single-threaded, and values must not outlive the recorder.
+//
+// Ids come from one monotonic counter (alloc_id_) that stops before it would
+// wrap, and a gate enters the current chunk only together with the fresh id it
+// outputs (public_bit and record_ are the only appenders; drop_chunk empties the
+// chunk). So the chunk is strictly increasing in output id, which is_pending
+// binary-searches. A recorded gate's operands were allocated before it, so a
+// chunk-local operand is the output of an earlier gate of the chunk; plan_flush's
+// reverse reachability sweep relies on that order.
 
 #include "emp-tool/ir/program.h"           // circuit::Gate, Op
 #include "emp-tool/ir/context/concept.h"   // BooleanContext
 #include "emp-tool/ir/context/checks.h"    // EMP_CONTEXT_CHECKS
 #include "emp-tool/runtime/core/utils.h"   // error()
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <unordered_set>
 #include <vector>
 
 namespace emp {
@@ -80,7 +88,6 @@ public:
     if (const_wire_[idx] < 0) {
       uint32_t o = alloc_id_();
       chunk_gates_.push_back({0, 0, o, v ? circuit::Op::Const1 : circuit::Op::Const0});
-      pending_.insert(o);
       const_wire_[idx] = (int64_t)o;
     }
     return (Wire)(uint32_t)const_wire_[idx];
@@ -98,7 +105,14 @@ public:
     for (auto& id : ids) id = alloc_id_();
     return ids;
   }
-  bool is_pending(uint32_t id) const { return pending_.count(id) != 0; }
+  // id is the output of a gate in the current chunk. The chunk is sorted by
+  // output id (see the header comment), so this is a binary search.
+  bool is_pending(uint32_t id) const {
+    auto it = std::lower_bound(
+        chunk_gates_.begin(), chunk_gates_.end(), id,
+        [](const circuit::Gate& g, uint32_t v) { return g.out < v; });
+    return it != chunk_gates_.end() && it->out == id;
+  }
   // A live C++ value still references id (refcount > 0) — i.e. it is in scope.
   bool in_scope(uint32_t id) const { return id < rc_.size() && rc_[id] > 0; }
   // Pending wires still referenced by a live value — the implicit keep-set for a flush.
@@ -111,14 +125,12 @@ public:
   const std::vector<circuit::Gate>& chunk_gates() const { return chunk_gates_; }
   void drop_chunk() {
     chunk_gates_.clear();
-    pending_.clear();
     const_wire_[0] = const_wire_[1] = -1;
   }
 
 private:
   uint32_t next_id_ = 1;                         // monotonic recorder id (1-based; 0 = null)
-  std::vector<circuit::Gate> chunk_gates_;       // current chunk (recorder ids)
-  std::unordered_set<uint32_t> pending_;         // ids produced in the current chunk
+  std::vector<circuit::Gate> chunk_gates_;       // current chunk (recorder ids), sorted by out
   int64_t const_wire_[2] = {-1, -1};             // per-chunk Const0/Const1 dedup
 
   uint32_t alloc_id_() {
@@ -134,7 +146,6 @@ private:
   Wire record_(const Wire& a, const Wire& b, circuit::Op op) {
     uint32_t o = alloc_id_();
     chunk_gates_.push_back({a, b, o, op});
-    pending_.insert(o);
     return o;
   }
 };

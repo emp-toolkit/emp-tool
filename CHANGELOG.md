@@ -76,6 +76,18 @@ metadata is numeric (see the README's version guidance).
   `ReuseShift = 0` with K > 1. An instance that mixes K values, or hashes a
   K that is not a power of two, now aligns each call to `bit_ceil(K)`, so
   its gids differ from before.
+- Direct-mode sessions do less bookkeeping per recorded gate, with unchanged
+  flush plans. `ChunkRecorderCtx` no longer keeps a hash set of the chunk's
+  pending ids: the chunk is sorted by output id, so `is_pending`
+  binary-searches it. `session::plan_flush` finds a gate by its output id with
+  one array read over the span of the chunk's output ids (or in a sorted table
+  when a hand-built chunk's ids are too sparse for that) and marks the needed
+  gates in one reverse sweep. A needed gate that reads a later gate's output is
+  now rejected as "gate reads a later gate's output" instead of "needed wire
+  has no compact mapping", and a stream with several faults may report a
+  different one of them first. `sizeof(ChunkRecorderCtx)` changed, so everything
+  built against the earlier header, such as a library whose session derives
+  from `ChunkedSession`, must be rebuilt.
 
 ### Fixed
 
