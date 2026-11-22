@@ -16,6 +16,7 @@
 #include "emp-tool/runtime/io/tcp_socket.h"
 
 #include <errno.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 namespace emp {
@@ -25,6 +26,14 @@ namespace emp {
 // user-space coalescing buffer in front of fwrite. Recv side: raw
 // ::read() into its own 32 KiB staging buffer, no stdio. The two paths
 // share the fd but no libc-level state.
+//
+// Transfers of NETWORK_DIRECT_IO_SIZE bytes or more skip the buffers, and
+// every path keeps the bytes in the order they were sent. Bytes waiting in
+// stdio are always older than the staged ones, so a large send first has
+// stdio write out what it holds and then hands the staged bytes and the
+// caller's buffer to the socket in one writev. A large receive first takes
+// the bytes already staged, then reads straight into the caller's buffer,
+// never more than it still asks for.
 //
 // Flush contract: callers must call flush() at the end of any protocol
 // step that ends in sends, before returning to the caller or blocking
@@ -194,12 +203,16 @@ protected:
 	void send_data_internal(const void *data, int64_t len) override {
 		expecting(len >= 0, "NetIO::send_data: negative len");
 		if (len == 0) return;
-		if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
-			memcpy(send_buf + send_ptr, data, len);
-			send_ptr += len;
+		if (len < NETWORK_DIRECT_IO_SIZE) {
+			if (len <= (int64_t)(NETWORK_STAGING_BUFFER_SIZE - send_ptr)) {
+				memcpy(send_buf + send_ptr, data, len);
+				send_ptr += len;
+			} else {
+				if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
+				send_raw(data, len);
+			}
 		} else {
-			if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
-			send_raw(data, len);
+			send_direct(static_cast<const char *>(data), len);
 		}
 		send_dirty = true;
 	}
@@ -211,9 +224,20 @@ protected:
 		// any send-then-recv pattern would deadlock with our bytes still
 		// staged. Raw ::read() bypasses stdio, so this has to be explicit.
 		flush_unlocked();
+		// A receive of NETWORK_DIRECT_IO_SIZE bytes or more reads past the
+		// staging buffer for the whole call: once the staged bytes are taken,
+		// every read lands in the caller's buffer and asks for no more than
+		// the call still needs, so no byte past this message leaves the socket.
+		const bool direct = len >= NETWORK_DIRECT_IO_SIZE;
 		int64_t got = 0;
 		while (got < len) {
 			if (recv_ptr == recv_fill) {
+				if (direct) {
+					// Nothing is staged, so the next bytes on the socket are the
+					// caller's: read them into its buffer, at most len - got.
+					got += read_direct((char *)data + got, len - got);
+					continue;
+				}
 				// Raw read() (not fread) so the refill accepts whatever the
 				// kernel has available — fread would block waiting for a
 				// full staging buffer's worth of bytes.
@@ -255,6 +279,11 @@ private:
 	char *send_buf = nullptr;       // 32 KiB coalescing staging
 	size_t send_ptr = 0;
 	bool send_dirty = false;
+
+	// The most one direct read() or writev() takes from the caller's buffer.
+	// With the staged bytes a writev also carries, a call stays below the
+	// 2^31-byte limit some systems put on one read or write.
+	static constexpr int64_t kMaxDirectIo = int64_t{1} << 30;
 
 	// Recv-side state (raw read() into a 32 KiB staging buffer).
 	char *recv_buf = nullptr;
@@ -325,10 +354,14 @@ private:
 		if (!send_dirty) return;
 		++flushes_count;
 		if (send_ptr) { send_raw(send_buf, send_ptr); send_ptr = 0; }
+		flush_stream();
+		send_dirty = false;
+	}
+
+	void flush_stream() {
 		expecting(::fflush(stream) == 0, [&] {
 			return std::string("NetIO: fflush failed: ") + std::strerror(errno);
 		});
-		send_dirty = false;
 	}
 
 	void send_raw(const void *data, size_t len) {
@@ -342,6 +375,67 @@ private:
 			          "net_send_data (peer closed or write error)");
 			sent += res;
 		}
+	}
+
+	// A send of NETWORK_DIRECT_IO_SIZE bytes or more goes out after every
+	// byte sent before it. stdio holds the oldest of those, so it writes them
+	// out first (fflush writes nothing when it holds nothing); then one writev
+	// carries the staged bytes followed by the caller's. A send longer than
+	// kMaxDirectIo takes one writev per kMaxDirectIo bytes; only the first
+	// carries staged bytes. Out of line, and with no state of its own, so that
+	// the staging path of send_data_internal, which every small send takes,
+	// compiles as it would without this path.
+#if defined(__GNUC__) || defined(__clang__)
+	[[gnu::noinline]]
+#endif
+	void send_direct(const char *data, int64_t len) {
+		flush_stream();
+		while (len > 0) {
+			const int64_t piece = len < kMaxDirectIo ? len : kMaxDirectIo;
+			struct iovec iov[2];
+			int cnt = 0;
+			if (send_ptr) iov[cnt++] = {send_buf, send_ptr};
+			iov[cnt++] = {const_cast<char *>(data), (size_t)piece};
+			writev_all(iov, cnt);
+			send_ptr = 0;
+			data += piece;
+			len -= piece;
+		}
+	}
+
+	// Write every byte of iov[0..cnt), in order, resuming after a short write
+	// and retrying on EINTR.
+	void writev_all(struct iovec *iov, int cnt) {
+		while (cnt > 0) {
+			ssize_t n;
+			do { n = ::writev(sock, iov, cnt); } while (n < 0 && errno == EINTR);
+			// Same fatal-abort rule as send_raw.
+			expecting(n > 0, "net_send_data (peer closed or write error)");
+			size_t done = (size_t)n;
+			while (cnt > 0 && done >= iov->iov_len) {
+				done -= iov->iov_len;
+				++iov;
+				--cnt;
+			}
+			if (cnt > 0) {
+				iov->iov_base = static_cast<char *>(iov->iov_base) + done;
+				iov->iov_len -= done;
+			}
+		}
+	}
+
+	// One read() of at most `cap` bytes (and at most kMaxDirectIo) into the
+	// caller's buffer; returns how many arrived. Same fatal-abort rule as the
+	// staging refill in recv_data_internal.
+#if defined(__GNUC__) || defined(__clang__)
+	[[gnu::noinline]]
+#endif
+	int64_t read_direct(char *dst, int64_t cap) {
+		const size_t want = (size_t)(cap < kMaxDirectIo ? cap : kMaxDirectIo);
+		ssize_t n;
+		do { n = ::read(sock, dst, want); } while (n < 0 && errno == EINTR);
+		expecting(n > 0, "net_recv_data (peer closed or read error)");
+		return (int64_t)n;
 	}
 
 };

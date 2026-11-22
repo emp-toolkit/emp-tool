@@ -30,6 +30,27 @@ a function, and any blocking wait (thread join, barrier, recv on a
 `test/runtime/test_netio.cpp` runs the correctness + send-only-regression coverage.
 Throughput lives separately in `bench/bench_netio.cpp`.
 
+## Buffering and large transfers
+
+NetIO coalesces small sends in a 32 KiB staging buffer (`send_buf`) in front of
+a 1 MiB stdio stream buffer, and reads into a 32 KiB staging buffer of its own.
+A send or receive of `NETWORK_DIRECT_IO_SIZE` bytes or more (16 KiB,
+`core/constants.h`) skips them, and every path keeps the bytes in the order
+they were sent:
+
+- A large send goes out after every byte sent before it: stdio writes out what
+  it holds (the oldest bytes), then one `writev` carries the staged bytes
+  followed by the message. A large send thus also moves the small sends staged
+  before it; small sends after it stay staged, so the flush contract above is
+  unchanged.
+- A large receive first takes the bytes already staged, then reads straight
+  into the caller's buffer, never more than the bytes still asked for.
+
+One `read` or `writev` takes at most 1 GiB of the caller's buffer, below the
+2^31-byte limit some systems put on one call; longer transfers take several.
+The bytes on the wire, the byte and round counters, and `flushes_count` are the
+same whichever path a transfer takes.
+
 ## Thread-safety
 
 A channel is not thread-safe: send-buffer coalescing is unlocked, and

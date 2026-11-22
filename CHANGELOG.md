@@ -99,6 +99,14 @@ metadata is numeric (see the README's version guidance).
   different one of them first. `sizeof(ChunkRecorderCtx)` changed, so everything
   built against the earlier header, such as a library whose session derives
   from `ChunkedSession`, must be rebuilt.
+- `NetIO` moves a send or receive of `NETWORK_DIRECT_IO_SIZE` bytes or more
+  (16 KiB, new in `core/constants.h`) between the caller's buffer and the
+  socket directly instead of copying it through its staging buffer and stdio.
+  A large send first writes out every byte sent before it, in order, and a
+  large receive first takes the bytes already staged, then reads only what it
+  still needs, so no byte of a later message leaves the socket. The bytes on
+  the wire, the counters and `flushes_count` are unchanged, and smaller
+  transfers take the same path as before.
 
 ### Fixed
 
