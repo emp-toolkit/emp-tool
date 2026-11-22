@@ -123,6 +123,19 @@ metadata is numeric (see the README's version guidance).
   transport carries one piece while the next is hashed, instead of the whole
   message waiting on its hash. The transcript, the counters and the rounds are
   unchanged; a transport sees the pieces as separate calls.
+- `PRG` fills the whole blocks of each request (`random_block`,
+  `random_data`, `random_data_unaligned`, and the refills behind `operator()`
+  and `random_bool`) with one call into the AES-CTR kernel instead of
+  `AES_BATCH_SIZE`-block chunks; a partial last block takes one more. On
+  VAES-512 that kernel runs the whole 16-block groups in one loop under round
+  keys broadcast once for the call, with the counters kept in registers, and
+  the rest through the tile ladder; on VAES-256 and VAES-512 a tile's counters
+  are one add off a broadcast base instead of being assembled from scalars.
+  Output and stream position are unchanged.
+- `PRG::random_data_unaligned` writes the whole blocks straight into the
+  destination, at any alignment, instead of filling an aligned window and
+  moving it into place. It writes the same bytes as before, the bytes
+  `random_data` writes for an aligned buffer, through the same kernel.
 
 ### Fixed
 

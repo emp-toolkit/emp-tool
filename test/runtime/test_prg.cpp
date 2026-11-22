@@ -14,6 +14,7 @@
 
 #include <openssl/evp.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -271,6 +272,99 @@ static bool check_random_data_unaligned_counter() {
 	return true;
 }
 
+// The stream of PRG(&seed, id) from block `start`, by OpenSSL on the explicit
+// counter blocks: block i is AES_k(makeBlock(0, start + i)), k = seed ^
+// makeBlock(0, id). Empty if OpenSSL fails.
+static vector<block> reference_stream(const block &seed, uint64_t id, uint64_t start,
+                                      int64_t nblocks) {
+	vector<block> ctr(nblocks), out(nblocks);
+	for (int64_t i = 0; i < nblocks; ++i) ctr[i] = makeBlock(0, start + static_cast<uint64_t>(i));
+	if (!openssl_aes128_ecb(seed ^ makeBlock(0, id), ctr.data(), out.data(),
+	                        static_cast<int>(nblocks)))
+		out.clear();
+	return out;
+}
+
+// Stream positions where the block counter crosses 2^32 or wraps at 2^64
+// inside a request.
+static const uint64_t crossing_starts[] = {0, uint64_t{0xFFFFFFFFu} - 5, ~uint64_t{0} - 18};
+
+// random_data_unaligned at every offset 0..15, and random_data at offset 0,
+// for sizes 0..300 and a few large ones: the bytes written are the stream's
+// next nbytes, the guard bytes around them keep their pattern, the position
+// advances by ceil(nbytes / 16), and the next block is the stream's next.
+static bool check_byte_fills_vs_reference() {
+	const block seed = makeBlock(0x5eed, 0xf00d);
+	constexpr uint64_t id = 3;
+	vector<int64_t> sizes;
+	for (int64_t s = 0; s <= 300; ++s) sizes.push_back(s);
+	for (int64_t s : {4095, 4096, 4097, 65536 + 1, 262144 + 15, 1 << 20}) sizes.push_back(s);
+	const int64_t max_bytes = int64_t{1} << 20;
+	vector<block> storage(max_bytes / 16 + 4);   // 16-byte aligned
+	uint8_t *buf = reinterpret_cast<uint8_t *>(storage.data());
+	for (uint64_t start : crossing_starts) {
+		const vector<block> ref = reference_stream(seed, id, start, max_bytes / 16 + 2);
+		if (ref.empty()) return false;
+		const uint8_t *ref_bytes = reinterpret_cast<const uint8_t *>(ref.data());
+		for (int64_t len : sizes)
+			for (int off = 0; off < 16; ++off)
+				for (int aligned_api = 0; aligned_api <= (off == 0 ? 1 : 0); ++aligned_api) {
+					memset(buf, 0xA5, static_cast<size_t>(len + 48));
+					uint8_t *p = buf + 16 + off;
+					PRG prg(&seed, id);
+					prg.seek(start);
+					if (aligned_api) prg.random_data(p, len);
+					else prg.random_data_unaligned(p, len);
+					const int64_t adv = (len + 15) / 16;
+					bool ok = memcmp(p, ref_bytes, static_cast<size_t>(len)) == 0 &&
+					          prg.position() == start + static_cast<uint64_t>(adv);
+					for (int64_t i = 0; i < 16 + off; ++i) ok &= buf[i] == 0xA5;
+					for (int64_t i = 16 + off + len; i < len + 48; ++i) ok &= buf[i] == 0xA5;
+					block next;
+					prg.random_block(&next, 1);
+					ok &= blocks_eq(next, ref[adv]);
+					if (!ok) {
+						cout << "  mismatch: " << (aligned_api ? "random_data" : "random_data_unaligned")
+						     << " start=" << start << " offset=" << off << " nbytes=" << len << "\n";
+						return false;
+					}
+				}
+	}
+	return true;
+}
+
+// random_block for n = 0..300 and a few large n, one call each: the blocks
+// are the stream's next n, the guard blocks after them are untouched, and
+// the position advances by n.
+static bool check_random_block_vs_reference() {
+	const block seed = makeBlock(0xabcd, 0x1234);
+	constexpr uint64_t id = 11;
+	const block guard = makeBlock(0x5a5a5a5a5a5a5a5aULL, 0xa5a5a5a5a5a5a5a5ULL);
+	vector<int64_t> sizes;
+	for (int64_t n = 0; n <= 300; ++n) sizes.push_back(n);
+	for (int64_t n : {1023, 4096, 4099, 65536 + 3}) sizes.push_back(n);
+	const int64_t max_n = 65536 + 3;
+	vector<block> out(max_n + 4);
+	for (uint64_t start : crossing_starts) {
+		const vector<block> ref = reference_stream(seed, id, start, max_n + 1);
+		if (ref.empty()) return false;
+		for (int64_t n : sizes) {
+			std::fill(out.begin(), out.begin() + n + 4, guard);
+			PRG prg(&seed, id);
+			prg.seek(start);
+			prg.random_block(out.data(), n);
+			bool ok = cmpBlock(out.data(), ref.data(), n) &&
+			          prg.position() == start + static_cast<uint64_t>(n);
+			for (int64_t i = n; i < n + 4; ++i) ok &= blocks_eq(out[i], guard);
+			if (!ok) {
+				cout << "  mismatch: random_block start=" << start << " n=" << n << "\n";
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static bool check_random_bool_is_0_or_1() {
 	PRG p;
 	for (int len : {1, 7, 32, 128, 1023, 4096}) {
@@ -372,6 +466,8 @@ static bool run_correctness() {
 		{"random_data == random_block (16B)",   check_random_data_matches_block},
 		{"random_data_unaligned vs aligned ref", check_random_data_unaligned},
 		{"random_data_unaligned counter",       check_random_data_unaligned_counter},
+		{"byte fills vs OpenSSL stream",        check_byte_fills_vs_reference},
+		{"random_block vs OpenSSL stream",      check_random_block_vs_reference},
 		{"random_bool ∈ {0,1}",                 check_random_bool_is_0_or_1},
 		{"random_bool bool/byte parity",         check_random_bool_representations_match},
 		{"random_bool mean ~ 0.5",              check_random_bool_distribution},

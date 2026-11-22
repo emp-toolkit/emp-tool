@@ -385,8 +385,43 @@ struct CtrFillOp {
 	}
 };
 
+// dst[i] = AES_K(counter + i) for i in [0, n), the counter in the block's low
+// qword (mod 2^64) and zero in its high qword. dst may have any alignment:
+// every store is unaligned.
+//
+// On VAES-512 the whole 16-block groups run in one loop under round keys
+// broadcast once for the call. A group is four counter tiles, each 16
+// counters past the same tile of the group before (64-bit lane adds, which
+// wrap as counter + i does). The n % 16 blocks left, and the whole request on
+// the other tiers, drain through the tile ladder.
 EMP_AES_TARGET_ATTR
 inline void ParaCtrEnc(block *dst, uint64_t counter, const AES_KEY *kk, int64_t n) {
+#if EMP_HAS_VAES512
+	if (n >= 16) {
+		using L = AesLane<4>;
+		typename L::vec_t rk[11];
+		for (int r = 0; r < 11; ++r)
+			rk[r] = L::broadcast(kk->rd_key[r]);
+		const typename L::vec_t step = L::broadcast(makeBlock(0, 16));
+		typename L::vec_t ctr[4];
+		for (int t = 0; t < 4; ++t)
+			ctr[t] = L::ctr_xor_tweak(counter, t, L::broadcast(_mm_setzero_si128()));
+		const int64_t groups = n / 16;
+		for (int64_t g = 0; g < groups; ++g) {
+			typename L::vec_t x[4];
+			for (int t = 0; t < 4; ++t) {
+				x[t] = ctr[t];
+				ctr[t] = L::add64(ctr[t], step);
+			}
+			L::template encrypt_n<4>(x, rk);
+			for (int t = 0; t < 4; ++t)
+				L::store(dst + 4 * t, x[t]);
+			dst += 16;
+		}
+		counter += 16 * static_cast<uint64_t>(groups);
+		n -= 16 * groups;
+	}
+#endif
 	CtrFillOp op{dst, counter, kk};
 	drain_tiles(op, n);
 }

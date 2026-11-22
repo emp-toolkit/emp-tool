@@ -162,5 +162,9 @@ the process, in every build, when it is not. Use
 buffers with arbitrary offset, and any other destination that is not
 naturally `block`-aligned.
 
-Use the aligned fast path only when the destination is known to be
-16-byte aligned, such as a `block*` or a suitably aligned block buffer.
+Both fill through the same counter-mode kernel, which writes the whole
+blocks straight to the destination at any alignment, so they give the same
+bytes, advance the stream by the same number of blocks, and cost the same.
+`random_data` only adds the alignment check: use it where the destination
+is known to be 16-byte aligned, such as a `block*` or a suitably aligned
+block buffer.
