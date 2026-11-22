@@ -39,6 +39,13 @@ metadata is numeric (see the README's version guidance).
   return or by exception.
   `run(ctx, circuit, args...)` behaves as before; it is the new overload over a
   fresh workspace.
+- `AesLane<N>::encrypt(x, rk)` and `AesLane<N>::encrypt_n<M>(x, rk)`
+  (`runtime/core/simd_tier.h`) run a whole AES-128 encryption of a lane
+  vector, or of `M` vectors round by round, under broadcast round keys, in each
+  tier's own round order: on aarch64, AESE with the round key, then AESMC, and
+  a closing XOR. Code built on the lanes gets NEON's native order without an
+  aarch64 branch of its own; the single-round `aesenc` / `aesenclast` keep
+  x86's key-after form.
 
 ### Changed
 

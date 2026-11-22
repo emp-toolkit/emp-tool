@@ -110,7 +110,10 @@ namespace emp {
 // AesLane<1> = xmm (AES-NI baseline); <2> = ymm (VAES+AVX2); <4> = zmm
 // (VAES+AVX512F). ctr_xor_tweak builds N counters in one vec_t XORed
 // with a broadcasted tweak (used by fixed-key-AES-CTR callers that
-// generate plaintexts inline).
+// generate plaintexts inline). encrypt / encrypt_n run the whole cipher
+// in the tier's own round order, so one caller body serves every tier.
+// They are always_inline: a caller's tile loop then holds the rounds before
+// it is optimized, and unrolls and inlines as if they were written in it.
 template<int N> struct AesLane;
 
 template<>
@@ -124,6 +127,21 @@ struct AesLane<1> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm_xor_si128(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm_aesenc_si128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm_aesenclast_si128(s, k); }
+	// AES-128 encryption of every block of x under the broadcast round keys
+	// rk[0..10]: XOR rk[0], nine aesenc, one aesenclast. encrypt_n does the
+	// same for M states in place, all M advancing one round before the next.
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static vec_t encrypt(vec_t x, const vec_t *rk) {
+		x = xorv(x, rk[0]);
+		for (int r = 1; r < 10; ++r) x = aesenc(x, rk[r]);
+		return aesenclast(x, rk[10]);
+	}
+	template<int M>
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static void encrypt_n(vec_t (&x)[M], const vec_t *rk) {
+		for (int t = 0; t < M; ++t) x[t] = xorv(x[t], rk[0]);
+		for (int r = 1; r < 10; ++r)
+			for (int t = 0; t < M; ++t) x[t] = aesenc(x[t], rk[r]);
+		for (int t = 0; t < M; ++t) x[t] = aesenclast(x[t], rk[10]);
+	}
 	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
 		const uint64_t c0 = b0 + static_cast<uint64_t>(slot);
 		return _mm_xor_si128(_mm_set_epi64x(0, static_cast<int64_t>(c0)), tw);
@@ -164,6 +182,19 @@ struct AesLane<2> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm256_xor_si256(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm256_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm256_aesenclast_epi128(s, k); }
+	// As AesLane<1>, on every block of the vector.
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static vec_t encrypt(vec_t x, const vec_t *rk) {
+		x = xorv(x, rk[0]);
+		for (int r = 1; r < 10; ++r) x = aesenc(x, rk[r]);
+		return aesenclast(x, rk[10]);
+	}
+	template<int M>
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static void encrypt_n(vec_t (&x)[M], const vec_t *rk) {
+		for (int t = 0; t < M; ++t) x[t] = xorv(x[t], rk[0]);
+		for (int r = 1; r < 10; ++r)
+			for (int t = 0; t < M; ++t) x[t] = aesenc(x[t], rk[r]);
+		for (int t = 0; t < M; ++t) x[t] = aesenclast(x[t], rk[10]);
+	}
 	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
 		const uint64_t c0 = b0 + 2 * static_cast<uint64_t>(slot);
 		return _mm256_xor_si256(
@@ -204,6 +235,19 @@ struct AesLane<4> {
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm512_aesenclast_epi128(s, k); }
+	// As AesLane<1>, on every block of the vector.
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static vec_t encrypt(vec_t x, const vec_t *rk) {
+		x = xorv(x, rk[0]);
+		for (int r = 1; r < 10; ++r) x = aesenc(x, rk[r]);
+		return aesenclast(x, rk[10]);
+	}
+	template<int M>
+	EMP_AES_TARGET_ATTR __attribute__((always_inline)) static void encrypt_n(vec_t (&x)[M], const vec_t *rk) {
+		for (int t = 0; t < M; ++t) x[t] = xorv(x[t], rk[0]);
+		for (int r = 1; r < 10; ++r)
+			for (int t = 0; t < M; ++t) x[t] = aesenc(x[t], rk[r]);
+		for (int t = 0; t < M; ++t) x[t] = aesenclast(x[t], rk[10]);
+	}
 	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
 		const uint64_t c0 = b0 + 4 * static_cast<uint64_t>(slot);
 		return _mm512_xor_si512(
@@ -325,11 +369,12 @@ struct ClmulLane<4> {
 namespace emp {
 
 // aarch64 AesLane<1>. NEON has no widening VAES, so only N=1 exists.
-// aesenc / aesenclast use x86-compatible "key-after" semantics —
-// vaeseq_u8 with a zero key, then XOR the real key. This breaks
-// AESE/AESMC fusion (the natural NEON pattern XORs the key BEFORE
-// the round), so aes_tiles_src uses a NEON-native loop directly on
-// aarch64 hot paths.
+// The single-round aesenc / aesenclast keep x86's "key-after" semantics:
+// vaeseq_u8 with a zero key, then XOR the real key. NEON's AESE adds its
+// key before SubBytes, so folding each XOR into the next round's AESE is
+// left to the compiler, which may not do it. encrypt / encrypt_n run the
+// whole cipher in NEON's own order instead, with no zero-key AESE and no
+// per-round XOR (always_inline, as on x86).
 template<int N> struct AesLane;
 
 template<>
@@ -350,6 +395,28 @@ struct AesLane<1> {
 		const uint8x16_t zero = vdupq_n_u8(0);
 		uint8x16_t r = vaeseq_u8(vreinterpretq_u8_m128i(s), zero);
 		return _mm_xor_si128(vreinterpretq_m128i_u8(r), k);
+	}
+	// The same cipher as the x86 lanes' encrypt / encrypt_n. AESE(s, rk[r])
+	// then AESMC adds round key r and runs round r + 1 up to its own key
+	// addition, so r = 0..8 are AESE + AESMC, the last round is AESE with
+	// rk[9] (no MixColumns), and rk[10] is one closing XOR.
+	__attribute__((always_inline)) static vec_t encrypt(vec_t x, const vec_t *rk) {
+		uint8x16_t s = vreinterpretq_u8_m128i(x);
+		for (int r = 0; r < 9; ++r)
+			s = vaesmcq_u8(vaeseq_u8(s, vreinterpretq_u8_m128i(rk[r])));
+		s = vaeseq_u8(s, vreinterpretq_u8_m128i(rk[9]));
+		return _mm_xor_si128(vreinterpretq_m128i_u8(s), rk[10]);
+	}
+	template<int M>
+	__attribute__((always_inline)) static void encrypt_n(vec_t (&x)[M], const vec_t *rk) {
+		uint8x16_t s[M];
+		for (int t = 0; t < M; ++t) s[t] = vreinterpretq_u8_m128i(x[t]);
+		for (int r = 0; r < 9; ++r)
+			for (int t = 0; t < M; ++t)
+				s[t] = vaesmcq_u8(vaeseq_u8(s[t], vreinterpretq_u8_m128i(rk[r])));
+		for (int t = 0; t < M; ++t)
+			x[t] = _mm_xor_si128(vreinterpretq_m128i_u8(vaeseq_u8(s[t], vreinterpretq_u8_m128i(rk[9]))),
+			                     rk[10]);
 	}
 	static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
 		const uint64_t c0 = b0 + static_cast<uint64_t>(slot);
