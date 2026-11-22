@@ -237,6 +237,14 @@ struct AesLane<4> {
 		return _mm512_inserti64x4(_mm512_castsi256_si512(lo), hi, 1);
 	}
 	EMP_AES_TARGET_ATTR static void  store(block *p, vec_t v)         { _mm512_storeu_si512((__m512i *)p, v); }
+	// Stores blocks 0..R-1 of v at p, with a write mask over their qwords: the
+	// bytes of blocks R..3 at p are never written, and a masked-off lane does
+	// not fault.
+	template<int R>
+	EMP_AES_TARGET_ATTR static void store_first(block *p, vec_t v) {
+		static_assert(R >= 1 && R <= 3, "AesLane<4>::store_first: 1 to 3 blocks");
+		_mm512_mask_storeu_epi64((void *)p, (__mmask8)((1u << (2 * R)) - 1), v);
+	}
 	EMP_AES_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)           { return _mm512_xor_si512(a, b); }
 	EMP_AES_TARGET_ATTR static vec_t aesenc(vec_t s, vec_t k)         { return _mm512_aesenc_epi128(s, k); }
 	EMP_AES_TARGET_ATTR static vec_t aesenclast(vec_t s, vec_t k)     { return _mm512_aesenclast_epi128(s, k); }

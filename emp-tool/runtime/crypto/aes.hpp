@@ -336,16 +336,21 @@ inline void ParaEncXorInput_runtime_impl(block *dst, const block *src, const AES
 // tweak), with the XOR done in-register at store time (no pt[] stash).
 enum class CtrStore { Plain, XorBack };
 
+// W = q * L::N + r blocks as q full tiles and, when r > 0, one more tile (tile
+// q) of which only the first r blocks are stored (L::store_first, AesLane<4>
+// only). That tile's other lanes run on the counters past the last one and
+// are dropped in-register: dst[W..] is never written.
 template <class L, int W, CtrStore St>
 EMP_AES_TARGET_ATTR
 static inline void aes_ctr_fill_lane(block *dst, uint64_t counter,
                                      const AES_KEY *kk, block tweak) {
+	constexpr int n_tiles = W / L::N + (W % L::N != 0);
 	// Build the tweak broadcast from a compile-time zero on the Plain path so
 	// the per-counter XOR folds away. Threading `tweak` (= zero_block) through
 	// as a runtime value instead leaves a live XOR on every counter, which
 	// markedly slows single-block random_block on the VAES-512 target. XorBack
 	// genuinely needs the tweak.
-	aes_tiles_src<L, W / L::N>(
+	aes_tiles_src<L, n_tiles>(
 		[&](int t) {
 			if constexpr (St == CtrStore::XorBack)
 				return L::ctr_xor_tweak(counter, t, L::broadcast(tweak));
@@ -354,6 +359,12 @@ static inline void aes_ctr_fill_lane(block *dst, uint64_t counter,
 		},
 		[dst](int t, typename L::vec_t x, typename L::vec_t pt) {
 			if constexpr (St == CtrStore::XorBack) x = L::xorv(x, pt);
+			if constexpr (W % L::N != 0) {
+				if (t == W / L::N) {
+					L::template store_first<W % L::N>(dst + (size_t)t * L::N, x);
+					return;
+				}
+			}
 			L::store(dst + (size_t)t * L::N, x);
 		}, kk);
 }
@@ -434,13 +445,19 @@ inline void ParaCtrEnc(block *dst, uint64_t counter, const AES_KEY *kk, int64_t 
 // an ideal cipher) — use this when callers want the AES key public for
 // schedule-amortization and rely on the XOR-back for output PRG-ness.
 // For a secret AES key (regular PRG), use detail::aes_ctr_fill instead.
+// Writes exactly dst[0..W). On VAES-512 every W runs on the four-block lane:
+// W / 4 full tiles and, for W % 4 > 0, one masked tile for the last blocks.
 template <int W>
 EMP_AES_TARGET_ATTR
 inline void aes_ctr_fill_dm(block *dst, uint64_t counter,
                             const AES_KEY *kk, block tweak = zero_block) {
 	static_assert(W >= 0, "aes_ctr_fill_dm: output width must be non-negative");
 	if constexpr (W == 0) return;
+#if EMP_HAS_VAES512
+	detail::aes_ctr_fill_lane<AesLane<4>, W, detail::CtrStore::XorBack>(dst, counter, kk, tweak);
+#else
 	detail::aes_ctr_fill_impl<W, detail::CtrStore::XorBack>(dst, counter, kk, tweak);
+#endif
 }
 
 // Schedule NumKeys AES-128 round keys per "Fast Garbling of Circuits

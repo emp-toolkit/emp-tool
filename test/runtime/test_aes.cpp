@@ -9,6 +9,7 @@
 //   AES_set_encrypt_key(uk, &ek)                    single-key wrapper
 //   AES_ecb_encrypt_blks<N>(blks, &ek)              single-key templated wrapper
 //   AES_ecb_encrypt_blks(blks, n, &ek)              single-key runtime wrapper
+//   aes_ctr_fill_dm<W>(dst, ctr, &ek, tweak)        Davies-Meyer CTR, W blocks
 //   detail::ParaCtrEnc(dst, ctr, &ek, n)            AES-CTR kernel behind PRG
 // and, from core/simd_tier.h, the lane primitives the kernels are built on:
 //   AesLane<N>::encrypt(x, rk)                      whole cipher on one vector
@@ -28,8 +29,10 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 using namespace emp;
@@ -106,6 +109,10 @@ static void example() {
 	for (int r = 0; r < 11; ++r) rk[r] = AesLane<1>::broadcast(ek.rd_key[r]);
 	cout << "  AesLane<1>::encrypt(msg)     = " << AesLane<1>::encrypt(msg, rk) << "\n";
 
+	// (5) Davies-Meyer CTR: dm[i] = AES(y_i) ^ y_i, y_i = (counter + i) ^ tweak.
+	block dm[3];
+	aes_ctr_fill_dm<3>(dm, /*counter=*/0, &ek, /*tweak=*/msg);
+	cout << "  aes_ctr_fill_dm<3>[0]        = " << dm[0] << "\n";
 }
 
 // ---------- correctness ----------
@@ -464,6 +471,61 @@ static bool check_ctr_kernel() {
 	return true;
 }
 
+// aes_ctr_fill_dm<W>: dst[i] = AES(y_i) ^ y_i with y_i = makeBlock(0, c + i)
+// ^ tweak, i < W, checked against OpenSSL and against the one-block lane
+// path, for counters that cross 2^32 or wrap at 2^64 inside the fill. Four
+// guard blocks past dst[W - 1] keep their pattern, and a fill that ends at
+// the end of a page whose next page is inaccessible runs without a fault:
+// nothing at dst[W..] is ever written.
+template <int W>
+static bool check_dm_width(const block &kb, const AES_KEY &ek, PRG &prg) {
+	const block guard = makeBlock(0x5a5a5a5a5a5a5a5aULL, 0xa5a5a5a5a5a5a5a5ULL);
+	for (uint64_t c0 : {uint64_t{0}, uint64_t{0xFFFFFFFFu} - W / 2, ~uint64_t{0},
+	                    ~uint64_t{0} - W / 2, ~uint64_t{0} - W + 1, uint64_t{0x123456789ULL}}) {
+		for (int trial = 0; trial < 4; ++trial) {
+			block tweak;
+			prg.random_block(&tweak, 1);
+			if (trial == 0) tweak = zero_block;
+			block got[W + 4], lane1[W + 4];
+			for (int i = 0; i < W + 4; ++i) got[i] = lane1[i] = guard;
+			aes_ctr_fill_dm<W>(got, c0, &ek, tweak);
+			detail::aes_ctr_fill_lane<AesLane<1>, W, detail::CtrStore::XorBack>(lane1, c0, &ek, tweak);
+
+			vector<block> y(W);
+			for (int i = 0; i < W; ++i) y[i] = makeBlock(0, c0 + static_cast<uint64_t>(i)) ^ tweak;
+			vector<block> ref = openssl_ecb_blocks(kb, y);
+			for (int i = 0; i < W; ++i) ref[i] = ref[i] ^ y[i];
+			bool ok = cmpBlock(got, ref.data(), W) && cmpBlock(lane1, ref.data(), W);
+			for (int i = W; i < W + 4; ++i) ok &= cmpBlock(&got[i], &guard, 1);
+			if (!ok) {
+				cout << "  [aes_ctr_fill_dm<" << W << ">]  FAIL  counter=" << c0 << "\n";
+				return false;
+			}
+		}
+	}
+	const long page = sysconf(_SC_PAGESIZE);
+	void *map = mmap(nullptr, 2 * page, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+	if (map == MAP_FAILED) return false;
+	uint8_t *base = static_cast<uint8_t *>(map);
+	bool ok = mprotect(base + page, page, PROT_NONE) == 0;
+	block *at_end = reinterpret_cast<block *>(base + page - W * sizeof(block));
+	ok = ok && !dies([&] { aes_ctr_fill_dm<W>(at_end, ~uint64_t{0} - 1, &ek, kb); });
+	munmap(map, 2 * page);
+	if (!ok) cout << "  [aes_ctr_fill_dm<" << W << ">]  FAIL  wrote past the end of the page\n";
+	return ok;
+}
+
+template <int... Ws>
+static bool check_dm_widths(std::integer_sequence<int, Ws...>) {
+	const block kb = makeBlock(0x2b7e151628aed2a6ULL, 0xabf7158809cf4f3cULL);
+	AES_KEY ek;
+	AES_set_encrypt_key(kb, &ek);
+	PRG prg;
+	const bool ok = (check_dm_width<Ws + 1>(kb, ek, prg) && ...);
+	cout << "  " << left << setw(40) << "[aes_ctr_fill_dm<1..16> vs OpenSSL]" << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -500,6 +562,7 @@ static bool run_correctness() {
 
 	ok &= check_lanes_encrypt();
 	ok &= check_ctr_kernel();
+	ok &= check_dm_widths(std::make_integer_sequence<int, 16>{});
 	return ok;
 }
 
