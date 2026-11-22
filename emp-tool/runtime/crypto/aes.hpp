@@ -28,6 +28,8 @@ inline void aes_tiles_src(Source&& src, Store&& store, const AES_KEY *kk) {
 	for (int r = 0; r < 11; ++r)
 		rk[r] = L::broadcast(kk->rd_key[r]);
 #if defined(__x86_64__) && EMP_HAS_VAES512
+	// Rounds written out rather than through L::encrypt_n, so each tile's last
+	// round goes straight into its store.
 	if constexpr (L::N == 4 && n_tiles > 1 && n_tiles <= 4) {
 		typename L::vec_t pt[n_tiles];
 		typename L::vec_t x[n_tiles];
@@ -46,22 +48,7 @@ inline void aes_tiles_src(Source&& src, Store&& store, const AES_KEY *kk) {
 #endif
 	for (int t = 0; t < n_tiles; ++t) {
 		auto pt = src(t);
-#if defined(__aarch64__)
-		if constexpr (L::N == 1) {
-			uint8x16_t x = vreinterpretq_u8_m128i(pt);
-			for (int r = 0; r < 9; ++r)
-				x = vaesmcq_u8(vaeseq_u8(x, vreinterpretq_u8_m128i(rk[r])));
-			x = vaeseq_u8(x, vreinterpretq_u8_m128i(rk[9]));
-			auto out = _mm_xor_si128(vreinterpretq_m128i_u8(x), rk[10]);
-			store(t, out, pt);
-			continue;
-		}
-#endif
-		auto x = L::xorv(pt, rk[0]);
-		for (int r = 1; r < 10; ++r)
-			x = L::aesenc(x, rk[r]);
-		x = L::aesenclast(x, rk[10]);
-		store(t, x, pt);
+		store(t, L::encrypt(pt, rk), pt);
 	}
 }
 

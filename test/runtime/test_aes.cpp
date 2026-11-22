@@ -9,6 +9,9 @@
 //   AES_set_encrypt_key(uk, &ek)                    single-key wrapper
 //   AES_ecb_encrypt_blks<N>(blks, &ek)              single-key templated wrapper
 //   AES_ecb_encrypt_blks(blks, n, &ek)              single-key runtime wrapper
+// and, from core/simd_tier.h, the lane primitives the kernels are built on:
+//   AesLane<N>::encrypt(x, rk)                      whole cipher on one vector
+//   AesLane<N>::encrypt_n<M>(x, rk)                 the same on M vectors
 
 #include "emp-tool/emp-tool.h"
 
@@ -94,6 +97,13 @@ static void example() {
 	ParaEnc<2, 1>(buf, eks);
 	cout << "  ParaEnc<2,1> (buf[0])        = " << buf[0] << "\n";
 	cout << "  ParaEnc<2,1> (buf[1])        = " << buf[1] << "\n";
+
+	// (4) Whole cipher on a SIMD lane: the round keys are lane vectors
+	//     (broadcast to every block on the wider lanes). Same result as (1).
+	AesLane<1>::vec_t rk[11];
+	for (int r = 0; r < 11; ++r) rk[r] = AesLane<1>::broadcast(ek.rd_key[r]);
+	cout << "  AesLane<1>::encrypt(msg)     = " << AesLane<1>::encrypt(msg, rk) << "\n";
+
 }
 
 // ---------- correctness ----------
@@ -309,6 +319,59 @@ static bool check_paraenc_runtime_contracts() {
 	return cmpBlock(blocks, before, 2);
 }
 
+// ---------- lane primitives and counter-mode fills ----------
+
+// encrypt and encrypt_n<M> on lane L against AES_ecb_encrypt_blks of the
+// same M * L::N blocks.
+template <class L, int M>
+static bool check_lane_encrypt_m(PRG &prg, const AES_KEY &ek) {
+	typename L::vec_t rk[11];
+	for (int r = 0; r < 11; ++r) rk[r] = L::broadcast(ek.rd_key[r]);
+	block in[M * L::N], ref[M * L::N], got[M * L::N];
+	prg.random_block(in, M * L::N);
+	memcpy(ref, in, sizeof(in));
+	AES_ecb_encrypt_blks(ref, M * L::N, &ek);
+
+	typename L::vec_t x[M];
+	for (int t = 0; t < M; ++t) x[t] = L::load(in + t * L::N);
+	L::template encrypt_n<M>(x, rk);
+	for (int t = 0; t < M; ++t) L::store(got + t * L::N, x[t]);
+	if (!cmpBlock(got, ref, M * L::N)) return false;
+
+	for (int t = 0; t < M; ++t) L::store(got + t * L::N, L::encrypt(L::load(in + t * L::N), rk));
+	return cmpBlock(got, ref, M * L::N);
+}
+
+template <class L>
+static bool check_lane_encrypt(const char *name) {
+	PRG prg;
+	bool ok = true;
+	for (int trial = 0; trial < 16 && ok; ++trial) {
+		block kb;
+		prg.random_block(&kb, 1);
+		AES_KEY ek;
+		AES_set_encrypt_key(kb, &ek);
+		ok &= check_lane_encrypt_m<L, 1>(prg, ek) && check_lane_encrypt_m<L, 2>(prg, ek) &&
+		      check_lane_encrypt_m<L, 3>(prg, ek) && check_lane_encrypt_m<L, 4>(prg, ek) &&
+		      check_lane_encrypt_m<L, 8>(prg, ek);
+	}
+	ostringstream os;
+	os << "  [" << name << "::encrypt(_n) vs ECB]";
+	cout << left << setw(42) << os.str() << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
+
+static bool check_lanes_encrypt() {
+	bool ok = check_lane_encrypt<AesLane<1>>("AesLane<1>");
+#if EMP_HAS_VAES256
+	ok &= check_lane_encrypt<AesLane<2>>("AesLane<2>");
+#endif
+#if EMP_HAS_VAES512
+	ok &= check_lane_encrypt<AesLane<4>>("AesLane<4>");
+#endif
+	return ok;
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -342,6 +405,8 @@ static bool run_correctness() {
 	ok &= check_paraenc_template_out_of_place<1, 32>();
 	ok &= check_paraenc_runtime_out_of_place(1, 17);
 	ok &= check_paraenc_runtime_out_of_place(5, 11);
+
+	ok &= check_lanes_encrypt();
 	return ok;
 }
 
