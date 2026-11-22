@@ -83,6 +83,15 @@ sub-challenges across stages). `get_send_digest()` / `get_recv_digest()`
 are per-direction snapshots for diagnostics. All three assert that
 `enable_fs` ran first.
 
+With FS on, a `send_data` or `recv_data` of more than 256 KiB absorbs and
+moves its bytes in 256 KiB pieces within the one call: a send hands each piece
+to the transport once it is absorbed, and a receive absorbs each piece once it
+has arrived, so the transport moves one piece while the next is hashed. The
+transcript, the counters and the rounds are those of one transfer. The direct
+paths above apply to each call the transport sees, so a final piece shorter
+than `NETWORK_DIRECT_IO_SIZE` is staged like any small send and leaves at the
+next flush or large send.
+
 A wrapping channel that sends and receives every byte through another
 channel's `send_data` / `recv_data` can call the protected
 `use_transcript_of(inner)` in its constructor. It then keeps no transcript of

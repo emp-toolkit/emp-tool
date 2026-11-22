@@ -241,11 +241,10 @@ public:
 		          "IOChannel::send_data: send counter overflow");
 		send_counter += bytes;
 		if (last_dir_ != Dir::SEND) { ++rounds; last_dir_ = Dir::SEND; }
-		std::visit([&](auto& st) {
-			using St = std::decay_t<decltype(st)>;
-			if constexpr (!std::is_same_v<St, std::monostate>)
-				st.send.put(data, nbyte);
-		}, fs_);
+		if (fs_on_()) {
+			send_fs_(static_cast<const char *>(data), nbyte);
+			return;
+		}
 		send_data_internal(data, nbyte);
 	}
 
@@ -258,12 +257,11 @@ public:
 		          "IOChannel::recv_data: receive counter overflow");
 		recv_counter += bytes;
 		if (last_dir_ != Dir::RECV) { ++rounds; last_dir_ = Dir::RECV; }
+		if (fs_on_()) {
+			recv_fs_(static_cast<char *>(data), nbyte);
+			return;
+		}
 		recv_data_internal(data, nbyte);
-		std::visit([&](auto& st) {
-			using St = std::decay_t<decltype(st)>;
-			if constexpr (!std::is_same_v<St, std::monostate>)
-				st.recv.put(data, nbyte);
-		}, fs_);
 	}
 
 	void send_block(const block *data, int64_t nblock) {
@@ -384,14 +382,64 @@ private:
 
 	// Per-direction FS transcripts, statically parameterized on the hash
 	// backend chosen at enable_fs<opt>() time. Storage is a variant over
-	// the closed HashOption set — every absorb/digest goes through an
-	// inlined std::visit branch, never a virtual call, so the pattern
-	// stays cheap enough to reuse for per-call hashing hot paths. The
-	// monostate alternative = FS off (default). `send` absorbs my
-	// outgoing wire bytes, `recv` my incoming ones. HashT is
+	// the closed HashOption set, so no absorb or digest is a virtual call.
+	// The monostate alternative (index 0) = FS off (default). `send`
+	// absorbs my outgoing wire bytes, `recv` my incoming ones. HashT is
 	// non-copyable; the variant only requires emplace-construction.
 	// fs_send_first_ records the role-bool passed to enable_fs so
 	// get_digest produces a value matching the peer.
+	//
+	// send_data and recv_data test fs_on_() and leave every FS step to the
+	// out-of-line send_fs_ / recv_fs_, so the FS-off path is the counters, one
+	// branch and the transport call. (std::visit can dispatch through a table
+	// of function pointers, an indirect call on every transfer.)
+	bool fs_on_() const { return fs_.index() != 0; }
+
+	// With FS on, send_fs_ / recv_fs_ absorb and move a transfer in pieces of
+	// at most kFsPieceBytes within the one call: a send hands each piece to
+	// the transport once it is absorbed, and a receive absorbs each piece once
+	// it has arrived, so the transport moves one piece while the next is
+	// hashed instead of a large message waiting on its whole hash. A transfer
+	// of kFsPieceBytes or less is one piece. The pieces go in order, so the
+	// transport carries the same bytes and the transcript absorbs the same
+	// bytes as with one piece; send_data / recv_data have already counted the
+	// call and its round.
+	static constexpr int64_t kFsPieceBytes = 256 * 1024;
+
+#if defined(__GNUC__) || defined(__clang__)
+	[[gnu::noinline]]
+#endif
+	void send_fs_(const char *data, int64_t nbyte) {
+		while (nbyte > 0) {
+			const int64_t n = nbyte < kFsPieceBytes ? nbyte : kFsPieceBytes;
+			std::visit([&](auto& st) {
+				using St = std::decay_t<decltype(st)>;
+				if constexpr (!std::is_same_v<St, std::monostate>)
+					st.send.put(data, n);
+			}, fs_);
+			send_data_internal(data, n);
+			data += n;
+			nbyte -= n;
+		}
+	}
+
+#if defined(__GNUC__) || defined(__clang__)
+	[[gnu::noinline]]
+#endif
+	void recv_fs_(char *data, int64_t nbyte) {
+		while (nbyte > 0) {
+			const int64_t n = nbyte < kFsPieceBytes ? nbyte : kFsPieceBytes;
+			recv_data_internal(data, n);
+			std::visit([&](auto& st) {
+				using St = std::decay_t<decltype(st)>;
+				if constexpr (!std::is_same_v<St, std::monostate>)
+					st.recv.put(data, n);
+			}, fs_);
+			data += n;
+			nbyte -= n;
+		}
+	}
+
 	// Shared body for the per-direction snapshot getters: run `fn` on the
 	// active FS state to fill a 32-B digest, return its first 16 B.
 	template <class Fn>
@@ -422,6 +470,9 @@ private:
 	using FsState = std::variant<std::monostate,
 	                             FsStateT<HashOption::sha256>>;
 #endif
+	static_assert(std::is_same_v<std::variant_alternative_t<0, FsState>,
+	                             std::monostate>,
+	              "fs_on_() reads alternative 0 as FS off");
 	FsState fs_;
 	bool fs_send_first_ = false;
 	// The channel whose transcript enable_fs, fs_enabled and the digests act

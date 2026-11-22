@@ -289,21 +289,110 @@ static bool check_fs_state_contracts_rejected() {
 }
 
 // One end of an in-memory pipe: sends append to `out`, receives take from `in`.
+// `sends` / `recvs` record the length of every transport call.
 class PipeIO final : public IOChannel {
 public:
 	PipeIO(std::deque<uint8_t> *out, std::deque<uint8_t> *in) : out_(out), in_(in) {}
 	void send_data_internal(const void *data, int64_t nbyte) override {
+		sends.push_back(nbyte);
 		const uint8_t *p = static_cast<const uint8_t *>(data);
 		out_->insert(out_->end(), p, p + nbyte);
 	}
 	void recv_data_internal(void *data, int64_t nbyte) override {
+		recvs.push_back(nbyte);
 		expecting(static_cast<int64_t>(in_->size()) >= nbyte, "PipeIO: pipe underrun");
 		std::copy(in_->begin(), in_->begin() + nbyte, static_cast<uint8_t *>(data));
 		in_->erase(in_->begin(), in_->begin() + nbyte);
 	}
+	vector<int64_t> sends, recvs;
 private:
 	std::deque<uint8_t> *out_, *in_;
 };
+
+// With FS on, a transfer longer than 256 KiB reaches the transport and the
+// transcript in 256 KiB pieces within its one call. Messages around and well
+// past the piece size go both ways, with FS off and on. They must arrive
+// intact; the transport must see each message whole with FS off, and in those
+// pieces with FS on; the byte counters and rounds must count one call per
+// message; and each end's transcripts must equal one-shot hashes of the bytes
+// each direction carried.
+static bool check_large_transfer_transcript() {
+	using FsHash = HashT<EMP_FS_HASH_DEFAULT>;
+	static constexpr int64_t P = 256 * 1024;
+	const int64_t sizes[] = {1, P - 1, P, P + 1, 3 * P + 7, int64_t{1} << 20, 5, 2 * P};
+	// The transport calls one message takes: one up to P bytes or with FS off,
+	// else P-byte pieces and the remainder.
+	auto pieces = [](int64_t n, bool fs, vector<int64_t> &calls) {
+		if (!fs || n <= P) { calls.push_back(n); return; }
+		for (; n > P; n -= P) calls.push_back(P);
+		calls.push_back(n);
+	};
+	auto first_block = [](const char *digest) {
+		block b;
+		std::memcpy(&b, digest, sizeof(b));
+		return b;
+	};
+	bool ok = true;
+	for (bool fs : {false, true}) {
+		std::deque<uint8_t> ab, ba;
+		PipeIO a(&ab, &ba), b(&ba, &ab);
+		if (fs) {
+			a.enable_fs(true);
+			b.enable_fs(false);
+		}
+		vector<uint8_t> sent_ab, sent_ba;
+		vector<int64_t> calls_ab, calls_ba;
+		uint64_t a_rounds = 0, b_rounds = 0;
+		int last = 0;  // direction of the previous message: 1 = a to b, 2 = b to a
+		PRG prg(&zero_block);
+		for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
+			const int64_t n = sizes[i];
+			const int dir = i % 3 != 2 ? 1 : 2;
+			vector<uint8_t> msg(n), got(n);
+			prg.random_data_unaligned(msg.data(), n);
+			if (dir == 1) {
+				a.send_data(msg.data(), n);
+				b.recv_data(got.data(), n);
+				sent_ab.insert(sent_ab.end(), msg.begin(), msg.end());
+				pieces(n, fs, calls_ab);
+			} else {
+				b.send_data(msg.data(), n);
+				a.recv_data(got.data(), n);
+				sent_ba.insert(sent_ba.end(), msg.begin(), msg.end());
+				pieces(n, fs, calls_ba);
+			}
+			if (dir != last) {
+				++a_rounds;
+				++b_rounds;
+				last = dir;
+			}
+			ok &= got == msg;
+		}
+		ok &= a.sends == calls_ab && b.recvs == calls_ab;
+		ok &= b.sends == calls_ba && a.recvs == calls_ba;
+		ok &= a.send_counter == sent_ab.size() && b.recv_counter == sent_ab.size();
+		ok &= b.send_counter == sent_ba.size() && a.recv_counter == sent_ba.size();
+		ok &= a.rounds == a_rounds && b.rounds == b_rounds;
+		if (!fs) continue;
+		char d_ab[FsHash::DIGEST_SIZE], d_ba[FsHash::DIGEST_SIZE];
+		char both[2 * FsHash::DIGEST_SIZE], d_both[FsHash::DIGEST_SIZE];
+		FsHash::hash_once(d_ab, sent_ab.data(), static_cast<int64_t>(sent_ab.size()));
+		FsHash::hash_once(d_ba, sent_ba.data(), static_cast<int64_t>(sent_ba.size()));
+		std::memcpy(both, d_ab, sizeof(d_ab));
+		std::memcpy(both + sizeof(d_ab), d_ba, sizeof(d_ba));
+		FsHash::hash_once(d_both, both, sizeof(both));
+		const block want_ab = first_block(d_ab), want_ba = first_block(d_ba);
+		const block want_both = first_block(d_both);
+		const block as = a.get_send_digest(), br = b.get_recv_digest();
+		const block bs = b.get_send_digest(), ar = a.get_recv_digest();
+		const block da = a.get_digest(), db = b.get_digest();
+		ok &= cmpBlock(&as, &want_ab, 1) && cmpBlock(&br, &want_ab, 1);
+		ok &= cmpBlock(&bs, &want_ba, 1) && cmpBlock(&ar, &want_ba, 1);
+		ok &= cmpBlock(&da, &want_both, 1) && cmpBlock(&db, &want_both, 1);
+	}
+	cout << "  [large transfers, piecewise absorb]    " << (ok ? "OK" : "FAIL") << "\n";
+	return ok;
+}
 
 // A wrapper that sends every byte through `inner` and uses inner's transcript.
 // Like a channel that buffers its own units, it sends what it has staged
@@ -381,6 +470,7 @@ static bool run_correctness() {
 	     << (fs_contracts ? "OK" : "FAIL") << "\n";
 	ok &= fs_contracts;
 	ok &= check_wrapper_uses_inner_transcript();
+	ok &= check_large_transfer_transcript();
 	return ok;
 }
 
