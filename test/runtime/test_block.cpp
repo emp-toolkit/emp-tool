@@ -4,6 +4,7 @@
 //
 // What's in block.h:
 //   block, makeBlock(hi, lo), zero_block, all_one_block
+//   select_mask[bit]                          zero_block / all_one_block, one cache line
 //   getLSB(b), set_bit(b, i)
 //   sigma(b)                                  linear orthomorphism (Guo et al.)
 //   to_hex(data, n)                           lowercase byte-order hex
@@ -129,6 +130,18 @@ static bool check_makeBlock_getLSB() {
 		if (getLSB(b) != (bool)(lo & 1)) return false;
 	}
 	return true;
+}
+
+// select_mask is indexed by secret bits, so both entries must lie in one cache
+// line: the 32-byte table is declared 32-byte aligned (checked at compile time)
+// and this binary must have placed it so.
+static_assert(sizeof(select_mask) == 32 && __alignof__(select_mask) >= 32,
+              "select_mask must be one 32-byte-aligned 32-byte table");
+static bool check_select_mask() {
+	const uintptr_t addr = reinterpret_cast<uintptr_t>(&select_mask[0]);
+	return addr % 32 == 0
+	    && blocks_eq(select_mask[0], zero_block)
+	    && blocks_eq(select_mask[1], all_one_block);
 }
 
 static bool check_set_bit() {
@@ -390,6 +403,7 @@ static bool run_correctness() {
 	struct Case { const char *name; bool (*fn)(); };
 	Case cases[] = {
 		{"makeBlock + getLSB",          check_makeBlock_getLSB},
+		{"select_mask in one cache line", check_select_mask},
 		{"set_bit",                     check_set_bit},
 		{"sigma linear + formula",      check_sigma_linear_and_formula},
 		{"xorBlocks_arr / xorBlocksTo", check_xorBlocks_arr},

@@ -49,7 +49,10 @@ inline block sigma(block a) {
 
 inline constexpr block zero_block    = makeBlock(0, 0);
 inline constexpr block all_one_block = makeBlock(0xFFFFFFFFFFFFFFFFULL, 0xFFFFFFFFFFFFFFFFULL);
-inline constexpr block select_mask[2] = {zero_block, all_one_block};
+// Callers index select_mask with secret bits (select_mask[getLSB(x)]), so
+// which entry is read must not show in the cache: 32-byte alignment puts the
+// whole 32-byte table in one cache line.
+alignas(32) inline constexpr block select_mask[2] = {zero_block, all_one_block};
 
 // Blocks with a single low bit set (only bit 0 / only bit 1) — for isolating or
 // flipping a low bit. Generic constants; a protocol that reserves a specific low

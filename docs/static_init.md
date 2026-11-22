@@ -61,7 +61,7 @@ standard library constants compose cleanly:
 ```cpp
 inline constexpr block zero_block    = makeBlock(0, 0);
 inline constexpr block all_one_block = makeBlock(~0ULL, ~0ULL);
-inline constexpr block select_mask[2] = {zero_block, all_one_block};
+alignas(32) inline constexpr block select_mask[2] = {zero_block, all_one_block};
 ```
 
 These live in `.rodata` — no dynamic initializer, no cross-TU order

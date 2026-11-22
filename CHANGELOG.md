@@ -160,6 +160,10 @@ metadata is numeric (see the README's version guidance).
 - `./run` could stop the two parties up to a second before
   `EMP_RUN_TIMEOUT`, because `SECONDS` counts whole seconds. It now gives
   them the full timeout and may run up to a second over.
+- `select_mask` is 32-byte aligned, so its two entries always share one cache
+  line. Callers index it with secret bits, and with only `block`'s 16-byte
+  alignment a binary could place the entries in different cache lines, so the
+  line a lookup touched could show the bit.
 
 ## v1.0.0-alpha.2
 
