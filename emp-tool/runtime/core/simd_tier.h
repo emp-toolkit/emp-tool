@@ -195,11 +195,16 @@ struct AesLane<2> {
 			for (int t = 0; t < M; ++t) x[t] = aesenc(x[t], rk[r]);
 		for (int t = 0; t < M; ++t) x[t] = aesenclast(x[t], rk[10]);
 	}
+	// Block j of the slot holds counter b0 + 2 * slot + j: b0 broadcast into
+	// every block's low qword (the same vector for every slot of a call, so it
+	// is formed once) plus the slot's lane offsets. The 64-bit lane adds wrap
+	// exactly as the scalar sum does, and the high qwords stay zero.
 	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
-		const uint64_t c0 = b0 + 2 * static_cast<uint64_t>(slot);
-		return _mm256_xor_si256(
-			_mm256_set_epi64x(0, static_cast<int64_t>(c0 + 1),
-			                    0, static_cast<int64_t>(c0)), tw);
+		const int64_t c = 2 * static_cast<int64_t>(slot);
+		const vec_t base = _mm256_and_si256(_mm256_set1_epi64x(static_cast<int64_t>(b0)),
+		                                    _mm256_set_epi64x(0, -1, 0, -1));
+		const vec_t off = _mm256_set_epi64x(0, c + 1, 0, c);
+		return _mm256_xor_si256(_mm256_add_epi64(base, off), tw);
 	}
 	// _mm256_shuffle_epi32 / the broadcast mask are per-128-bit-lane, so this
 	// is sigma() applied independently to each block.
@@ -248,13 +253,13 @@ struct AesLane<4> {
 			for (int t = 0; t < M; ++t) x[t] = aesenc(x[t], rk[r]);
 		for (int t = 0; t < M; ++t) x[t] = aesenclast(x[t], rk[10]);
 	}
+	// As AesLane<2>, with counter b0 + 4 * slot + j in block j: one masked
+	// broadcast of b0 into the low qwords (mask 0x55) per call, one add per slot.
 	EMP_AES_TARGET_ATTR static vec_t ctr_xor_tweak(uint64_t b0, int slot, vec_t tw) {
-		const uint64_t c0 = b0 + 4 * static_cast<uint64_t>(slot);
-		return _mm512_xor_si512(
-			_mm512_set_epi64(0, static_cast<int64_t>(c0 + 3),
-			                 0, static_cast<int64_t>(c0 + 2),
-			                 0, static_cast<int64_t>(c0 + 1),
-			                 0, static_cast<int64_t>(c0)), tw);
+		const int64_t c = 4 * static_cast<int64_t>(slot);
+		const vec_t base = _mm512_maskz_set1_epi64(0x55, static_cast<long long>(b0));
+		const vec_t off = _mm512_set_epi64(0, c + 3, 0, c + 2, 0, c + 1, 0, c);
+		return _mm512_xor_si512(_mm512_add_epi64(base, off), tw);
 	}
 	// _MM_PERM_BADC == 0x4E == 78: the per-128-lane half-swap of sigma().
 	EMP_AES_TARGET_ATTR static vec_t sigma(vec_t a) {
@@ -383,7 +388,10 @@ struct AesLane<1> {
 	using vec_t = block;
 	static vec_t broadcast(__m128i k)                                  { return k; }
 	static vec_t load(const block *p)                                  { return _mm_loadu_si128((const __m128i *)p); }
-	static void  store(block *p, vec_t v)                              { _mm_storeu_si128((__m128i *)p, v); }
+	// A byte store: p may point anywhere (PRG fills write straight into
+	// unaligned buffers), and vst1q_u8 claims no alignment, where
+	// sse2neon's _mm_storeu_si128 stores through an int32_t *.
+	static void  store(block *p, vec_t v)                              { vst1q_u8(reinterpret_cast<uint8_t *>(p), vreinterpretq_u8_m128i(v)); }
 	static vec_t load_per_block(const block *p)                        { return load(p); }
 	static vec_t xorv(vec_t a, vec_t b)                                { return _mm_xor_si128(a, b); }
 	static vec_t aesenc(vec_t s, vec_t k) {

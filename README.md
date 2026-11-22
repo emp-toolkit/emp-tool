@@ -171,10 +171,10 @@ prg.random_data_unaligned(&rand_int, 4);         // arbitrary-aligned dest
 prg.reseed(&rand_block[1]);                      // reset seed + counter
 ```
 
-`random_data` (16B-aligned) is the fast path; use `random_data_unaligned`
-for any destination that isn't naturally 16-byte aligned (stack ints,
-small structs, etc.) — the aligned variant stops the process on an
-unaligned destination, in every build.
+`random_data` takes a 16B-aligned destination and stops the process on an
+unaligned one, in every build; use `random_data_unaligned` for any
+destination that isn't naturally 16-byte aligned (stack ints, small
+structs, etc.). Both write the same bytes through the same kernel.
 
 ### PRP / CCRH
 

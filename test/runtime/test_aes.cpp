@@ -9,6 +9,7 @@
 //   AES_set_encrypt_key(uk, &ek)                    single-key wrapper
 //   AES_ecb_encrypt_blks<N>(blks, &ek)              single-key templated wrapper
 //   AES_ecb_encrypt_blks(blks, n, &ek)              single-key runtime wrapper
+//   detail::ParaCtrEnc(dst, ctr, &ek, n)            AES-CTR kernel behind PRG
 // and, from core/simd_tier.h, the lane primitives the kernels are built on:
 //   AesLane<N>::encrypt(x, rk)                      whole cipher on one vector
 //   AesLane<N>::encrypt_n<M>(x, rk)                 the same on M vectors
@@ -17,6 +18,7 @@
 
 #include <openssl/evp.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -321,6 +323,17 @@ static bool check_paraenc_runtime_contracts() {
 
 // ---------- lane primitives and counter-mode fills ----------
 
+// AES-128 of explicit blocks under the raw key `key`, by OpenSSL: the
+// reference the counter-mode kernels below are checked against.
+static vector<block> openssl_ecb_blocks(const block &key, const vector<block> &in) {
+	vector<block> out(in.size());
+	if (!in.empty())
+		openssl_aes128_ecb(reinterpret_cast<const uint8_t *>(&key),
+		                   reinterpret_cast<const uint8_t *>(in.data()),
+		                   reinterpret_cast<uint8_t *>(out.data()), static_cast<int>(in.size()));
+	return out;
+}
+
 // encrypt and encrypt_n<M> on lane L against AES_ecb_encrypt_blks of the
 // same M * L::N blocks.
 template <class L, int M>
@@ -372,6 +385,85 @@ static bool check_lanes_encrypt() {
 	return ok;
 }
 
+// detail::ParaCtrEnc(dst, c, &ek, n) writes AES(makeBlock(0, c + i)) to
+// dst[i], i < n, and nothing else. Checked against OpenSSL on the explicit
+// counter blocks for every n in 0..4096 and a few large n, from counters
+// whose low qword crosses 2^32 (a carry out of the low 32 bits) or wraps at
+// 2^64 (to 0, with the high qword staying 0), the wrap landing on every
+// position of a 16-block group; also into unaligned destinations.
+static bool check_ctr_kernel() {
+	const block kb = makeBlock(0x0123456789abcdefULL, 0xfedcba9876543210ULL);
+	AES_KEY ek;
+	AES_set_encrypt_key(kb, &ek);
+	const block guard = makeBlock(0x5a5a5a5a5a5a5a5aULL, 0xa5a5a5a5a5a5a5a5ULL);
+	const int64_t small_max = 4096;
+	const int64_t large[] = {16384 + 5, 65536 + 13, (int64_t{1} << 20) + 9};
+	const int64_t n_ref = large[2];
+
+	auto reference = [&](uint64_t c0, int64_t n) {
+		vector<block> ctr(n);
+		for (int64_t i = 0; i < n; ++i) ctr[i] = makeBlock(0, c0 + static_cast<uint64_t>(i));
+		return openssl_ecb_blocks(kb, ctr);
+	};
+	// One call writes exactly out[0..n) of the guarded buffer, equal to ref.
+	auto one = [&](vector<block> &out, uint64_t c0, int64_t n, const vector<block> &ref) {
+		std::fill(out.begin(), out.begin() + n + 4, guard);
+		detail::ParaCtrEnc(out.data(), c0, &ek, n);
+		if (!cmpBlock(out.data(), ref.data(), n)) return false;
+		for (int64_t i = n; i < n + 4; ++i)
+			if (!cmpBlock(&out[i], &guard, 1)) return false;
+		return true;
+	};
+
+	// Every n in 0..4096 from the two crossing counters; from 0 and from a start
+	// that wraps near the end of a 4096-block request, the edge sizes only.
+	vector<block> out(n_ref + 4);
+	for (uint64_t c0 : {uint64_t{0xFFFFFFFFu} - 40, ~uint64_t{0} - 40, uint64_t{0},
+	                    ~uint64_t{0} - (uint64_t)small_max + 3}) {
+		const bool sweep = c0 == uint64_t{0xFFFFFFFFu} - 40 || c0 == ~uint64_t{0} - 40;
+		vector<int64_t> ns;
+		for (int64_t n = 0; n <= small_max; ++n)
+			if (sweep || n < 34 || n > small_max - 34) ns.push_back(n);
+		ns.insert(ns.end(), std::begin(large), std::end(large));
+		const vector<block> ref = reference(c0, n_ref);
+		for (int64_t n : ns)
+			if (!one(out, c0, n, ref)) {
+				cout << "  [ParaCtrEnc vs OpenSSL]  FAIL  counter=" << c0 << " n=" << n << "\n";
+				return false;
+			}
+	}
+	for (uint64_t j = 0; j < 16; ++j) {
+		const uint64_t c0 = ~uint64_t{0} - 16 - j;
+		const vector<block> ref = reference(c0, 64);
+		for (int64_t n = 0; n <= 64; ++n)
+			if (!one(out, c0, n, ref)) {
+				cout << "  [ParaCtrEnc vs OpenSSL]  FAIL  counter=" << c0 << " n=" << n << "\n";
+				return false;
+			}
+	}
+	// Unaligned destinations: the bytes before and after stay untouched.
+	{
+		const uint64_t c0 = ~uint64_t{0} - 50;
+		const vector<block> ref = reference(c0, 200);
+		vector<uint8_t> bytes(200 * 16 + 64);
+		for (int off = 1; off < 16; ++off)
+			for (int64_t n : {1, 2, 3, 15, 16, 17, 31, 33, 64, 100, 200}) {
+				memset(bytes.data(), 0xA5, bytes.size());
+				uint8_t *p = bytes.data() + 16 + off;
+				detail::ParaCtrEnc(reinterpret_cast<block *>(p), c0, &ek, n);
+				bool ok = memcmp(p, ref.data(), static_cast<size_t>(16 * n)) == 0;
+				for (uint8_t *q = bytes.data(); q < p; ++q) ok &= *q == 0xA5;
+				for (uint8_t *q = p + 16 * n; q < bytes.data() + bytes.size(); ++q) ok &= *q == 0xA5;
+				if (!ok) {
+					cout << "  [ParaCtrEnc vs OpenSSL]  FAIL  unaligned off=" << off << " n=" << n << "\n";
+					return false;
+				}
+			}
+	}
+	cout << "  " << left << setw(40) << "[ParaCtrEnc vs OpenSSL, n=0..4096+]" << "OK\n";
+	return true;
+}
+
 static bool run_correctness() {
 	cout << "=== correctness ===\n";
 	bool ok = true;
@@ -407,6 +499,7 @@ static bool run_correctness() {
 	ok &= check_paraenc_runtime_out_of_place(5, 11);
 
 	ok &= check_lanes_encrypt();
+	ok &= check_ctr_kernel();
 	return ok;
 }
 

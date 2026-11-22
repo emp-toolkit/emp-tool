@@ -75,13 +75,7 @@ class PRG { public:
 		if (nbytes == 0) return;
 		expecting(((uintptr_t)data & (alignof(block) - 1)) == 0,
 		          "PRG::random_data: data must be 16-byte aligned; use random_data_unaligned");
-		random_block((block *)data, nbytes/16);
-		if (nbytes % 16 != 0) {
-			block extra;
-			random_block(&extra, 1);
-			memcpy((nbytes/16*16)+(char *) data, &extra,
-			       static_cast<size_t>(nbytes % 16));
-		}
+		fill_bytes_(static_cast<char *>(data), nbytes);
 	}
 
 	// Unpacks 8 bools per random byte (= 128 bools per AES block). The inner
@@ -96,80 +90,22 @@ class PRG { public:
 		random_bool_impl_(data, length);
 	}
 
+	// Any alignment; the same bytes, and the same stream advance, as
+	// random_data on an aligned buffer.
 	void random_data_unaligned(void *data, int64_t nbytes) {
 		expecting(nbytes >= 0,
 		          "PRG::random_data_unaligned: negative byte count");
-		if (nbytes == 0) return;
-		// Small-buffer fast path. Anything that fits in two blocks is
-		// filled with the minimum number of whole AES blocks and copied
-		// without an alignment dance. This also covers every case where
-		// std::align below could fail (failure requires nbytes <= 30,
-		// since the worst alignment skew is 15 bytes and the aligned
-		// region needs 16).
-		if (nbytes <= (int64_t)(2 * sizeof(block))) {
-			block tmp[2];
-			random_block(tmp,
-			             (nbytes + (int64_t)sizeof(block) - 1) /
-			             (int64_t)sizeof(block));
-			memcpy(data, tmp, static_cast<size_t>(nbytes));
-			return;
-		}
-
-		// Aligned bulk path. nbytes > 32 here, so std::align is
-		// guaranteed to succeed.
-		size_t size = static_cast<size_t>(nbytes);
-		void *aligned_data = data;
-		std::align(sizeof(block), sizeof(block), aligned_data, size);
-		// round down to a whole number of blocks
-		size = sizeof(block) * (size / sizeof(block));
-		int64_t chopped = nbytes - static_cast<int64_t>(size);
-
-		// temporarily fill the bulk of the buffer with random data
-		random_data(aligned_data, nbytes - chopped);
-
-		// move the random data to the start of the buffer
-		// (using memmove, not memcpy, because of memory overlap)
-		memmove(data, aligned_data, static_cast<size_t>(nbytes - chopped));
-
-		int64_t remaining_bytes = chopped;
-		char* end = (char*)data + nbytes;
-
-		// there can be 0-2 blocks leftover
-		// eg: <- 8 bytes -> <- N blocks -> <- 15 bytes ->
-		//     in the above case, the N blocks are filled by random_data,
-		//     leaving 23 bytes leftover, which requires 2 blocks to fill,
-		//     of which we must ignore 9 bytes to avoid writing past the
-		//     end of the buffer (`void *data`).
-		while (remaining_bytes > 0) {
-			block tmp;
-			random_block(&tmp, 1);
-			int64_t bytes_to_copy = std::min(remaining_bytes, (int64_t)sizeof(block));
-			memcpy(end - remaining_bytes, &tmp,
-			       static_cast<size_t>(bytes_to_copy));
-			remaining_bytes -= bytes_to_copy;
-		}
+		fill_bytes_(static_cast<char *>(data), nbytes);
 	}
 
 	void random_block(block * data, int64_t nblocks=1) {
 		expecting(nblocks >= 0, "PRG::random_block: negative block count");
 		if (nblocks == 0) return;
-		// Caller must pass block-aligned `data` (16 bytes). random_data and
-		// random_data_unaligned wrap unaligned inputs.
-		//
-		// AES_BATCH_SIZE keeps the AES-encrypt phase's per-call setup
-		// (round-key broadcasts on the VAES path) amortized over many
-		// blocks; ParaCtrEnc builds counter plaintexts in-register and
-		// writes only the encrypted output to `data` — no intermediate
-		// counter-write pass.
+		// Caller must pass block-aligned `data` (16 bytes). random_data_unaligned
+		// takes any alignment.
 		expecting(((uintptr_t)data & (alignof(block) - 1)) == 0,
 		          "PRG::random_block: data must be 16-byte aligned");
-		while (nblocks > 0) {
-			int64_t n = nblocks < AES_BATCH_SIZE ? nblocks : AES_BATCH_SIZE;
-			detail::ParaCtrEnc(data, counter, &aes, n);
-			counter += n;
-			data += n;
-			nblocks -= n;
-		}
+		fill_blocks_(data, nblocks);
 	}
 
 	typedef uint64_t result_type;
@@ -194,6 +130,28 @@ class PRG { public:
 	}
 
 private:
+	// The next n blocks of the stream, written to `out` at any alignment by one
+	// call into the CTR kernel (its stores are unaligned on every tier), which
+	// builds the counters in registers and writes only the output.
+	void fill_blocks_(block *out, int64_t n) {
+		detail::ParaCtrEnc(out, counter, &aes, n);
+		counter += static_cast<uint64_t>(n);
+	}
+
+	// The next nbytes of the stream, at any alignment of `out`: the whole
+	// blocks straight from the CTR kernel, then the first nbytes % 16 bytes of
+	// one more block. The stream advances by ceil(nbytes / 16) blocks.
+	void fill_bytes_(char *out, int64_t nbytes) {
+		const int64_t whole = nbytes / static_cast<int64_t>(sizeof(block));
+		fill_blocks_(reinterpret_cast<block *>(out), whole);
+		if (const int64_t tail = nbytes % static_cast<int64_t>(sizeof(block))) {
+			block extra;
+			fill_blocks_(&extra, 1);
+			memcpy(out + whole * static_cast<int64_t>(sizeof(block)), &extra,
+			       static_cast<size_t>(tail));
+		}
+	}
+
 	template <typename T>
 	void random_bool_impl_(T *data, int64_t length) {
 		expecting(length >= 0, "PRG::random_bool: negative bit count");

@@ -3,11 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 namespace emp {
-// Counter-mode AES chunk size in blocks: bounds the PRG refill working set
-// and amortizes drain_tiles' per-call ramp. Any multiple of the widest
+// Chunk size in blocks for PRP::permute_block, which encrypts its buffer in
+// place one chunk per runtime ParaEnc call. Any multiple of the widest
 // ParaEnc tile drains through the same instruction stream, and throughput is
 // flat across a wide range of sizes, so the value is a footprint choice, not
-// a per-machine tunable.
+// a per-machine tunable. The PRG does not chunk: each of its requests is one
+// call into the CTR kernel.
 constexpr int64_t AES_BATCH_SIZE = 64;
 // NetIO staging: send-side coalescing buffer and recv-side read() target.
 // Sized so bulk transfers don't syscall too often while keeping the two
