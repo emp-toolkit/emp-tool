@@ -181,6 +181,12 @@ metadata is numeric (see the README's version guidance).
   line. Callers index it with secret bits, and with only `block`'s 16-byte
   alignment a binary could place the entries in different cache lines, so the
   line a lookup touched could show the bit.
+- `recv_bool` accepted any value in the padding bits above a message in its
+  last byte, which `send_bool` always zeroes and the Fiat-Shamir transcript
+  absorbs. A sender could pick up to 7 such bits per message, each choice a
+  different transcript for the same data, and so grind a later Fiat-Shamir
+  challenge for free. `recv_bool` now aborts unless they are zero, so every
+  bool vector has one wire encoding.
 
 ## v1.0.0-alpha.2
 

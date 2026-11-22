@@ -323,6 +323,13 @@ public:
 	// lengths. Zero the one byte that bools_to_bits leaves partially-
 	// written before each pack. Whole-byte bytes get fully overwritten by
 	// the SIMD/memcpy path inside bools_to_bits, so they don't need a clear.
+	//
+	// recv_bool accepts only that encoding and aborts if a padding bit of
+	// the last byte is set. The transcript absorbs the padding bits, so
+	// accepting any value would let a sender vary up to 7 bits per message
+	// that the receiver ignores: a different transcript for the same data,
+	// free choices for grinding any Fiat-Shamir challenge drawn later. With
+	// the check, every bool vector has exactly one wire encoding.
 	void send_bool(const bool *data, int64_t length) {
 		send_bool_impl_(data, length);
 	}
@@ -369,6 +376,8 @@ private:
 			int64_t batch = length < IO_BOOL_CHUNK_SIZE ? length : IO_BOOL_CHUNK_SIZE;
 			int64_t bytes = (batch + 7) / 8;
 			recv_data(buf, bytes);
+			expecting(batch % 8 == 0 || (buf[bytes - 1] >> (batch % 8)) == 0,
+			          "IOChannel::recv_bool: nonzero padding bits");
 			bits_to_bools(data, buf, batch);
 			data += batch;
 			length -= batch;

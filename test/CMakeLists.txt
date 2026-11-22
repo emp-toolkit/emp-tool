@@ -188,6 +188,7 @@ target_compile_options(test_no_exceptions PRIVATE -fno-exceptions)
 add_test_case(runtime test_ecc)
 add_test_case(runtime test_ro)
 add_test_case(runtime test_session_id)
+add_test_case(runtime test_io_channel)
 add_test_case_with_run(runtime test_netio PORTS 7)   # port .. port + 6
 add_test_case_with_run(runtime test_tlsio PORTS 8)   # port .. port + 7
 add_test_case(runtime test_traceio)

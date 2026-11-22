@@ -2,7 +2,6 @@
 #include <cctype>
 #include <fcntl.h>
 #include <iostream>
-#include <limits>
 #include <openssl/ec.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -310,35 +309,14 @@ int main() {
 		ok = ok && infinity_rejected && malformed_rejected;
 	}
 
-	// Signed public counts must fail before counter updates, multiplication,
-	// pointer arithmetic, or conversion to an unsigned library size.
+	// Signed public point counts must fail before pointer arithmetic or
+	// conversion to an unsigned library size.
 	{
 		MemoryIO io(std::vector<unsigned char>{});
-		char byte = 0;
-		block blk = zero_block;
-		bool bit = false;
 		bool rejected =
-			dies([&] { io.send_data(&byte, -1); }) &&
-			dies([&] { io.recv_data(&byte, -1); }) &&
-			dies([&] { io.send_block(&blk, -1); }) &&
-			dies([&] { io.recv_block(&blk, -1); }) &&
-			dies([&] { io.send_block(
-				&blk, std::numeric_limits<int64_t>::max()); }) &&
-			dies([&] { io.recv_block(
-				&blk, std::numeric_limits<int64_t>::max()); }) &&
-			dies([&] { io.send_bool(&bit, -1); }) &&
-			dies([&] { io.recv_bool(&bit, -1); }) &&
 			dies([&] { io.send_pt(nullptr, -1); }) &&
-			dies([&] { io.recv_pt(&G, nullptr, -1); }) &&
-			dies([&] {
-				io.send_counter = std::numeric_limits<uint64_t>::max();
-				io.send_data(&byte, 1);
-			}) &&
-			dies([&] {
-				io.recv_counter = std::numeric_limits<uint64_t>::max();
-				io.recv_data(&byte, 1);
-			});
-		cout << "IO negative/overflow counts rejected: " << rejected << endl;
+			dies([&] { io.recv_pt(&G, nullptr, -1); });
+		cout << "IO negative point counts rejected: " << rejected << endl;
 		ok = ok && rejected;
 	}
 
