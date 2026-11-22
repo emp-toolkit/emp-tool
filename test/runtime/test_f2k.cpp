@@ -18,6 +18,7 @@
 #include "emp-tool/emp-tool.h"
 
 #include <chrono>
+#include <cstring>
 #include <fcntl.h>
 #include <iomanip>
 #include <iostream>
@@ -123,10 +124,11 @@ static block ref_reduce_words(uint64_t z[4]) {
 	return makeBlock(z[1], z[0]);
 }
 
-static block ref_gfmul(block a, block b) {
+// Carry-less product a·b, bit by bit over b, as four 64-bit words (low first).
+static void ref_clmul_words(block a, block b, uint64_t z[4]) {
 	uint64_t a_lo = ((uint64_t *)&a)[0], a_hi = ((uint64_t *)&a)[1];
 	uint64_t b_lo = ((uint64_t *)&b)[0], b_hi = ((uint64_t *)&b)[1];
-	uint64_t z[4] = {0, 0, 0, 0};
+	z[0] = z[1] = z[2] = z[3] = 0;
 	for (int i = 0; i < 128; ++i) {
 		bool bit = i < 64 ? ((b_lo >> i) & 1) : ((b_hi >> (i - 64)) & 1);
 		if (!bit) continue;
@@ -140,6 +142,11 @@ static block ref_gfmul(block a, block b) {
 			z[word + 2] ^= a_hi >> (64 - sh);
 		}
 	}
+}
+
+static block ref_gfmul(block a, block b) {
+	uint64_t z[4];
+	ref_clmul_words(a, b, z);
 	return ref_reduce_words(z);
 }
 
@@ -149,6 +156,15 @@ static block ref_reduce(block lo, block hi) {
 	uint64_t z[4] = {((uint64_t *)&lo)[0], ((uint64_t *)&lo)[1],
 	                 ((uint64_t *)&hi)[0], ((uint64_t *)&hi)[1]};
 	return ref_reduce_words(z);
+}
+
+// Σ data[i]·X^i bit by bit, unreduced: bit j of data[i] is the coefficient
+// of X^(i+j) in four 64-bit words (low first).
+static void ref_pack_words(const block *data, uint64_t z[4]) {
+	z[0] = z[1] = z[2] = z[3] = 0;
+	for (int i = 0; i < 128; ++i)
+		for (int j = 0; j < 128; ++j)
+			if (getBit(data[i], j)) z[(i + j) / 64] ^= 1ULL << ((i + j) % 64);
 }
 
 // ---------- correctness ----------
@@ -223,6 +239,27 @@ static bool check_vector_inn_prdt(int sz) {
 	return blocks_eq(got2[0], want2[0]) && blocks_eq(got2[1], want2[1]);
 }
 
+// Σ a[i]·b[i] against the bit-by-bit products, unreduced and reduced. The
+// tier chain takes 4-, 2- and 1-block chunks in turn (as many as the build
+// has), so n = 0..70 reaches each tier with every leftover, including none.
+static bool check_vector_inn_prdt_ref(int n) {
+	PRG prg;
+	vector<block> a(n + 1), b(n + 1);   // +1: n = 0 still has storage
+	prg.random_block(a.data(), n);
+	prg.random_block(b.data(), n);
+	uint64_t z[4] = {0, 0, 0, 0}, t[4];
+	for (int i = 0; i < n; ++i) {
+		ref_clmul_words(a[i], b[i], t);
+		for (int w = 0; w < 4; ++w) z[w] ^= t[w];
+	}
+	block got2[2], got;
+	vector_inn_prdt_sum_no_red(got2, a.data(), b.data(), n);
+	vector_inn_prdt_sum_red(&got, a.data(), b.data(), n);
+	return blocks_eq(got2[0], makeBlock(z[1], z[0]))
+	    && blocks_eq(got2[1], makeBlock(z[3], z[2]))
+	    && blocks_eq(got, ref_reduce_words(z));
+}
+
 // Four term-major sums against four scalar gfmul sums.
 static bool check_vector_inn_prdt_x4(int n) {
 	PRG prg;
@@ -287,38 +324,114 @@ static bool check_x4_tiers() {
 	return ok;
 }
 
-static bool check_uni_hash_coeff_gen(int sz) {
+// coeff[i] = seed^(i+1) against a chain of gfmul by seed, with nothing
+// written past coeff[sz-1].
+static bool check_uni_hash_coeff_gen(int64_t sz, block seed) {
+	const block canary = makeBlock(0xA5A5A5A5A5A5A5A5ULL, 0x5A5A5A5A5A5A5A5AULL);
+	vector<block> coeff(sz + 2, canary);
+	uni_hash_coeff_gen(coeff.data(), seed, sz);
+	block want = seed;
+	for (int64_t i = 0; i < sz; ++i) {
+		if (!blocks_eq(coeff[i], want)) return false;
+		gfmul(want, seed, &want);
+	}
+	return blocks_eq(coeff[sz], canary) && blocks_eq(coeff[sz + 1], canary);
+}
+
+static bool check_uni_hash_coeff_gen_sizes() {
 	PRG prg;
 	block seed;
-	prg.random_block(&seed, 1);
-	vector<block> coeff(sz);
-	uni_hash_coeff_gen(coeff.data(), seed, sz);
-	// coeff[i] should equal seed^(i+1).
-	block want = seed;
-	if (!blocks_eq(coeff[0], want)) return false;
-	for (int i = 1; i < sz; ++i) {
-		gfmul(want, seed, &want);
-		if (!blocks_eq(coeff[i], want)) return false;
+	bool ok = true;
+	for (int64_t sz = 1; sz <= 1100; ++sz) {
+		prg.random_block(&seed, 1);
+		ok &= check_uni_hash_coeff_gen(sz, seed);
 	}
-	return true;
+	for (int64_t sz : {4096, 65535, 65536, 65537}) {
+		prg.random_block(&seed, 1);
+		ok &= check_uni_hash_coeff_gen(sz, seed);
+	}
+	// Seeds 0 and 1 (every power equal), X (whose powers pass X^127 and wrap
+	// through the reduction) and all-ones.
+	for (block s : {zero_block, makeBlock(0, 1), makeBlock(0, 2), all_one_block})
+		for (int64_t sz : {1, 2, 3, 4, 5, 6, 127, 128, 129, 130, 300})
+			ok &= check_uni_hash_coeff_gen(sz, s);
+	// One size against the bit-by-bit multiply, independent of reduce().
+	prg.random_block(&seed, 1);
+	vector<block> coeff(257);
+	uni_hash_coeff_gen(coeff.data(), seed, 257);
+	block want = seed;
+	for (int i = 0; i < 257; ++i) {
+		ok &= blocks_eq(coeff[i], want);
+		want = ref_gfmul(want, seed);
+	}
+	return ok;
+}
+
+// The packing kernel of every tier compiled into this binary, before the
+// reduction; packing() runs only the widest.
+struct PackTier {
+	const char *name;
+	void (*fn)(const block *, block &, block &);
+};
+static const vector<PackTier> &pack_tiers() {
+	static const vector<PackTier> tiers = {
+#ifdef __x86_64__
+		{"ssse3", detail::gf_pack_lanes<detail::GfPackLane<1>>},
+#if EMP_HAS_AVX2
+		{"avx2", detail::gf_pack_lanes<detail::GfPackLane<2>>},
+#endif
+#if EMP_HAS_AVX512BW
+		{"avx512bw", detail::gf_pack_lanes<detail::GfPackLane<4>>},
+#endif
+#else
+		{"neon", detail::gf_pack_neon},
+#endif
+	};
+	return tiers;
+}
+
+// Every tier must give the unreduced sum z itself, and packing() its
+// reduction.
+static bool packing_matches(const block *data, const uint64_t z[4]) {
+	for (const PackTier &t : pack_tiers()) {
+		block lo, hi;
+		t.fn(data, lo, hi);
+		if (!blocks_eq(lo, makeBlock(z[1], z[0])) || !blocks_eq(hi, makeBlock(z[3], z[2]))) {
+			cout << "    packing tier " << t.name << " mismatch\n";
+			return false;
+		}
+	}
+	uint64_t zr[4] = {z[0], z[1], z[2], z[3]};
+	block got;
+	GaloisFieldPacking().packing(&got, data);
+	return blocks_eq(got, ref_reduce_words(zr));
 }
 
 static bool check_packing() {
-	PRG prg;
-	GaloisFieldPacking pkr;
-	for (int t = 0; t < 16; ++t) {
-		alignas(32) block storage[129];
-		block *data = storage + 1;  // 16-byte aligned, deliberately not 32-byte aligned.
-		prg.random_block(data, 128);
-		block got;
-		pkr.packing(&got, data);
-		// Reference: Σ data[i] * X^i where X^i has only bit i set.
-		block want = makeBlock(0, 0);
-		for (int i = 0; i < 128; ++i) {
-			block xi = set_bit(makeBlock(0, 0), i);
-			want = want ^ ref_gfmul(data[i], xi);
+	alignas(32) block storage[129];
+	block *data = storage + 1;  // 16-byte aligned, deliberately not 32-byte aligned.
+	uint64_t z[4];
+	// Every basis input, data[i] = X^j and the rest zero: the sum is X^(i+j).
+	memset(data, 0, 128 * sizeof(block));
+	for (int i = 0; i < 128; ++i)
+		for (int j = 0; j < 128; ++j) {
+			data[i] = set_bit(zero_block, j);
+			z[0] = z[1] = z[2] = z[3] = 0;
+			z[(i + j) / 64] = 1ULL << ((i + j) % 64);
+			if (!packing_matches(data, z)) return false;
+			data[i] = zero_block;
 		}
-		if (!blocks_eq(got, want)) return false;
+	// All zero, all ones, then random inputs.
+	for (int fill : {0x00, 0xff}) {
+		memset(data, fill, 128 * sizeof(block));
+		ref_pack_words(data, z);
+		if (!packing_matches(data, z)) return false;
+	}
+	PRG prg;
+	for (int t = 0; t < 256; ++t) {
+		prg.random_block(data, 128);
+		ref_pack_words(data, z);
+		if (!packing_matches(data, z)) return false;
 	}
 	return true;
 }
@@ -431,6 +544,9 @@ static bool run_correctness() {
 	bool b = true;
 	for (int sz : {1, 7, 64, 1024}) b &= check_vector_inn_prdt(sz);
 	cout << "  vector_inn_prdt_sum_*          " << (b ? "OK" : "FAIL") << "\n";
+	bool b5 = true;
+	for (int n = 0; n <= 70; ++n) b5 &= check_vector_inn_prdt_ref(n);
+	cout << "  inner products n=0..70 vs ref  " << (b5 ? "OK" : "FAIL") << "\n";
 	bool b3 = true;
 	for (int n : {0, 1, 7, 10, 64}) b3 &= check_vector_inn_prdt_x4(n);
 	cout << "  vector_inn_prdt_sum_red_x4     " << (b3 ? "OK" : "FAIL") << "\n";
@@ -439,15 +555,16 @@ static bool run_correctness() {
 	bool b2 = true;
 	for (int sz : {1, 7, 64, 1024}) b2 &= check_vector_inn_prdt_bool(sz);
 	cout << "  vector_inn_prdt_sum_red(bits)  " << (b2 ? "OK" : "FAIL") << "\n";
-	bool c = true;
-	for (int sz : {1, 4, 16, 1024}) c &= check_uni_hash_coeff_gen(sz);
+	bool c = check_uni_hash_coeff_gen_sizes();
 	cout << "  uni_hash_coeff_gen             " << (c ? "OK" : "FAIL") << "\n";
 	block coeff = zero_block;
 	bool c2 = dies([&] { uni_hash_coeff_gen(&coeff, zero_block, 0); })
 	       && dies([&] { uni_hash_coeff_gen(&coeff, zero_block, -1); });
 	cout << "  uni_hash_coeff_gen rejects <=0 " << (c2 ? "OK" : "FAIL") << "\n";
 	bool d = check_packing();
-	cout << "  GaloisFieldPacking::packing    " << (d ? "OK" : "FAIL") << "\n";
+	cout << "  GaloisFieldPacking::packing    " << (d ? "OK" : "FAIL") << " (tiers:";
+	for (const PackTier &t : pack_tiers()) cout << " " << t.name;
+	cout << ")\n";
 	bool d2 = check_packing_bool();
 	cout << "  GaloisFieldPacking::packing(bits) " << (d2 ? "OK" : "FAIL") << "\n";
 	bool e = true;
@@ -457,7 +574,7 @@ static bool run_correctness() {
 	cout << "  empty vectors produce zero     " << (f ? "OK" : "FAIL") << "\n";
 	bool g = check_negative_vector_sizes_rejected();
 	cout << "  negative vector sizes rejected " << (g ? "OK" : "FAIL") << "\n";
-	return a && b && b2 && b3 && b4 && c && c2 && d && d2 && e && f && g;
+	return a && b && b2 && b3 && b4 && b5 && c && c2 && d && d2 && e && f && g;
 }
 
 int main(int /*argc*/, char ** /*argv*/) {

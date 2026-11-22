@@ -11,6 +11,8 @@
 #include "emp-tool/runtime/core/simd_tier.h"
 #include "emp-tool/runtime/core/utils.h"
 
+#include <utility>
+
 namespace emp {
 
 EMP_F2K_TARGET_ATTR
@@ -114,13 +116,16 @@ namespace detail {
 // 256-bit product into lo/hi. mid = a_hi*b_lo XOR a_lo*b_hi is folded
 // into lo/hi via a 64-bit shift inside each 128-bit lane, then the
 // lane-wide accumulator is folded down to a scalar xmm via halving
-// XOR-reductions. ClmulLane<1> is always available, so the chain
+// XOR-reductions. With fewer than L::N blocks left the tier returns at
+// once: its loop would not run, so zeroing and folding its accumulators
+// would only add zero. ClmulLane<1> is always available, so the chain
 // always terminates with a complete drain.
 template <class L>
 EMP_F2K_TARGET_ATTR
 static inline void inn_prdt_drain_lanes(block &lo, block &hi,
                                           const block *a, const block *b,
                                           int64_t &i, int64_t sz) {
+	if (sz - i < L::N) return;
 	using V = typename L::vec_t;
 	V lo_v = L::zero(), hi_v = L::zero(), mid_v = L::zero();
 	for (; i + L::N <= sz; i += L::N) {
@@ -138,36 +143,6 @@ static inline void inn_prdt_drain_lanes(block &lo, block &hi,
 	hi_v = L::xorv(hi_v, L::bsrli_8(mid_v));
 	lo = lo ^ L::fold_to_xmm(lo_v);
 	hi = hi ^ L::fold_to_xmm(hi_v);
-}
-
-// One byte_off of the GF packing: gather bit-shifted contributions of
-// 8 inputs at i = BYTE_OFF*8 + 0..7 into the 128-bit running sum +
-// 1-byte overflow. Byte-shift happens once per byte_off in the caller.
-template <int BYTE_OFF>
-__attribute__((always_inline))
-static inline void gf_pack_byte(const block *data, block &lo, block &hi) {
-	block combined_lo = data[BYTE_OFF * 8 + 0];  // b=0: no bit shift
-	block combined_hi = zero_block;
-	#define EMP_GF_PACK_BIT(B) do {                              \
-		block d = data[BYTE_OFF * 8 + (B)];                      \
-		block s = _mm_slli_epi64(d, (B));                        \
-		block c = _mm_srli_epi64(d, 64 - (B));                   \
-		combined_lo ^= s ^ _mm_slli_si128(c, 8);                 \
-		combined_hi ^= _mm_srli_si128(c, 8);                     \
-	} while (0)
-	EMP_GF_PACK_BIT(1); EMP_GF_PACK_BIT(2); EMP_GF_PACK_BIT(3);
-	EMP_GF_PACK_BIT(4); EMP_GF_PACK_BIT(5); EMP_GF_PACK_BIT(6);
-	EMP_GF_PACK_BIT(7);
-	#undef EMP_GF_PACK_BIT
-
-	if (BYTE_OFF == 0) {
-		lo ^= combined_lo;
-		hi ^= combined_hi;
-	} else {
-		lo ^= _mm_slli_si128(combined_lo, BYTE_OFF);
-		hi ^= _mm_srli_si128(combined_lo, 16 - BYTE_OFF)
-		    ^ _mm_slli_si128(combined_hi, BYTE_OFF);
-	}
 }
 
 }  // namespace detail
@@ -325,37 +300,43 @@ inline void vector_inn_prdt_sum_red(block *res, const block *a, const T *b) {
 	vector_inn_prdt_sum_red(res, a, b, N);
 }
 
+namespace detail {
+
+// a^2 in GF(2^128). The two cross terms of a·a are equal and cancel in
+// characteristic 2, so the unreduced square is (a_lo^2, a_hi^2): two
+// carry-less multiplies instead of mul128's four, then gfmul's reduce().
+EMP_F2K_TARGET_ATTR
+static inline block gf_square(block a) {
+	using L = ClmulLane<1>;
+	return reduce(L::clmul_lo_lo(a, a), L::clmul_hi_hi(a, a));
+}
+
+}  // namespace detail
+
+// coeff[i] = seed^(i+1). Past the first three, the pair seed^k = coeff[k-1]
+// and seed^(k+1) = coeff[k] gives the next two powers:
+//   coeff[2k-1] = seed^(2k)   = (seed^k)^2
+//   coeff[2k]   = seed^(2k+1) = seed^k · seed^(k+1)
+// For k >= 2 both reads lie below both writes (k < 2k-1), in slots filled
+// before this step, and every slot is written once. An odd sz ends on a full
+// step; an even sz leaves coeff[sz-1] = seed^sz, the square of
+// coeff[sz/2 - 1]. Every power is a reduced field element, so the bits do
+// not depend on the order of the products.
+EMP_F2K_TARGET_ATTR
 inline void uni_hash_coeff_gen(block* coeff, block seed, int64_t sz) {
 	expecting(sz > 0, "uni_hash_coeff_gen: size must be positive");
 	coeff[0] = seed;
-	if(sz == 1) return;
-
-	gfmul(seed, seed, &coeff[1]);
-	if(sz == 2) return;
-
-	gfmul(coeff[1], seed, &coeff[2]);
-	if(sz == 3) return;
-
-	block multiplier;
-	gfmul(coeff[2], seed, &multiplier);
-	coeff[3] = multiplier;
-	if(sz == 4) return;
-
-	// Compute the rest in batches of 4.
-	int64_t i = 4;
-	for(; i < sz - 3; i += 4) {
-		gfmul(coeff[i - 4], multiplier, &coeff[i]);
-		gfmul(coeff[i - 3], multiplier, &coeff[i + 1]);
-		gfmul(coeff[i - 2], multiplier, &coeff[i + 2]);
-		gfmul(coeff[i - 1], multiplier, &coeff[i + 3]);
+	if (sz == 1) return;
+	coeff[1] = detail::gf_square(seed);
+	if (sz == 2) return;
+	gfmul(seed, coeff[1], &coeff[2]);
+	for (int64_t k = 2; 2 * k < sz; ++k) {
+		const block a = coeff[k - 1], b = coeff[k];
+		coeff[2 * k - 1] = detail::gf_square(a);
+		gfmul(a, b, &coeff[2 * k]);
 	}
-
-	int64_t remainder = sz % 4;
-	if(remainder != 0) {
-		i = sz - remainder;
-		for(; i < sz; ++i)
-			gfmul(coeff[i - 1], seed, &coeff[i]);
-	}
+	if (sz % 2 == 0)
+		coeff[sz - 1] = detail::gf_square(coeff[sz / 2 - 1]);
 }
 
 template<int N>
@@ -364,172 +345,239 @@ inline void uni_hash_coeff_gen(block* coeff, block seed) {
 	uni_hash_coeff_gen(coeff, seed, N);
 }
 
+// GaloisFieldPacking::packing(block*): res = Σ_{i<128} data[i]·X^i in
+// GF(2^128). Write i = 8k + b, with byte offset k < 16 and bit offset b < 8:
+//   S_b = Σ_k data[8k+b]·X^(8k),    Σ_i data[i]·X^i = Σ_b S_b·X^b.
+// Each term of S_b is a whole-byte shift, and S_b has degree < 248, so it is
+// a 256-bit (lo, hi) pair built from byte shuffles alone. Bits move only in
+// the seven S_b·X^b with b > 0, each carrying across 64-bit words. Every tier
+// computes this unreduced sum (degree < 255) exactly, so all of them hand the
+// same (lo, hi) to the one reduce() in packing().
 #if EMP_HAS_AVX512BW
-namespace detail {
-
-// AVX-512 pack group: blocks 8*OFF..8*OFF+7 shifted by their bit index k =
-// 8*OFF + j via VARIABLE-count shifts (vpsllvq/vpsrlvq, 4 blocks per zmm with
-// per-64-lane counts; a count >= 64 zeroes the lane, which makes the j = 0
-// carry vanish naturally). The cross-64 carry and the byte shift OFF are both
-// per-128-bit-lane ops, so the whole accumulation stays lane-parallel; the
-// caller folds the 4 lanes once at the end.
-template<int OFF>
-__attribute__((target("avx512bw,avx512f,avx2,sse2")))
-static inline void gf_pack_group_avx512(const block *data, __m512i &acc_lo,
-                                        __m512i &acc_hi) {
-	const __m512i cnt_lo = _mm512_set_epi64(3, 3, 2, 2, 1, 1, 0, 0);
-	const __m512i cnt_hi = _mm512_set_epi64(7, 7, 6, 6, 5, 5, 4, 4);
-	const __m512i inv_lo = _mm512_set_epi64(61, 61, 62, 62, 63, 63, 64, 64);
-	const __m512i inv_hi = _mm512_set_epi64(57, 57, 58, 58, 59, 59, 60, 60);
-	const __m512i d0 = _mm512_loadu_si512((const void *)(data + OFF * 8));
-	const __m512i d1 = _mm512_loadu_si512((const void *)(data + OFF * 8 + 4));
-	__m512i s0 = _mm512_sllv_epi64(d0, cnt_lo);
-	__m512i c0 = _mm512_srlv_epi64(d0, inv_lo);
-	__m512i s1 = _mm512_sllv_epi64(d1, cnt_hi);
-	__m512i c1 = _mm512_srlv_epi64(d1, inv_hi);
-	__m512i lo = s0 ^ _mm512_bslli_epi128(c0, 8) ^ s1 ^ _mm512_bslli_epi128(c1, 8);
-	__m512i hi = _mm512_bsrli_epi128(c0, 8) ^ _mm512_bsrli_epi128(c1, 8);
-	if constexpr (OFF == 0) {
-		acc_lo ^= lo;
-		acc_hi ^= hi;
-	} else {
-		acc_lo ^= _mm512_bslli_epi128(lo, OFF);
-		acc_hi ^= _mm512_bsrli_epi128(lo, 16 - OFF) ^ _mm512_bslli_epi128(hi, OFF);
-	}
-}
-
-}  // namespace detail
-
-__attribute__((target("avx512bw,avx512f,avx2,sse2,pclmul")))
-inline void GaloisFieldPacking::packing(block *res, const block *data) {
-	__m512i acc_lo = _mm512_setzero_si512(), acc_hi = _mm512_setzero_si512();
-	detail::gf_pack_group_avx512< 0>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 1>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 2>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 3>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 4>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 5>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 6>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 7>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 8>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512< 9>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<10>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<11>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<12>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<13>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<14>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx512<15>(data, acc_lo, acc_hi);
-	__m256i lo256 = _mm512_castsi512_si256(acc_lo) ^ _mm512_extracti64x4_epi64(acc_lo, 1);
-	__m256i hi256 = _mm512_castsi512_si256(acc_hi) ^ _mm512_extracti64x4_epi64(acc_hi, 1);
-	block lo = _mm256_castsi256_si128(lo256) ^ _mm256_extracti128_si256(lo256, 1);
-	block hi = _mm256_castsi256_si128(hi256) ^ _mm256_extracti128_si256(hi256, 1);
-	*res = reduce(lo, hi);
-}
+  #define EMP_GF_PACK_TARGET_ATTR __attribute__((target("avx512bw,avx512f,avx2,sse2,pclmul")))
 #elif EMP_HAS_AVX2
+  #define EMP_GF_PACK_TARGET_ATTR __attribute__((target("avx2,sse2,pclmul")))
+#elif defined(__x86_64__)
+  #define EMP_GF_PACK_TARGET_ATTR __attribute__((target("ssse3,sse2,pclmul")))
+#else
+  #define EMP_GF_PACK_TARGET_ATTR
+#endif
+
 namespace detail {
 
-// AVX2 pack group: blocks 8*OFF..8*OFF+7 shifted by their bit index k =
-// 8*OFF + j. Each ymm holds two blocks; variable 64-bit shifts form the
-// within-block shift and its carry. The two 128-bit lanes are folded once
-// after all 16 byte groups have been accumulated.
-template<int OFF>
-__attribute__((target("avx2,sse2")))
-static inline void gf_pack_group_avx2(const block *data, __m256i &acc_lo,
-                                      __m256i &acc_hi) {
-	const __m256i cnt01 = _mm256_set_epi64x(1, 1, 0, 0);
-	const __m256i inv01 = _mm256_set_epi64x(63, 63, 64, 64);
-	const __m256i cnt23 = _mm256_set_epi64x(3, 3, 2, 2);
-	const __m256i inv23 = _mm256_set_epi64x(61, 61, 62, 62);
-	const __m256i cnt45 = _mm256_set_epi64x(5, 5, 4, 4);
-	const __m256i inv45 = _mm256_set_epi64x(59, 59, 60, 60);
-	const __m256i cnt67 = _mm256_set_epi64x(7, 7, 6, 6);
-	const __m256i inv67 = _mm256_set_epi64x(57, 57, 58, 58);
-	const __m256i d01 = _mm256_loadu_si256(
-	    reinterpret_cast<const __m256i *>(data + OFF * 8));
-	const __m256i d23 = _mm256_loadu_si256(
-	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 2));
-	const __m256i d45 = _mm256_loadu_si256(
-	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 4));
-	const __m256i d67 = _mm256_loadu_si256(
-	    reinterpret_cast<const __m256i *>(data + OFF * 8 + 6));
-	const __m256i s01 = _mm256_sllv_epi64(d01, cnt01);
-	const __m256i c01 = _mm256_srlv_epi64(d01, inv01);
-	const __m256i s23 = _mm256_sllv_epi64(d23, cnt23);
-	const __m256i c23 = _mm256_srlv_epi64(d23, inv23);
-	const __m256i s45 = _mm256_sllv_epi64(d45, cnt45);
-	const __m256i c45 = _mm256_srlv_epi64(d45, inv45);
-	const __m256i s67 = _mm256_sllv_epi64(d67, cnt67);
-	const __m256i c67 = _mm256_srlv_epi64(d67, inv67);
-	const __m256i lo = s01 ^ _mm256_bslli_epi128(c01, 8)
-	                    ^ s23 ^ _mm256_bslli_epi128(c23, 8)
-	                    ^ s45 ^ _mm256_bslli_epi128(c45, 8)
-	                    ^ s67 ^ _mm256_bslli_epi128(c67, 8);
-	const __m256i hi = _mm256_bsrli_epi128(c01, 8)
-	                    ^ _mm256_bsrli_epi128(c23, 8)
-	                    ^ _mm256_bsrli_epi128(c45, 8)
-	                    ^ _mm256_bsrli_epi128(c67, 8);
-	if constexpr (OFF == 0) {
-		acc_lo ^= lo;
-		acc_hi ^= hi;
-	} else {
-		acc_lo ^= _mm256_bslli_epi128(lo, OFF);
-		acc_hi ^= _mm256_bsrli_epi128(lo, 16 - OFF)
-		        ^ _mm256_bslli_epi128(hi, OFF);
+#ifdef __x86_64__
+// x86 tiers: S_b by Horner's rule from the top byte offset down,
+// S_b <- S_b·X^8 + data[8k+b], each step one byte shift, one alignr and one
+// XOR. GfPackLane<N> carries N chains per vector (1 = xmm with SSSE3,
+// 2 = ymm with AVX2, 4 = zmm with AVX-512BW), one per 128-bit lane, and each
+// byte shuffle stays inside its lane. shl_acc<B> adds the chains' pairs to
+// the running sum (tlo, thi), lane j shifted by B + j bits; u and v are the
+// top bits of each 64-bit word, which move into the word above. S_b has no
+// bits at degree 248 or higher, so no bit leaves the pair.
+template <int N> struct GfPackLane;
+
+template <>
+struct GfPackLane<1> {
+	static constexpr int N = 1;
+	using vec_t = __m128i;
+	EMP_GF_PACK_TARGET_ATTR static vec_t zero()                        { return _mm_setzero_si128(); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t loadu(const block *p)         { return _mm_loadu_si128((const __m128i *)p); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)        { return _mm_xor_si128(a, b); }
+	// The pair (lo, hi) times X^8: both halves move up one byte, and lo's
+	// top byte enters hi from below.
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_lo(vec_t lo)               { return _mm_slli_si128(lo, 1); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_hi(vec_t lo, vec_t hi)     { return _mm_alignr_epi8(hi, lo, 15); }
+	template <int B>
+	EMP_GF_PACK_TARGET_ATTR static void shl_acc(vec_t lo, vec_t hi, vec_t &tlo, vec_t &thi) {
+		if constexpr (B == 0) {
+			tlo = _mm_xor_si128(tlo, lo);
+			thi = _mm_xor_si128(thi, hi);
+		} else {
+			const vec_t u = _mm_srli_epi64(lo, 64 - B), v = _mm_srli_epi64(hi, 64 - B);
+			tlo = _mm_xor_si128(tlo, _mm_xor_si128(_mm_slli_epi64(lo, B), _mm_slli_si128(u, 8)));
+			thi = _mm_xor_si128(thi, _mm_xor_si128(_mm_slli_epi64(hi, B), _mm_alignr_epi8(v, u, 8)));
+		}
+	}
+	EMP_GF_PACK_TARGET_ATTR static block fold_to_xmm(vec_t v)          { return v; }
+};
+
+#if EMP_HAS_AVX2
+template <>
+struct GfPackLane<2> {
+	static constexpr int N = 2;
+	using vec_t = __m256i;
+	EMP_GF_PACK_TARGET_ATTR static vec_t zero()                        { return _mm256_setzero_si256(); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t loadu(const block *p)         { return _mm256_loadu_si256((const __m256i *)p); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)        { return _mm256_xor_si256(a, b); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_lo(vec_t lo)               { return _mm256_bslli_epi128(lo, 1); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_hi(vec_t lo, vec_t hi)     { return _mm256_alignr_epi8(hi, lo, 15); }
+	// Per-word shift counts. A count of 64 (lane 0 of chain 0) makes
+	// vpsrlvq return 0, so that lane carries nothing.
+	template <int B>
+	EMP_GF_PACK_TARGET_ATTR static void shl_acc(vec_t lo, vec_t hi, vec_t &tlo, vec_t &thi) {
+		const vec_t c = _mm256_set_epi64x(B + 1, B + 1, B, B);
+		const vec_t r = _mm256_set_epi64x(63 - B, 63 - B, 64 - B, 64 - B);
+		const vec_t u = _mm256_srlv_epi64(lo, r), v = _mm256_srlv_epi64(hi, r);
+		tlo = _mm256_xor_si256(tlo, _mm256_xor_si256(_mm256_sllv_epi64(lo, c), _mm256_bslli_epi128(u, 8)));
+		thi = _mm256_xor_si256(thi, _mm256_xor_si256(_mm256_sllv_epi64(hi, c), _mm256_alignr_epi8(v, u, 8)));
+	}
+	EMP_GF_PACK_TARGET_ATTR static block fold_to_xmm(vec_t v) {
+		return _mm_xor_si128(_mm256_castsi256_si128(v), _mm256_extracti128_si256(v, 1));
+	}
+};
+#endif
+
+#if EMP_HAS_AVX512BW
+template <>
+struct GfPackLane<4> {
+	static constexpr int N = 4;
+	using vec_t = __m512i;
+	EMP_GF_PACK_TARGET_ATTR static vec_t zero()                        { return _mm512_setzero_si512(); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t loadu(const block *p)         { return _mm512_loadu_si512((const void *)p); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t xorv(vec_t a, vec_t b)        { return _mm512_xor_si512(a, b); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_lo(vec_t lo)               { return _mm512_bslli_epi128(lo, 1); }
+	EMP_GF_PACK_TARGET_ATTR static vec_t x8_hi(vec_t lo, vec_t hi)     { return _mm512_alignr_epi8(hi, lo, 15); }
+	// As GfPackLane<2>; vpternlogq with truth table 0x96 is a three-way XOR.
+	template <int B>
+	EMP_GF_PACK_TARGET_ATTR static void shl_acc(vec_t lo, vec_t hi, vec_t &tlo, vec_t &thi) {
+		const vec_t c = _mm512_set_epi64(B + 3, B + 3, B + 2, B + 2, B + 1, B + 1, B, B);
+		const vec_t r = _mm512_set_epi64(61 - B, 61 - B, 62 - B, 62 - B,
+		                                 63 - B, 63 - B, 64 - B, 64 - B);
+		const vec_t u = _mm512_srlv_epi64(lo, r), v = _mm512_srlv_epi64(hi, r);
+		tlo = _mm512_ternarylogic_epi64(tlo, _mm512_sllv_epi64(lo, c), _mm512_bslli_epi128(u, 8), 0x96);
+		thi = _mm512_ternarylogic_epi64(thi, _mm512_sllv_epi64(hi, c), _mm512_alignr_epi8(v, u, 8), 0x96);
+	}
+	EMP_GF_PACK_TARGET_ATTR static block fold_to_xmm(vec_t v) {
+		const __m256i y = _mm256_xor_si256(_mm512_castsi512_si256(v), _mm512_extracti64x4_epi64(v, 1));
+		return _mm_xor_si128(_mm256_castsi256_si128(y), _mm256_extracti128_si256(y, 1));
+	}
+};
+#endif
+
+// One pass over chains m = Base .. Base + sizeof...(C) - 1: lane j of chain m
+// builds S_b for b = m·N + j, from its k = 15 element down.
+template <class L, int Base, int... C>
+EMP_GF_PACK_TARGET_ATTR
+static inline void gf_pack_pass(const block *data, typename L::vec_t &tlo,
+                                typename L::vec_t &thi,
+                                std::integer_sequence<int, C...>) {
+	using V = typename L::vec_t;
+	constexpr int kChains = sizeof...(C);
+	V lo[kChains], hi[kChains];
+	for (int c = 0; c < kChains; ++c) {
+		lo[c] = L::loadu(data + 8 * 15 + (Base + c) * L::N);
+		hi[c] = L::zero();
+	}
+	for (int k = 14; k >= 0; --k)
+		for (int c = 0; c < kChains; ++c) {
+			hi[c] = L::x8_hi(lo[c], hi[c]);
+			lo[c] = L::xorv(L::x8_lo(lo[c]), L::loadu(data + 8 * k + (Base + c) * L::N));
+		}
+	(L::template shl_acc<(Base + C) * L::N>(lo[C], hi[C], tlo, thi), ...);
+}
+
+// The 8 / N chains run in passes of at most four, so the eight accumulators
+// of a pass stay in registers next to its loads (16 xmm registers without
+// AVX-512).
+template <class L>
+EMP_GF_PACK_TARGET_ATTR
+static inline void gf_pack_lanes(const block *data, block &lo, block &hi) {
+	constexpr int kChains = 8 / L::N, kPass = kChains < 4 ? kChains : 4;
+	static_assert(kChains <= 2 * kPass, "gf_pack_lanes runs at most two passes");
+	typename L::vec_t tlo = L::zero(), thi = L::zero();
+	gf_pack_pass<L, 0>(data, tlo, thi, std::make_integer_sequence<int, kPass>{});
+	if constexpr (kChains > kPass)
+		gf_pack_pass<L, kPass>(data, tlo, thi, std::make_integer_sequence<int, kPass>{});
+	lo = L::fold_to_xmm(tlo);
+	hi = L::fold_to_xmm(thi);
+}
+#endif  // __x86_64__
+
+#ifdef __aarch64__
+// NEON tier: no Horner chain. Element 8k+b enters S_b directly as
+// data[8k+b]·X^(8k), whose low and high halves are two byte extracts, and the
+// elements of byte offsets k and k+1 fold together before reaching the
+// accumulators, so the 128 elements form independent short chains.
+// EOR3 needs the SHA3 extension; without it the three-way XOR is two EORs.
+static inline uint8x16_t gf_pack_neon_xor3(uint8x16_t a, uint8x16_t b, uint8x16_t c) {
+#if defined(__ARM_FEATURE_SHA3)
+	return veor3q_u8(a, b, c);
+#else
+	return veorq_u8(a, veorq_u8(b, c));
+#endif
+}
+template <int K>
+static inline uint8x16_t gf_pack_neon_lo(uint8x16_t d) {   // low half of d·X^(8K)
+	if constexpr (K == 0) return d;
+	else return vextq_u8(vdupq_n_u8(0), d, 16 - K);
+}
+template <int K>
+static inline uint8x16_t gf_pack_neon_hi(uint8x16_t d) {   // high half of d·X^(8K)
+	static_assert(K > 0, "d·X^0 has no high half");
+	return vextq_u8(d, vdupq_n_u8(0), 16 - K);
+}
+template <int K>
+static inline void gf_pack_neon_pair(const block *data, uint8x16_t lo[8], uint8x16_t hi[8]) {
+	for (int b = 0; b < 8; ++b) {
+		const uint8x16_t d0 = vreinterpretq_u8_s64(data[8 * K + b]);
+		const uint8x16_t d1 = vreinterpretq_u8_s64(data[8 * (K + 1) + b]);
+		lo[b] = gf_pack_neon_xor3(lo[b], gf_pack_neon_lo<K>(d0), gf_pack_neon_lo<K + 1>(d1));
+		if constexpr (K == 0)
+			hi[b] = veorq_u8(hi[b], gf_pack_neon_hi<1>(d1));
+		else
+			hi[b] = gf_pack_neon_xor3(hi[b], gf_pack_neon_hi<K>(d0), gf_pack_neon_hi<K + 1>(d1));
 	}
 }
+// (tlo, thi) += (lo, hi)·X^B for 0 < B < 8, as GfPackLane<1>::shl_acc.
+template <int B>
+static inline void gf_pack_neon_shl_acc(uint8x16_t lo8, uint8x16_t hi8,
+                                        uint64x2_t &tlo, uint64x2_t &thi) {
+	const uint64x2_t lo = vreinterpretq_u64_u8(lo8), hi = vreinterpretq_u64_u8(hi8);
+	const uint64x2_t u = vshrq_n_u64(lo, 64 - B), v = vshrq_n_u64(hi, 64 - B);
+	tlo = veorq_u64(tlo, veorq_u64(vshlq_n_u64(lo, B), vextq_u64(vdupq_n_u64(0), u, 1)));
+	thi = veorq_u64(thi, veorq_u64(vshlq_n_u64(hi, B), vextq_u64(u, v, 1)));
+}
+static inline void gf_pack_neon(const block *data, block &lo_out, block &hi_out) {
+	uint8x16_t lo[8], hi[8];
+	for (int b = 0; b < 8; ++b) lo[b] = hi[b] = vdupq_n_u8(0);
+	gf_pack_neon_pair< 0>(data, lo, hi);
+	gf_pack_neon_pair< 2>(data, lo, hi);
+	gf_pack_neon_pair< 4>(data, lo, hi);
+	gf_pack_neon_pair< 6>(data, lo, hi);
+	gf_pack_neon_pair< 8>(data, lo, hi);
+	gf_pack_neon_pair<10>(data, lo, hi);
+	gf_pack_neon_pair<12>(data, lo, hi);
+	gf_pack_neon_pair<14>(data, lo, hi);
+	uint64x2_t tlo = vreinterpretq_u64_u8(lo[0]), thi = vreinterpretq_u64_u8(hi[0]);
+	gf_pack_neon_shl_acc<1>(lo[1], hi[1], tlo, thi);
+	gf_pack_neon_shl_acc<2>(lo[2], hi[2], tlo, thi);
+	gf_pack_neon_shl_acc<3>(lo[3], hi[3], tlo, thi);
+	gf_pack_neon_shl_acc<4>(lo[4], hi[4], tlo, thi);
+	gf_pack_neon_shl_acc<5>(lo[5], hi[5], tlo, thi);
+	gf_pack_neon_shl_acc<6>(lo[6], hi[6], tlo, thi);
+	gf_pack_neon_shl_acc<7>(lo[7], hi[7], tlo, thi);
+	lo_out = vreinterpretq_s64_u64(tlo);
+	hi_out = vreinterpretq_s64_u64(thi);
+}
+#endif  // __aarch64__
 
 }  // namespace detail
 
-__attribute__((target("avx2,sse2,pclmul")))
+EMP_GF_PACK_TARGET_ATTR
 inline void GaloisFieldPacking::packing(block *res, const block *data) {
-	__m256i acc_lo = _mm256_setzero_si256(), acc_hi = _mm256_setzero_si256();
-	detail::gf_pack_group_avx2< 0>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 1>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 2>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 3>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 4>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 5>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 6>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 7>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 8>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2< 9>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<10>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<11>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<12>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<13>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<14>(data, acc_lo, acc_hi);
-	detail::gf_pack_group_avx2<15>(data, acc_lo, acc_hi);
-	block lo = _mm256_castsi256_si128(acc_lo)
-	         ^ _mm256_extracti128_si256(acc_lo, 1);
-	block hi = _mm256_castsi256_si128(acc_hi)
-	         ^ _mm256_extracti128_si256(acc_hi, 1);
-	*res = reduce(lo, hi);
-}
+	block lo, hi;
+#if EMP_HAS_AVX512BW
+	detail::gf_pack_lanes<detail::GfPackLane<4>>(data, lo, hi);
+#elif EMP_HAS_AVX2
+	detail::gf_pack_lanes<detail::GfPackLane<2>>(data, lo, hi);
+#elif defined(__x86_64__)
+	detail::gf_pack_lanes<detail::GfPackLane<1>>(data, lo, hi);
 #else
-#ifdef __x86_64__
-__attribute__((target("sse2,pclmul")))
+	detail::gf_pack_neon(data, lo, hi);
 #endif
-inline void GaloisFieldPacking::packing(block *res, const block *data) {
-	block lo = zero_block, hi = zero_block;
-	detail::gf_pack_byte< 0>(data, lo, hi);
-	detail::gf_pack_byte< 1>(data, lo, hi);
-	detail::gf_pack_byte< 2>(data, lo, hi);
-	detail::gf_pack_byte< 3>(data, lo, hi);
-	detail::gf_pack_byte< 4>(data, lo, hi);
-	detail::gf_pack_byte< 5>(data, lo, hi);
-	detail::gf_pack_byte< 6>(data, lo, hi);
-	detail::gf_pack_byte< 7>(data, lo, hi);
-	detail::gf_pack_byte< 8>(data, lo, hi);
-	detail::gf_pack_byte< 9>(data, lo, hi);
-	detail::gf_pack_byte<10>(data, lo, hi);
-	detail::gf_pack_byte<11>(data, lo, hi);
-	detail::gf_pack_byte<12>(data, lo, hi);
-	detail::gf_pack_byte<13>(data, lo, hi);
-	detail::gf_pack_byte<14>(data, lo, hi);
-	detail::gf_pack_byte<15>(data, lo, hi);
 	*res = reduce(lo, hi);
 }
-#endif  // EMP_HAS_AVX512BW / EMP_HAS_AVX2
+#undef EMP_GF_PACK_TARGET_ATTR
 
 inline void GaloisFieldPacking::packing(block *res, const bool *data) {
 	bools_to_bits(res, data, 128);

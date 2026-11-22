@@ -142,6 +142,18 @@ metadata is numeric (see the README's version guidance).
   `W / 4` full tiles and, for `W % 4 > 0`, one tile stored under a write mask,
   so `aes_ctr_fill_dm<3>` is one AES chain instead of three. The output is
   unchanged and nothing past `dst[W - 1]` is written.
+- `GaloisFieldPacking::packing(block*)` builds its 128-term sum from
+  whole-byte shifts and makes only seven bit shifts, at the end, instead of a
+  bit shift with carries for every input. The SSSE3, AVX2 and AVX-512BW tiers
+  share one kernel, and aarch64 has a NEON kernel in place of the generic code
+  through sse2neon. The result is unchanged.
+- `uni_hash_coeff_gen` derives the powers two at a time from earlier ones,
+  `seed^(2k) = (seed^k)^2` and `seed^(2k+1) = seed^k * seed^(k+1)`, with a
+  square that takes two carry-less multiplies instead of four. The
+  coefficients are unchanged.
+- `vector_inn_prdt_sum_no_red` and `vector_inn_prdt_sum_red` skip a 512- or
+  256-bit VPCLMULQDQ tier that has no full vector of input left, instead of
+  zeroing and folding its empty accumulators. Results are unchanged.
 
 ### Fixed
 
