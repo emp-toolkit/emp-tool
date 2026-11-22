@@ -306,13 +306,30 @@ auto compile_linear(F&& body) { return compile_at_<circuit::WireReuse::Linear, A
 // units when recorded for a flattening backend (a session's run_compose) and inlines
 // everywhere else. There is no separate "invoke": run IS the verb, opaque or inline
 // by context, exactly like every other context-polymorphic op. Args by const-ref.
+//
+// run(ctx, circuit, ws, args...) does the same through a caller-owned
+// ProgramWorkspace (ir/execute.h): repeated runs reuse its vectors instead of
+// allocating and zero-filling fresh wire slots, inputs and outputs per call. The
+// one-shot form is this overload over a fresh workspace. One workspace may serve
+// any sequence of circuits. Each call sizes the inputs and outputs to the circuit
+// and grows the slots to its num_wires, and never reads a value an earlier call
+// left in a slot, because every Circuit's program is valid (its constructor
+// validates it): the inputs fill slots [0, num_inputs) first; in a dense program
+// gate i writes slot num_inputs + i and reads only lower slots, so every slot
+// below num_wires, outputs included, is written before it is read; a wire-reuse
+// program reads and outputs only slots that an input or an earlier gate wrote.
+// When Wire is not trivially copyable (a refcounted recorder wire), the call
+// releases the workspace's wires on every exit, by return or by exception, as the
+// one-shot form's workspace does when destroyed, so no wire stays held between
+// calls. A workspace
+// serves one call at a time; on a ComposeCtx only its input vector is used.
 // ---------------------------------------------------------------------------
 namespace detail {
+// Pack v's wires at dst + at, and advance at past them.
 template <class Wire, class V>
-inline void append_wires(std::vector<Wire>& out, const V& v) {
-    std::size_t base = out.size();
-    out.resize(base + (std::size_t)V::width());
-    v.pack_wires(out.data() + base);
+inline void pack_arg(Wire* dst, std::size_t& at, const V& v) {
+    v.pack_wires(dst + at);
+    at += (std::size_t)V::width();
 }
 }  // namespace detail
 
@@ -321,6 +338,7 @@ template <BooleanContext Ctx, RecordValue RetV, RecordValue... ArgVs>
              (RebindableWireBundle<ArgVs, Ctx> && ...)
 wire_bundle_rebind_t<RetV, Ctx>
 run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
+    ProgramWorkspace<typename Ctx::Wire>& ws,
     const wire_bundle_rebind_t<ArgVs, Ctx>&... args) {
     using Wire = typename Ctx::Wire;
     const circuit::BooleanProgram& p = c.program();
@@ -328,11 +346,23 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
               "frontend::run: argument count != circuit arity (stale artifact?)");
     expecting(detail::all_owned_by(ctx, args...),
               "frontend::run: an argument belongs to a different context");
-    std::vector<Wire> inputs;
-    inputs.reserve(p.num_inputs);
-    (detail::append_wires(inputs, args), ...);
-    expecting((uint32_t)inputs.size() == p.num_inputs,
+    constexpr std::size_t width = (std::size_t{0} + ... + (std::size_t)ArgVs::width());
+    expecting(width == p.num_inputs,
               "frontend::run: total argument width != circuit input count");
+    // A Wire that holds a resource (a chunked session's refcounted recorder
+    // wire) must not stay held in ws after this call returns or unwinds: the
+    // guard releases the workspace's wires on every exit, after the result has
+    // taken its own copies.
+    struct ReleaseWires {
+        ProgramWorkspace<Wire>& w;
+        ~ReleaseWires() {
+            if constexpr (!std::is_trivially_copyable_v<Wire>) w.release_wire_values();
+        }
+    } release_wires{ws};
+    std::vector<Wire>& inputs = ws.tmp_inputs;
+    inputs.resize(width);
+    std::size_t at = 0;
+    (detail::pack_arg(inputs.data(), at, args), ...);
     if constexpr (std::same_as<std::remove_cvref_t<Ctx>, ComposeCtx>) {
         // Composition: record one opaque instance (wiring only), don't inline.
         // Pass the co-owning program handle so the plan outlives this Circuit.
@@ -343,7 +373,6 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
                   "frontend::run: result belongs to a different context");
         return result;
     } else {
-        ProgramWorkspace<Wire> ws;
         const std::vector<Wire>& ow =
             execute_program(ctx, p, std::span<const Wire>(inputs.data(), inputs.size()), ws);
         auto result = wire_bundle_rebind_t<RetV, Ctx>::from_wires(ctx, ow.data());
@@ -351,6 +380,16 @@ run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
                   "frontend::run: result belongs to a different context");
         return result;
     }
+}
+
+template <BooleanContext Ctx, RecordValue RetV, RecordValue... ArgVs>
+    requires RebindableWireBundle<RetV, Ctx> &&
+             (RebindableWireBundle<ArgVs, Ctx> && ...)
+wire_bundle_rebind_t<RetV, Ctx>
+run(Ctx& ctx, const Circuit<RetV, ArgVs...>& c,
+    const wire_bundle_rebind_t<ArgVs, Ctx>&... args) {
+    ProgramWorkspace<typename Ctx::Wire> ws;
+    return run(ctx, c, ws, args...);
 }
 
 // ---------------------------------------------------------------------------

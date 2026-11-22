@@ -28,6 +28,17 @@ metadata is numeric (see the README's version guidance).
   own first land out of wire order. emp-zk's `BoolIO` uses it: the OT and
   VOLE extensions given a `BoolIO` used to turn on a second transcript on it,
   which hashed its byte traffic a second time.
+- `frontend::run(ctx, circuit, ws, args...)` (`circuits/frontend/circuit_fn.h`)
+  runs a compiled circuit through a caller-owned `ProgramWorkspace`, so
+  repeated runs reuse its wire slots and its input and output vectors instead
+  of allocating and zero-filling new ones on every call. One workspace may
+  serve any sequence of circuits on contexts with its `Wire` type: each call
+  sizes it to the circuit and never reads a value an earlier call left in it.
+  Over wires that are not trivially copyable, such as a chunked session's
+  recorder wires, each call releases the workspace's wires on every exit, by
+  return or by exception.
+  `run(ctx, circuit, args...)` behaves as before; it is the new overload over a
+  fresh workspace.
 
 ### Changed
 
