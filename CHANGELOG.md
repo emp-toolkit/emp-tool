@@ -107,6 +107,15 @@ metadata is numeric (see the README's version guidance).
   still needs, so no byte of a later message leaves the socket. The bytes on
   the wire, the counters and `flushes_count` are unchanged, and smaller
   transfers take the same path as before.
+- `IOChannel::send_data` / `recv_data` check whether the channel keeps a
+  Fiat-Shamir transcript before dispatching to it, so with FS off a transfer
+  costs one branch instead of a `std::visit`, which some standard libraries
+  dispatch through an indirect call.
+- With Fiat-Shamir on, `IOChannel::send_data` / `recv_data` absorb and move a
+  transfer of more than 256 KiB in 256 KiB pieces within the one call, so the
+  transport carries one piece while the next is hashed, instead of the whole
+  message waiting on its hash. The transcript, the counters and the rounds are
+  unchanged; a transport sees the pieces as separate calls.
 
 ### Fixed
 
