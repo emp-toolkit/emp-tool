@@ -46,6 +46,8 @@ metadata is numeric (see the README's version guidance).
   a closing XOR. Code built on the lanes gets NEON's native order without an
   aarch64 branch of its own; the single-round `aesenc` / `aesenclast` keep
   x86's key-after form.
+- `AesLane<4>::store_first<R>(p, v)` stores the first `R` (1 to 3) blocks of a
+  vector under a write mask.
 
 ### Changed
 
@@ -136,6 +138,10 @@ metadata is numeric (see the README's version guidance).
   destination, at any alignment, instead of filling an aligned window and
   moving it into place. It writes the same bytes as before, the bytes
   `random_data` writes for an aligned buffer, through the same kernel.
+- `aes_ctr_fill_dm<W>` on VAES-512 runs every width on the four-block lane:
+  `W / 4` full tiles and, for `W % 4 > 0`, one tile stored under a write mask,
+  so `aes_ctr_fill_dm<3>` is one AES chain instead of three. The output is
+  unchanged and nothing past `dst[W - 1]` is written.
 
 ### Fixed
 
