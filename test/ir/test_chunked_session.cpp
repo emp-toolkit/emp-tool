@@ -4,7 +4,12 @@
 // What's in chunked_session.h:
 //   input<V>(...)              authenticate a fixed-width typed input
 //   reveal(...)                flush and decode, with empty = non-recipient
+//   checkpoint(keep...)        flush, then keep only the given values' state
 //   run_artifact<RetV>(...)    debug-validate and execute a raw BooleanProgram
+//
+// A flush runs the backend only when a keep id is pending in the recorder's
+// chunk (a gate or public-constant output); a value whose chunk was dropped
+// without keeping it is a stale wire.
 
 
 #include "emp-tool/ir/session/chunked_session.h"
@@ -57,6 +62,8 @@ class TestChunkedSession : public ChunkedSession<TestChunkedSession> {
 public:
   std::vector<uint8_t> decoded;
   int program_runs = 0;
+  circuit::BooleanProgram last_prog;           // the last program handed to the backend
+  std::vector<uint32_t> last_in, last_out;     // and its recorder-id inputs / outputs
 
   void authenticate_into_(int, const std::vector<uint8_t>&,
                           const std::vector<uint32_t>& ids) {
@@ -67,10 +74,13 @@ public:
                                 const std::vector<std::vector<uint32_t>>& id_lists) {
     for (const auto& ids : id_lists) carried_.insert(ids.begin(), ids.end());
   }
-  void run_program_into_(const circuit::BooleanProgram&,
-                         const std::vector<uint32_t>&,
+  void run_program_into_(const circuit::BooleanProgram& prog,
+                         const std::vector<uint32_t>& in_ids,
                          const std::vector<uint32_t>& out_ids) {
     ++program_runs;
+    last_prog = prog;
+    last_in = in_ids;
+    last_out = out_ids;
     carried_.insert(out_ids.begin(), out_ids.end());
   }
   std::vector<uint8_t> decode_(const std::vector<uint32_t>&, int) {
@@ -139,6 +149,59 @@ int main() {
     sess.decoded = {1};
     (void)sess.reveal(value, PUBLIC);
   }), "a nonempty wrong-width decode is a backend error");
+
+  // A flush runs a program only for pending keep ids.
+  {
+    using circuit::Op;
+    TestChunkedSession sess;
+    ChunkRecorderCtx& ctx = sess.ctx();
+    Pair in = sess.input<Pair>(1, 3);
+    sess.decoded = {1, 1};
+    (void)sess.reveal(in, PUBLIC);
+    check(sess.program_runs == 0, "revealing a materialized input runs no program");
+
+    ChunkRecorderCtx::Wire g = ctx.and_gate(in.wires[0], in.wires[1]);
+    Bit v = Bit::from_wires(ctx, &g);
+    sess.decoded = {1};
+    (void)sess.reveal(v, PUBLIC);
+    check(sess.program_runs == 1 && sess.last_prog.gates.size() == 1 &&
+              sess.last_prog.gates[0].op == Op::And &&
+              sess.last_in == std::vector<uint32_t>{in.wires[0], in.wires[1]} &&
+              sess.last_out == std::vector<uint32_t>{g},
+          "revealing a pending gate runs its one-gate program");
+    (void)sess.reveal(v, PUBLIC);
+    check(sess.program_runs == 1, "a value an earlier flush kept is materialized");
+
+    ChunkRecorderCtx::Wire k = ctx.public_bit(true);
+    Bit kv = Bit::from_wires(ctx, &k);
+    (void)sess.reveal(kv, PUBLIC);
+    check(sess.program_runs == 2 && sess.last_prog.num_inputs == 0 &&
+              sess.last_prog.gates.size() == 1 &&
+              sess.last_prog.gates[0].op == Op::Const1 &&
+              sess.last_out == std::vector<uint32_t>{k},
+          "revealing a pending public constant runs a const-only program");
+  }
+
+  check(dies([] {
+    TestChunkedSession sess;
+    ChunkRecorderCtx& ctx = sess.ctx();
+    Pair in = sess.input<Pair>(1, 3);
+    ChunkRecorderCtx::Wire g = ctx.xor_gate(in.wires[0], in.wires[1]);
+    Bit dropped = Bit::from_wires(ctx, &g);
+    sess.checkpoint(in);   // nothing pending is kept: the chunk is dropped unplanned
+    (void)sess.reveal(dropped, PUBLIC);
+  }), "revealing a value whose chunk was dropped is a stale wire");
+  {
+    TestChunkedSession sess;
+    ChunkRecorderCtx& ctx = sess.ctx();
+    Pair in = sess.input<Pair>(1, 3);
+    ChunkRecorderCtx::Wire g = ctx.xor_gate(in.wires[0], in.wires[1]);
+    Bit kept = Bit::from_wires(ctx, &g);
+    sess.checkpoint(kept);
+    sess.decoded = {0};
+    check(sess.reveal(kept, PUBLIC).has_value() && sess.program_runs == 1,
+          "the same value kept by the checkpoint reveals without another flush");
+  }
 
 #ifndef NDEBUG
   check(dies([] {
