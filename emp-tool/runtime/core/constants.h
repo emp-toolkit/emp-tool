@@ -16,6 +16,11 @@ constexpr int64_t AES_BATCH_SIZE = 64;
 // only makes consumption burstier, which stalls the peer's pipeline.
 const static int NETWORK_STAGING_BUFFER_SIZE = 1024*32;
 const static int NETWORK_STREAM_BUFFER_SIZE = 1024*1024;
+// NetIO moves a send or receive of at least this many bytes between the
+// caller's buffer and the socket directly, past the staging buffer (and, for
+// a send, past stdio). A transfer of half the staging buffer or more leaves
+// little room to coalesce with others, so staging it would mostly add copies.
+const static int NETWORK_DIRECT_IO_SIZE = NETWORK_STAGING_BUFFER_SIZE / 2;
 
 // Bool-packing chunk size in bools for the bulk bool send/recv path.
 // Packs 8 bools per byte, so the on-stack staging is IO_BOOL_CHUNK_SIZE/8 bytes.
