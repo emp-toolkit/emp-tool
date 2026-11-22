@@ -164,6 +164,37 @@ program, then replay it in lockstep. (A `Float_T` body inlines its
 `fp<W>_*.empbc` gates into the recording, so a recorded float circuit is
 semantically — not necessarily gate-for-gate — equal to the standalone builtin.)
 
+### Reusing a replay workspace
+
+`run(ctx, circ, args...)` replays through a fresh `ProgramWorkspace` (wire slots,
+input and output vectors, `ir/execute.h`) on every call. A caller that runs
+compiled circuits repeatedly can pass its own, `run(ctx, circ, ws, args...)`, and
+get the same result while the workspace keeps its vectors' capacity, so later calls
+skip allocating and zero-filling them:
+
+```cpp
+ProgramWorkspace<Ctx::Wire> ws;                    // one per Wire type, one call at a time
+for (auto& [x, y] : pairs) sums.push_back(cf::run(sess.ctx(), circ, ws, x, y));
+auto w = cf::run(sess.ctx(), other_circ, ws, sums[0]);   // any circuit, any order
+```
+
+- **Any circuit, any order.** One workspace serves any sequence of circuits on
+  contexts with its `Wire` type. Each call sizes the input and output vectors to
+  the circuit and grows the wire slots to its `num_wires`. No call reads a value
+  an earlier call left in a slot: a `Circuit`'s program passed `validate_program`
+  at construction, so its replay reads only slots the same replay wrote. The
+  inputs are copied in first; in a dense program gate `i` writes slot
+  `num_inputs + i` and reads only lower slots, so every slot below `num_wires`,
+  outputs included, is written before it is read; a wire-reuse (`compile_linear`,
+  `make_compact`) program reads and outputs only slots that an input or an earlier
+  gate wrote.
+- **Refcounted wires.** When `Wire` is not trivially copyable (a chunked session's
+  recorder wires), each call releases the workspace's wires on every exit, by
+  return or by exception, as the one-shot form's workspace does when destroyed, so
+  no wire stays held between calls; only the vectors' capacity carries over.
+- On a `ComposeCtx`, `run` records the circuit as an opaque unit call and uses only
+  the workspace's input vector.
+
 ## The compiled circuit object
 
 `compile` returns a `Circuit<RetV, ArgVs...>` wrapping a
@@ -216,6 +247,9 @@ round-sensitive protocol (e.g. GMW) gets efficiency by moving the program into
 
 - `test/circuits/test_circuit_fn.cpp` — compile-once / run-on-any-context on
   `ClearCtx` (incl. both body forms, a nullary circuit, `.constant()`, fp32),
-  plus the size-optimal 31-AND adder and deterministic recording.
+  plus the size-optimal 31-AND adder and deterministic recording, and one reused
+  workspace across calls and circuits matching the one-shot `run` and
+  `execute_program` on `ClearCtx`, `RecordCtx`, a half-gate garbler, the chunk
+  recorder and `ComposeCtx`.
 - `test/circuits/circuit_fn_contract_probes.cpp` — the contract's positive case +
   the negative cases that must fail to compile with the expected message.

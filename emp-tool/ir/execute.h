@@ -97,7 +97,11 @@ inline void execute_program(const BooleanProgram& p,
 // ---------------------------------------------------------------------------
 // Reusable replay workspace — avoids per-call allocation across repeated
 // replays. `tmp_inputs` is for callers that assemble an input vector before
-// replay (e.g. Float_T::binop_ concatenates 2*W operand wires).
+// replay (e.g. Float_T::binop_ concatenates 2*W operand wires). One workspace
+// may replay different programs: a valid program (validate_program) reads only
+// slots its own replay wrote, so values an earlier replay left behind are never
+// read. They stay until overwritten or release_wire_values(), which matters only
+// for wires that hold a resource (refcounted recorder wires).
 // ---------------------------------------------------------------------------
 template <class Wire>
 struct ProgramWorkspace {
