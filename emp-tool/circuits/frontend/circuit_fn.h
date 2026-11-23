@@ -258,6 +258,10 @@ detail::compiled_ret_t<Tr, ArgVs...> compile(F&& body) {
         // any gate (RecordCtx requires all external_input calls up front).
         std::tuple<ArgVs...> args{detail::make_rec_arg<ArgVs>(rc)...};
         auto ret = detail::invoke_circuit_body<Tr>(body, rc, args);
+        // GCC 13.3 (Ubuntu 24.04's default) miscompiles this check at -O2/-Os
+        // with NDEBUG for some bodies, such as a BitVec_T slice/concat: its
+        // points-to analysis folds the comparison to false, so the check
+        // always fires. GCC 13.5, GCC 14 and Clang compile it correctly.
         expecting(ret.context() == &rc,
                   "compile: body returned a value owned by a different context");
         using Ret = std::decay_t<decltype(ret)>;
