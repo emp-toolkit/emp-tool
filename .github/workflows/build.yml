@@ -100,8 +100,10 @@ jobs:
           -DEMP_HASH_BACKEND=${{ matrix.hash }}
           -DEMP_FS_HASH=${{ matrix.fs_hash }}
           -DEMP_TEST_MODE=${{ matrix.test_mode || 'OFF' }}
+      # A bare --parallel runs make -j with no limit: every translation unit
+      # compiles at once and the GCC jobs run the runner out of memory.
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --parallel 4
       - name: Test
         run: ctest --test-dir build --output-on-failure --timeout 150
       - name: Reject invalid hash backend
@@ -136,7 +138,7 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
       - name: Build
-        run: cmake --build build-san --parallel
+        run: cmake --build build-san --parallel 4
       - name: Test (ASan + UBSan)
         run: ctest --test-dir build-san --output-on-failure --timeout 150
         env:
