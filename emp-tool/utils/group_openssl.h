@@ -104,6 +104,14 @@ inline void Point::from_bin(Group * g, const unsigned char * buf, size_t buf_len
 	}
 	int ret = EC_POINT_oct2point(group->ec_group, point, buf, buf_len, group->bn_ctx);
 	if(ret == 0) error("ECC FROM_BIN");
+	// from_bin decodes untrusted bytes. oct2point already rejects off-curve
+	// encodings, but keep the on-curve check explicit, and reject the point
+	// at infinity, which oct2point accepts. P-256 has cofactor 1, so these
+	// two checks also imply membership in the prime-order group.
+	if(EC_POINT_is_on_curve(group->ec_group, point, group->bn_ctx) != 1)
+		error("ECC FROM_BIN: point not on curve");
+	if(EC_POINT_is_at_infinity(group->ec_group, point))
+		error("ECC FROM_BIN: point at infinity");
 }
 
 inline Point Point::add(Point & rhs) {

@@ -6,6 +6,8 @@
 #include "emp-tool/utils/block.h"
 #include "emp-tool/circuits/bit.h"
 #include <stdio.h>
+#include <climits>
+#include <cstring>
 #include <fstream>
 
 using std::vector;
@@ -34,6 +36,53 @@ void execute_circuit(block * wires, const T * gates, size_t num_gate) {
 	}
 }
 
+// Circuit descriptions, circuit files in particular, are untrusted input.
+// Every count and wire index is range-checked when the circuit is loaded,
+// before compute() uses it to index `wires`; malformed input aborts through
+// error(). Inputs occupy the first num_in wires and outputs the last num_out.
+inline void check_bristol_counts(int num_gate, int num_wire, int64_t num_in, int64_t num_out) {
+	if (num_gate < 0 || num_gate > INT_MAX / 4 || num_wire < 0
+	    || num_in < 0 || num_in > num_wire || num_out < 0 || num_out > num_wire)
+		error("circuit: invalid gate, wire, input or output count");
+}
+
+inline void check_bristol_gates(const int * gates, int num_gate, int num_wire) {
+	for(int i = 0; i < num_gate; ++i) {
+		const int * g = gates + 4*i;
+		bool ok = g[0] >= 0 && g[0] < num_wire && g[2] >= 0 && g[2] < num_wire;
+		if (g[3] == AND_GATE || g[3] == XOR_GATE)
+			ok = ok && g[1] >= 0 && g[1] < num_wire;
+		else if (g[3] != NOT_GATE)
+			ok = false;
+		if (!ok) error("circuit: invalid gate");
+	}
+}
+
+// Reads one gate line into g[0..3]. Only the gates compute() evaluates are
+// accepted, "2 1 in0 in1 out AND|XOR" and "1 1 in out INV"; any other line
+// aborts rather than being skipped or misread.
+inline void read_bristol_gate(FILE * f, int * g) {
+	int nin = 0, nout = 0;
+	char type[16];
+	if (fscanf(f, "%d%d", &nin, &nout) != 2 || nout != 1)
+		error("circuit file: malformed gate");
+	if (nin == 2) {
+		if (fscanf(f, "%d%d%d%15s", &g[0], &g[1], &g[2], type) != 4)
+			error("circuit file: malformed gate");
+		if (strcmp(type, "AND") == 0) g[3] = AND_GATE;
+		else if (strcmp(type, "XOR") == 0) g[3] = XOR_GATE;
+		else error("circuit file: unsupported gate type");
+	} else if (nin == 1) {
+		if (fscanf(f, "%d%d%15s", &g[0], &g[2], type) != 3)
+			error("circuit file: malformed gate");
+		if (strcmp(type, "INV") != 0)
+			error("circuit file: unsupported gate type");
+		g[1] = 0;
+		g[3] = NOT_GATE;
+	} else
+		error("circuit file: unsupported gate arity");
+}
+
 
 class BristolFormat { public:
 	int num_gate, num_wire, n1, n2, n3;
@@ -47,9 +96,11 @@ class BristolFormat { public:
 		this->n1 = n1;
 		this->n2 = n2;
 		this->n3 = n3;
-		gates.resize(num_gate*4);
+		check_counts();
+		check_bristol_gates(gate_arr, num_gate, num_wire);
+		gates.resize((size_t)num_gate*4);
 		wires.resize(num_wire);
-		memcpy(gates.data(), gate_arr, num_gate*4*sizeof(int));
+		memcpy(gates.data(), gate_arr, (size_t)num_gate*4*sizeof(int));
 	}
 
 	BristolFormat(FILE * file) {
@@ -79,30 +130,27 @@ class BristolFormat { public:
 	}
 
 
+	void check_counts() const {
+		if (n1 < 0 || n2 < 0)
+			error("circuit: invalid gate, wire, input or output count");
+		check_bristol_counts(num_gate, num_wire, (int64_t)n1 + n2, n3);
+	}
+
 	void from_file(FILE * f) {
-		int tmp;
-		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
-		(void)fscanf(f, "%d%d%d\n", &n1, &n2, &n3);
-		(void)fscanf(f, "\n");
-		char str[10];
-		gates.resize(num_gate*4);
+		if (fscanf(f, "%d%d", &num_gate, &num_wire) != 2
+		    || fscanf(f, "%d%d%d", &n1, &n2, &n3) != 3)
+			error("circuit file: malformed header");
+		check_counts();
+		gates.resize((size_t)num_gate*4);
 		wires.resize(num_wire);
-		for(int i = 0; i < num_gate; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			if (tmp == 2) {
-				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
-				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
-				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
-			}
-			else if (tmp == 1) {
-				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
-				gates[4*i+3] = NOT_GATE;
-			}
-		}
+		for(int i = 0; i < num_gate; ++i)
+			read_bristol_gate(f, &gates[4*i]);
+		check_bristol_gates(gates.data(), num_gate, num_wire);
 	}
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
+		if (f == nullptr) error("circuit file: cannot open");
 		this->from_file(f);
 		fclose(f);
 	}
@@ -142,40 +190,40 @@ class BristolFashion { public:
 		this->from_file(file);
 	}
 
-	void from_file(FILE * f) {
-		int tmp;
-		(void)fscanf(f, "%d%d\n", &num_gate, &num_wire);
-		int niov = 0;
-		(void)fscanf(f, "%d", &niov);
+	// Sums the "count v_1 ... v_count" wire-count list of the header. Each
+	// value is non-negative, so the int64_t sum cannot overflow.
+	static int64_t read_io_wires(FILE * f) {
+		int niov = 0, tmp = 0;
+		int64_t total = 0;
+		if (fscanf(f, "%d", &niov) != 1 || niov < 0)
+			error("circuit file: malformed header");
 		for(int i = 0; i < niov; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			num_input += tmp;
+			if (fscanf(f, "%d", &tmp) != 1 || tmp < 0)
+				error("circuit file: malformed header");
+			total += tmp;
 		}
-		(void)fscanf(f, "%d", &niov);
-		for(int i = 0; i < niov; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			num_output += tmp;
-		}
+		return total;
+	}
 
-		char str[10];
-		gates.resize(num_gate*4);
+	void from_file(FILE * f) {
+		if (fscanf(f, "%d%d", &num_gate, &num_wire) != 2)
+			error("circuit file: malformed header");
+		int64_t in_total = read_io_wires(f);
+		int64_t out_total = read_io_wires(f);
+		check_bristol_counts(num_gate, num_wire, in_total, out_total);
+		num_input = (int)in_total;
+		num_output = (int)out_total;
+
+		gates.resize((size_t)num_gate*4);
 		wires.resize(num_wire);
-		for(int i = 0; i < num_gate; ++i) {
-			(void)fscanf(f, "%d", &tmp);
-			if (tmp == 2) {
-				(void)fscanf(f, "%d%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+1], &gates[4*i+2], str);
-				if (str[0] == 'A') gates[4*i+3] = AND_GATE;
-				else if (str[0] == 'X') gates[4*i+3] = XOR_GATE;
-			}
-			else if (tmp == 1) {
-				(void)fscanf(f, "%d%d%d%s", &tmp, &gates[4*i], &gates[4*i+2], str);
-				gates[4*i+3] = NOT_GATE;
-			}
-		}
+		for(int i = 0; i < num_gate; ++i)
+			read_bristol_gate(f, &gates[4*i]);
+		check_bristol_gates(gates.data(), num_gate, num_wire);
 	}
 
 	void from_file(const char * file) {
 		FILE * f = fopen(file, "r");
+		if (f == nullptr) error("circuit file: cannot open");
 		this->from_file(f);
 		fclose(f);
 	}

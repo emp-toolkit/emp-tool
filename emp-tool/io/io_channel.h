@@ -42,7 +42,8 @@ class IOChannel { public:
 		size_t len = 0;
 		for(size_t i = 0; i < num_pts; ++i) {
 			recv_data(&len, 4);
-			assert(len <= 2048);
+			// len comes from the peer: bound it in every build type.
+			if (len > 2048) error("recv_pt: point length too large");
 			g->resize_scratch(len);
 			unsigned char * tmp = g->scratch;
 			recv_data(tmp, len);
