@@ -63,6 +63,9 @@ most. The example is the headline; everything below supports it.
 Verification, ideally against an external ground truth.
 
 - For `aes.h`: NIST FIPS-197 test vectors **and** OpenSSL cross-check.
+- For `rijndael256.h`: published known answers and round-key vectors
+  **and** a byte-oriented reference written from the specification, over
+  every tile shape of the runtime and compile-time paths.
 - For `f2k.h`: scalar-reference GF(2^128) multiply implementation
   **and** algebraic identities (a·0=0, a·1=a, commutativity,
   distributivity).

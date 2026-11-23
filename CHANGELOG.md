@@ -7,6 +7,15 @@ metadata is numeric (see the README's version guidance).
 
 ### Added
 
+- Rijndael-256, Rijndael with a 256-bit block and a 256-bit key (14 rounds),
+  encryption only: `R256_KEY`, `R256_set_encrypt_key`, and
+  `R256_ecb_encrypt_blks` with compile-time and runtime block counts
+  (`runtime/crypto/rijndael256.h`). A 256-bit block is two consecutive
+  `block`s. Each round is an AES round on each 128-bit half after one byte
+  permutation of the state: `vpermb` on VAES-512 with AVX-512 VBMI, `pblendvb`
+  and `pshufb` on VAES-256 and AES-NI, `TBL` on aarch64. `core/simd_tier.h`
+  adds `EMP_HAS_AVX512VBMI`, `EMP_HAS_R256_VPERMB512` and
+  `EMP_R256_TARGET_ATTR`.
 - Circuit mode: a `Computation` is a `Circuit` plus a role for its return
   value and for each argument, Party (a party id) or Public, so a session sees
   every owner and recipient before the online phase. `cf::computation(circ,

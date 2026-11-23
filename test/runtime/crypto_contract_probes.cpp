@@ -1,5 +1,6 @@
 #include "emp-tool/runtime/crypto/f2k.h"
 #include "emp-tool/runtime/crypto/mitccrh.h"
+#include "emp-tool/runtime/crypto/rijndael256.h"
 
 using namespace emp;
 
@@ -48,6 +49,9 @@ int main() {
 #elif CRYPTO_NEG_CASE == 16
 	MITCCRHBulk<8> hash;
 	hash.hash<3, 1>(blocks);
+#elif CRYPTO_NEG_CASE == 17
+	R256_KEY rk = {};
+	R256_ecb_encrypt_blks<-1>(blocks, &rk);
 #endif
 	return 0;
 }

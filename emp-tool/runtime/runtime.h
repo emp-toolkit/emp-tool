@@ -31,6 +31,7 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 #include "emp-tool/runtime/crypto/ccrh.h"
 #include "emp-tool/runtime/crypto/mitccrh.h"
 #include "emp-tool/runtime/crypto/aes.h"
+#include "emp-tool/runtime/crypto/rijndael256.h"
 #include "emp-tool/runtime/crypto/session_id.h"
 #include "emp-tool/runtime/crypto/f2k.h"
 #include "emp-tool/runtime/crypto/ec.h"
