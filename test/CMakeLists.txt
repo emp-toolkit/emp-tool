@@ -122,8 +122,9 @@ set(_crypto_neg_msg
     "MITCCRH: bit_ceil"
     "MITCCRHBulk: BatchSize must be positive"
     "MITCCRHBulk: K must divide BatchSize"
-    "R256_ecb_encrypt_blks: block count must be non-negative")
-foreach(neg RANGE 1 17)
+    "R256_ecb_encrypt_blks: block count must be non-negative"
+    "R256_ecb_decrypt_blks: block count must be non-negative")
+foreach(neg RANGE 1 18)
     add_executable(crypto_contract_neg_${neg} EXCLUDE_FROM_ALL runtime/crypto_contract_probes.cpp)
     target_link_libraries(crypto_contract_neg_${neg} PRIVATE emp-tool::emp-tool)
     target_compile_definitions(crypto_contract_neg_${neg} PRIVATE CRYPTO_NEG_CASE=${neg})

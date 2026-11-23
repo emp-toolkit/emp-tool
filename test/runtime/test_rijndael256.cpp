@@ -2,10 +2,13 @@
 // the AES round instructions. Read example() first; the rest is verification.
 //
 // What's in rijndael256.h:
-//   R256_KEY                                   15 round keys, as 30 blocks
-//   R256_set_encrypt_key(uk, &ek)              schedule of the two-block key uk
+//   R256_KEY, R256_DEC_KEY                     15 round keys per direction
+//   R256_set_encrypt_key(uk, &ek)              schedules of the two-block key uk
+//   R256_set_decrypt_key(uk, &dk)
 //   R256_ecb_encrypt_blks<N>(blks, &ek)        N 256-bit blocks, unrolled
+//   R256_ecb_decrypt_blks<N>(blks, &dk)
 //   R256_ecb_encrypt_blks(blks, n, &ek)        n 256-bit blocks, runtime n
+//   R256_ecb_decrypt_blks(blks, n, &dk)
 // A 256-bit block is two consecutive blocks: bytes 0..15, then 16..31.
 
 #include "emp-tool/emp-tool.h"
@@ -58,6 +61,14 @@ static const uint8_t *sbox() {
 }
 
 static const int kShift[4] = {0, 1, 3, 4};
+
+// InvMixColumns of one 4-byte column.
+static void inv_mix_column(uint8_t *a) {
+	uint8_t m[4];
+	for (int r = 0; r < 4; ++r)
+		m[r] = gmul(a[r], 14) ^ gmul(a[(r + 1) % 4], 11) ^ gmul(a[(r + 2) % 4], 13) ^ gmul(a[(r + 3) % 4], 9);
+	memcpy(a, m, 4);
+}
 
 struct Rijndael256 {
 	uint8_t w[15][32];
@@ -141,6 +152,12 @@ static void schedule(const uint8_t key[32], R256_KEY *ek) {
 	R256_set_encrypt_key(uk, ek);
 }
 
+static void schedule(const uint8_t key[32], R256_DEC_KEY *dk) {
+	block uk[2];
+	memcpy(uk, key, 32);
+	R256_set_decrypt_key(uk, dk);
+}
+
 // ---------- example: typical usage ----------
 
 static void example() {
@@ -161,13 +178,20 @@ static void example() {
 	for (int i = 0; i < 4; ++i) { tile[2 * i] = key[0]; tile[2 * i + 1] = key[1]; }
 	R256_ecb_encrypt_blks<4>(tile, &ek);
 	cout << "  R256_ecb_encrypt_blks<4>[0]  = " << to_hex(tile, 32) << "\n";
+
+	// (3) Decryption has its own schedule type; it inverts (1).
+	R256_DEC_KEY dk;
+	R256_set_decrypt_key(key, &dk);
+	R256_ecb_decrypt_blks(msg, 1, &dk);
+	cout << "  R256^-1(R256(msg)) == msg    = " << (memcmp(msg, key, 32) == 0 ? "yes" : "no") << "\n";
 }
 
 // ---------- correctness ----------
 
 // Published known answers (key, plaintext, ciphertext; a plaintext of two
-// blocks runs as n = 2). Every one also agrees with py3rijndael, an independent
-// implementation of the Rijndael specification.
+// blocks runs as n = 2), each encrypted and its ciphertext decrypted. Every
+// one also agrees with py3rijndael, an independent implementation of the
+// Rijndael specification.
 //   - Daemen & Rijmen, The Design of Rijndael (2nd ed., 2020), Appendix B.3:
 //     under the zero key, E(0) and E(E(0)).
 //   - Bouncy Castle's RijndaelTest, vector 21 (256-bit block and key).
@@ -214,11 +238,18 @@ static bool check_known_answers() {
 		R256_ecb_encrypt_blks(blk, n, &ek);
 		const ref::Rijndael256 r(key);
 		for (int64_t i = 0; i < n; ++i) r.encrypt(pt + 32 * i, got_ref + 32 * i);
-		const bool good = memcmp(blk, want, 32 * n) == 0 && memcmp(got_ref, want, 32 * n) == 0;
+		const bool enc = memcmp(blk, want, 32 * n) == 0 && memcmp(got_ref, want, 32 * n) == 0;
+		R256_DEC_KEY dk;
+		schedule(key, &dk);
+		block back[4];
+		memcpy(back, want, 32 * n);
+		R256_ecb_decrypt_blks(back, n, &dk);
+		const bool dec = memcmp(back, pt, 32 * n) == 0;
 		cout << "  [known answer: " << left << setw(36) << string(v.source) + "]" << right
-		     << (good ? "OK" : "FAIL") << "\n";
-		if (!good) cout << "    got=" << to_hex(blk, 32 * n) << "\n";
-		ok &= good;
+		     << (enc && dec ? "OK" : "FAIL") << "\n";
+		if (!enc) cout << "    encrypt got=" << to_hex(blk, 32 * n) << "\n";
+		if (!dec) cout << "    decrypt got=" << to_hex(back, 32 * n) << "\n";
+		ok &= enc && dec;
 	}
 	return ok;
 }
@@ -226,8 +257,8 @@ static bool check_known_answers() {
 // Published round keys: the Rijndael-256 key-schedule vectors of the FAEST
 // implementation's tests (github.com/faest-sign/faest-arch-opt,
 // test/test_aes.cpp), also produced by py3rijndael. The reference must give
-// them, and so must R256_set_encrypt_key in its own layout: on aarch64 it
-// stores P(K_r) for r < 14 (rijndael256.hpp).
+// them, and so must R256_set_encrypt_key in its own layout (on aarch64 it
+// stores P(K_r) for r < 14) and R256_set_decrypt_key in its (rijndael256.hpp).
 static bool check_key_schedule() {
 	struct Ks { const char *key; const char *rk[15]; };
 	static const Ks vs[] = {
@@ -297,29 +328,57 @@ static bool check_key_schedule() {
 #endif
 			ok &= memcmp(ek.rd_key + 2 * r, expect, 32) == 0;
 		}
+		// Decryption round j uses K_{14-j}, through InvMixColumns for j = 1..13.
+		R256_DEC_KEY dk;
+		schedule(key, &dk);
+		for (int j = 0; j < 15; ++j) {
+			uint8_t d[32], expect[32];
+			memcpy(d, want[14 - j], 32);
+			if (j > 0 && j < 14)
+				for (int c = 0; c < 8; ++c) ref::inv_mix_column(d + 4 * c);
+			memcpy(expect, d, 32);
+#if defined(__aarch64__)
+			if (j < 14)
+				for (int i = 0; i < 32; ++i) expect[i] = d[detail::r256_dec_perm[i]];
+#endif
+			ok &= memcmp(dk.rd_key + 2 * j, expect, 32) == 0;
+		}
 	}
-	cout << "  [key schedule: FAEST round-key vectors]          " << (ok ? "OK" : "FAIL") << "\n";
+	cout << "  [key schedules: FAEST round-key vectors]         " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
-// buf holds n 256-bit blocks after one guard block pair; the guards and the
-// pair after the run must come back untouched.
+// n random 256-bit blocks between two guard block pairs, and both schedules of
+// a random key. run(dec) encrypts or decrypts them in place through `f`; the
+// guards must come back untouched, and the reference must map each input block
+// to its output (encryption) or each output back to its input (decryption).
 struct Run {
-	vector<block> buf;
-	vector<uint8_t> want;
+	PRG &prg;
 	int64_t n;
-	Run(PRG &prg, const uint8_t key[32], int64_t n_) : buf(2 * n_ + 4), want(32 * n_), n(n_) {
-		prg.random_block(buf.data(), (int64_t)buf.size());
-		const ref::Rijndael256 r(key);
-		const uint8_t *in = reinterpret_cast<const uint8_t *>(buf.data() + 2);
-		for (int64_t i = 0; i < n; ++i) r.encrypt(in + 32 * i, want.data() + 32 * i);
+	uint8_t key[32];
+	R256_KEY ek;
+	R256_DEC_KEY dk;
+	Run(PRG &prg_, int64_t n_) : prg(prg_), n(n_) {
+		prg.random_data_unaligned(key, 32);
+		schedule(key, &ek);
+		schedule(key, &dk);
 	}
-	block *data() { return buf.data() + 2; }
-	bool matches(const vector<block> &before) const {
-		const bool guards = memcmp(buf.data(), before.data(), 32) == 0 &&
-		                    memcmp(buf.data() + 2 + 2 * n, before.data() + 2 + 2 * n, 32) == 0;
-		// An empty `want` may have a null data(), which memcmp must not get.
-		return guards && (n == 0 || memcmp(buf.data() + 2, want.data(), want.size()) == 0);
+	template <class F>
+	bool run(bool dec, F &&f) {
+		vector<block> buf(2 * n + 4);
+		prg.random_block(buf.data(), (int64_t)buf.size());
+		const vector<block> before = buf;
+		f(buf.data() + 2);
+		bool ok = memcmp(buf.data(), before.data(), 32) == 0 &&
+		          memcmp(buf.data() + 2 + 2 * n, before.data() + 2 + 2 * n, 32) == 0;
+		const ref::Rijndael256 r(key);
+		for (int64_t i = 0; i < n; ++i) {
+			const block *in = before.data() + 2 + 2 * i, *out = buf.data() + 2 + 2 * i;
+			uint8_t x[32];
+			r.encrypt(reinterpret_cast<const uint8_t *>(dec ? out : in), x);
+			ok &= memcmp(x, dec ? in : out, 32) == 0;
+		}
+		return ok;
 	}
 };
 
@@ -330,80 +389,89 @@ static bool check_runtime_widths() {
 	for (int64_t n = 0; n <= 40; ++n) ns.push_back(n);
 	for (int64_t n : {63, 64, 65, 100, 257}) ns.push_back(n);
 	for (int64_t n : ns) {
-		uint8_t key[32];
-		prg.random_data_unaligned(key, 32);
-		R256_KEY ek;
-		schedule(key, &ek);
-		Run run(prg, key, n);
-		const vector<block> before = run.buf;
-		R256_ecb_encrypt_blks(run.data(), n, &ek);
-		if (!run.matches(before)) {
-			cout << "  [runtime n=" << n << "] FAIL\n";
+		Run t(prg, n);
+		const bool enc = t.run(false, [&](block *p) { R256_ecb_encrypt_blks(p, n, &t.ek); });
+		const bool dec = t.run(true, [&](block *p) { R256_ecb_decrypt_blks(p, n, &t.dk); });
+		if (!enc || !dec) {
+			cout << "  [runtime n=" << n << (enc ? "" : " encrypt") << (dec ? "" : " decrypt") << "] FAIL\n";
 			ok = false;
 		}
 	}
-	cout << "  [runtime n = 0..40, 63, 64, 65, 100, 257 vs reference] " << (ok ? "OK" : "FAIL") << "\n";
+	cout << "  [runtime n = 0..40, 63, 64, 65, 100, 257, both ways] " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
 template <int N>
 static bool check_template_width(PRG &prg) {
-	uint8_t key[32];
-	prg.random_data_unaligned(key, 32);
-	R256_KEY ek;
-	schedule(key, &ek);
-	Run run(prg, key, N);
-	const vector<block> before = run.buf;
-	R256_ecb_encrypt_blks<N>(run.data(), &ek);
-	const bool ok = run.matches(before);
-	if (!ok) cout << "  [R256_ecb_encrypt_blks<" << N << ">] FAIL\n";
-	return ok;
+	Run t(prg, N);
+	const bool enc = t.run(false, [&](block *p) { R256_ecb_encrypt_blks<N>(p, &t.ek); });
+	const bool dec = t.run(true, [&](block *p) { R256_ecb_decrypt_blks<N>(p, &t.dk); });
+	if (!enc) cout << "  [R256_ecb_encrypt_blks<" << N << ">] FAIL\n";
+	if (!dec) cout << "  [R256_ecb_decrypt_blks<" << N << ">] FAIL\n";
+	return enc && dec;
 }
 
 template <int... Ns>
 static bool check_template_widths(std::integer_sequence<int, Ns...>) {
 	PRG prg;
 	const bool ok = (check_template_width<Ns>(prg) & ...);
-	cout << "  [R256_ecb_encrypt_blks<N>, N = 0..17, 31..33 vs reference] " << (ok ? "OK" : "FAIL") << "\n";
+	cout << "  [R256_ecb_{en,de}crypt_blks<N>, N = 0..17, 31..33] " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
 // The kernels' tables, derived again from the two ShiftRows. In gather form
 // ((G x)[i] = x[g[i]]), SR8 is the Rijndael-256 ShiftRows and SR4 the AES one
-// on each half; AESENC applies SR4 to its input, so P must satisfy
-// P[SR4[i]] = SR8[i]. The split form reads P one half at a time.
-static bool check_permutation_tables() {
-	uint8_t sr8[32], sr4[32], perm[32];
-	for (int c = 0; c < 8; ++c)
-		for (int r = 0; r < 4; ++r) sr8[4 * c + r] = (uint8_t)(4 * ((c + ref::kShift[r]) % 8) + r);
-	for (int h = 0; h < 2; ++h)
-		for (int j = 0; j < 4; ++j)
-			for (int r = 0; r < 4; ++r) sr4[16 * h + 4 * j + r] = (uint8_t)(16 * h + 4 * ((j + r) % 4) + r);
-	for (int i = 0; i < 32; ++i) perm[sr4[i]] = sr8[i];
-	bool ok = memcmp(perm, detail::r256_perm, 32) == 0;
+// on each half. AESENC applies SR4 to its input, so P must satisfy
+// P[SR4[i]] = SR8[i]; AESDEC applies the inverse of SR4, so with ISR the
+// inverse permutations Pd must satisfy Pd[ISR4[i]] = ISR8[i]. The split form
+// reads a permutation one half at a time.
+static bool split_form_matches(const uint8_t perm[32], const uint8_t mask[16], const uint8_t shuf[16]) {
+	bool ok = true;
 	// Half h, byte i: source byte perm[16h + i] = 16 * (other half?) + position.
 	for (int h = 0; h < 2; ++h)
 		for (int i = 0; i < 16; ++i) {
 			const int src = perm[16 * h + i], pos = src % 16;
 			const bool other = src / 16 != h;
-			ok &= detail::r256_shuffle[i] == pos;
-			ok &= (detail::r256_blend_mask[pos] == 0xff) == other;
+			ok &= shuf[i] == pos;
+			ok &= (mask[pos] == 0xff) == other;
 		}
+	return ok;
+}
+
+static bool check_permutation_tables() {
+	uint8_t sr8[32], sr4[32], isr8[32], isr4[32], perm[32], dec_perm[32];
+	for (int c = 0; c < 8; ++c)
+		for (int r = 0; r < 4; ++r) sr8[4 * c + r] = (uint8_t)(4 * ((c + ref::kShift[r]) % 8) + r);
+	for (int h = 0; h < 2; ++h)
+		for (int j = 0; j < 4; ++j)
+			for (int r = 0; r < 4; ++r) sr4[16 * h + 4 * j + r] = (uint8_t)(16 * h + 4 * ((j + r) % 4) + r);
+	for (int i = 0; i < 32; ++i) { isr8[sr8[i]] = (uint8_t)i; isr4[sr4[i]] = (uint8_t)i; }
+	for (int i = 0; i < 32; ++i) { perm[sr4[i]] = sr8[i]; dec_perm[isr4[i]] = isr8[i]; }
+	bool ok = memcmp(perm, detail::r256_perm, 32) == 0 &&
+	          memcmp(dec_perm, detail::r256_dec_perm, 32) == 0;
+	ok &= split_form_matches(perm, detail::r256_blend_mask, detail::r256_shuffle);
+	ok &= split_form_matches(dec_perm, detail::r256_dec_blend_mask, detail::r256_dec_shuffle);
 	cout << "  [permutation tables from ShiftRows]      " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }
 
 static bool check_contracts() {
-	R256_KEY ek;
 	block key[2] = {zero_block, zero_block};
+	R256_KEY ek;
+	R256_DEC_KEY dk;
 	R256_set_encrypt_key(key, &ek);
+	R256_set_decrypt_key(key, &dk);
 	block blk[2] = {zero_block, zero_block};
-	const bool neg = dies_with([&] { R256_ecb_encrypt_blks(blk, -1, &ek); },
-	                           "R256_ecb_encrypt_blks: negative block count");
-	const bool huge = dies_with([&] {
-		R256_ecb_encrypt_blks(blk, numeric_limits<int64_t>::max() / 32 + 1, &ek);
-	}, "R256_ecb_encrypt_blks: block count overflows int64_t bytes");
-	const bool ok = neg && huge;
+	const int64_t huge_n = numeric_limits<int64_t>::max() / 32 + 1;
+	const bool ok =
+		dies_with([&] { R256_ecb_encrypt_blks(blk, -1, &ek); },
+		          "R256_ecb_encrypt_blks: negative block count") &&
+		dies_with([&] { R256_ecb_encrypt_blks(blk, huge_n, &ek); },
+		          "R256_ecb_encrypt_blks: block count overflows int64_t bytes") &&
+		dies_with([&] { R256_ecb_decrypt_blks(blk, -1, &dk); },
+		          "R256_ecb_decrypt_blks: negative block count") &&
+		dies_with([&] { R256_ecb_decrypt_blks(blk, huge_n, &dk); },
+		          "R256_ecb_decrypt_blks: block count overflows int64_t bytes");
 	cout << "  [negative / overflowing n rejected]      " << (ok ? "OK" : "FAIL") << "\n";
 	return ok;
 }

@@ -52,6 +52,9 @@ int main() {
 #elif CRYPTO_NEG_CASE == 17
 	R256_KEY rk = {};
 	R256_ecb_encrypt_blks<-1>(blocks, &rk);
+#elif CRYPTO_NEG_CASE == 18
+	R256_DEC_KEY dk = {};
+	R256_ecb_decrypt_blks<-1>(blocks, &dk);
 #endif
 	return 0;
 }

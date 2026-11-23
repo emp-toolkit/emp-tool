@@ -211,17 +211,20 @@ of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)` correlated.
 ### Rijndael-256
 
 Rijndael with a 256-bit block and a 256-bit key (14 rounds), computed with
-the AES round instructions. A 256-bit block is two consecutive `block`s; the
-API is encryption only, like `aes.h`.
+the AES round instructions. A 256-bit block is two consecutive `block`s. The
+two directions have their own schedule types.
 
 ```cpp
 block key[2];                                    // 256-bit key
 PRG().random_block(key, 2);
 R256_KEY ek;
 R256_set_encrypt_key(key, &ek);
+R256_DEC_KEY dk;
+R256_set_decrypt_key(key, &dk);
 
 block buf[2 * 16];                               // 16 blocks of 256 bits
 R256_ecb_encrypt_blks(buf, 16, &ek);             // in place, runtime count
+R256_ecb_decrypt_blks(buf, 16, &dk);             // and back
 R256_ecb_encrypt_blks<4>(buf, &ek);              // compile-time count
 ```
 
