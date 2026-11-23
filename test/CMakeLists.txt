@@ -85,6 +85,7 @@ add_test_case(runtime test_hash)
 add_test_case(runtime test_mitccrh)
 add_test_case(runtime test_prg)
 add_test_case(runtime test_prp)
+add_test_case(runtime test_rijndael256)
 
 set(_aes_neg_msg
     "ParaEnc: dimensions must be non-negative"
@@ -120,8 +121,9 @@ set(_crypto_neg_msg
     "vector_inn_prdt_sum_red_x4: size must be non-negative"
     "MITCCRH: bit_ceil"
     "MITCCRHBulk: BatchSize must be positive"
-    "MITCCRHBulk: K must divide BatchSize")
-foreach(neg RANGE 1 16)
+    "MITCCRHBulk: K must divide BatchSize"
+    "R256_ecb_encrypt_blks: block count must be non-negative")
+foreach(neg RANGE 1 17)
     add_executable(crypto_contract_neg_${neg} EXCLUDE_FROM_ALL runtime/crypto_contract_probes.cpp)
     target_link_libraries(crypto_contract_neg_${neg} PRIVATE emp-tool::emp-tool)
     target_compile_definitions(crypto_contract_neg_${neg} PRIVATE CRYPTO_NEG_CASE=${neg})

@@ -121,7 +121,7 @@ includes all three.
 emp-tool/
 ├── runtime/      substrate
 │   ├── core/        block, constants, utils, test_mode
-│   ├── crypto/      PRG, PRP, AES, Hash, CCRH, MITCCRH, f2k, ec
+│   ├── crypto/      PRG, PRP, AES, Rijndael-256, Hash, CCRH, MITCCRH, f2k, ec
 │   ├── io/          IOChannel, NetIO, TLSIO, TraceIO
 │   └── execution/   half-gate / privacy-free garbling leaf primitives
 ├── ir/           context-free Boolean IR + execution contracts
@@ -207,6 +207,23 @@ different shape: each call takes the next gids of a stream started by `setS`
 — see `crypto/mitccrh.h`. `CCRH` is the single
 correlation-robust hash: its `sigma` preprocessing rules out a footgun class
 of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)` correlated.
+
+### Rijndael-256
+
+Rijndael with a 256-bit block and a 256-bit key (14 rounds), computed with
+the AES round instructions. A 256-bit block is two consecutive `block`s; the
+API is encryption only, like `aes.h`.
+
+```cpp
+block key[2];                                    // 256-bit key
+PRG().random_block(key, 2);
+R256_KEY ek;
+R256_set_encrypt_key(key, &ek);
+
+block buf[2 * 16];                               // 16 blocks of 256 bits
+R256_ecb_encrypt_blks(buf, 16, &ek);             // in place, runtime count
+R256_ecb_encrypt_blks<4>(buf, &ek);              // compile-time count
+```
 
 ### Hash
 

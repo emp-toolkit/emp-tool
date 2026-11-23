@@ -5,9 +5,10 @@
 
 // Centralized SIMD tier detection + Lane abstractions used by emp-tool's
 // AES and F2K kernels. Two sections:
-//   1. ISA tier macros: EMP_HAS_AVX2 / AVX512F / VAES / VPCLMULQDQ and the
-//      composed flags EMP_HAS_VAES{256,512}, EMP_HAS_VPCLMUL{256,512}, plus
-//      per-module __attribute__((target)) packs EMP_AES_TARGET_ATTR /
+//   1. ISA tier macros: EMP_HAS_AVX2 / AVX512F / VAES / VPCLMULQDQ /
+//      AVX512VBMI and the composed flags EMP_HAS_VAES{256,512},
+//      EMP_HAS_VPCLMUL{256,512}, EMP_HAS_R256_VPERMB512, plus per-module
+//      __attribute__((target)) packs EMP_AES_TARGET_ATTR / EMP_R256_TARGET_ATTR /
 //      EMP_F2K_TARGET_ATTR.
 //   2. SIMD Lane traits. AesLane<N> and ClmulLane<N> share N = blocks per
 //      vector (1 = xmm, 2 = ymm, 4 = zmm). The struct bodies expose the
@@ -71,6 +72,14 @@
   #define EMP_HAS_VPCLMULQDQ 0
 #endif
 
+// AVX-512 VBMI: vpermb, a byte permutation across a whole zmm. Shipped on
+// Icelake+ Intel and all AMD Zen 4+.
+#if defined(__x86_64__) && defined(__AVX512VBMI__)
+  #define EMP_HAS_AVX512VBMI 1
+#else
+  #define EMP_HAS_AVX512VBMI 0
+#endif
+
 #define EMP_HAS_VAES256    (EMP_HAS_VAES       && EMP_HAS_AVX2)
 #define EMP_HAS_VAES512    (EMP_HAS_VAES       && EMP_HAS_AVX512F)
 #define EMP_HAS_VPCLMUL256 (EMP_HAS_VPCLMULQDQ && EMP_HAS_AVX2)
@@ -84,6 +93,21 @@
   #define EMP_AES_TARGET_ATTR __attribute__((target("aes,sse2")))
 #else
   #define EMP_AES_TARGET_ATTR
+#endif
+
+// Rijndael-256 (crypto/rijndael256.hpp) takes the VAES-512 tier only with
+// vpermb; without it, the VAES-256 or AES-NI kernels, which also need SSSE3
+// pshufb and SSE4.1 pblendvb.
+#define EMP_HAS_R256_VPERMB512 (EMP_HAS_VAES512 && EMP_HAS_AVX512VBMI)
+
+#if EMP_HAS_R256_VPERMB512
+  #define EMP_R256_TARGET_ATTR __attribute__((target("vaes,avx512f,avx512vbmi,avx2,aes,sse4.1,ssse3")))
+#elif EMP_HAS_VAES256
+  #define EMP_R256_TARGET_ATTR __attribute__((target("vaes,avx2,aes,sse4.1,ssse3")))
+#elif defined(__x86_64__)
+  #define EMP_R256_TARGET_ATTR __attribute__((target("aes,sse4.1,ssse3")))
+#else
+  #define EMP_R256_TARGET_ATTR
 #endif
 
 #if EMP_HAS_VPCLMUL512

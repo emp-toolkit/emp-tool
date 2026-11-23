@@ -18,6 +18,7 @@ add_bench(bench_hash)
 add_bench(bench_mitccrh)
 add_bench(bench_prg)
 add_bench(bench_prp)
+add_bench(bench_rijndael256)
 add_bench(bench_utils)
 
 add_bench(bench_netio)
