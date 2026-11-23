@@ -2,8 +2,9 @@
 
 ## Reporting a vulnerability
 
-Email wangxiao1254@gmail.com. Please do not open a public issue for a
-vulnerability.
+Email wangxiao1254@gmail.com, or report privately through GitHub: the
+repository's Security tab, then "Report a vulnerability". Please do not
+open a public issue for a vulnerability.
 
 A useful report says which version or commit is affected, which API or
 message reaches the faulty code, and how to reproduce the problem.
