@@ -185,6 +185,9 @@ metadata is numeric (see the README's version guidance).
 
 ### Fixed
 
+- `circuits/bit.h` includes `<array>`, which `Bit_T::encode` returns. It had
+  relied on another header to include it, and with GCC 12's standard library
+  none does, so two IR tests did not build.
 - `./run` could stop the two parties up to a second before
   `EMP_RUN_TIMEOUT`, because `SECONDS` counts whole seconds. It now gives
   them the full timeout and may run up to a second over.
