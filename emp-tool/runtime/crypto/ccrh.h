@@ -5,11 +5,17 @@
 namespace emp {
 
 /*
- * By default, CCRH uses zero_block as the AES key.
- * Here we model f(x) = AES_{00..0}(x) as a random permutation (and thus in the RPM model)
+ * Circular correlation-robust hash H_K(x) = σ(x) ⊕ AES_K(σ(x)), with AES_K
+ * modeled as an ideal cipher. The key is public, and the caller must choose
+ * it: a key that every instance shares makes H one fixed permutation for all
+ * of them, so one evaluation can be tested against the secret inputs of every
+ * instance at once, and the bound degrades with their total number (the
+ * multi-instance setting of Guo-Katz-Wang-Weng-Yu, ePrint 2019/1168). Give each
+ * instance its own key, for example one derived from its session id. MITCCRH
+ * goes further and keys every tweak.
  */
 class CCRH: public PRP { public:
-	CCRH(const block& key = zero_block): PRP(key) {
+	explicit CCRH(const block& key): PRP(key) {
 	}
 
 	block H(block in) {

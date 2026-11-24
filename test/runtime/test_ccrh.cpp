@@ -3,7 +3,7 @@
 // rest is verification.
 //
 // What's in ccrh.h:
-//   CCRH(key=zero_block)       inherits PRP
+//   CCRH(key)                  inherits PRP; the key is required
 //   block H(block)             single-block H
 //   template<int n> H(out, in) batched
 //   Hn(out, in, n)             runtime-sized, out-of-place (no overlap)
@@ -19,6 +19,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
@@ -41,9 +42,18 @@ static bool dies(F&& f) {
 	return !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
 }
 
+// No default key: a hash every instance shares under one fixed key is the
+// multi-instance setting the header warns about, so the caller picks the key.
+static_assert(!std::is_default_constructible_v<CCRH>,
+              "CCRH must not have a default key");
+static_assert(!std::is_convertible_v<block, CCRH>,
+              "CCRH's key constructor must be explicit");
+
 static void example() {
 	cout << "=== example ===\n";
-	CCRH ccrh;  // zero key
+	block key;
+	PRG().random_block(&key, 1);   // a key of this instance's own
+	CCRH ccrh(key);
 	block in = makeBlock(0xCAFEBABEULL, 0xDEADBEEFULL);
 	cout << "  H(in)               = " << ccrh.H(in) << "\n";
 
@@ -116,7 +126,7 @@ static bool check_Hn(int n) {
 }
 
 static bool check_negative_lengths_rejected() {
-	CCRH ccrh;
+	CCRH ccrh(makeBlock(0x6e65, 0x67));
 	block input = zero_block;
 	block output = zero_block;
 	return dies([&] { ccrh.Hn(&output, &input, -1); })
@@ -124,7 +134,7 @@ static bool check_negative_lengths_rejected() {
 }
 
 static bool check_zero_lengths_noop() {
-	CCRH ccrh;
+	CCRH ccrh(makeBlock(0x7a65, 0x726f));
 	ccrh.Hn(nullptr, nullptr, 0);
 	ccrh.Hn(nullptr, 0);
 	return true;

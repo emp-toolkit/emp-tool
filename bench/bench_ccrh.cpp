@@ -2,7 +2,7 @@
 // CRH applied to sigma(x) = x ^ rotate_halves(x). Throughput benchmark.
 //
 // What's in ccrh.h:
-//   CCRH(key=zero_block)       inherits PRP
+//   CCRH(key)                  inherits PRP; the key is required
 //   block H(block)             single-block H
 //   template<int n> H(out, in) batched
 //   Hn(out, in, n)             runtime-sized, out-of-place (no overlap)
@@ -61,7 +61,9 @@ static void print_vec(const string &lbl, double calls, int n) {
 
 static void bench(double sec) {
 	PRG prg;
-	CCRH ccrh;
+	block key;
+	prg.random_block(&key, 1);
+	CCRH ccrh(key);
 
 	cout << "=== single-shot H (chained-dep) ===\n";
 	{

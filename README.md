@@ -194,7 +194,7 @@ PRP prp(key);
 block buf[64];
 prp.permute_block(buf, 64);                      // in-place AES of 64 blocks
 
-CCRH ccrh;
+CCRH ccrh(key);                                  // the key is required
 block out[8];
 ccrh.H<8>(out, buf);                             // compile-time batch
 block one = ccrh.H(buf[0]);                      // single-block form
@@ -207,6 +207,10 @@ different shape: each call takes the next gids of a stream started by `setS`
 — see `crypto/mitccrh.h`. `CCRH` is the single
 correlation-robust hash: its `sigma` preprocessing rules out a footgun class
 of misuse where a plain CRH leaves `H(in)` and `H(in ⊕ Δ)` correlated.
+`CCRH` has no default key. A key that every instance shares makes the hash one
+fixed permutation for all of them, so one evaluation can be tested against
+every instance's secret inputs at once; give each instance its own key, for
+example one derived from its session id.
 
 ### Rijndael-256
 

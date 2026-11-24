@@ -75,6 +75,13 @@ metadata is numeric (see the README's version guidance).
 
 ### Changed
 
+- `CCRH` takes its AES key explicitly: the constructor is `explicit
+  CCRH(const block &key)`, with no zero-key default. Under one key that every
+  instance shares, the hash is one fixed permutation, and one evaluation can
+  be tested against the secret inputs of every instance at once, so the bound
+  degrades with their total number. Callers that relied on the default must
+  pass a key of their own, for example one derived from a session id. Hash
+  values under a given key are unchanged.
 - `default_init_allocator`, and with it `BlockVec` and every
   `default_init_vector`, asks for transparent huge pages on an allocation of
   at least 2 MiB (`kHugePageAdviceBytes`): on Linux it marks the allocation
