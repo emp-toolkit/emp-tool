@@ -2,14 +2,19 @@
 // Read example() first; the rest is verification.
 //
 // What's in block_vector.h:
-//   default_init_allocator<T>  default-initialize storage for overwrite-first use
+//   default_init_allocator<T>  default-initialize storage for overwrite-first use;
+//                              large allocations ask for transparent huge pages
 //   default_init_vector<T>     vector using that allocator
 //   BlockVec                   aligned, overwrite-first block vector
+//   advise_huge_pages          the huge-page request (MADV_HUGEPAGE on Linux)
 
 #include "emp-tool/runtime/core/block_vector.h"
 
 #include <cstdint>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -73,15 +78,53 @@ static bool check_nontrivial_default_construction() {
 	       values[1].value == 23 && values[2].value == 23;
 }
 
+// The VmFlags of the /proc/self/smaps mapping that holds address p, or "" when
+// there is no such file or mapping.
+static string vm_flags_of(const void *p) {
+	ifstream smaps("/proc/self/smaps");
+	const uintptr_t at = reinterpret_cast<uintptr_t>(p);
+	string line;
+	bool inside = false;
+	while (getline(smaps, line)) {
+		uintptr_t lo = 0, hi = 0;
+		char dash = 0;
+		istringstream head(line);
+		if (head >> hex >> lo >> dash >> hi && dash == '-') {   // a mapping's first line
+			inside = lo <= at && at < hi;
+			continue;
+		}
+		if (inside && line.rfind("VmFlags:", 0) == 0) return line;
+	}
+	return "";
+}
+
+// A vector of at least kHugePageAdviceBytes holds its contents like any other, and on
+// Linux with transparent huge pages its mapping carries the advice (VmFlags "hg").
+static bool check_huge_page_advice() {
+	BlockVec big((size_t{4} << 20) / sizeof(block));
+	for (size_t i = 0; i < big.size(); ++i) big[i] = makeBlock(i, ~i);
+	for (size_t i = 0; i < big.size(); ++i)
+		if (!blocks_equal(big[i], makeBlock(i, ~i))) return false;
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
+	if (ifstream("/sys/kernel/mm/transparent_hugepage/enabled")) {
+		const string flags = vm_flags_of(big.data()) + " ";
+		if (flags.find(" hg ") == string::npos) return false;
+	}
+#endif
+	return true;
+}
+
 static bool run_correctness() {
 	static_assert(is_same_v<BlockVec::value_type, block>);
 	bool alignment = check_alignment();
 	bool lifetime = check_copy_move_reserve_resize();
 	bool nontrivial = check_nontrivial_default_construction();
+	bool huge = check_huge_page_advice();
 	cout << "  block alignment is preserved       " << (alignment ? "OK" : "FAIL") << "\n";
 	cout << "  copy/move/reserve/resize are sound " << (lifetime ? "OK" : "FAIL") << "\n";
 	cout << "  nontrivial default ctor runs       " << (nontrivial ? "OK" : "FAIL") << "\n";
-	return alignment && lifetime && nontrivial;
+	cout << "  large vectors ask for huge pages   " << (huge ? "OK" : "FAIL") << "\n";
+	return alignment && lifetime && nontrivial && huge;
 }
 
 int main() {

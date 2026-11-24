@@ -75,6 +75,14 @@ metadata is numeric (see the README's version guidance).
 
 ### Changed
 
+- `default_init_allocator`, and with it `BlockVec` and every
+  `default_init_vector`, asks for transparent huge pages on an allocation of
+  at least 2 MiB (`kHugePageAdviceBytes`): on Linux it marks the allocation
+  `MADV_HUGEPAGE` (`advise_huge_pages`). Where the system allows huge pages,
+  as its default `madvise` mode does, the kernel backs the allocation with
+  2 MiB pages, so writing it the first time takes one page fault per 2 MiB
+  instead of one per 4 KiB page. A large buffer that is only partly written
+  can take more resident memory. Elsewhere nothing changes.
 - `TLSIO` authenticates by pinned public keys instead of a CA. `TLSConfig`
   takes `key_pem_path` (this party's private key) and
   `peer_public_key_pem_path` (the peer's public key); `cert_pem_path`,
