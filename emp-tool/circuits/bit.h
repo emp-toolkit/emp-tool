@@ -11,6 +11,7 @@
 #include "emp-tool/ir/context/checks.h"             // check_same_context
 #include "emp-tool/circuits/numeric_kernels.h"   // kernel::mux for select
 #include "emp-tool/runtime/core/utils.h"                  // error()
+#include <array>
 #include <vector>
 
 namespace emp {
