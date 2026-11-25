@@ -30,7 +30,7 @@ public:
     // before any op. Operating on a default-constructed value is UB, like a
     // moved-from one. (Same contract for UInt_T / Int_T / Float_T / BitVec_T.)
     Bit_T() = default;
-    Bit_T(Ctx& c, Wire wire) : ctx_(&c), w(wire) {}
+    Bit_T(Ctx& c, Wire wire) : w(wire), ctx_(&c) {}
     static Bit_T constant(Ctx& c, bool v) { return Bit_T(c, c.public_bit(v)); }
 
     Ctx* context() const { return ctx_; }

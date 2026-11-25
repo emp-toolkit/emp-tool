@@ -124,10 +124,16 @@ static block ref_reduce_words(uint64_t z[4]) {
 	return makeBlock(z[1], z[0]);
 }
 
+// The two 64-bit words of x, low first.
+static void words_of(block x, uint64_t w[2]) { std::memcpy(w, &x, sizeof(block)); }
+
 // Carry-less product a·b, bit by bit over b, as four 64-bit words (low first).
 static void ref_clmul_words(block a, block b, uint64_t z[4]) {
-	uint64_t a_lo = ((uint64_t *)&a)[0], a_hi = ((uint64_t *)&a)[1];
-	uint64_t b_lo = ((uint64_t *)&b)[0], b_hi = ((uint64_t *)&b)[1];
+	uint64_t aw[2], bw[2];
+	words_of(a, aw);
+	words_of(b, bw);
+	const uint64_t a_lo = aw[0], a_hi = aw[1];
+	const uint64_t b_lo = bw[0], b_hi = bw[1];
 	z[0] = z[1] = z[2] = z[3] = 0;
 	for (int i = 0; i < 128; ++i) {
 		bool bit = i < 64 ? ((b_lo >> i) & 1) : ((b_hi >> (i - 64)) & 1);
@@ -153,8 +159,9 @@ static block ref_gfmul(block a, block b) {
 // Bit-by-bit reduction of a whole 256-bit value lo + hi·x^128 (every bit,
 // including ones no product reaches).
 static block ref_reduce(block lo, block hi) {
-	uint64_t z[4] = {((uint64_t *)&lo)[0], ((uint64_t *)&lo)[1],
-	                 ((uint64_t *)&hi)[0], ((uint64_t *)&hi)[1]};
+	uint64_t z[4];
+	words_of(lo, z);
+	words_of(hi, z + 2);
 	return ref_reduce_words(z);
 }
 
