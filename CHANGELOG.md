@@ -200,6 +200,14 @@ metadata is numeric (see the README's version guidance).
 
 ### Fixed
 
+- Destroying or shrinking a `BlockVec`, or any `default_init_vector` of a
+  trivially destructible type, no longer writes its elements.
+  `std::vector` destroys the elements of a vector with a non-default
+  allocator one by one through the allocator. For `block` elements, GCC
+  compiled that loop into a memset of the whole range just before the
+  storage was freed. That also faulted in pages that were never written.
+  `default_init_allocator::destroy` now does nothing for trivially
+  destructible types.
 - `circuits/bit.h` includes `<array>`, which `Bit_T::encode` returns. It had
   relied on another header to include it, and with GCC 12's standard library
   none does, so two IR tests did not build.
