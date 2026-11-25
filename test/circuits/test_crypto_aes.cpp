@@ -182,12 +182,12 @@ static void test_openssl_block() {
 
     // AES_set_encrypt_key/AES_encrypt are the low-level libcrypto reference path.
     unsigned char ref[16];
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     AES_KEY ek;
     AES_set_encrypt_key(k, 128, &ek);
     AES_encrypt(p, ref, &ek);
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 
     auto key = sess.input<Block>(ALICE, bits_of<128>(k));
     auto pt  = sess.input<Block>(BOB,   bits_of<128>(p));

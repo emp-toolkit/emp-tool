@@ -120,6 +120,7 @@ static bool check_trivial_destruction_writes_nothing() {
 	return g_storage_intact;
 }
 
+#if defined(__linux__) && defined(MADV_HUGEPAGE)
 // The VmFlags of the /proc/self/smaps mapping that holds address p, or "" when
 // there is no such file or mapping.
 static string vm_flags_of(const void *p) {
@@ -139,6 +140,7 @@ static string vm_flags_of(const void *p) {
 	}
 	return "";
 }
+#endif
 
 // A vector of at least kHugePageAdviceBytes holds its contents like any other, and on
 // Linux with transparent huge pages its mapping carries the advice (VmFlags "hg").

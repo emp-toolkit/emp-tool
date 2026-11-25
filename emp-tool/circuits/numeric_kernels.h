@@ -59,7 +59,7 @@ inline void sub_full(Ctx& c, typename Ctx::Wire* dest, typename Ctx::Wire* borro
                      const typename Ctx::Wire* op1, const typename Ctx::Wire* op2,
                      const typename Ctx::Wire* borrowIn, int size) {
     using W = typename Ctx::Wire;
-    if (size == 0) { if (borrowIn && borrowOut) *borrowOut = *borrowIn; return; }
+    if (size == 0) { if (borrowOut) *borrowOut = borrowIn ? *borrowIn : c.public_bit(false); return; }
     W borrow = borrowIn ? *borrowIn : c.public_bit(false);
     int skipLast = (borrowOut == nullptr) ? 1 : 0;
     int i = 0;

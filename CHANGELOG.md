@@ -219,6 +219,8 @@ metadata is numeric (see the README's version guidance).
 
 ### Fixed
 
+- `kernel::sub_full` over zero bits with a borrow output but no borrow input
+  writes a zero borrow. It left the output unset.
 - emp-tool builds against OpenSSL 4. `TLSIO`'s self-signed certificate, and
   the test certificates in `test_tlsio`, take their names from a separately
   built `X509_NAME`: OpenSSL 4 returns a certificate's own subject and issuer
