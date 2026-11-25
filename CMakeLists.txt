@@ -163,10 +163,40 @@ target_compile_options(emp-tool PUBLIC -Wno-ignored-attributes)
 # build-on-target deployments; do NOT ship those binaries to older CPUs,
 # since they may SIGILL.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64)")
+    set(_emp_arm_floor -march=armv8-a+crypto+crc)
     if(EMP_TOOL_NATIVE_ARCH)
-        target_compile_options(emp-tool PUBLIC -mcpu=native)
+        # emp-tool always uses the Armv8 AES and PMULL instructions. Every Apple
+        # Silicon CPU has them, but -mcpu=native can leave them off on a
+        # virtualized one, so there the floor flags enable them. Elsewhere a
+        # CPU that -mcpu=native leaves them off is taken to lack them.
+        include(CheckCXXSourceCompiles)
+        include(CMakePushCheckState)
+        cmake_push_check_state(RESET)
+        set(CMAKE_REQUIRED_FLAGS -mcpu=native)
+        check_cxx_source_compiles([[
+            #include <arm_neon.h>
+            int main() {
+                uint8x16_t s = vaesmcq_u8(vaeseq_u8(vdupq_n_u8(1), vdupq_n_u8(2)));
+                poly64x2_t a = vreinterpretq_p64_u8(s);
+                poly128_t p = vmull_p64(vgetq_lane_p64(a, 0), vgetq_lane_p64(a, 1));
+                return vgetq_lane_u8(vreinterpretq_u8_p128(p), 0);
+            }]] EMP_TOOL_NATIVE_ARM_AES)
+        cmake_pop_check_state()
+        if(EMP_TOOL_NATIVE_ARM_AES)
+            target_compile_options(emp-tool PUBLIC -mcpu=native)
+        elseif(APPLE)
+            message(WARNING "-mcpu=native does not enable the Armv8 AES and PMULL "
+                "instructions emp-tool needs; building with ${_emp_arm_floor} "
+                "instead, which every Apple Silicon CPU implements.")
+            target_compile_options(emp-tool PUBLIC ${_emp_arm_floor})
+        else()
+            message(FATAL_ERROR "-mcpu=native does not enable the Armv8 AES and "
+                "PMULL instructions emp-tool needs, so emp-tool cannot run on this "
+                "CPU. To build for another arm64 CPU that has them, set "
+                "EMP_TOOL_NATIVE_ARCH=OFF.")
+        endif()
     else()
-        target_compile_options(emp-tool PUBLIC -march=armv8-a+crypto+crc)
+        target_compile_options(emp-tool PUBLIC ${_emp_arm_floor})
     endif()
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64|AMD64)")
     if(EMP_TOOL_NATIVE_ARCH)

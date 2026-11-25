@@ -72,6 +72,15 @@ jobs:
             native: OFF
             hash: sha256
             fs_hash: default
+          - name: Ubuntu arm64 GCC native ISA
+            os: ubuntu-24.04-arm
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            shared: OFF
+            native: ON
+            hash: sha256
+            fs_hash: default
           - name: macOS AppleClang portable
             os: macos-latest
             cc: clang
@@ -79,6 +88,15 @@ jobs:
             build_type: Release
             shared: OFF
             native: OFF
+            hash: sha256
+            fs_hash: default
+          - name: macOS AppleClang native ISA
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            shared: OFF
+            native: ON
             hash: sha256
             fs_hash: default
           - name: macOS AppleClang OpenSSL 4

@@ -223,6 +223,12 @@ metadata is numeric (see the README's version guidance).
   the test certificates in `test_tlsio`, take their names from a separately
   built `X509_NAME`: OpenSSL 4 returns a certificate's own subject and issuer
   names only as const, so adding an entry to them no longer compiled.
+- With `EMP_TOOL_NATIVE_ARCH` on arm64, configure checks that `-mcpu=native`
+  enables the AES and PMULL instructions emp-tool always uses. On Apple
+  Silicon, which always has them, a failed check falls back to
+  `-march=armv8-a+crypto+crc` with a warning; on virtualized Apple Silicon,
+  `-mcpu=native` left them off and the build failed. On other CPUs a failed
+  check stops configure, since emp-tool cannot run there.
 - In deterministic mode, `ECGroup::rand_scalar` draws from a fresh default
   `PRG` per call. It kept one per thread, so a scalar depended on which earlier
   draws the same thread had made, and a run with several sessions could change
