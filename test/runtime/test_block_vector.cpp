@@ -3,7 +3,8 @@
 //
 // What's in block_vector.h:
 //   default_init_allocator<T>  default-initialize storage for overwrite-first use;
-//                              large allocations ask for transparent huge pages
+//                              destroying trivial elements does nothing; large
+//                              allocations ask for transparent huge pages
 //   default_init_vector<T>     vector using that allocator
 //   BlockVec                   aligned, overwrite-first block vector
 //   advise_huge_pages          the huge-page request (MADV_HUGEPAGE on Linux)
@@ -78,6 +79,47 @@ static bool check_nontrivial_default_construction() {
 	       values[1].value == 23 && values[2].value == 23;
 }
 
+// A base allocator that checks, when the vector hands its storage back, that every
+// byte still holds kFill: destroying block elements must not write them.
+static constexpr unsigned char kFill = 0xA5;
+static bool g_storage_intact = false;
+
+__attribute__((noinline)) static bool all_bytes_are(const void *p, size_t n, unsigned char v) {
+	const volatile unsigned char *b = static_cast<const volatile unsigned char *>(p);
+	for (size_t i = 0; i < n; ++i)
+		if (b[i] != v) return false;
+	return true;
+}
+
+template <typename T>
+struct CheckingAllocator : std::allocator<T> {
+	using value_type = T;
+	template <typename U>
+	struct rebind { using other = CheckingAllocator<U>; };
+	CheckingAllocator() = default;
+	template <typename U>
+	CheckingAllocator(const CheckingAllocator<U> &) noexcept {}
+	void deallocate(T *p, size_t n) {
+		g_storage_intact = all_bytes_are(p, n * sizeof(T), kFill);
+		std::allocator<T>::deallocate(p, n);
+	}
+};
+
+// Destroying a vector of blocks leaves its elements as they were until the storage is
+// freed; the same holds for the elements a shrinking resize drops.
+static bool check_trivial_destruction_writes_nothing() {
+	using Vec = std::vector<block, default_init_allocator<block, CheckingAllocator<block>>>;
+	const block fill = makeBlock(0xA5A5A5A5A5A5A5A5ULL, 0xA5A5A5A5A5A5A5A5ULL);
+	g_storage_intact = false;
+	{
+		Vec blocks(1024);
+		for (auto &b : blocks) b = fill;
+		blocks.resize(16);
+		if (!all_bytes_are(blocks.data() + 16, (1024 - 16) * sizeof(block), kFill)) return false;
+	}
+	return g_storage_intact;
+}
+
 // The VmFlags of the /proc/self/smaps mapping that holds address p, or "" when
 // there is no such file or mapping.
 static string vm_flags_of(const void *p) {
@@ -119,12 +161,14 @@ static bool run_correctness() {
 	bool alignment = check_alignment();
 	bool lifetime = check_copy_move_reserve_resize();
 	bool nontrivial = check_nontrivial_default_construction();
+	bool untouched = check_trivial_destruction_writes_nothing();
 	bool huge = check_huge_page_advice();
 	cout << "  block alignment is preserved       " << (alignment ? "OK" : "FAIL") << "\n";
 	cout << "  copy/move/reserve/resize are sound " << (lifetime ? "OK" : "FAIL") << "\n";
 	cout << "  nontrivial default ctor runs       " << (nontrivial ? "OK" : "FAIL") << "\n";
+	cout << "  destroying blocks writes nothing   " << (untouched ? "OK" : "FAIL") << "\n";
 	cout << "  large vectors ask for huge pages   " << (huge ? "OK" : "FAIL") << "\n";
-	return alignment && lifetime && nontrivial && huge;
+	return alignment && lifetime && nontrivial && untouched && huge;
 }
 
 int main() {

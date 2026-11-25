@@ -39,7 +39,9 @@ inline void advise_huge_pages(void *p, std::size_t bytes) noexcept {
 // Allocator that skips value-initialization for trivial types when
 // vector::resize(N) / vector(N) would otherwise zero each element.
 // Saves the bzero on memory that's about to be overwritten. Non-trivial
-// types still go through their default ctor. An allocation of at least
+// types still go through their default ctor. Destroying a trivially
+// destructible element does nothing, so neither does freeing or shrinking
+// a vector of them. An allocation of at least
 // kHugePageAdviceBytes also asks for transparent huge pages
 // (advise_huge_pages): such a buffer is usually written in full soon after,
 // though one that is only partly touched can take more resident memory.
@@ -72,6 +74,15 @@ public:
         a_t::construct(static_cast<A &>(*this), ptr,
                        std::forward<Arg>(arg),
                        std::forward<Args>(args)...);
+    }
+    // Destroy: no-op for trivially destructible U. A vector with a non-default
+    // allocator destroys its elements one by one through the allocator, and
+    // GCC compiles that loop over block elements into a memset of the whole
+    // range just before the storage is freed. Non-trivial types still run
+    // their destructor.
+    template <typename U>
+    void destroy(U *ptr) noexcept(std::is_nothrow_destructible<U>::value) {
+        if constexpr (!std::is_trivially_destructible<U>::value) ptr->~U();
     }
 };
 
