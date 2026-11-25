@@ -51,7 +51,9 @@ The default Release build uses `-O3 -funroll-loops` and tunes for the build
 host's ISA (`-march=native` on x86_64 or `-mcpu=native` on arm64). This enables
 the best available SIMD tiers, but the resulting binary may SIGILL on older
 CPUs. Set `-DEMP_TOOL_NATIVE_ARCH=OFF` for the portable AES-NI + PCLMUL +
-SSE4.2 x86_64 baseline or `armv8-a+crypto+crc` arm64 baseline. Default PRG
+SSE4.2 x86_64 baseline or `armv8-a+crypto+crc` arm64 baseline. On arm64,
+configure stops if `-mcpu=native` does not enable the AES and PMULL instructions,
+except on Apple Silicon, where it uses the `armv8-a+crypto+crc` baseline instead. Default PRG
 construction obtains its seed from the kernel through `getentropy()` on every
 supported platform.
 
