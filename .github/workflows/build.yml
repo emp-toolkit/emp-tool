@@ -81,16 +81,29 @@ jobs:
             native: OFF
             hash: sha256
             fs_hash: default
+          - name: macOS AppleClang OpenSSL 4
+            os: macos-latest
+            cc: clang
+            cxx: clang++
+            build_type: Release
+            shared: OFF
+            native: OFF
+            hash: sha256
+            fs_hash: default
+            openssl: openssl@4
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     env:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
+      OPENSSL_FORMULA: ${{ matrix.openssl || 'openssl@3' }}
     steps:
       - uses: actions/checkout@v6
       - name: Locate OpenSSL (macOS)
         if: runner.os == 'macOS'
-        run: echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+        run: |
+          brew list "$OPENSSL_FORMULA" > /dev/null || brew install "$OPENSSL_FORMULA"
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix "$OPENSSL_FORMULA")" >> "$GITHUB_ENV"
       - name: Configure
         run: >
           cmake -B build

@@ -233,18 +233,30 @@ static X509 *raw_cert(const char *subject, EVP_PKEY *subject_key, const char *is
                       EVP_PKEY *signer, bool is_ca) {
 	X509 *cert = X509_new();
 	if (!cert) key_die("X509_new");
-	auto add_cn = [](X509_NAME *name, const char *cn) {
-		return X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
-		                                  (const unsigned char *)cn, -1, -1, 0) == 1;
+	// The names are built on their own and copied in: OpenSSL 4 hands out the
+	// certificate's own names only as const.
+	auto cn_name = [](const char *cn) -> X509_NAME * {
+		X509_NAME *name = X509_NAME_new();
+		if (name && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
+		                                       (const unsigned char *)cn, -1, -1, 0) != 1) {
+			X509_NAME_free(name);
+			name = nullptr;
+		}
+		return name;
 	};
+	X509_NAME *subject_name = cn_name(subject);
+	X509_NAME *issuer_name = cn_name(issuer);
 	bool built =
+	    subject_name != nullptr && issuer_name != nullptr &&
 	    X509_set_version(cert, X509_VERSION_3) == 1 &&
 	    ASN1_INTEGER_set(X509_get_serialNumber(cert), 1) == 1 &&
 	    X509_gmtime_adj(X509_getm_notBefore(cert), 0) != nullptr &&
 	    X509_gmtime_adj(X509_getm_notAfter(cert), 60 * 60) != nullptr &&
-	    add_cn(X509_get_subject_name(cert), subject) &&
-	    add_cn(X509_get_issuer_name(cert), issuer) &&
+	    X509_set_subject_name(cert, subject_name) == 1 &&
+	    X509_set_issuer_name(cert, issuer_name) == 1 &&
 	    X509_set_pubkey(cert, subject_key) == 1;
+	X509_NAME_free(subject_name);
+	X509_NAME_free(issuer_name);
 	if (built && is_ca) {
 		X509V3_CTX v3;
 		X509V3_set_ctx_nodb(&v3);
