@@ -121,12 +121,15 @@ inline EVP_PKEY *read_public_key(const std::string &path) {
 inline X509 *self_signed_cert(EVP_PKEY *key) {
 	X509 *cert = X509_new();
 	if (!cert) die("X509_new");
-	X509_NAME *name = X509_get_subject_name(cert);
+	// The name is built on its own and copied in as subject and issuer: OpenSSL
+	// 4 hands out the certificate's own name only as const.
+	X509_NAME *name = X509_NAME_new();
 	// Ed25519 and Ed448 sign the message itself, with no separate digest.
 	const int type = EVP_PKEY_get_id(key);
 	const EVP_MD *md =
 	    (type == EVP_PKEY_ED25519 || type == EVP_PKEY_ED448) ? nullptr : EVP_sha256();
 	const bool built =
+	    name != nullptr &&
 	    X509_set_version(cert, X509_VERSION_3) == 1 &&
 	    ASN1_INTEGER_set(X509_get_serialNumber(cert), 1) == 1 &&
 	    X509_gmtime_adj(X509_getm_notBefore(cert), 0) != nullptr &&
@@ -134,9 +137,11 @@ inline X509 *self_signed_cert(EVP_PKEY *key) {
 	    X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC,
 	                               reinterpret_cast<const unsigned char *>("emp-tool"),
 	                               -1, -1, 0) == 1 &&
+	    X509_set_subject_name(cert, name) == 1 &&
 	    X509_set_issuer_name(cert, name) == 1 &&
 	    X509_set_pubkey(cert, key) == 1 &&
 	    X509_sign(cert, key, md) > 0;
+	X509_NAME_free(name);
 	if (!built) {
 		X509_free(cert);
 		die("cannot build a self-signed certificate for key_pem_path");

@@ -219,6 +219,10 @@ metadata is numeric (see the README's version guidance).
 
 ### Fixed
 
+- emp-tool builds against OpenSSL 4. `TLSIO`'s self-signed certificate, and
+  the test certificates in `test_tlsio`, take their names from a separately
+  built `X509_NAME`: OpenSSL 4 returns a certificate's own subject and issuer
+  names only as const, so adding an entry to them no longer compiled.
 - In deterministic mode, `ECGroup::rand_scalar` draws from a fresh default
   `PRG` per call. It kept one per thread, so a scalar depended on which earlier
   draws the same thread had made, and a run with several sessions could change
