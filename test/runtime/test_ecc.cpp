@@ -274,7 +274,7 @@ int main() {
 	ok = ok && res;
 
 	// Exercise the nonzero/range contract of this build's generator: OpenSSL's
-	// private generator, or the deterministic path in a test-mode build.
+	// private generator, or the deterministic path in a deterministic-mode build.
 	for (int i = 0; i < 64; ++i) {
 		Scalar s = G.rand_scalar();
 		ok = ok && !BN_is_zero(s.n()) && BN_cmp(s.n(), order.n()) < 0;

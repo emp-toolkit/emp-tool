@@ -44,7 +44,7 @@ jobs:
             native: OFF
             hash: sha256
             fs_hash: blake3
-          - name: Ubuntu GCC Debug test mode
+          - name: Ubuntu GCC Debug deterministic mode
             os: ubuntu-latest
             cc: gcc
             cxx: g++
@@ -53,7 +53,7 @@ jobs:
             native: OFF
             hash: sha256
             fs_hash: default
-            test_mode: ON
+            deterministic: ON
           - name: Ubuntu GCC native ISA
             os: ubuntu-latest
             cc: gcc
@@ -99,7 +99,7 @@ jobs:
           -DEMP_TOOL_NATIVE_ARCH=${{ matrix.native }}
           -DEMP_HASH_BACKEND=${{ matrix.hash }}
           -DEMP_FS_HASH=${{ matrix.fs_hash }}
-          -DEMP_TEST_MODE=${{ matrix.test_mode || 'OFF' }}
+          -DEMP_DETERMINISTIC_MODE=${{ matrix.deterministic || 'OFF' }}
       # A bare --parallel runs make -j with no limit: every translation unit
       # compiles at once and the GCC jobs run the runner out of memory.
       - name: Build

@@ -120,7 +120,7 @@ includes all three.
 ```
 emp-tool/
 ├── runtime/      substrate
-│   ├── core/        block, constants, utils, test_mode
+│   ├── core/        block, constants, utils, deterministic_mode
 │   ├── crypto/      PRG, PRP, AES, Rijndael-256, Hash, CCRH, MITCCRH, f2k, ec
 │   ├── io/          IOChannel, NetIO, TLSIO, TraceIO
 │   └── execution/   half-gate / privacy-free garbling leaf primitives
@@ -488,28 +488,29 @@ cmake --build build -j
 Benchmarks are separate from `ctest` and live under `bench/`; see
 `docs/benchmark_conventions.md`.
 
-### Wire-byte equivalence (test mode)
+### Wire-byte equivalence (deterministic mode)
 
-A test-mode build (`-DEMP_TEST_MODE=ON`) swaps every randomness source
-in the toolkit (`PRG()` default-construction, `ECGroup::rand_scalar`) for
-deterministic `(lane, ordinal)`-seeded streams, so two runs of the
-same code — single- or multi-threaded — produce byte-identical wire
-output. Combined with `TraceIO` (an
+A deterministic-mode build (`-DEMP_DETERMINISTIC_MODE=ON`) swaps every
+randomness source in the toolkit (`PRG()` default-construction,
+`ECGroup::rand_scalar`) for deterministic streams seeded by party, lane and
+draw, so two runs of the same code — single- or multi-threaded — produce
+byte-identical wire output, while the parties of a run still draw different
+values. Combined with `TraceIO` (an
 `IOChannel` adapter that tees wire bytes to a file), this lets you
 verify that an optimization or refactor doesn't change a protocol's
 observable behavior:
 
 ```bash
-cmake -B build-test -DEMP_TEST_MODE=ON && cmake --build build-test -j
-./run ./build-test/your_protocol_test before
+cmake -B build-det -DEMP_DETERMINISTIC_MODE=ON && cmake --build build-det -j
+./run ./build-det/your_protocol_test before
 # … apply your refactor, rebuild …
-./run ./build-test/your_protocol_test after
+./run ./build-det/your_protocol_test after
 diff before.alice.send after.alice.send   # each direction, checked at its sender
 diff before.bob.send   after.bob.send     # both must be empty
 ```
 
-See [docs/test_mode.md](docs/test_mode.md) for the full design,
-determinism contract, and limitations.
+See [docs/deterministic_mode.md](docs/deterministic_mode.md) for the full
+design, determinism contract, and limitations.
 
 ## Documentation
 
@@ -523,7 +524,7 @@ determinism contract, and limitations.
 | API conventions and failure model | [docs/api_conventions.md](docs/api_conventions.md) |
 | Translating C++ / Python to circuits | [docs/EMP_TRANSLATION.md](docs/EMP_TRANSLATION.md) |
 | Floating-point circuit assets | [docs/floating_point_circuits.md](docs/floating_point_circuits.md) |
-| Test mode / wire-byte determinism | [docs/test_mode.md](docs/test_mode.md) |
+| Deterministic mode / wire-byte determinism | [docs/deterministic_mode.md](docs/deterministic_mode.md) |
 | Test and benchmark conventions | [docs/test_conventions.md](docs/test_conventions.md), [docs/benchmark_conventions.md](docs/benchmark_conventions.md) |
 | Tracked future work (ISA dispatch, embedder hook, asset reproducibility) | [docs/roadmap.md](docs/roadmap.md) |
 
@@ -542,8 +543,8 @@ determinism contract, and limitations.
   getting each party the other's authentic public key is the deployment's
   job.
 - Failures are fail-stop: a violated check terminates the process
-  ([docs/api_conventions.md](docs/api_conventions.md)). A test-mode
-  build (`-DEMP_TEST_MODE=ON`) makes all randomness deterministic and is
+  ([docs/api_conventions.md](docs/api_conventions.md)). A deterministic-mode
+  build (`-DEMP_DETERMINISTIC_MODE=ON`) makes all randomness predictable and is
   never safe for real secrets.
 - Report vulnerabilities to wangxiao1254@gmail.com.
 

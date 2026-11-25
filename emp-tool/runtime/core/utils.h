@@ -1,6 +1,7 @@
 #ifndef EMP_UTILS_H__
 #define EMP_UTILS_H__
 #include "emp-tool/runtime/core/error.h"
+#include "emp-tool/runtime/core/deterministic_mode.h"
 #include <string>
 #include "emp-tool/runtime/core/block.h"
 #include "emp-tool/runtime/core/simd_tier.h"
@@ -21,7 +22,7 @@ namespace emp {
 using std::chrono::time_point;
 using std::chrono::high_resolution_clock;
 
-inline int parse_party(const char * const * arg, int max_party = BOB);   // argv[1] in [1, max_party]; default ALICE=1 / BOB=2
+inline int parse_party(const char * const * arg, int max_party = BOB);   // argv[1] in [1, max_party]; default ALICE=1 / BOB=2; also the deterministic-mode party
 inline int peer_port();                              // $EMP_PORT, default 12345
 inline const char * peer_ip();                       // $EMP_PEER_IP, default 127.0.0.1
 

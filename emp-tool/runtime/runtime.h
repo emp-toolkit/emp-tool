@@ -1,7 +1,7 @@
 #ifndef EMP_RUNTIME_RUNTIME_H__
 #define EMP_RUNTIME_RUNTIME_H__
 
-// runtime — the low-level substrate: core (block / utils / constants / test_mode /
+// runtime — the low-level substrate: core (block / utils / constants / deterministic_mode /
 // simd_tier), the runtime crypto primitives, the IO channels, and the garbling leaf
 // primitives (half-gate / privacy-free). It defines no circuit values, no IR, and
 // no sessions; the ir and circuits layers build on it.
@@ -23,7 +23,7 @@ static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__,
 #include "emp-tool/runtime/core/block.h"
 #include "emp-tool/runtime/core/block_vector.h"
 #include "emp-tool/runtime/core/constants.h"
-#include "emp-tool/runtime/core/test_mode.h"
+#include "emp-tool/runtime/core/deterministic_mode.h"
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/hash.h"
 #include "emp-tool/runtime/crypto/prg.h"

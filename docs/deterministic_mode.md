@@ -1,13 +1,13 @@
-# Test mode — deterministic randomness for wire-byte equivalence
+# Deterministic mode — reproducible randomness for wire-byte equivalence
 
-A test-mode build of emp-tool swaps every randomness source in the
-toolkit for a deterministic, counter-derived stream. In a test-mode
-build, the wire bytes a protocol produces are byte-identical across
-runs of the same code. Two complementary headers build the framework:
+A deterministic-mode build of emp-tool swaps every randomness source in the
+toolkit for a deterministic, counter-derived stream. In such a build, the wire
+bytes a protocol produces are byte-identical across runs of the same code. Two
+complementary headers build the framework:
 
 | Header | Role |
 |---|---|
-| [`emp-tool/runtime/core/test_mode.h`](../emp-tool/runtime/core/test_mode.h) | The build switch and the lane machinery. `is_test_mode()`, `next_test_seed()`, `reset_test_seed_counter()`, `test_lane_scope`, `next_test_child_lane()`. |
+| [`emp-tool/runtime/core/deterministic_mode.h`](../emp-tool/runtime/core/deterministic_mode.h) | The build switch, the party and the lane machinery. `is_deterministic_mode()`, `set_deterministic_party()`, `next_deterministic_seed()`, `reset_deterministic_seeds()`, `deterministic_lane_scope`, `next_deterministic_child_lane()`. |
 | [`emp-tool/runtime/io/trace_io.h`](../emp-tool/runtime/io/trace_io.h) | `TraceIO` IOChannel adapter that tees wire bytes to a pair of files alongside delivering them. |
 
 ## When to use it
@@ -22,58 +22,79 @@ two implementations of "the same protocol" can each pass per-OT
 output verification while sending the wire bytes in different
 orders, which breaks any peer running on the unchanged code.
 
-## What test mode swaps
+## What deterministic mode swaps
 
 Two randomness sources in emp-tool reach the wire:
 
 1. **`PRG()` default-construction** — used pervasively for keys,
    Δ sampling, masks, check seeds, and other protocol randomness.
-   In test mode, `PRG()` pulls a deterministic `(lane, ordinal)`
-   seed from `next_test_seed()` instead of OS entropy
-   (`getentropy()`): the lane names the logical unit of
-   work (main thread = lane 0), the ordinal counts constructions
-   within the lane.
+   In deterministic mode, `PRG()` takes a `(party, lane, ordinal)`
+   seed from `next_deterministic_seed()` instead of OS entropy
+   (`getentropy()`): the party is the one the process plays, the
+   lane names the logical unit of work (main thread = lane 0), and
+   the ordinal counts constructions within the lane.
 2. **`ECGroup::rand_scalar`** — the only call to OpenSSL's
    `BN_priv_rand_range` in emp-tool, used by elliptic-curve
-   protocols. In test mode, it samples uniform in `[1, order)`
-   via emp::PRG-driven rejection instead of OpenSSL's internal
-   CSPRNG.
+   protocols. In deterministic mode, each call samples uniform in
+   `[1, order)` from a fresh default `PRG`, by rejection, instead of
+   OpenSSL's internal CSPRNG.
 
 `PRG(const void*, int)` (explicit seed) is unaffected — callers
 that pass their own seed already control determinism.
 
 ## Turning it on
 
-Test mode is a build option, not a runtime switch:
+Deterministic mode is a build option, not a runtime switch:
 
 ```bash
-cmake -B build-test -DEMP_TEST_MODE=ON
-cmake --build build-test -j
+cmake -B build-det -DEMP_DETERMINISTIC_MODE=ON
+cmake --build build-det -j
 ```
 
-`-DEMP_TEST_MODE=ON` defines `EMP_TEST_MODE` for emp-tool and, through its
-exported target, for every library and program that links it, so a dependent
-built against a test-mode emp-tool is a test-mode build too. `is_test_mode()`
-is a compile-time constant. A normal build compiles the deterministic paths
-out, so no environment variable or call can make its randomness predictable.
-Objects built the two ways cannot be linked into one program: the link fails on
-an undefined `emp::TestModeAbiMarker` symbol.
+`-DEMP_DETERMINISTIC_MODE=ON` defines `EMP_DETERMINISTIC_MODE` for emp-tool and,
+through its exported target, for every library and program that links it, so a
+dependent built against a deterministic-mode emp-tool is a deterministic-mode
+build too. `is_deterministic_mode()` is a compile-time constant. A normal build
+compiles the deterministic paths out, so no environment variable or call can make
+its randomness predictable. Objects built the two ways cannot be linked into one
+program: the link fails on an undefined `emp::DeterministicModeAbiMarker` symbol.
 
-A test-mode build prints a prominent warning to `stderr` at its first
-deterministic draw, once per process, that default PRG seeds and EC scalar
-randomness are deterministic and insecure. Never deploy a test-mode build or
-process real secrets with it.
+A deterministic-mode build prints a prominent warning to `stderr` at its first
+deterministic draw, once per process, that default PRG seeds and EC scalars are
+predictable. Never deploy such a build or process real secrets with it.
 
-`reset_test_seed_counter()` rewinds every lane's ordinal and releases lane 0.
+`reset_deterministic_seeds()` rewinds every lane's ordinal and releases lane 0.
 Call it between independent test iterations, after joining threads and draining
 pool futures, to get reproducible PRG sequences within one process.
 
+The mode was called test mode before; `-DEMP_TEST_MODE=ON` still turns it on,
+the build still defines `EMP_TEST_MODE` along with `EMP_DETERMINISTIC_MODE`, and
+the old function and type names (`is_test_mode()`, `test_lane_scope`, ...) remain
+as deprecated aliases. They will be removed in a later release.
+
+## Parties
+
+The processes of a multi-process run all start from the same `(lane, ordinal)`
+schedule, so without more each would draw exactly what every other draws: the same
+keys, the same Δ, the same masks. That is not how real randomness behaves, and a
+test of a cheat can pass in such a build only because the cheater's values equal
+the honest parties'. So every seed also carries the party the process plays:
+`set_deterministic_party(p)` fixes it for the process, and `parse_party()`, which
+every multi-process test and example calls on its `argv`, calls it. Party 0, the
+default, is a process that set none, such as a single-process test; its seeds are
+the bare lanes.
+
+Seeds drawn before any party is set are party 0's. Once a process has drawn a seed
+as one party, setting another aborts, since it would mix two parties' streams in
+one process. Parties that run as threads of one process are told apart by their
+lanes instead.
+
 ## Multi-threading: lanes
 
-A seed is the pair `(lane, ordinal)`, so determinism under threads
-reduces to one rule: **every spawned worker draws under its own
-lane, chosen by the code that created the work** (whose program
-order is deterministic), never discovered by the worker itself.
+A seed's lane and ordinal make determinism under threads reduce to one
+rule: **every spawned worker draws under its own lane, chosen by the
+code that created the work** (whose program order is deterministic),
+never discovered by the worker itself.
 
 - **`ThreadPool` tasks: automatic.** `enqueue` derives a lane on the
   enqueuing thread and installs it around the task body. Nested
@@ -83,18 +104,18 @@ order is deterministic), never discovered by the worker itself.
 
   ```cpp
   std::thread([&, peer]() {
-      emp::test_lane_scope guard(0x100 + peer);  // any stable id
+      emp::deterministic_lane_scope guard(0x100 + peer);  // any stable id
       // ... PRG() draws here come from (0x100+peer, 0), (…, 1), ...
   });
   ```
 
   Manually assigned lane ids must be nonzero and unique among concurrently
   active work. Lane 0 is the unscoped lane: the first unscoped thread to draw
-  a seed or derive a child lane owns it until `reset_test_seed_counter()`.
+  a seed or derive a child lane owns it until `reset_deterministic_seeds()`.
 
 - **Forgetting is loud.** A second thread drawing from lane 0 or deriving a
-  child lane from it would replay deterministic streams byte-for-byte, so test
-  mode aborts with a pointer to this document instead.
+  child lane from it would replay deterministic streams byte-for-byte, so
+  deterministic mode aborts with a pointer to this document instead.
 
 Lanes make the *randomness* reproducible. Byte-identical *traces*
 additionally require that each traced channel has a single writer
@@ -102,28 +123,26 @@ lane — see the contract below.
 
 ### Cost in production
 
-One cached `std::atomic<bool>` load per `PRG()` default-
-construction. Branch predicts perfectly; no measurable overhead
-in production paths.
+None: a normal build compiles the deterministic paths out
+(`if constexpr (is_deterministic_mode())`).
 
 ## Determinism contract
 
 - **Threads need lanes.** Pool tasks get one automatically;
-  hand-spawned threads install `test_lane_scope` with a stable id
-  (peer index, slice number). Seeds are then reproducible under any
+  hand-spawned threads install `deterministic_lane_scope` with a stable
+  id (peer index, slice number). Seeds are then reproducible under any
   scheduling; wire-byte identity additionally requires one writer
   lane per channel, since concurrent writers to a single channel
   interleave nondeterministically even with deterministic seeds.
+- **Processes need parties.** `parse_party()` sets one; a multi-process
+  program that does not use it calls `set_deterministic_party()` itself.
 - **A connecting NetIO draws a seed.** Its constructor runs the
   session-root coin flip, which default-constructs a `PRG`, so a NetIO
   built on a hand-spawned thread needs a lane like any other draw
   (`NetIO::SessionRoot::none` draws nothing).
-- **`PRG(const void*, int)` is unchanged in test mode.** Callers
-  with their own explicit seed sources already control determinism;
-  the test-mode hook only affects the OS-random default path.
-- **`ECGroup::rand_scalar` uses a `thread_local PRG`.** Determinism
-  per thread depends on the order of `rand_scalar` calls, which
-  is determined by the protocol's call graph.
+- **`PRG(const void*, int)` is unchanged in deterministic mode.**
+  Callers with their own explicit seed sources already control
+  determinism; the hook only affects the OS-random default path.
 - **External inputs are not deterministic.** Test inputs (choice
   bits, message buffers) come from the caller — the test harness
   must seed them deterministically too.
@@ -157,12 +176,12 @@ the wrapping `TraceIO`'s counts, which is correct.
 For a refactor / optimization where wire-equivalence is required:
 
 ```bash
-# A test-mode build (see "Turning it on").
-cmake -B build-test -DEMP_TEST_MODE=ON && cmake --build build-test -j
+# A deterministic-mode build (see "Turning it on").
+cmake -B build-det -DEMP_DETERMINISTIC_MODE=ON && cmake --build build-det -j
 # Record the "before" trace (both Alice and Bob).
-./run ./build-test/your_protocol_test before
-# … apply your refactor / optimization, rebuild build-test …
-./run ./build-test/your_protocol_test after
+./run ./build-det/your_protocol_test before
+# … apply your refactor / optimization, rebuild build-det …
+./run ./build-det/your_protocol_test after
 
 # Each direction of the wire, checked at its sender; both must be empty.
 diff before.alice.send after.alice.send
@@ -178,14 +197,14 @@ cover the full wire.
 `TraceIO` in use; its `example()` is a starting point for new
 wire-equivalence tests.
 
-## What test mode does NOT cover
+## What deterministic mode does NOT cover
 
 - **Transcript interleaving across lanes.** Lanes fix the seeds;
   they cannot fix the order in which concurrent lanes' bytes land on
   a *shared* channel. Keep one writer lane per traced channel (the
   per-thread-NetIO pattern).
 - **Caller-provided randomness.** A `PRG` constructed with an
-  explicit seed bypasses the test-mode hook entirely.
+  explicit seed bypasses the hook entirely.
 - **Other OpenSSL randomness.** Only `BN_priv_rand_range` (via
   `ECGroup::rand_scalar`) is intercepted. Direct `RAND_bytes` calls,
   if any code path adds them, would still pull from OpenSSL's

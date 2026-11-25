@@ -27,7 +27,7 @@ order:
 
 ## What every report should state
 
-- Any non-default configuration the defect needs: `EMP_TEST_MODE`, a BLAKE3
+- Any non-default configuration the defect needs: `EMP_DETERMINISTIC_MODE`, a BLAKE3
   hash backend (`EMP_HASH_BACKEND` or `EMP_FS_HASH`), Fiat-Shamir enabled,
   `NetIO` or `TLSIO`.
 - Which parts of the impact the reproducer demonstrates and which are

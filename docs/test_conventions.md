@@ -35,7 +35,7 @@ code — a test process exits 0 only if every check passed. Within that,
 three shapes recur.
 
 - **`test/runtime/` single-process primitive tests** (aes, block,
-  ccrh, f2k, hash, mitccrh, prg, prp, test_mode, utils) use an
+  ccrh, f2k, hash, mitccrh, prg, prp, deterministic_mode, utils) use an
   `example()` function followed by a `bool`-returning
   `run_correctness()` dispatcher that prints `OK` / `FAIL` per check
   and lets `main()` exit 1 on any failure.

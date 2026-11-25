@@ -25,11 +25,11 @@ freely, subject to the following restrictions:
 #ifndef EMP_THREAD_POOL_H
 #define EMP_THREAD_POOL_H
 
-// Altered from the original for emp-tool: (1) in a test-mode build
-// (emp::is_test_mode()), every enqueued task runs under a deterministic
-// emp::test_lane_scope whose lane is derived on the enqueuing thread, so
-// pool-parallel randomness reproduces across runs regardless of which
-// worker executes the task (see emp-tool/runtime/core/test_mode.h);
+// Altered from the original for emp-tool: (1) in a deterministic-mode build
+// (emp::is_deterministic_mode()), every enqueued task runs under an
+// emp::deterministic_lane_scope whose lane is derived on the enqueuing thread,
+// so pool-parallel randomness reproduces across runs regardless of which
+// worker executes the task (see emp-tool/runtime/core/deterministic_mode.h);
 // (2) enqueue-on-stopped-pool stops the process through emp::expecting()
 // instead of throwing, keeping the public surface exception-free
 // (docs/api_conventions.md, enforced by test_no_exceptions); (3) queued tasks
@@ -38,7 +38,7 @@ freely, subject to the following restrictions:
 // copy of the original.
 
 #include "emp-tool/runtime/core/error.h"
-#include "emp-tool/runtime/core/test_mode.h"
+#include "emp-tool/runtime/core/deterministic_mode.h"
 
 #include <condition_variable>
 #include <functional>
@@ -147,17 +147,17 @@ auto ThreadPool::enqueue(F &&f, Args &&...args)
 	    });
 
 	std::future<return_type> res = task->get_future();
-	// In a test-mode build, the task's lane is derived HERE, on the
+	// In a deterministic-mode build, the task's lane is derived HERE, on the
 	// enqueuing thread: enqueue order is program order, so the task's
 	// randomness is reproducible no matter which worker runs it, or when.
-	[[maybe_unused]] uint64_t test_lane = 0;
-	if constexpr (emp::is_test_mode()) test_lane = emp::next_test_child_lane();
+	[[maybe_unused]] uint64_t lane = 0;
+	if constexpr (emp::is_deterministic_mode()) lane = emp::next_deterministic_child_lane();
 	{
 		std::unique_lock<std::mutex> lock(queue_mutex);
 		emp::expecting(!stop, "ThreadPool: enqueue on stopped pool");
-		if constexpr (emp::is_test_mode())
-			tasks.emplace([task, test_lane]() {
-				emp::test_lane_scope scope(test_lane);
+		if constexpr (emp::is_deterministic_mode())
+			tasks.emplace([task, lane]() {
+				emp::deterministic_lane_scope scope(lane);
 				(*task)();
 			});
 		else

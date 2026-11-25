@@ -200,7 +200,7 @@ Ways to run things:
 - **Not thread-safe by contract.** Channels and `ECGroup` are documented as
   not thread-safe. Concurrent use is misuse.
 - **Non-production code.**
-  - `EMP_TEST_MODE` builds: deterministic randomness, insecure by design and
+  - `EMP_DETERMINISTIC_MODE` builds: deterministic randomness, insecure by design and
     never deployed.
   - `bench/`, `test/` (including fixed `/tmp` key paths in `test_tlsio`), the
     `run` script and `TraceIO`.

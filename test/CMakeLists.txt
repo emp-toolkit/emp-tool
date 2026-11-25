@@ -137,7 +137,7 @@ foreach(neg RANGE 1 18)
         PASS_REGULAR_EXPRESSION "${_expect}" RUN_SERIAL TRUE)
 endforeach()
 
-add_test_case(runtime test_test_mode)
+add_test_case(runtime test_deterministic_mode)
 
 # Link-time build-consistency guards (runtime/core/abi_guard.h). The positive
 # case links like any consumer; each negative case compiles the probe with one
@@ -155,7 +155,7 @@ endfunction()
 add_test_case(runtime abi_guard_probes)     # positive (ABI_NEG_CASE undefined)
 link_with_section_gc(abi_guard_probes)
 set(_abi_neg_cases 1)
-set(_abi_neg_msg "TestModeAbiMarker")        # 1 the other test mode
+set(_abi_neg_msg "DeterministicModeAbiMarker")   # 1 the other deterministic mode
 if(EMP_WITH_BLAKE3)
     list(APPEND _abi_neg_cases 2 3)
     list(APPEND _abi_neg_msg

@@ -4,7 +4,7 @@
 #include "emp-tool/runtime/crypto/aes.h"
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/core/constants.h"
-#include "emp-tool/runtime/core/test_mode.h"
+#include "emp-tool/runtime/core/deterministic_mode.h"
 #include <memory>
 #include <sys/random.h>
 
@@ -23,14 +23,14 @@ class PRG { public:
 		}
 
 		block v;
-		if constexpr (is_test_mode()) {
-			// Deterministic seed: lane in the high half, per-lane
-			// construction ordinal in the low half. Distinct lanes never
-			// collide, and a lane's sequence depends only on its own
-			// program order, so multi-threaded runs reproduce under the
-			// lane discipline of emp-tool/runtime/core/test_mode.h.
-			const TestSeed ts = next_test_seed();
-			v = makeBlock((int64_t)ts.lane, (int64_t)ts.ordinal);
+		if constexpr (is_deterministic_mode()) {
+			// Deterministic seed: the party's lane in the high half, the
+			// per-lane construction ordinal in the low half. A lane's
+			// sequence depends only on its own program order, so
+			// multi-threaded runs reproduce under the lane discipline of
+			// emp-tool/runtime/core/deterministic_mode.h.
+			const DeterministicSeed ds = next_deterministic_seed();
+			v = makeBlock((int64_t)deterministic_seed_high(ds), (int64_t)ds.ordinal);
 		} else {
 			v = from_urand();
 		}
