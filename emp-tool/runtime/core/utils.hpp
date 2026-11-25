@@ -55,10 +55,14 @@ inline int parse_bounded_int(const char *text, int lower, int upper,
 
 inline int parse_party(const char *const * arg, int max_party) {
 	const char *text = arg ? arg[1] : nullptr;
-	return detail::parse_bounded_int(
+	const int party = detail::parse_bounded_int(
 	    text, ALICE, max_party,
 	    "parse_party: argv[1] (party) must be an integer in [1, max_party] "
 	    "(default max is BOB=2; multi-party callers pass nP)");
+	// In a deterministic-mode build, this process draws the party's own seeds
+	// (deterministic_mode.h); a no-op otherwise.
+	set_deterministic_party(party);
+	return party;
 }
 inline int peer_port() {
 	const char * e = std::getenv("EMP_PORT");

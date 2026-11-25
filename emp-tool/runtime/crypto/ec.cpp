@@ -1,5 +1,5 @@
 #include "emp-tool/runtime/crypto/ec.h"
-#include "emp-tool/runtime/core/test_mode.h"
+#include "emp-tool/runtime/core/deterministic_mode.h"
 #include "emp-tool/runtime/core/utils.h"
 #include "emp-tool/runtime/crypto/prg.h"
 #include "emp-tool/runtime/crypto/hash.h"   // for the hash-ABI build-consistency marker
@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
-#include <optional>
 #include <vector>
 
 namespace emp {
@@ -454,27 +453,21 @@ void ECGroup::resize_scratch(int64_t size) {
 
 Scalar ECGroup::rand_scalar() {
 	Scalar n;
-	if constexpr (!is_test_mode()) {
+	if constexpr (!is_deterministic_mode()) {
 		do {
 			expecting(BN_priv_rand_range(n.n(), order_.n()) == 1,
 			          "ECGroup::rand_scalar: BN_priv_rand_range");
 		} while (BN_is_zero(n.n()));
 		return n;
 	}
-	// Test-mode build: deterministic uniform sample in [1, order_) via emp::PRG.
-	// Rejection sampling:
-	// draw n_bits-wide random bytes, retry if zero or ≥ order_. P-256's order
-	// is just under 2^256, so the per-iteration reject probability
-	// is ≪ 1.
-	// Long-lived per-thread PRG, but re-seeded whenever the determinism
-	// epoch advances (reset_test_seed_counter). Without this the stream
-	// would carry across a reset while fresh PRG() constructions restart,
-	// leaving the two randomness sources out of step and making wire bytes
-	// depend on how many scalars were drawn earlier in the process.
-	thread_local std::optional<PRG> prg;
-	thread_local uint64_t prg_epoch = (uint64_t)-1;
-	const uint64_t epoch = current_test_seed_epoch();
-	if (!prg || prg_epoch != epoch) { prg.emplace(); prg_epoch = epoch; }
+	// Deterministic-mode build: deterministic uniform sample in [1, order_) via
+	// emp::PRG. Rejection sampling: draw n_bits-wide random bytes, retry if zero
+	// or ≥ order_. P-256's order is just under 2^256, so the per-iteration
+	// reject probability is ≪ 1.
+	// One PRG per call, seeded from the caller's lane like any other: the
+	// scalar then depends only on that lane's program order, not on which
+	// thread ran earlier draws, as a PRG kept per thread would.
+	PRG prg;
 	const int n_bits = BN_num_bits(order_.n());
 	const int n_bytes = (n_bits + 7) / 8;
 	const unsigned char top_mask = (n_bits % 8 == 0)
@@ -482,7 +475,7 @@ Scalar ECGroup::rand_scalar() {
 		: (unsigned char)((1u << (n_bits % 8)) - 1);
 	std::vector<unsigned char> buf((size_t)n_bytes);
 	do {
-		prg->random_data_unaligned(buf.data(), n_bytes);
+		prg.random_data_unaligned(buf.data(), n_bytes);
 		buf[0] &= top_mask;
 		expecting(BN_bin2bn(buf.data(), n_bytes, n.n()) != nullptr,
 		          "ECGroup::rand_scalar: BN_bin2bn");
@@ -565,9 +558,9 @@ template <> const char HashAbiMarker<EMP_HASH_DEFAULT>::sym = 0;
 // fails to link.
 template <> const char FsVariantAbiMarker<EMP_FS_VARIANT_HAS_BLAKE3>::sym = 0;
 
-// Test-mode marker (see test_mode.h): define the symbol for whether this
-// emp-tool build is a test-mode build. A consumer built the other way
-// references the other marker and fails to link.
-template <> const char TestModeAbiMarker<EMP_TEST_MODE_ENABLED>::sym = 0;
+// Deterministic-mode marker (see deterministic_mode.h): define the symbol for
+// whether this emp-tool build is a deterministic-mode build. A consumer built the
+// other way references the other marker and fails to link.
+template <> const char DeterministicModeAbiMarker<EMP_DETERMINISTIC_MODE_ENABLED>::sym = 0;
 
 }  // namespace emp

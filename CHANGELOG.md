@@ -75,6 +75,25 @@ metadata is numeric (see the README's version guidance).
 
 ### Changed
 
+- Test mode is now deterministic mode, a name for what it does: randomness is
+  predictable, not testing-specific. The CMake option is
+  `EMP_DETERMINISTIC_MODE`, which the build also exports as a compile definition,
+  and the header `runtime/core/deterministic_mode.h`. The functions and types are
+  `is_deterministic_mode()`, `next_deterministic_seed()` /
+  `DeterministicSeed`, `next_deterministic_child_lane()`,
+  `deterministic_lane_scope`, `current_deterministic_epoch()` and
+  `reset_deterministic_seeds()`. The old names stay for now as deprecated
+  aliases: `-DEMP_TEST_MODE=ON` still turns the mode on, the build still
+  defines `EMP_TEST_MODE`, `runtime/core/test_mode.h` includes the new header,
+  and `is_test_mode()`, `test_lane_scope` and the rest forward to the new ones.
+- In deterministic mode, the processes of a multi-process run draw different
+  seeds: a seed is (party, lane, ordinal), and `parse_party()` sets the party
+  through the new `set_deterministic_party()`. Before, every process drew the
+  same values, so the parties held the same keys and masks, and a test of a
+  cheat could pass only because the cheater's values equaled everyone else's.
+  Party 0, a process that set none, keeps the old seeds; the traces of
+  multi-process runs change once.
+
 - `CCRH` takes its AES key explicitly: the constructor is `explicit
   CCRH(const block &key)`, with no zero-key default. Under one key that every
   instance shares, the hash is one fixed permutation, and one evaluation can
@@ -199,6 +218,12 @@ metadata is numeric (see the README's version guidance).
   by three field multiplications. It returns the same points.
 
 ### Fixed
+
+- In deterministic mode, `ECGroup::rand_scalar` draws from a fresh default
+  `PRG` per call. It kept one per thread, so a scalar depended on which earlier
+  draws the same thread had made, and a run with several sessions could change
+  its wire bytes with the thread schedule. Traces that draw EC scalars change
+  once.
 
 - Destroying or shrinking a `BlockVec`, or any `default_init_vector` of a
   trivially destructible type, no longer writes its elements.

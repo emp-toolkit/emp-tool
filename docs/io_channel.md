@@ -168,7 +168,7 @@ error.
   channels avoid reconnecting.
 - **`TraceIO`** (`trace_io.h`): an `IOChannel` that tees every wire
   byte to `<prefix>.send` / `<prefix>.recv` files for diff-based
-  wire-equivalence checks; see `test_mode.md`.
+  wire-equivalence checks; see `deterministic_mode.md`.
 
 ## TCP socket buffers
 
